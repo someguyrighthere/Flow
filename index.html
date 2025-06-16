@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Business Suite - All-in-One Business Tools</title>
+    <link rel="stylesheet" href="css/style.css"> 
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        .hero {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; text-align: center; padding: 100px 20px;
+        }
+        .hero h1 { font-size: 3.5rem; color: #fff; margin-bottom: 20px; max-width: 800px; }
+        .hero p { font-size: 1.2rem; color: var(--text-light); max-width: 600px; margin-bottom: 40px; }
+        .public-nav { display: flex; gap: 15px; }
+        .video-section { padding: 80px 0; text-align: center; }
+        .video-placeholder {
+            max-width: 800px; margin: auto; aspect-ratio: 16 / 9;
+            background-color: #000; border-radius: 12px; display: flex;
+            align-items: center; justify-content: center; font-size: 1.5rem;
+            color: var(--text-medium); border: 2px dashed var(--border-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="background-animation"></div>
+    <div class="container">
+        <header class="dashboard-header" style="padding-top: 20px; padding-bottom: 20px;">
+            <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <nav class="public-nav">
+                <a href="#features" class="btn btn-secondary">Features</a>
+                <a href="pricing.html" class="btn btn-secondary">Pricing</a>
+                <a href="login.html" class="btn btn-primary">Login / Sign Up</a>
+            </nav>
+        </header>
+        <main>
+            <section class="hero">
+                <h1>The All-in-One Suite for Your Growing Business</h1>
+                <p>From hiring and onboarding to scheduling and sales, get the tools you need to streamline your operations and focus on what matters most.</p>
+                <div>
+                    <a href="login.html" class="btn btn-primary" style="padding: 15px 30px; font-size: 1.2rem;">Get Started For Free</a>
+                </div>
+            </section>
+            <section id="features" class="video-section">
+                <h2 style="font-size: 2.5rem;">See How It Works</h2>
+                <div class="video-placeholder">
+                    <span>▶ Your Product Demo Video Here</span>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

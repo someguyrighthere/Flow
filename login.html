@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Sign In - Flow Business Suite</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css"> 
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        body { display: flex; flex-direction: column; }
+        .main-content {
+            flex-grow: 1; display: flex; align-items: center;
+            justify-content: center; padding-bottom: 10vh;
+        }
+        .login-card {
+            width: 100%; max-width: 400px; background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px); padding: 40px; border-radius: 12px;
+            text-align: center; border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .login-card h2 { font-size: 2rem; margin-top: 0; margin-bottom: 30px; font-weight: 600; }
+        .login-form .form-group { margin-bottom: 20px; text-align: left; }
+        .login-form label { display: block; margin-bottom: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
+        .login-form input {
+            width: 100%; padding: 12px; border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3); background-color: rgba(255, 255, 255, 0.1);
+            color: #fff; box-sizing: border-box; font-family: 'Poppins', sans-serif; font-size: 1rem;
+        }
+        .login-form input::placeholder { color: rgba(255, 255, 255, 0.6); }
+        #error-message { color: #ff8a80; display: none; margin-bottom: 15px; font-weight: 500; }
+        .btn-login {
+            width: 100%; padding: 12px; border: none; border-radius: 8px;
+            font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            background-color: rgba(255, 255, 255, 0.9); color: #333;
+        }
+        .btn-login:hover { background-color: #fff; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+    <div class="background-animation"></div>
+    <header class="container">
+        <div class="dashboard-header">
+            <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+        </div>
+    </header>
+    <main class="main-content">
+        <div class="login-card">
+            <h2>Login</h2>
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required placeholder="you@company.com">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required placeholder="••••••••">
+                </div>
+                <p id="error-message"></p>
+                <button type="submit" class="btn-login">Sign In</button>
+            </form>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

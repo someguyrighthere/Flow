@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Account - Flow Business Suite</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
+        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
+        .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
+        .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
+        .card {
+             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
+             border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
+             max-width: 600px; margin: 40px auto;
+        }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
+        .form-group input {
+            width: 100%; padding: 12px; border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-light); box-sizing: border-box;
+        }
+        .settings-menu { position: relative; }
+        .settings-dropdown {
+            display: none; position: absolute; top: 55px; right: 0;
+            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 10; padding: 10px 0;
+        }
+        .settings-dropdown a, .settings-dropdown button {
+            color: var(--text-light); padding: 12px 16px; text-decoration: none;
+            display: block; width: 100%; text-align: left; background: none;
+            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
+        }
+        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body>
+    <div class="background-animation"></div>
+    <div class="container">
+        <header class="dashboard-header">
+            <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <div class="settings-menu">
+                <button id="settings-button" class="btn btn-secondary">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                </button>
+                <div id="settings-dropdown" class="settings-dropdown">
+                    <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <button id="logout-button">Logout</button>
+                </div>
+            </div>
+        </header>
+        <nav class="main-nav">
+            <a href="suite-hub.html">App Hub</a>
+            <a href="account.html" class="active">My Account</a>
+        </nav>
+        
+        <section>
+            <h2 style="color: var(--text-light);">My Profile</h2>
+            <div class="card">
+                <h3>Update Your Information</h3>
+                <form id="update-profile-form">
+                    <div class="form-group"><label for="profile-name">Full Name</label><input type="text" id="profile-name" required></div>
+                    <div class="form-group"><label for="profile-email">Email</label><input type="email" id="profile-email" required></div>
+                    <hr style="border-color: var(--border-color); margin: 30px 0;">
+                    <h3>Change Password</h3>
+                    <div class="form-group"><label for="current-password">Current Password</label><input type="password" id="current-password" placeholder="Enter current password to change"></div>
+                    <div class="form-group"><label for="new-password">New Password</label><input type="password" id="new-password" placeholder="Enter new password"></div>
+                    <button type="submit" class="btn btn-primary">Update Profile</button>
+                </form>
+            </div>
+        </section>
+
+    </div>
+    <script src="js/app.js"></script>
+</body>
+</html>
