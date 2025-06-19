@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'YOUR_RENDER_BACKEND_PUBLIC_URL/api'; // <--- UPDATE THIS LINE WITH YOUR RENDER BACKEND URL
 
 /**
  * Handles API requests to the backend.
@@ -114,7 +114,7 @@ function showConfirmModal(message, confirmButtonText = 'Confirm') {
 
         // Allow clicking outside the modal to cancel (optional, but consistent with message modal)
         confirmModalOverlay.onclick = (event) => {
-            if (event.target === confirmModalOverlay) {
+            if (event.target === modalOverlay) {
                 handleCancel(); // Treat outside click as cancel
             }
         };
@@ -226,7 +226,7 @@ function handleLoginPage() {
         if (!emailRegex.test(email)) {
             if (errorMessage) {
                 errorMessage.textContent = 'Please enter a valid email address.';
-                errorMessage.classList.add('visible');
+                errorMessage.classList.add('visible'); // Show it
             }
             return;
         }
@@ -235,7 +235,7 @@ function handleLoginPage() {
         if (password.length < 6) {
             if (errorMessage) {
                 errorMessage.textContent = 'Password must be at least 6 characters long.';
-                errorMessage.classList.add('visible');
+                errorMessage.classList.add('visible'); // Show it
             }
             return;
         }
@@ -538,8 +538,6 @@ function handleAdminPage() {
         if (!userListDiv) return;
         userListDiv.innerHTML = '<p>Loading users...</p>';
         try {
-            // Fetch users. Assuming '/users' endpoint returns users for the current company.
-            // You might want to filter by role if you only want to show non-super-admins
             const users = await apiRequest('GET', '/users');
             userListDiv.innerHTML = ''; // Clear loading message
 
@@ -549,7 +547,6 @@ function handleAdminPage() {
                 users.forEach(user => {
                     const userDiv = document.createElement('div');
                     userDiv.className = 'list-item';
-                    // Display full name, role, and location name (if available), without email
                     let userInfo = `${user.full_name} - Role: ${user.role}`;
                     if (user.location_name) {
                         userInfo += ` @ ${user.location_name}`;
@@ -577,7 +574,6 @@ function handleAdminPage() {
             const type = targetButton.dataset.type; // 'location' or 'user'
             const confirmationMessage = `Are you sure you want to delete this ${type}?`;
             
-            // Replaced native confirm() with custom showConfirmModal
             const confirmed = await showConfirmModal(confirmationMessage, 'Delete');
 
             if (confirmed) {
@@ -585,20 +581,19 @@ function handleAdminPage() {
                     if (type === 'location') {
                         await apiRequest('DELETE', `/locations/${id}`);
                         showModalMessage('Location deleted successfully!', false);
-                        loadLocations(); // Reload locations after deletion
-                        loadUsers(); // Also reload users as some might be tied to this location
+                        loadLocations(); 
+                        loadUsers(); 
                     } else if (type === 'user') {
                         await apiRequest('DELETE', `/users/${id}`);
                         showModalMessage('User deleted successfully!', false);
-                        loadUsers(); // Reload users after deletion
+                        loadUsers(); 
                     }
                 } catch (error) {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
-        });
-    }
-
+        }
+    });
 
     // Handle new location form submission
     if (newLocationForm) {
@@ -614,7 +609,7 @@ function handleAdminPage() {
                 nameInput.value = '';
                 addressInput.value = '';
                 showModalMessage('Location created successfully!', false);
-                loadLocations(); // Reload locations to show new entry and update dropdown
+                loadLocations(); 
             } catch (error) {
                 console.error("Error creating location:", error);
                 showModalMessage(`Error creating location: ${error.message}`, true);
@@ -629,8 +624,8 @@ function handleAdminPage() {
             const adminName = document.getElementById('admin-name') ? document.getElementById('admin-name').value : '';
             const adminEmail = document.getElementById('admin-email') ? document.getElementById('admin-email').value : '';
             const adminPassword = document.getElementById('admin-password') ? document.getElementById('admin-password').value : '';
-            const adminLocationSelectElement = document.getElementById('admin-location-select'); // Get the element
-            const adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : ''; // Safely get its value
+            const adminLocationSelectElement = document.getElementById('admin-location-select'); 
+            const adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : ''; 
 
             if (!adminLocationId) {
                 showModalMessage('Please select a location to assign the admin.', true);
@@ -655,8 +650,8 @@ function handleAdminPage() {
                 if (adminLocationSelectElement) adminLocationSelectElement.value = '';
 
                 showModalMessage(`Admin invite sent to ${adminEmail} for selected location with the provided temporary password.`, false);
-                loadUsers(); // Reload users to show the newly invited admin
-            } catch (error) { // The catch block was indeed missing
+                loadUsers(); 
+            } catch (error) { 
                 console.error("Error inviting admin:", error);
                 showModalMessage(`Failed to invite admin: ${error.message}`, true);
             }
@@ -674,29 +669,25 @@ function handleAdminPage() {
             const employeeId = document.getElementById('employee-id') ? document.getElementById('employee-id').value : '';
             const employeeLocationSelectElement = document.getElementById('employee-location-select');
             
-            // Corrected: Convert to number, but also handle empty string ("") from dropdown
-            let employeeLocationId = null; // Default to null if not selected
+            let employeeLocationId = null; 
             if (employeeLocationSelectElement && employeeLocationSelectElement.value !== "") {
                 employeeLocationId = parseInt(employeeLocationSelectElement.value);
             }
 
-            // Client-side validation: ensure location_id is not null IF there are locations available to choose from
-            // This prevents trying to send 'null' or empty string if there are no locations and one is technically required.
-            const hasLocationsInDropdown = employeeLocationSelectElement && employeeLocationSelectElement.options.length > 1; // More than just "Select a location"
+            const hasLocationsInDropdown = employeeLocationSelectElement && employeeLocationSelectElement.options.length > 1; 
             if (!employeeName || !employeeEmail || !employeePassword || (hasLocationsInDropdown && employeeLocationId === null)) { 
                 showModalMessage('Full name, email, temporary password, and a valid location (if available) are required for new employees.', true);
                 return;
             }
 
-
             try {
-                await apiRequest('POST', '/invite-employee', { // New API endpoint
+                await apiRequest('POST', '/invite-employee', { 
                     full_name: employeeName,
                     email: employeeEmail,
                     password: employeePassword,
                     position: employeePosition,
                     employee_id: employeeId,
-                    location_id: employeeLocationId // This will be null or a number
+                    location_id: employeeLocationId 
                 });
 
                 if (document.getElementById('employee-name')) document.getElementById('employee-name').value = '';
@@ -707,7 +698,7 @@ function handleAdminPage() {
                 if (employeeLocationSelectElement) employeeLocationSelectElement.value = '';
 
                 showModalMessage(`Employee invite sent to ${employeeEmail} for selected location.`, false);
-                loadUsers(); // Reload users to show the newly invited employee
+                loadUsers(); 
             } catch (error) {
                 console.error("Error inviting employee:", error);
                 showModalMessage(`Failed to invite employee: ${error.message}`, true);
@@ -715,10 +706,9 @@ function handleAdminPage() {
         });
     }
 
-
     // Initial load for admin page
-    loadLocations(); // Load locations and populate dropdowns (admin and employee forms)
-    loadUsers(); // Load and display users
+    loadLocations(); 
+    loadUsers(); 
 }
 
 /**
@@ -726,7 +716,6 @@ function handleAdminPage() {
  * Sets up event listeners for plan selection and Stripe checkout.
  */
 function handlePricingPage() {
-    // Check if the user is authenticated, redirect if not
     if (!localStorage.getItem('authToken')) {
         window.location.href = 'login.html';
         return;
@@ -736,21 +725,12 @@ function handlePricingPage() {
     const proPlanBtn = document.getElementById('pro-plan-btn');
     const enterprisePlanBtn = document.getElementById('enterprise-plan-btn');
 
-    // Assume Stripe is loaded via the script tag in pricing.html
-    const stripe = Stripe('pk_test_51Ra4RJG06NHrwsY922jS3wPjF0020WbJ3PjF0020WbJ3PjF0020WbJ3f0L3hW9yTjY00l8Z7zrHY'); // Replace with your actual publishable key
+    const stripe = Stripe('pk_test_51Ra4RJG06NHrwsY922jS3wPjF0020WbJ3PjF0020WbJ3PjF0020WbJ3f0L3hW9yTjY00l8Z7zrHY'); 
 
-    /**
-     * Handles the click event for plan selection buttons.
-     * Initiates a Stripe Checkout session.
-     * @param {string} planId - The ID of the selected plan ('pro' or 'enterprise').
-     */
     async function selectPlan(planId) {
         try {
-            // Call your backend to create a Stripe Checkout session
             const response = await apiRequest('POST', '/create-checkout-session', { planId: planId });
             const { url } = response;
-
-            // Redirect to Stripe Checkout
             window.location.href = url;
 
         } catch (error) {
@@ -759,7 +739,6 @@ function handlePricingPage() {
         }
     }
 
-    // Add event listeners to the plan buttons
     if (proPlanBtn) {
         proPlanBtn.addEventListener('click', () => selectPlan('pro'));
     }
@@ -767,9 +746,6 @@ function handlePricingPage() {
         enterprisePlanBtn.addEventListener('click', () => selectPlan('enterprise'));
     }
 
-    // The free plan button might be a 'Current Plan' indicator or a downgrade option.
-    // If it allows downgrading, you'd implement that logic.
-    // For now, it's just a display.
     if (freePlanBtn) {
         freePlanBtn.addEventListener('click', () => {
             showModalMessage('You are currently on the Free plan. To upgrade, choose Pro or Enterprise.', false);
@@ -802,23 +778,19 @@ function handleSchedulingPage() {
     const applyFiltersBtn = document.getElementById('apply-filters-btn');
     const clearFiltersBtn = document.getElementById('clear-filters-btn');
 
-    let currentWeekStart = new Date(); // Stores the start of the currently displayed week
+    let currentWeekStart = new Date(); 
 
-    // Initialize currentWeekStart to the beginning of the current week (Sunday)
     function initializeWeek() {
         const today = new Date();
-        const dayOfWeek = today.getDay(); // 0 for Sunday, 1 for Monday, etc.
+        const dayOfWeek = today.getDay(); 
         currentWeekStart = new Date(today);
-        currentWeekStart.setDate(today.getDate() - dayOfWeek); // Set to Sunday of the current week
-        currentWeekStart.setHours(0, 0, 0, 0); // Normalize to start of day
+        currentWeekStart.setDate(today.getDate() - dayOfWeek); 
+        currentWeekStart.setHours(0, 0, 0, 0); 
     }
 
-    /**
-     * Populates employee and location dropdowns.
-     */
     async function populateDropdowns() {
         try {
-            const employees = await apiRequest('GET', '/users?filterRole=employee'); // Fetch only employees
+            const employees = await apiRequest('GET', '/users?filterRole=employee'); 
             const locations = await apiRequest('GET', '/locations');
 
             if (employeeSelect) {
@@ -865,25 +837,17 @@ function handleSchedulingPage() {
         }
     }
 
-    /**
-     * Renders the calendar grid for the current week.
-     * @param {Array} schedules - An array of schedule objects to display.
-     */
-    function renderCalendar(schedules = []) {
+    async function renderCalendar(schedules = []) {
         if (!calendarGrid) return;
 
-        // Clear previous content except Time column header
         calendarGrid.querySelectorAll('.calendar-day-header:not(:first-child), .calendar-day-cell').forEach(el => el.remove());
 
-        // Generate Day Headers (Monday to Sunday)
         const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const currentWeekEndDate = new Date(currentWeekStart);
-        currentWeekEndDate.setDate(currentWeekEndDate.getDate() + 6); // End of the week (Saturday)
+        currentWeekEndDate.setDate(currentWeekEndDate.getDate() + 6); 
 
         currentWeekDisplay.textContent = `${currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${currentWeekEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
-        // Create day headers and cells for the grid
-        const dayCells = {};
         for (let i = 0; i < 7; i++) {
             const date = new Date(currentWeekStart);
             date.setDate(currentWeekStart.getDate() + i);
@@ -891,22 +855,21 @@ function handleSchedulingPage() {
             const dayHeader = document.createElement('div');
             dayHeader.className = 'calendar-day-header';
             dayHeader.textContent = `${daysOfWeek[date.getDay()]} (${date.getMonth() + 1}/${date.getDate()})`;
-            dayHeader.style.gridColumn = i + 2; // Starts from second column
+            dayHeader.style.gridColumn = i + 2; 
             dayHeader.style.gridRow = 1;
             calendarGrid.appendChild(dayHeader);
 
             const dayCell = document.createElement('div');
             dayCell.className = 'calendar-day-cell';
-            dayCell.dataset.date = date.toISOString().split('T')[0]; //YYYY-MM-DD
+            dayCell.dataset.date = date.toISOString().split('T')[0]; 
             dayCell.style.gridColumn = i + 2;
-            dayCell.style.gridRow = '2 / span 24'; // Spans all 24 hour rows
+            dayCell.style.gridRow = '2 / span 24'; 
             calendarGrid.appendChild(dayCell);
-            dayCells[date.toISOString().split('T')[0]] = dayCell; // Store reference to add shifts
+            dayCells[date.toISOString().split('T')[0]] = dayCell; 
         }
 
-        // Generate Time Slots (already static in HTML, but ensure structure)
         const timeColumn = document.getElementById('time-column');
-        if (timeColumn && timeColumn.children.length === 0) { // Only generate if empty
+        if (timeColumn && timeColumn.children.length === 0) { 
             for (let i = 0; i < 24; i++) {
                 const timeSlot = document.createElement('div');
                 timeSlot.className = 'calendar-time-slot';
@@ -916,47 +879,42 @@ function handleSchedulingPage() {
             }
         }
 
-        // Place shifts on the calendar
         schedules.forEach(shift => {
             const shiftStartTime = new Date(shift.start_time);
             const shiftEndTime = new Date(shift.end_time);
-            const shiftDate = shiftStartTime.toISOString().split('T')[0]; //YYYY-MM-DD
+            const shiftDate = shiftStartTime.toISOString().split('T')[0]; 
 
             const targetCell = dayCells[shiftDate];
             if (targetCell) {
                 const shiftDiv = document.createElement('div');
                 shiftDiv.className = 'calendar-shift';
                 
-                // Calculate position and height
                 const startHour = shiftStartTime.getHours() + shiftStartTime.getMinutes() / 60;
                 const endHour = shiftEndTime.getHours() + shiftEndTime.getMinutes() / 60;
                 const durationHours = endHour - startHour;
 
-                // 30px per hour means 0.5px per minute. 15px per half-hour, etc.
-                const topOffset = (startHour * 30); // 30px per hour
+                const topOffset = (startHour * 30); 
                 const height = (durationHours * 30);
 
                 shiftDiv.style.top = `${topOffset}px`;
                 shiftDiv.style.height = `${height}px`;
 
-                // Add content
                 shiftDiv.innerHTML = `<strong>${shift.employee_name}</strong><br>${shiftStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${shiftEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
                 if (shift.notes) {
-                    shiftDiv.title = shift.notes; // Tooltip for notes
+                    shiftDiv.title = shift.notes; 
                 }
 
-                // Add delete functionality
                 const deleteButton = document.createElement('button');
                 deleteButton.className = 'btn-delete';
                 deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>`;
                 deleteButton.onclick = async (e) => {
-                    e.stopPropagation(); // Prevent triggering other cell click handlers
+                    e.stopPropagation(); 
                     const confirmDelete = await showConfirmModal(`Are you sure you want to delete this shift for ${shift.employee_name}?`, 'Delete Shift');
                     if (confirmDelete) {
                         try {
                             await apiRequest('DELETE', `/schedules/${shift.schedule_id}`);
                             showModalMessage('Shift deleted successfully!', false);
-                            loadSchedules(); // Reload schedules after deletion
+                            loadSchedules(); 
                         } catch (error) {
                             showModalMessage(`Failed to delete shift: ${error.message}`, true);
                         }
@@ -970,17 +928,12 @@ function handleSchedulingPage() {
         });
     }
 
-
-    /**
-     * Fetches schedules from the backend based on current filters and renders them.
-     */
     async function loadSchedules() {
         const employeeId = filterEmployeeSelect ? filterEmployeeSelect.value : '';
         const locationId = filterLocationSelect ? filterLocationSelect.value : '';
         const startDate = filterStartDate ? filterStartDate.value : '';
         const endDate = filterEndDate ? filterEndDate.value : '';
 
-        // Calculate week range for API call
         const apiStartDate = currentWeekStart.toISOString().split('T')[0];
         const apiEndDate = new Date(currentWeekStart);
         apiEndDate.setDate(currentWeekStart.getDate() + 6);
@@ -992,7 +945,6 @@ function handleSchedulingPage() {
         });
         if (employeeId) queryParams.append('employee_id', employeeId);
         if (locationId) queryParams.append('location_id', locationId);
-        // If filter dates are set, override week view
         if (startDate && endDate) {
             queryParams.set('start_date', startDate);
             queryParams.set('end_date', endDate);
@@ -1004,11 +956,10 @@ function handleSchedulingPage() {
         } catch (error) {
             console.error("Error loading schedules:", error);
             showModalMessage(`Failed to load schedules: ${error.message}`, true);
-            renderCalendar([]); // Render empty calendar on error
+            renderCalendar([]); 
         }
     }
 
-    // Event Listeners for Week Navigation
     if (prevWeekBtn) {
         prevWeekBtn.addEventListener('click', () => {
             currentWeekStart.setDate(currentWeekStart.getDate() - 7);
@@ -1022,7 +973,6 @@ function handleSchedulingPage() {
         });
     }
 
-    // Event Listener for Create Shift Form
     if (createShiftForm) {
         createShiftForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1041,8 +991,8 @@ function handleSchedulingPage() {
                     notes: notes
                 });
                 showModalMessage('Shift created successfully!', false);
-                createShiftForm.reset(); // Clear the form
-                loadSchedules(); // Reload schedules
+                createShiftForm.reset(); 
+                loadSchedules(); 
             } catch (error) {
                 console.error("Error creating shift:", error);
                 showModalMessage(`Failed to create shift: ${error.message}`, true);
@@ -1050,7 +1000,6 @@ function handleSchedulingPage() {
         });
     }
 
-    // Event Listeners for Filters
     if (applyFiltersBtn) {
         applyFiltersBtn.addEventListener('click', loadSchedules);
     }
@@ -1060,14 +1009,14 @@ function handleSchedulingPage() {
             if (filterLocationSelect) filterLocationSelect.value = '';
             if (filterStartDate) filterStartDate.value = '';
             if (filterEndDate) filterEndDate.value = '';
-            initializeWeek(); // Reset to current week
+            initializeWeek(); 
             loadSchedules();
         });
     }
 
-    initializeWeek(); // Set initial week
-    populateDropdowns(); // Populate dropdowns on page load
-    loadSchedules(); // Load initial schedules
+    initializeWeek(); 
+    populateDropdowns(); 
+    loadSchedules(); 
 }
 
 /**
@@ -1082,7 +1031,7 @@ function handleHiringPage() {
 
     const createJobPostingForm = document.getElementById('create-job-posting-form');
     const jobPostingList = document.getElementById('job-posting-list');
-    const jobPostingLocationSelect = document.getElementById('job-posting-location-select'); // For create form
+    const jobPostingLocationSelect = document.getElementById('job-posting-location-select'); 
     
     const applicantList = document.getElementById('applicant-list');
     const filterApplicantJobPostingSelect = document.getElementById('filter-applicant-job-posting-select');
@@ -1099,9 +1048,6 @@ function handleHiringPage() {
     const shareLinkModalCloseButton = document.getElementById('share-link-modal-close-button');
 
 
-    /**
-     * Populates location dropdowns for job postings and applicant filtering.
-     */
     async function populateLocationDropdowns() {
         try {
             const locations = await apiRequest('GET', '/locations');
@@ -1131,9 +1077,6 @@ function handleHiringPage() {
         }
     }
 
-    /**
-     * Populates job posting dropdown for applicant filtering.
-     */
     async function populateJobPostingDropdown() {
         try {
             const jobPostings = await apiRequest('GET', '/job-postings');
@@ -1154,9 +1097,6 @@ function handleHiringPage() {
     }
 
 
-    /**
-     * Fetches and displays job postings.
-     */
     async function loadJobPostings() {
         if (!jobPostingList) return;
         jobPostingList.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>';
@@ -1185,7 +1125,7 @@ function handleHiringPage() {
                     `;
                     jobPostingList.appendChild(jobCard);
                 });
-                attachJobPostingListeners(); // Attach listeners after rendering
+                attachJobPostingListeners(); 
             }
         } catch (error) {
             console.error("Error loading job postings:", error);
@@ -1193,24 +1133,19 @@ function handleHiringPage() {
         }
     }
 
-    /**
-     * Attaches event listeners to dynamically created job posting elements.
-     * This includes edit, delete, and share functionality.
-     */
     function attachJobPostingListeners() {
-        // Event delegation for delete buttons
-        jobPostingList.querySelectorAll('.btn-delete[data-type="job-posting"]').forEach(button => { // Targeting specific data-type
+        jobPostingList.querySelectorAll('.btn-delete[data-type="job-posting"]').forEach(button => { 
             button.onclick = async (e) => {
-                e.stopPropagation();
+                e.stopPropagation(); 
                 const id = button.dataset.id;
                 const confirmDelete = await showConfirmModal('Are you sure you want to delete this job posting? This will also remove associated applicants.', 'Delete Job Posting');
                 if (confirmDelete) {
                     try {
                         await apiRequest('DELETE', `/job-postings/${id}`);
                         showModalMessage('Job posting deleted successfully!', false);
-                        loadJobPostings(); // Reload list
-                        populateJobPostingDropdown(); // Update filter dropdown
-                        loadApplicants(); // Reload applicants as some might be unlinked
+                        loadJobPostings(); 
+                        populateJobPostingDropdown(); 
+                        loadApplicants(); 
                     }
                     catch (error) {
                         showModalMessage(`Failed to delete job posting: ${error.message}`, true);
@@ -1219,13 +1154,11 @@ function handleHiringPage() {
             };
         });
 
-        // Event delegation for share buttons
         jobPostingList.querySelectorAll('.share-btn').forEach(button => {
             button.onclick = (e) => {
-                e.stopPropagation(); // Prevent card click
+                e.stopPropagation(); 
                 const id = button.dataset.id;
                 const title = button.dataset.title;
-                // Generate a mock direct link and embed code (for demonstration)
                 const directLink = `http://localhost:8000/apply.html?job_id=${id}`;
                 const embedCode = `<iframe src="http://localhost:8000/embed-job-apply.html?job_id=${id}" width="600" height="400" frameborder="0"></iframe>`;
                 
@@ -1235,13 +1168,11 @@ function handleHiringPage() {
             };
         });
 
-        // Close share modal
         if (shareLinkModalCloseButton) {
             shareLinkModalCloseButton.onclick = () => {
                 if (shareLinkModalOverlay) shareLinkModalOverlay.style.display = 'none';
             };
         }
-        // Copy link functionality
         if (copyLinkBtn) {
             copyLinkBtn.onclick = () => {
                 if (shareJobLinkInput) {
@@ -1251,7 +1182,6 @@ function handleHiringPage() {
                 }
             };
         }
-        // Copy embed code functionality
         if (copyEmbedBtn) {
             copyEmbedBtn.onclick = () => {
                 if (shareJobEmbedCodeInput) {
@@ -1262,7 +1192,6 @@ function handleHiringPage() {
             };
         }
 
-        // TODO: Implement edit functionality for applicants (e.g., update status)
         jobPostingList.querySelectorAll('.edit-job-btn').forEach(button => {
             button.onclick = (e) => {
                 e.stopPropagation();
@@ -1272,9 +1201,6 @@ function handleHiringPage() {
         });
     }
 
-    /**
-     * Fetches and displays applicants based on filters.
-     */
     async function loadApplicants() {
         if (!applicantList) return;
         applicantList.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
@@ -1292,7 +1218,7 @@ function handleHiringPage() {
 
         try {
             const applicants = await apiRequest('GET', `/applicants?${params.toString()}`);
-            applicantList.innerHTML = ''; // Clear loading message
+            applicantList.innerHTML = ''; 
             if (applicants.length === 0) {
                 applicantList.innerHTML = '<p style="color: var(--text-medium);">No applicants found matching criteria.</p>';
             } else {
@@ -1316,7 +1242,7 @@ function handleHiringPage() {
                     `;
                     applicantList.appendChild(applicantCard);
                 });
-                attachApplicantListeners(); // Attach listeners after rendering
+                attachApplicantListeners(); 
             }
         } catch (error) {
             console.error("Error loading applicants:", error);
@@ -1324,12 +1250,8 @@ function handleHiringPage() {
         }
     }
 
-    /**
-     * Attaches event listeners to dynamically created applicant elements.
-     */
     function attachApplicantListeners() {
-        // Event delegation for delete buttons
-        applicantList.querySelectorAll('.btn-delete[data-type="applicant"]').forEach(button => { // Targeting specific data-type
+        applicantList.querySelectorAll('.btn-delete[data-type="applicant"]').forEach(button => { 
             button.onclick = async (e) => {
                 e.stopPropagation();
                 const id = button.dataset.id;
@@ -1337,64 +1259,4 @@ function handleHiringPage() {
                 if (confirmDelete) {
                     try {
                         await apiRequest('DELETE', `/documents/${id}`);
-                        showModalMessage('Document deleted successfully!', false);
-                        loadDocuments(); // Reload list
-                    } catch (error) {
-                        showModalMessage(`Failed to delete document: ${error.message}`, true);
-                    }
-                }
-            };
-        });
-    }
-
-    // Handle document upload form submission
-    if (uploadDocumentForm) {
-        uploadDocumentForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const title = document.getElementById('document-title').value;
-            const fileInput = document.getElementById('document-file');
-            const description = document.getElementById('document-description').value;
-            const file = fileInput.files[0];
-
-            if (!file) {
-                showModalMessage('Please select a file to upload.', true);
-                return;
-            }
-
-            // In a real application, you would upload the file to cloud storage (e.g., AWS S3, Google Cloud Storage)
-            // and then save the returned URL and other metadata to your database.
-            // For this demonstration, we'll simulate an upload and generate a mock URL.
-
-            const mockFileUploadResponse = {
-                file_url: `https://placehold.co/300x200/C86DD7/ffffff?text=${encodeURIComponent(file.name)}`, // Placeholder image URL
-                file_type: file.type || 'application/octet-stream'
-            };
-            
-            // Check if the uploaded file is actually an image before using a placeholder image service.
-            // For production, you'd send the file to a backend upload endpoint.
-            if (!isImageFile(file.type)) {
-                mockFileUploadResponse.file_url = `https://example.com/uploads/${Date.now()}-${file.name}`; // Fallback for non-images
-            }
-
-            try {
-                // Simulate API request to save document metadata
-                await apiRequest('POST', '/documents', {
-                    title: title,
-                    file_name: file.name,
-                    file_type: mockFileUploadResponse.file_type,
-                    file_url: mockFileUploadResponse.file_url,
-                    description: description
-                });
-
-                showModalMessage('Document uploaded and saved successfully!', false);
-                uploadDocumentForm.reset(); // Clear the form
-                loadDocuments(); // Reload the document list
-            } catch (error) {
-                console.error("Error uploading document:", error);
-                showModalMessage(`Failed to upload document: ${error.message}`, true);
-            }
-        });
-    }
-
-    loadDocuments(); // Load documents on page load
-}
+                        s
