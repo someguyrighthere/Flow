@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Settings - Flow Business Suite</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/style.min.css">
+    <link rel="stylesheet" href="css/theme.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
@@ -59,6 +59,45 @@
             color: var(--text-light); box-sizing: border-box;
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
+        /* Styles for the custom message modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            display: none; /* Hidden by default */
+        }
+        .modal-content {
+            background-color: rgba(26, 26, 26, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .modal-content p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .modal-buttons .btn {
+            padding: 10px 25px;
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -81,17 +120,23 @@
             <a href="suite-hub.html">App Hub</a>
             <a href="admin.html" class="active">Admin Settings</a>
         </nav>
-        
-        <div id="super-admin-view">
+
+        <div id="admin-settings-content">
              <h2 style="color: var(--text-light);">Admin Settings</h2>
              <div class="account-grid">
                 <div class="card">
                     <h3>Manage Locations</h3>
                     <div id="location-list"></div>
+                    <!-- Added a horizontal rule here for separation -->
+                    <hr style="border-color: var(--border-color); margin: 30px 0;">
                     <form id="new-location-form" style="margin-top: 20px;">
                         <div class="form-group">
-                            <label for="new-location-name">Add New Location</label>
+                            <label for="new-location-name">Location Name</label>
                             <input type="text" id="new-location-name" placeholder="e.g., Downtown Branch" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-location-address">Location Address</label>
+                            <input type="text" id="new-location-address" placeholder="e.g., 123 Main St, Anytown, USA" required>
                         </div>
                         <button type="submit" class="btn btn-primary">Create Location</button>
                     </form>
@@ -104,9 +149,40 @@
                     <form id="invite-admin-form">
                         <div class="form-group"><label for="admin-name">Full Name</label><input type="text" id="admin-name" required></div>
                         <div class="form-group"><label for="admin-email">Email</label><input type="email" id="admin-email" required></div>
+                        <!-- New: Temporary Password field -->
+                        <div class="form-group">
+                            <label for="admin-password">Temporary Password</label>
+                            <input type="password" id="admin-password" placeholder="Enter temporary password" required>
+                        </div>
                         <div class="form-group">
                             <label for="admin-location-select">Assign to Location</label>
                             <select id="admin-location-select" required></select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Invite</button>
+                    </form>
+
+                    <hr style="border-color: var(--border-color); margin: 30px 0;">
+                    <h4>Invite New Employee</h4>
+                    <form id="invite-employee-form">
+                        <div class="form-group"><label for="employee-name">Full Name</label><input type="text" id="employee-name" required></div>
+                        <div class="form-group"><label for="employee-email">Email</label><input type="email" id="employee-email" required></div>
+                        <div class="form-group">
+                            <label for="employee-password">Temporary Password</label>
+                            <input type="password" id="employee-password" placeholder="Enter temporary password" required>
+                        </div>
+                         <div class="form-group">
+                            <label for="employee-position">Position</label>
+                            <input type="text" id="employee-position" placeholder="e.g., Sales Associate, Jr. Developer">
+                        </div>
+                         <div class="form-group">
+                            <label for="employee-id">Employee ID (Optional)</label>
+                            <input type="text" id="employee-id" placeholder="e.g., EMP001">
+                        </div>
+                        <div class="form-group">
+                            <label for="employee-location-select">Assign to Location</label>
+                            <select id="employee-location-select" required>
+                                <!-- Locations will be populated by JS -->
+                            </select>
                         </div>
                         <button type="submit" class="btn btn-primary">Send Invite</button>
                     </form>
@@ -114,7 +190,25 @@
              </div>
         </div>
     </div>
-    <div id="confirm-modal" class="modal-overlay"><div class="modal-content"><p id="modal-message"></p><div class="modal-buttons"><button id="modal-cancel" class="btn btn-secondary">Cancel</button><button id="modal-confirm" class="btn btn-primary"></button></div></div></div>
-    <script src="js/app.js"></script>
+    <!-- Message Modal Overlay (for showModalMessage function) -->
+    <div id="message-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+    <!-- Confirmation Modal Overlay (for showConfirmModal function) -->
+    <div id="confirm-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="confirm-modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+    <script src="js/app.min.js"></script>
 </body>
 </html>

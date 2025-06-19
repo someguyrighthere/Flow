@@ -4,42 +4,128 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Onboarding Dashboard - Flow Business Suite</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/style.min.css">
+    <link rel="stylesheet" href="css/theme.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
-        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
-        .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
-        .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
-        .settings-menu { position: relative; }
+        /* Base styles (Mobile-first approach) */
+        .container {
+            z-index: 2;
+            padding: 20px 5%; /* Fluid padding */
+            box-sizing: border-box;
+        }
+        .dashboard-header {
+            display: flex;
+            flex-direction: column; /* Stack items vertically on small screens */
+            align-items: center;
+            text-align: center;
+            padding-top: 20px;
+            padding-bottom: 20px;
+        }
+        .app-title {
+            font-size: 1.8rem; /* Smaller title for mobile */
+            margin-bottom: 15px; /* Space between title and settings on mobile */
+        }
+        .settings-menu {
+            position: relative;
+            margin-top: 10px; /* Adjust spacing */
+        }
         .settings-dropdown {
-            display: none; position: absolute; top: 55px; right: 0;
-            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color); border-radius: 8px;
-            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 10; padding: 10px 0;
+            display: none;
+            position: absolute;
+            top: 45px; /* Adjust dropdown position */
+            right: 0;
+            background-color: rgba(26, 26, 26, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            min-width: 160px; /* Slightly smaller dropdown */
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 10;
+            padding: 10px 0;
         }
         .settings-dropdown a, .settings-dropdown button {
-            color: var(--text-light); padding: 12px 16px; text-decoration: none;
-            display: block; width: 100%; text-align: left; background: none;
-            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
+            color: var(--text-light);
+            padding: 10px 15px; /* Adjusted padding */
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.9rem; /* Smaller font */
+            cursor: pointer;
         }
-        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
-        .dashboard-section-header { display: flex; justify-content: space-between; align-items: center; }
+        .settings-dropdown a:hover, .settings-dropdown button:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        .main-nav {
+            display: flex;
+            flex-direction: column; /* Stack navigation links vertically */
+            gap: 8px; /* Reduced gap */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 20px; /* Adjusted margin */
+            padding-bottom: 10px; /* Add some padding below nav */
+        }
+        .main-nav a {
+            padding: 8px 12px; /* Adjusted padding */
+            text-decoration: none;
+            color: var(--text-medium);
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            text-align: center; /* Center align links */
+        }
+        .main-nav a.active {
+            color: var(--text-light);
+            border-bottom-color: var(--primary-accent);
+        }
+        .dashboard-section-header {
+            display: flex;
+            flex-direction: column; /* Stack header items vertically on small screens */
+            align-items: center;
+            gap: 15px; /* Space between title and button */
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .dashboard-section-header h2 {
+            font-size: 1.8rem; /* Smaller heading for mobile */
+            margin-bottom: 0;
+        }
         .onboarding-item {
-            display: flex; align-items: center; justify-content: space-between;
-            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.15); padding: 15px 20px; border-radius: 8px;
-            margin-bottom: 10px; border-left: 4px solid transparent; transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column; /* Stack content vertically */
+            align-items: flex-start; /* Align text to start */
+            gap: 10px; /* Space between info and actions */
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+            width: 100%; /* Ensure full width */
+            box-sizing: border-box;
         }
         .onboarding-item:hover {
-            transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             border-left: 4px solid var(--primary-accent);
         }
-        .onboarding-item-info { display: flex; align-items: center; gap: 15px; font-weight: 500; }
+        .onboarding-item-info {
+            display: flex;
+            flex-direction: column; /* Stack info items vertically */
+            align-items: flex-start;
+            gap: 5px; /* Smaller gap for info items */
+            font-weight: 500;
+        }
+        .onboarding-item-info p {
+            margin: 0; /* Remove default paragraph margins */
+            font-size: 0.95rem;
+        }
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); display: none; align-items: center;
@@ -47,19 +133,92 @@
         }
         .modal-content {
             background-color: rgba(26, 26, 26, 0.8); backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; border-radius: 8px;
-            width: 90%; max-width: 450px; text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.2); padding: 25px; /* Smaller padding */
+            border-radius: 8px;
+            width: 90%; /* Fluid width */
+            max-width: 400px; /* Max width for larger screens */
+            text-align: left;
         }
-        .modal-content h3 { margin-top: 0; }
-        .modal-buttons { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
+        .modal-content h3 { margin-top: 0; font-size: 1.3rem; } /* Smaller heading */
+        .modal-buttons { margin-top: 15px; display: flex; gap: 8px; justify-content: flex-end; }
+        .form-group { margin-bottom: 15px; } /* Adjusted margin */
+        .form-group label { font-weight: 600; margin-bottom: 4px; display: block; font-size: 0.95rem;} /* Adjusted font size */
         .form-group input, .form-group select {
-            width: 100%; padding: 12px; border-radius: 6px;
+            width: 100%; padding: 10px; /* Adjusted padding */
+            border-radius: 6px;
             border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
-            color: var(--text-light); box-sizing: border-box;
+            color: var(--text-light); box-sizing: border-box; font-size: 0.9rem; /* Adjusted font size */
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
+
+
+        /* Media queries for larger screens (e.g., tablets and desktops) */
+        @media (min-width: 768px) {
+            .dashboard-header {
+                flex-direction: row; /* Layout items horizontally */
+                justify-content: space-between; /* Space them out */
+            }
+            .app-title {
+                font-size: 2rem; /* Restore larger title */
+                margin-bottom: 0;
+            }
+            .settings-menu {
+                margin-top: 0;
+            }
+            .settings-dropdown {
+                top: 55px; /* Restore original dropdown position */
+                min-width: 180px; /* Restore original width */
+            }
+            .settings-dropdown a, .settings-dropdown button {
+                padding: 12px 16px; /* Restore original padding */
+                font-size: 1rem; /* Restore original font size */
+            }
+            .main-nav {
+                flex-direction: row; /* Layout navigation links horizontally */
+                gap: 10px; /* Restore original gap */
+                margin-bottom: 30px;
+                padding-bottom: 0;
+            }
+            .main-nav a {
+                padding: 10px 15px; /* Restore original padding */
+                text-align: left; /* Restore left align */
+            }
+            .dashboard-section-header {
+                flex-direction: row; /* Layout header items horizontally */
+                justify-content: space-between;
+                gap: 0; /* Remove gap */
+                text-align: left;
+            }
+            .dashboard-section-header h2 {
+                font-size: 2.5rem; /* Restore original heading size */
+            }
+            .onboarding-item {
+                flex-direction: row; /* Layout content horizontally */
+                align-items: center; /* Center items vertically */
+                gap: 15px; /* Restore original gap */
+                padding: 15px 20px;
+            }
+            .onboarding-item-info {
+                flex-direction: row; /* Layout info items horizontally */
+                align-items: center;
+                gap: 15px; /* Restore original gap */
+            }
+            .onboarding-item-info p {
+                font-size: 1rem;
+            }
+            .modal-content {
+                padding: 30px; /* Restore original padding */
+            }
+            .modal-content h3 {
+                font-size: 1.5rem; /* Restore original heading size */
+            }
+            .modal-buttons {
+                gap: 10px;
+            }
+            .form-group { margin-bottom: 20px; }
+            .form-group label { font-size: 1rem; }
+            .form-group input, .form-group select { font-size: 1rem; padding: 12px; }
+        }
     </style>
 </head>
 <body>
@@ -81,6 +240,7 @@
         <nav class="main-nav">
             <a href="suite-hub.html">App Hub</a>
             <a href="dashboard.html" class="active">Onboarding</a>
+            <a href="checklists.html">Task Lists</a>
         </nav>
         <section id="onboarding-sessions-section">
             <div class="dashboard-section-header">
@@ -108,6 +268,15 @@
             </form>
         </div>
     </div>
-    <script src="js/app.js"></script>
+    <!-- Message Modal Overlay (for showModalMessage function) - included here for consistency -->
+    <div id="message-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+    <script src="js/app.min.js"></script>
 </body>
 </html>

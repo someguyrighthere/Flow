@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Sign Up - Flow Business Suite</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.min.css"> 
+    <link rel="stylesheet" href="css/theme.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        body { display: flex; flex-direction: column; }
+        .main-content {
+            flex-grow: 1; display: flex; align-items: center;
+            justify-content: center; padding-bottom: 10vh;
+        }
+        .register-card {
+            width: 100%; max-width: 500px; /* Slightly wider for more fields */
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px); padding: 40px; border-radius: 12px;
+            text-align: center; border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .register-card h2 { font-size: 2rem; margin-top: 0; margin-bottom: 30px; font-weight: 600; }
+        .register-form .form-group { margin-bottom: 20px; text-align: left; }
+        .register-form label { display: block; margin-bottom: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
+        .register-form input {
+            width: 100%; padding: 12px; border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3); background-color: rgba(255, 255, 255, 0.1);
+            color: #fff; box-sizing: border-box; font-family: 'Poppins', sans-serif; font-size: 1rem;
+        }
+        .register-form input::placeholder { color: rgba(255, 255, 255, 0.6); }
+        #error-message {
+            color: #ff8a80;
+            display: none;
+            margin-bottom: 15px;
+            font-weight: 500;
+            visibility: hidden;
+            height: 0;
+            overflow: hidden;
+        }
+        #error-message.visible {
+            display: block;
+            visibility: visible;
+            height: auto;
+        }
+
+        .btn-register {
+            width: 100%; padding: 12px; border: none; border-radius: 8px;
+            font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            background-color: var(--primary-accent); /* Use primary accent for register button */
+            color: white;
+            box-shadow: 0 0 15px var(--primary-accent-glow);
+        }
+        .btn-register:hover {
+            background-color: var(--primary-accent);
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px var(--primary-accent-glow);
+        }
+
+        .switch-link {
+            display: block;
+            margin-top: 20px;
+            color: var(--text-medium);
+            font-size: 0.95rem;
+            text-decoration: none;
+        }
+        .switch-link:hover {
+            color: var(--primary-accent);
+            text-decoration: underline;
+        }
+
+        /* Styles for the custom message modal (copied for consistency) */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000; display: none;
+        }
+        .modal-content {
+            background-color: rgba(26, 26, 26, 0.95); backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 400px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .modal-content p { margin-bottom: 20px; font-size: 1.1rem; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; }
+        .modal-buttons .btn { padding: 10px 25px; font-size: 1rem; }
+
+        /* General accessibility: Ensure focus states are visible */
+        :focus-visible {
+            outline: 2px solid var(--primary-accent); /* Use your theme's accent color */
+            outline-offset: 2px;
+            border-radius: 4px; /* Match your general border-radius */
+        }
+    </style>
+</head>
+<body>
+    <div class="background-animation"></div>
+    <header class="container">
+        <div class="dashboard-header">
+            <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+        </div>
+    </header>
+    <main class="main-content">
+        <div class="register-card">
+            <h2>Sign Up</h2>
+            <form id="register-form" class="register-form">
+                <div class="form-group">
+                    <label for="company-name">Company Name</label>
+                    <input type="text" id="company-name" required placeholder="Your Company Inc.">
+                </div>
+                <div class="form-group">
+                    <label for="full-name">Your Full Name</label>
+                    <input type="text" id="full-name" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required placeholder="you@company.com">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required minlength="6" placeholder="••••••••">
+                </div>
+                <p id="error-message" role="alert" aria-live="polite" class="sr-only"></p>
+                <button type="submit" class="btn-register">Create Account</button>
+            </form>
+            <a href="login.html" class="switch-link">Already have an account? Log In</a>
+        </div>
+    </main>
+    <!-- Message Modal Overlay (for showModalMessage function) -->
+    <div id="message-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+    <script src="js/app.min.js"></script>
+</body>
+</html>

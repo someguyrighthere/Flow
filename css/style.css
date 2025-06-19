@@ -49,3 +49,23 @@
     background-color: var(--card-bg);
     border-color: var(--text-medium);
 }
+
+/* Global fix for settings button icon to prevent cutoff */
+#settings-button {
+    display: flex; /* Use flexbox to center content */
+    align-items: center; /* Vertically center */
+    justify-content: center; /* Horizontally center */
+    padding: 8px; /* Ensure enough padding around the icon */
+    min-width: 40px; /* Ensure a minimum width */
+    min-height: 40px; /* Ensure a minimum height */
+    width: auto; /* Allow content to dictate width if needed, but min-width ensures size */
+    height: auto; /* Allow content to dictate height if needed, but min-height ensures size */
+    box-sizing: border-box; /* Include padding in the width/height */
+}
+
+#settings-button svg {
+    display: block; /* Ensure SVG is a block element */
+    width: 24px; /* Set a consistent size for the SVG */
+    height: 24px;
+    flex-shrink: 0; /* Prevent SVG from shrinking */
+}

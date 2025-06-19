@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha --require @babel/register --timeout 5000 --extension cjs",
+    "build:js": "uglifyjs ../js/app.js -o ../js/app.min.js",
+    "build:css": "cleancss -o ../css/style.min.css ../css/style.css && cleancss -o ../css/theme.min.css ../css/theme.css",
+    "build": "npm run build:js && npm run build:css",
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -12,8 +16,23 @@
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "express-rate-limit": "^7.3.1",
+    "morgan": "^1.10.0",
+    "dotenv": "^16.4.5",
+    "stripe": "^16.2.0"
+  },
+  "devDependencies": {
+    "uglify-js": "^3.17.4",
+    "clean-css-cli": "^5.6.3",
+    "mocha": "^10.4.0",
+    "chai": "^5.1.1",
+    "supertest": "^7.0.0",
+    "@babel/core": "^7.24.5",
+    "@babel/register": "^7.23.7",
+    "@babel/preset-env": "^7.24.5"
   }
 }
