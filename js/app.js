@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://flow-business-suite.onrender.com/'; // <--- UPDATE THIS LINE WITH YOUR RENDER BACKEND URL
+const API_BASE_URL = 'https://flow-business-suite.onrender.com/api'; // <--- UPDATED WITH YOUR RENDER BACKEND URL
 
 /**
  * Handles API requests to the backend.
@@ -55,7 +55,7 @@ function showModalMessage(message, isError = false) {
         // Hide the modal if clicking outside the content (optional)
         modalOverlay.onclick = (event) => {
             if (event.target === modalOverlay) {
-                modalOverlay.style.display = 'none';
+                handleCancel(); // Treat outside click as cancel
             }
         };
     } else {
@@ -539,8 +539,7 @@ function handleAdminPage() {
         userListDiv.innerHTML = '<p>Loading users...</p>';
         try {
             const users = await apiRequest('GET', '/users');
-            userListDiv.innerHTML = ''; // Clear loading message
-
+            userListDiv.innerHTML = ''; 
             if (users.length === 0) {
                 userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users invited yet.</p>';
             } else {
@@ -592,7 +591,7 @@ function handleAdminPage() {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
-        }
+        });
     });
 
     // Handle new location form submission
@@ -936,7 +935,7 @@ function handleSchedulingPage() {
 
         const apiStartDate = currentWeekStart.toISOString().split('T')[0];
         const apiEndDate = new Date(currentWeekStart);
-        apiEndDate.setDate(currentWeekStart.getDate() + 6);
+        apiEndDate.setDate(currentWeekStart.getDate() + 6); 
         const apiEndDateString = apiEndDate.toISOString().split('T')[0];
 
         const queryParams = new URLSearchParams({
@@ -1190,7 +1189,7 @@ function handleHiringPage() {
                     showModalMessage('Embed code copied to clipboard!', false);
                 }
             };
-        }
+        });
 
         jobPostingList.querySelectorAll('.edit-job-btn').forEach(button => {
             button.onclick = (e) => {
@@ -1259,4 +1258,56 @@ function handleHiringPage() {
                 if (confirmDelete) {
                     try {
                         await apiRequest('DELETE', `/documents/${id}`);
-                        s
+                        showModalMessage('Document deleted successfully!', false);
+                        loadDocuments(); 
+                    } catch (error) {
+                        showModalMessage(`Failed to delete document: ${error.message}`, true);
+                    }
+                }
+            };
+        });
+    }
+
+    if (uploadDocumentForm) {
+        uploadDocumentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('document-title').value;
+            const fileInput = document.getElementById('document-file');
+            const description = document.getElementById('document-description').value;
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showModalMessage('Please select a file to upload.', true);
+                return;
+            }
+
+            const mockFileUploadResponse = {
+                file_url: `https://placehold.co/300x200/C86DD7/ffffff?text=${encodeURIComponent(file.name)}`, 
+                file_type: file.type || 'application/octet-stream'
+            };
+            
+            if (!isImageFile(file.type)) {
+                mockFileUploadResponse.file_url = `https://example.com/uploads/${Date.now()}-${file.name}`; 
+            }
+
+            try {
+                await apiRequest('POST', '/documents', {
+                    title: title,
+                    file_name: file.name,
+                    file_type: mockFileUploadResponse.file_type,
+                    file_url: mockFileUploadResponse.file_url,
+                    description: description
+                });
+
+                showModalMessage('Document uploaded and saved successfully!', false);
+                uploadDocumentForm.reset(); 
+                loadDocuments(); 
+            } catch (error) {
+                console.error("Error uploading document:", error);
+                showModalMessage(`Failed to upload document: ${error.message}`, true);
+            }
+        });
+    }
+
+    loadDocuments(); 
+}
