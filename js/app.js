@@ -1,4 +1,4 @@
-const API_BASE_URL = 'YOUR_RENDER_BACKEND_PUBLIC_URL/api'; // <--- UPDATE THIS LINE WITH YOUR RENDER BACKEND URL
+const API_BASE_URL = 'https://flow-business-suite.onrender.com/'; // <--- UPDATE THIS LINE WITH YOUR RENDER BACKEND URL
 
 /**
  * Handles API requests to the backend.
