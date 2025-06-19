@@ -23,7 +23,8 @@
     "express-rate-limit": "^7.3.1",
     "morgan": "^1.10.0",
     "dotenv": "^16.4.5",
-    "stripe": "^16.2.0"
+    "stripe": "^16.2.0",
+    "pg": "^8.11.5" // NEW: PostgreSQL client library
   },
   "devDependencies": {
     "uglify-js": "^3.17.4",
