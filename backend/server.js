@@ -1,7 +1,6 @@
 // --- Imports ---
 const express = require('express');
-// const sqlite3 = require('sqlite3').verbose(); // REMOVED: Replaced with PostgreSQL client
-const { Pool } = require('pg'); // NEW: PostgreSQL client
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
@@ -9,7 +8,7 @@ const path = require('path');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
 const rateLimit = require('express-rate-limit');
-const morgan = require = require('morgan');
+const morgan = require('morgan'); // CORRECTED: Removed extra 'require ='
 
 // Load environment variables from .env file in development
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
@@ -20,8 +19,8 @@ const stripeInstance = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 
-const PORT = process.env.PORT || 3000;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const PORT = process.env.PORT; 
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; 
 
 app.use(cors({
     origin: function (origin, callback) {
@@ -48,8 +47,9 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    const client = await pool.connect(); // Get a client from the pool
+    const client = await pool.connect(); 
     try {
+        await client.query('BEGIN'); 
         switch (event.type) {
             case 'checkout.session.completed':
                 const session = event.data.object;
@@ -111,18 +111,20 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (
             default:
                 console.log(`Unhandled event type ${event.type}`);
         }
+        await client.query('COMMIT'); 
         res.status(200).json({ received: true });
     } catch (dbErr) {
+        await client.query('ROLLBACK'); 
         console.error("Database update error during webhook processing:", dbErr.message);
         res.status(500).json({ error: 'Webhook processing failed.' });
     } finally {
-        client.release(); // Release the client back to the pool
+        client.release(); 
     }
 });
 
 app.use(express.json());
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET; 
 
 app.use(morgan('dev'));
 
@@ -132,19 +134,13 @@ app.use(express.static(path.join(__dirname, '..'), {
 }));
 
 // --- Database Setup (PostgreSQL) ---
-// Using a connection pool for efficient database connections
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL, // Render provides this env var
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false // Required for Render production
+    connectionString: process.env.DATABASE_URL, 
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false 
 });
 
-// Test database connection on startup
 pool.on('connect', () => console.log('Connected to PostgreSQL database'));
 pool.on('error', (err) => console.error('PostgreSQL database error:', err.message, err.stack));
-
-// Removed SQLite database connection logic and table creation
-// db = new sqlite3.Database...
-// db.serialize()...
 
 // --- Helper function for database queries (for consistency) ---
 async function query(text, params) {
@@ -156,17 +152,15 @@ async function query(text, params) {
         client.release();
     }
 }
-// Helper function to run database commands that don't return rows (like INSERT, UPDATE, DELETE)
 async function runCommand(text, params) {
     const client = await pool.connect();
     try {
         const res = await client.query(text, params);
-        return res.rowCount; // Return number of affected rows
+        return res.rowCount; 
     } finally {
         client.release();
     }
 }
-
 
 // --- Authentication Middleware ---
 function authenticateToken(req, res, next) {
@@ -208,7 +202,6 @@ app.post('/api/register', authLimiter, async (req, res, next) => {
     try {
         const password_hash = await bcrypt.hash(password, 10);
         
-        // Start a transaction
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -304,14 +297,13 @@ app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
 
     if (role === 'location_admin') {
         if (location_id !== currentUserLocationId) {
-            if (!(location_id === null && currentUserLocationId === null)) { // Allow loc_admin with no location to assign to null
+            if (!(location_id === null && currentUserLocationId === null)) { 
                 return res.status(403).json({ error: 'Access Denied: Location admin can only invite employees to their assigned location.' });
             }
         }
     }
 
     try {
-        // Verify location exists and belongs to company (if not null)
         if (location_id !== null) {
             const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
             if (locationCheck.length === 0) { return res.status(400).json({ error: 'Selected location does not exist or does not belong to your company.' }); }
@@ -429,7 +421,7 @@ app.post('/api/locations', authenticateToken, async (req, res, next) => {
     try {
         const result = await query('INSERT INTO Locations (company_id, location_name, location_address) VALUES ($1, $2, $3) RETURNING location_id', [companyId, location_name, location_address]);
         res.status(201).json({ message: 'Location created!', locationId: result[0].location_id });
-    } catch (error) {
+    }  catch (error) {
         console.error("Database error creating location:", error);
         next(error);
     }
@@ -473,7 +465,7 @@ app.get('/api/users', authenticateToken, async (req, res, next) => {
     } else if (role === 'employee') {
         sql += ` AND Users.user_id = $${paramIndex++}`;
         params.push(currentUserId);
-    } else if (!['super_admin'].includes(role)) { // Deny if not admin or employee
+    } else if (!['super_admin'].includes(role)) { 
         return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view users.' });
     }
 
@@ -571,7 +563,7 @@ app.get('/api/schedules', authenticateToken, async (req, res, next) => {
     } else if (role === 'employee') {
         sql += ` AND Schedules.employee_id = $${paramIndex++}`;
         params.push(currentUserId);
-    } else if (!['super_admin'].includes(role)) { // Deny if not admin or employee
+    } else if (!['super_admin'].includes(role)) { 
         return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view schedules.' });
     }
     
@@ -694,7 +686,7 @@ app.put('/api/job-postings/:id', authenticateToken, async (req, res, next) => {
 
     if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can update job postings.' }); }
     if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid job posting ID provided.' }); }
-    if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) { return res.status(400).json({ error: 'Job title must be a non-empty string if provided.' }); }
+    if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) { return res.status(400).json({ error: "Job title is required and must be a non-empty string." }); }
     if (description !== undefined && (typeof description !== 'string' || description.trim() === '')) { return res.status(400).json({ error: 'Description must be a non-empty string if provided.' }); }
     if (requirements !== undefined && typeof requirements !== 'string') { return res.status(400).json({ error: 'Requirements must be a string if provided.' }); }
     const allowedStatuses = ['Open', 'Closed', 'Filled'];
@@ -886,7 +878,7 @@ app.put('/api/applicants/:id', authenticateToken, async (req, res, next) => {
         }
     }
     if (job_posting_id !== undefined) {
-        if (role === 'super_admin' || (role === 'location_admin')) { // Location admin check for job_posting_id will happen at DB level or explicit check below
+        if (role === 'super_admin' || (role === 'location_admin')) { 
             const jobCheck = await query('SELECT job_posting_id, location_id FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2', [job_posting_id, companyId]);
             if (jobCheck.length === 0) { return res.status(400).json({ error: 'Job Posting not found or does not belong to your company.' }); }
             if (role === 'location_admin' && jobCheck[0].location_id !== null && jobCheck[0].location_id !== currentUserLocationId) {
@@ -952,7 +944,7 @@ app.post('/api/documents', authenticateToken, async (req, res, next) => {
     if (!title || typeof title !== 'string' || title.trim() === '' || !file_name || typeof file_name !== 'string' || file_name.trim() === '' || !file_type || typeof file_type !== 'string' || file_type.trim() === '' || !file_url || typeof file_url !== 'string' || !/^https?:\/\/[^\s$.?#].[^\s]*$/i.test(file_url)) {
         return res.status(400).json({ error: 'Invalid document data provided. Title, file name, type, and a valid URL are required.' });
     }
-    if (description !== undefined && typeof description !== 'string') { return res.status(400).json({ error: 'Description must be a string if provided.' }); }
+    if (description !== undefined && typeof description !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
 
     try {
         const result = await runCommand(
