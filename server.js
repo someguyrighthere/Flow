@@ -1250,7 +1250,7 @@ app.get('/admin.html', (req, res) => {
 // SPA Fallback: For any other GET request not handled by an API route or explicit file route,
 // serve index.html. This is crucial for client-side routing.
 // This should be the very last route for GET requests.
-app.get('*', (req, res) => {
+app.get(/'*'/, (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
