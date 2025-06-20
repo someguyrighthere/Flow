@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "1.0.0",
+  "version": "1.0", // IMPORTANT: Manually re-type this line in your local file to ensure no hidden invalid characters
   // "main": "index.js", // REMOVED OR CHANGE TO "server.js" - Render is looking for this
   "scripts": {
     "test": "mocha --require @babel/register --timeout 5000 --extension cjs",
