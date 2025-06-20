@@ -11,15 +11,11 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 
 // Load environment variables from .env file in development
-// CRUCIAL FIX: Ensure dotenv.config() only runs locally if the file exists and it's not a test run.
-// Render provides variables directly via its dashboard.
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
     try {
-        // Check if .env file exists locally before trying to load it
         require('fs').accessSync(path.join(__dirname, '.env'));
         require('dotenv').config();
     } catch (e) {
-        // Log that .env was not loaded, but don't crash if it's expected (e.g., in CI/CD or deployed without .env)
         console.warn("Warning: .env file not found or accessible locally. Relying on system environment variables.");
     }
 }
@@ -244,7 +240,7 @@ app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
         }
         next(error);
     }
-    } catch (error) {
+    } catch (error) { // Syntax error is within this block!
         console.error("Invite employee error:", error);
         next(error);
     }
@@ -484,7 +480,7 @@ app.get('/api/schedules', authenticateToken, async (req, res, next) => {
             sql += ` AND Schedules.location_id = $${paramIndex++}`;
             params.push(currentUserLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+            return res.status(403).json({ error: 'Access Deny: Insufficient permissions to view schedules.' });
         }
     } else if (role === 'employee') {
         sql += ` AND Schedules.employee_id = $${paramIndex++}`;
@@ -933,8 +929,60 @@ app.delete('/api/documents/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
+// --- Static Files and SPA Fallback (Moved to the very end) ---
+// Define Public Directory Path - this assumes server.js is in the root of the repository
+const PUBLIC_DIR = path.join(__dirname, '/'); 
+// Serve static files (CSS, JS, images, etc.) from the public directory
+app.use(express.static(PUBLIC_DIR));
+
+// Explicitly serve HTML files for direct requests (e.g., typing URL into browser)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
+});
+app.get('/register.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'register.html'));
+});
+app.get('/pricing.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'pricing.html'));
+});
+app.get('/suite-hub.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'suite-hub.html'));
+});
+app.get('/dashboard.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'dashboard.html'));
+});
+app.get('/checklists.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'checklists.html'));
+});
+app.get('/new-hire-view.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'new-hire-view.html'));
+});
+app.get('/hiring.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'hiring.html'));
+});
+app.get('/scheduling.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'scheduling.html'));
+});
+app.get('/sales-analytics.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'sales-analytics.html'));
+});
+app.get('/documents.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'documents.html'));
+});
+app.get('/account.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'account.html'));
+});
+app.get('/admin.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'admin.html'));
+});
+
+// SPA Fallback: For any other GET request not handled by an API route or explicit file route,
+// serve index.html. This is crucial for client-side routing.
 app.get(/'*'/, (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html')); // Fallback to index.html for SPA routing
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 app.use((err, req, res, next) => {
