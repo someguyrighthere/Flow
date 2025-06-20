@@ -649,10 +649,10 @@ app.get('/api/job-postings', authenticateToken, async (req, res, next) => {
             sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
             params.push(currentUserLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+            return res.status(403).json({ error: 'Access Deny: Insufficient permissions to view job postings.' });
         }
     } else if (role === 'employee') {
-        return res.status(403).json({ error: 'Access Deny: Insufficient permissions to view job postings.' });
+        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view job postings.' });
     }
 
     const allowedStatuses = ['Open', 'Closed', 'Filled'];
