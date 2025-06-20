@@ -8,7 +8,7 @@ const path = require('path');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
 const rateLimit = require('express-rate-limit');
-const morgan = require('morgan'); // CORRECTED: Removed extra 'require ='
+const morgan = require('morgan');
 
 // Load environment variables from .env file in development
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
@@ -25,10 +25,18 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 app.use(cors({
     origin: function (origin, callback) {
         const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:8000', 'null'];
+
+        // --- NEW: CORS DEBUGGING LOGS ---
+        console.log(`CORS Check: Incoming Origin -> ${origin}`);
+        console.log(`CORS Check: Allowed Origins -> ${allowedOrigins.join(', ')}`);
+        // --- END CORS DEBUGGING LOGS ---
+
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'), false);
+            const msg = `CORS Error: Origin ${origin} not allowed. Allowed: ${allowedOrigins.join(', ')}`;
+            console.error(msg); // Log the specific CORS rejection
+            callback(new Error(msg), false);
         }
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
