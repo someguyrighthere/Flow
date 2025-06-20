@@ -1,10 +1,18 @@
+// app.js - Client-Side JavaScript for Flow Business Suite
+// This file handles all client-side logic, form submissions, and API requests.
+
+// IMPORTANT: Set this to your deployed backend API URL.
+// Your frontend is deployed at https://flow-gz1r.onrender.com/
+// Assuming your backend API is accessible at the same root with '/api' suffix (as per server.js routes configuration).
 const API_BASE_URL = 'https://flow-gz1r.onrender.com';
 
 /**
  * Handles API requests to the backend.
  * Includes authentication token in headers if available.
  * @param {string} method - HTTP method (GET, POST, PUT, DELETE).
- * @param {string} path - API endpoint path (e.g., '/login', '/profile').
+ * @param {string} path - API endpoint path (e.g., '/login', '/profile'). Note: path here
+ * should NOT include the '/api' prefix as API_BASE_URL already contains it
+ * or handles the base path. Our server.js routes are now defined without '/api' prefix.
  * @param {object} body - Request body data (for POST, PUT).
  * @returns {Promise<object|null>} - JSON response data or null if 204.
  * @throws {Error} - If the API response is not OK.
@@ -20,7 +28,10 @@ async function apiRequest(method, path, body = null) {
     if (token) options.headers['Authorization'] = `Bearer ${token}`;
     if (body) options.body = JSON.stringify(body);
 
-    const response = await fetch(`${API_BASE_URL}${path}`, options);
+    // Construct the full API URL. Since server.js routes are now /login, /register etc.,
+    // we append the path directly to API_BASE_URL.
+    const response = await fetch(`${API_BASE_URL}${path}`, options); // Corrected: Path directly appended
+
     if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Something went wrong');
@@ -34,6 +45,7 @@ async function apiRequest(method, path, body = null) {
 
 /**
  * Displays a custom modal message to the user.
+ * Ensure your HTML includes elements with ids: 'message-modal-overlay', 'modal-message-text', 'modal-close-button'
  * @param {string} message - The message to display.
  * @param {boolean} isError - True if it's an error message, false otherwise.
  */
@@ -46,6 +58,7 @@ function showModalMessage(message, isError = false) {
         modalMessage.textContent = message;
         modalMessage.style.color = isError ? '#ff8a80' : 'var(--text-light)'; // Apply error color or default
         modalOverlay.style.display = 'flex'; // Show the modal
+        modalOverlay.style.zIndex = '1000'; // Ensure it's on top
 
         // Hide the modal when the close button is clicked
         modalCloseButton.onclick = () => {
@@ -59,10 +72,8 @@ function showModalMessage(message, isError = false) {
             }
         };
     } else {
-        // Fallback to console log if modal elements are not found
         console.error("Modal elements not found for showModalMessage. Message:", message);
-        // Fallback to alert for critical errors if modal isn't available
-        // Note: For a production app, ensure your modal is reliably present.
+        // Fallback for debugging if modal not available
         if (isError) {
             console.error(`ERROR: ${message}`);
         } else {
@@ -121,28 +132,67 @@ function showConfirmModal(message, confirmButtonText = 'Confirm') {
     });
 }
 
+/**
+ * Sets up the settings dropdown and logout functionality.
+ * Assumes elements with IDs 'settings-button', 'settings-dropdown', and 'logout-button' exist on relevant pages.
+ */
+function setupSettingsDropdown() {
+    const settingsButton = document.getElementById('settings-button');
+    const settingsDropdown = document.getElementById('settings-dropdown');
+    if (settingsButton && settingsDropdown) {
+        settingsButton.addEventListener('click', (event) => {
+            event.stopPropagation(); // Prevent document click from closing it immediately
+            settingsDropdown.style.display = settingsDropdown.style.display === 'block' ? 'none' : 'block';
+        });
+        // Close dropdown if clicked outside
+        document.addEventListener('click', (event) => {
+            if (!settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
+                settingsDropdown.style.display = 'none';
+            }
+        });
+    }
+
+    // Handle the logout button if it's present on the page
+    const logoutButton = document.getElementById('logout-button');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', () => {
+            localStorage.removeItem('authToken'); // Clear token
+            localStorage.removeItem('userRole'); // Clear role
+            window.location.href = 'login.html'; // Redirect to login page
+        });
+    }
+}
+
+
+// --- Page Specific Handlers ---
 
 document.addEventListener('DOMContentLoaded', () => {
-    const page = window.location.pathname;
+    const page = window.location.pathname; // Get the current page path
+
+    // Call the appropriate handler based on the page
     if (page.includes('login.html')) {
         handleLoginPage();
+    } else if (page.includes('register.html')) {
+        handleRegisterPage(); // Added handler for register page
     } else if (page.includes('suite-hub.html')) {
         handleSuiteHubPage();
     } else if (page.includes('account.html')) {
         handleAccountPage();
     } else if (page.includes('admin.html')) {
         handleAdminPage();
-    } else if (page.includes('pricing.html')) { // Handle pricing page
+    } else if (page.includes('pricing.html')) {
         handlePricingPage();
-    } else if (page.includes('scheduling.html')) { // Handle scheduling page
+    } else if (page.includes('scheduling.html')) {
         handleSchedulingPage();
-    } else if (page.includes('hiring.html')) { // Handle hiring page
+    } else if (page.includes('hiring.html')) {
         handleHiringPage();
-    } else if (page.includes('sales-analytics.html')) { // Handle Sales & Analytics page
+    } else if (page.includes('sales-analytics.html')) {
         handleSalesAnalyticsPage();
     }
-    setupSettingsDropdown(); // This is called on every page that includes app.js
+    // Call global setup functions that might be needed on multiple pages
+    setupSettingsDropdown();
 });
+
 
 /**
  * Handles the logic for the login page.
@@ -150,65 +200,138 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 function handleLoginPage() {
     const loginForm = document.getElementById('login-form');
-    if (!loginForm) return;
+    if (!loginForm) return; // Exit if form not found on this page
+
     loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Prevent default form submission (page reload)
+
         const emailInput = document.getElementById('email');
         const passwordInput = document.getElementById('password');
-        const email = emailInput.value;
+        const email = emailInput.value.trim(); // Trim whitespace
         const password = passwordInput.value;
-        const errorMessage = document.getElementById('error-message'); // Existing error message p tag
+        const errorMessage = document.getElementById('error-message');
 
         // Clear previous error messages and hide
-        if (errorMessage) { // Defensive check
+        if (errorMessage) {
             errorMessage.textContent = '';
-            errorMessage.classList.remove('visible'); // Hide it visually and from screen readers
+            errorMessage.classList.remove('visible');
         }
 
-        // Basic Client-Side Validation
+        // Basic Client-Side Validation (should mirror backend validation)
         if (!email || !password) {
             if (errorMessage) {
                 errorMessage.textContent = 'Email and password are required.';
-                errorMessage.classList.add('visible'); // Show it
+                errorMessage.classList.add('visible');
             }
             return;
         }
 
-        // Basic email format validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             if (errorMessage) {
                 errorMessage.textContent = 'Please enter a valid email address.';
-                errorMessage.classList.add('visible'); // Show it
+                errorMessage.classList.add('visible');
             }
             return;
         }
 
-        // Password length validation (matches minlength on input)
         if (password.length < 6) {
             if (errorMessage) {
                 errorMessage.textContent = 'Password must be at least 6 characters long.';
-                errorMessage.classList.add('visible'); // Show it
+                errorMessage.classList.add('visible');
             }
             return;
         }
 
         try {
-            const data = await apiRequest('POST', '/login', { email, password });
-            localStorage.setItem('authToken', data.token);
+            // Make API request to backend login endpoint
+            const data = await apiRequest('POST', '/login', { email, password }); // Note: '/login' as API_BASE_URL handles the root path
+
+            localStorage.setItem('authToken', data.token); // Store JWT
+            localStorage.setItem('userRole', data.role); // Store user role
+
+            // Redirect based on user role after successful login
             if (data.role === 'super_admin' || data.role === 'location_admin') {
                 window.location.href = 'suite-hub.html';
             } else {
-                window.location.href = 'new-hire-view.html';
+                window.location.href = 'new-hire-view.html'; // Assuming this is for general employees
             }
         } catch (error) {
+            // Handle API errors (e.g., 'Invalid credentials' from backend, or network errors)
+            console.error("Login API error:", error);
             if (errorMessage) {
                 errorMessage.textContent = `Login Failed: ${error.message}`;
-                errorMessage.classList.add('visible'); // Show it
+                errorMessage.classList.add('visible');
             }
+            // Also show modal for more prominent feedback
+            showModalMessage(`Login Failed: ${error.message}`, true);
         }
     });
 }
+
+/**
+ * Handles the logic for the registration page.
+ * Manages form submission and redirects on successful registration.
+ */
+function handleRegisterPage() {
+    const registerForm = document.getElementById('register-form');
+    if (!registerForm) return; // Exit if form not found on this page
+
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault(); // Prevent default form submission
+
+        const companyNameInput = document.getElementById('company-name');
+        const fullNameInput = document.getElementById('full-name');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const errorMessage = document.getElementById('error-message');
+
+        const company_name = companyNameInput.value.trim();
+        const full_name = fullNameInput.value.trim();
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+
+        // Clear previous error messages
+        errorMessage.textContent = '';
+        errorMessage.classList.remove('visible');
+
+        // Basic Client-Side Validation (ensure this matches server-side validation)
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email)) {
+            errorMessage.textContent = 'Please fill all fields correctly. Password must be at least 6 characters and email valid.';
+            errorMessage.classList.add('visible');
+            return;
+        }
+
+        try {
+            // Make API request to backend register endpoint
+            const data = await apiRequest('POST', '/register', { company_name, full_name, email, password }); // Note: '/register' as API_BASE_URL handles the root path
+
+            showModalMessage('Account created successfully! Please log in.', false);
+            // Clear form fields on success
+            companyNameInput.value = '';
+            fullNameInput.value = '';
+            emailInput.value = '';
+            passwordInput.value = '';
+
+            // Redirect to login page after a short delay
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 2000);
+
+        } catch (error) {
+            // Handle API errors (e.g., 'Email already registered' from backend, or network errors)
+            console.error("Registration API error:", error);
+            if (errorMessage) {
+                errorMessage.textContent = `Registration Failed: ${error.message}`;
+                errorMessage.classList.add('visible');
+            }
+            // Also show modal for more prominent feedback
+            showModalMessage(`Registration Failed: ${error.message}`, true);
+        }
+    });
+}
+
 
 /**
  * Handles the logic for the suite-hub page.
@@ -522,4 +645,5 @@ function handleAdminPage() {
     // Initial load for admin page
     loadLocations(); // Load locations and populate dropdown
     loadUsers(); // Load and display users
+}
 }
