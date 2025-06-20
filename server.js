@@ -681,7 +681,7 @@ app.post('/api/applicants', authenticateToken, async (req, res, next) => {
 
     if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can add applicants.' }); }
     if (typeof job_posting_id !== 'number' || job_posting_id <= 0 || !full_name || !email || !isValidEmail(email) || !phone_number) {
-        return res.status(400).json({ error: 'Invalid applicant data provided. Job posting ID, full name, email, and phone number are required.' });
+        return res.status(400).json({ error: 'Invalid applicant data provided. Title, file name, type, and a valid URL are required.' });
     }
     if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
     if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
