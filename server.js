@@ -97,7 +97,8 @@ const isValidEmail = (email) => {
 };
 
 // --- API Routes (Define ALL API routes FIRST) ---
-
+// These routes should always be processed before any static file serving
+// to ensure API requests are handled by your backend logic.
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
