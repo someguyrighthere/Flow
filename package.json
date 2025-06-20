@@ -1,11 +1,11 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "index.js",
+  // "main": "index.js", // REMOVED OR CHANGE TO "server.js" - Render is looking for this
   "scripts": {
     "test": "mocha --require @babel/register --timeout 5000 --extension cjs",
-    "build:js": "uglifyjs ../js/app.js -o ../js/app.min.js",
-    "build:css": "cleancss -o ../css/style.min.css ../css/style.css && cleancss -o ../css/theme.min.css ../css/theme.css",
+    "build:js": "uglifyjs ./js/app.js -o ./js/app.min.js", // Updated path if app.js is in root/js
+    "build:css": "cleancss -o ./css/style.min.css ./css/style.css && cleancss -o ./css/theme.min.css ./css/theme.css", // Updated path
     "build": "npm run build:js && npm run build:css",
     "start": "node server.js"
   },

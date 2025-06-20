@@ -1,1 +1,17 @@
 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
+
+
+
+ CORS_ORIGIN    https://flow-business-suite.onrender.com
+
+FRONTEND_URL   https://flow-business-suite.onrender.com
+JWT_SECRET    gCEr9MyUUkAhjcxEbefE9sPKE8i9LKvdUsZulcBqaTQdD3al6w
+
+STRIPE_PRICE_ID_ENT    price_1RaPvCG06NHrwsY9pCUHG5wZ
+STRIPE_PRICE_ID_PRO    price_1Ra54LG06NHrwsY9DgNT8vSl
+STRIPE_SECRET_KEY      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
+STRIPE_WEBHOOK_SECRET   whsec_0bE3OaH7uIlHTYF6cNCkAeMQtk11Qli0
+
+https://github.com/someguyrighthere/Flow
+
+npm start
