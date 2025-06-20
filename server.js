@@ -554,7 +554,7 @@ app.put('/profile', authenticateToken, async (req, res, next) => {
         await runCommand(updateSql, updateParams);
         
         // Fetch updated user details to regenerate token with new info (e.g., email or full_name)
-        const updatedUserResult = await query("SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1", [userId]);
+        const updatedUserResult = await query("SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1', [userId]);
         const updatedUser = updatedUserResult[0];
         const newPayload = {
             userId: updatedUser.user_id,
@@ -1186,7 +1186,7 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
         console.error("Database error fetching applicants:", error);
         next(error);
     }
-} // Final closing curly brace for the catch block and the route handler
+}); // Final closing curly brace for the catch block and the route handler
 
 // --- Static Files and SPA Fallback (Moved to the very end) ---
 // Define Public Directory Path - this assumes server.js is in the root of the repository
