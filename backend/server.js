@@ -1023,47 +1023,9 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
-```
-You've provided a screenshot of your Render dashboard's project overview. It shows a project named "Flow" and a service named "Flow Business Suite" that is "Deployed."
 
-You're likely still experiencing the "Login Failed: Failed to fetch" error on your deployed site.
-
-The critical insight from this screenshot, combined with your previous information, is that **you only have *one* service deployed in this "Flow" project, named "Flow Business Suite," which is a Node.js web service.**
-
-**What this means for your problem:**
-
-* This single service is responsible for **both** serving your static frontend files (HTML, CSS, JS) **AND** handling your backend API requests.
-* Your `API_BASE_URL` in your frontend's `app.js` (which is compiled into `app.min.js`) **must** point to the public URL of *this specific service*, with the `/api` path appended for API calls.
-
-**The most likely root cause for "Login Failed: Failed to fetch" is still:**
-
-**`API_BASE_URL` in `app.js` is not configured correctly to match the *single* service's URL for its API endpoints.**
-
-Even though your service has a Public URL (e.g., `https://flow-business-suite.onrender.com`), when your frontend makes an API call like to `https://flow-business-suite.onrender.com/api/login`, your `server.js` needs to be correctly set up to handle that `/api` path.
-
-Let's assume the Public URL of your "Flow Business Suite" service is indeed `https://flow-business-suite.onrender.com`.
-
-**Here's the definitive fix strategy. This involves ensuring `API_BASE_URL` is exactly right in `app.js` and critically, ensuring `server.js` handles API routes *before* serving static files.**
-
-**Step 1: Ensure `API_BASE_URL` in `app.js` (Local File) is correct.**
-
-* Open your local file: `onboardflow/js/app.js`.
-* Find the line `const API_BASE_URL = '...';`.
-* **Change it to:**
-    ```javascript
     const API_BASE_URL = 'https://flow-business-suite.onrender.com/api'; 
-    ```
-    (Ensure `https://flow-business-suite.onrender.com` is the *exact* Public URL of your single Render service).
-* Save `app.js`.
-
-**Step 2: Modify `server.js` to ensure API routes are prioritized over static file serving.**
-
-While your current `server.js` seems to have API routes defined before `express.static`, let's explicitly ensure this. More importantly, the `TypeError` for `morgan` was a major problem.
-
-**I will update your `backend/server.js` Canvas. I will ensure that the `morgan` typo is corrected and add comments indicating the best practice for ordering API routes and static file serving.**
-
-
-```javascript
+ 
 // --- Imports ---
 const express = require('express');
 const { Pool } = require('pg');
