@@ -1198,7 +1198,7 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
 // Define Public Directory Path - this assumes server.js is in the root of the repository
 const PUBLIC_DIR = path.join(__dirname, '/');
 // Serve static files (CSS, JS, images, etc.) from the public directory
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR);
 
 // Explicitly serve HTML files for direct requests (e.g., typing URL into browser)
 // It's generally better to have a single entry point (index.html) for SPAs
