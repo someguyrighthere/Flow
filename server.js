@@ -1191,8 +1191,8 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
     } catch (error) {
         console.error("Database error fetching applicants:", error);
         next(error);
-    }
-} // Final closing curly brace for the catch block and the route handler
+    
+} 
 
 // --- Static Files and SPA Fallback (Moved to the very end) ---
 // Define Public Directory Path - this assumes server.js is in the root of the repository
@@ -1250,7 +1250,7 @@ app.get('/admin.html', (req, res) => {
 // SPA Fallback: For any other GET request not handled by an API route or explicit file route,
 // serve index.html. This is crucial for client-side routing.
 // This should be the very last route for GET requests.
-app.get(/'*'/, (req, res) => {
+app.get('*', (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
