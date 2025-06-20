@@ -554,7 +554,7 @@ app.put('/profile', authenticateToken, async (req, res, next) => {
         await runCommand(updateSql, updateParams);
         
         // Fetch updated user details to regenerate token with new info (e.g., email or full_name)
-        const updatedUserResult = await query("SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1', [userId]);
+        const updatedUserResult = await query("SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1", [userId]);
         const updatedUser = updatedUserResult[0];
         const newPayload = {
             userId: updatedUser.user_id,
