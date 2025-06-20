@@ -126,7 +126,8 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
                 break;
             case 'invoice.payment_failed':
                 const invoiceFailed = event.data.object;
-                console.log(`Invoice Payment Failed: ${invoiceNFailed.id}`); // This line causes the error if it's mistyped
+                console.log(`Invoice Payment Failed: ${invoiceFailed.id}`);
+                // Corrected from invoiceNFailed.id to invoiceFailed.id
                 if (invoiceFailed.subscription && invoiceFailed.customer) {
                     await client.query(
                         'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
@@ -487,7 +488,7 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
         const password_hash = await bcrypt.hash(password, 10);
         // Corrected: Added RETURNING user_id to get the newly created user's ID
         const result = await runCommand(
-            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, position, employee_id, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 'employee', 'active', 'free') RETURNING user_id`,
+            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 'employee', 'active', 'free') RETURNING user_id`,
             [companyId, location_id, full_name, email, password_hash, position, employee_id]
         );
         // The runCommand now returns an object with user_id if successful
@@ -966,7 +967,7 @@ app.get('/job-postings', authenticateToken, async (req, res, next) => {
 
         // Super admin can filter by any location
         // Location admin can only filter by their assigned location or null (unassigned)
-        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) { // Assuming 0 or null for unassigned
+        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) {
             sql += ` AND location_id = $${paramIndex++}`;
             params.push(parsedLocationId);
         } else {
@@ -1191,8 +1192,8 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
     } catch (error) {
         console.error("Database error fetching applicants:", error);
         next(error);
-    
-} 
+    }
+} // Final closing curly brace for the catch block and the route handler
 
 // --- Static Files and SPA Fallback (Moved to the very end) ---
 // Define Public Directory Path - this assumes server.js is in the root of the repository
