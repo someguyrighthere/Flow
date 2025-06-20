@@ -8,7 +8,7 @@ const path = require('path');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
 const rateLimit = require('express-rate-limit');
-const morgan = require('morgan'); // CORRECTED: Removed the extra ' = require'
+const morgan = require('morgan');
 
 // Load environment variables from .env file in development
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
