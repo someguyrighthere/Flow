@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'https://flow-gz1r.onrender.com/api';
 
 /**
  * Handles API requests to the backend.
