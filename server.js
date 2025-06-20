@@ -275,8 +275,14 @@ app.post('/register', authLimiter, async (req, res, next) => {
         } catch (dbErr) {
             await client.query('ROLLBACK'); // Rollback on error
             console.error("Database error during registration:", dbErr);
-            if (dbErr.message && dbErr.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
-                return res.status(409).json({ error: 'Email already registered.' });
+            // NEW: More specific error messages for duplicate unique constraints
+            if (dbErr.code === '23505') { // PostgreSQL unique_violation error code
+                if (dbErr.constraint === 'users_email_key') {
+                    return res.status(409).json({ error: 'Email already registered. Please use a different email address.' });
+                }
+                if (dbErr.constraint === 'companies_company_name_key') {
+                    return res.status(409).json({ error: 'Company name already registered. Please choose a different company name.' });
+                }
             }
             next(dbErr); // Pass to general error handler
         } finally {
@@ -1186,7 +1192,7 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
         console.error("Database error fetching applicants:", error);
         next(error);
     }
-}); // Final closing curly brace for the catch block and the route handler
+} // Final closing curly brace for the catch block and the route handler
 
 // --- Static Files and SPA Fallback (Moved to the very end) ---
 // Define Public Directory Path - this assumes server.js is in the root of the repository
