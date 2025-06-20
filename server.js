@@ -101,7 +101,7 @@ const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-// --- API Routes (Define ALL API routes FIRST, so they are not caught by static file serving) ---
+// --- API Routes (Define ALL API routes FIRST) ---
 // These routes must come BEFORE any static file serving middleware
 // to ensure API requests are handled by your backend logic.
 const authLimiter = rateLimit({
@@ -221,7 +221,7 @@ app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
         }
     }
 
-    try {
+    try { // Outer try block
         if (location_id !== null) {
             const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
             if (locationCheck.length === 0) { return res.status(400).json({ error: 'Selected location does not exist or does not belong to your company.' }); }
@@ -233,18 +233,14 @@ app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
             [companyId, location_id, full_name, email, password_hash, position, employee_id]
         );
         res.status(201).json({ message: "Employee invited successfully!", userId: result });
-    } catch (error) {
+    } catch (error) { // The outer catch block for the above try
         console.error("Invite employee error:", error);
         if (error.message && error.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
             return res.status(409).json({ error: 'Email already registered.' });
         }
         next(error);
     }
-    } catch (error) { 
-        console.error("Invite employee error:", error);
-        next(error);
-    }
-});
+}); // <--- THIS WAS THE MISSING CLOSING CURLY BRACE FOR THE OUTER TRY BLOCK
 
 app.get('/api/profile', authenticateToken, async (req, res, next) => {
     try {
@@ -255,7 +251,7 @@ app.get('/api/profile', authenticateToken, async (req, res, next) => {
     }  catch (error) {
         console.error("Error fetching profile info:", error);
         next(error);
-    
+    }
 });
 
 app.put('/api/profile', authenticateToken, async (req, res, next) => {
