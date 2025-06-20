@@ -11,8 +11,17 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 
 // Load environment variables from .env file in development
+// CRUCIAL FIX: Ensure dotenv.config() only runs locally if the file exists and it's not a test run.
+// Render provides variables directly via its dashboard.
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
-    require('dotenv').config();
+    try {
+        // Check if .env file exists locally before trying to load it
+        require('fs').accessSync(path.join(__dirname, '.env'));
+        require('dotenv').config();
+    } catch (e) {
+        // Log that .env was not loaded, but don't crash if it's expected (e.g., in CI/CD or deployed without .env)
+        console.warn("Warning: .env file not found or accessible locally. Relying on system environment variables.");
+    }
 }
 
 const stripeInstance = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -96,8 +105,8 @@ const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-// --- API Routes (Define ALL API routes FIRST) ---
-// These routes should always be processed before any static file serving
+// --- API Routes (Define ALL API routes FIRST, so they are not caught by static file serving) ---
+// These routes must come BEFORE any static file serving middleware
 // to ensure API requests are handled by your backend logic.
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -233,6 +242,10 @@ app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
         if (error.message && error.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
             return res.status(409).json({ error: 'Email already registered.' });
         }
+        next(error);
+    }
+    } catch (error) {
+        console.error("Invite employee error:", error);
         next(error);
     }
 });
