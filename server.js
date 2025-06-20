@@ -820,6 +820,9 @@ app.get('/api/applicants', authenticateToken, async (req, res, next) => {
             return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
         }
     } else if (role === 'employee') {
+        sql += ` AND Applicants.user_id = $${paramIndex++}`;
+        params.push(currentUserId);
+    } else if (!['super_admin'].includes(role)) { 
         return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view applicants.' });
     }
 
