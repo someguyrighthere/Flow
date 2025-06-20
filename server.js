@@ -240,7 +240,7 @@ app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
         }
         next(error);
     }
-    } catch (error) { // Syntax error is within this block!
+    } catch (error) { 
         console.error("Invite employee error:", error);
         next(error);
     }
