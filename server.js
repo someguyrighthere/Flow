@@ -1,4 +1,4 @@
-// --// --- Imports ---
+// --- Imports ---
 const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
@@ -937,4 +937,3 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
-
