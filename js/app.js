@@ -6,6 +6,13 @@
 // Assuming your backend API is accessible at the same root with '/api' suffix (as per server.js routes configuration).
 const API_BASE_URL = 'https://flow-gz1r.onrender.com';
 
+// Initialize Stripe.js with your public key (replace with your actual publishable key)
+// This key should be retrieved from your backend or securely stored in your client-side config.
+// For now, using a placeholder. You'd typically load this from an environment variable or a meta tag.
+// IMPORTANT: Replace 'pk_test_YOUR_STRIPE_PUBLISHABLE_KEY' with your actual Stripe Publishable Key
+const stripe = Stripe('pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td'); 
+
+
 /**
  * Handles API requests to the backend.
  * Includes authentication token in headers if available.
@@ -181,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (page.includes('admin.html')) {
         handleAdminPage();
     } else if (page.includes('pricing.html')) {
-        handlePricingPage();
+        handlePricingPage(); // Added handler for pricing page
     } else if (page.includes('scheduling.html')) {
         handleSchedulingPage();
     } else if (page.includes('hiring.html')) {
@@ -391,7 +398,8 @@ function handleAccountPage() {
             if (displayProfileEmail) displayProfileEmail.textContent = profile.email || 'N/A';
             if (profileNameInput) profileNameInput.value = profile.fullName || '';
             if (profileEmailInput) profileEmailInput.value = profile.email || '';
-        } catch (error) {
+        }
+        catch (error) {
             console.error("Error loading profile info:", error);
             showModalMessage(`Failed to load profile: ${error.message}`, true);
         }
@@ -419,20 +427,20 @@ function handleAccountPage() {
             try {
                 // Send the update request
                 const result = await apiRequest('PUT', '/profile', updatePayload);
-                
+
                 // If a new token is returned, update it in localStorage
                 if (result && result.token) {
                     localStorage.setItem('authToken', result.token);
                 }
 
                 showModalMessage(result.message || 'Profile updated successfully!', false);
-                
+
                 // Clear password fields after successful update for security
                 if (currentPasswordInput) currentPasswordInput.value = '';
                 if (newPasswordInput) newPasswordInput.value = '';
-                
+
                 // Reload profile info to reflect changes immediately
-                loadProfileInfo(); 
+                loadProfileInfo();
             } catch (error) {
                 console.error("Error updating profile:", error);
                 showModalMessage(`Failed to update profile: ${error.message}`, true);
@@ -471,12 +479,12 @@ function handleAdminPage() {
             locationListDiv.innerHTML = ''; // Clear loading message
             if (locations.length === 0) {
                 locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
-                if(adminLocationSelect) { // Defensive check
+                if (adminLocationSelect) { // Defensive check
                     adminLocationSelect.innerHTML = '<option value="">No locations available</option>';
                     adminLocationSelect.disabled = true;
                 }
             } else {
-                if(adminLocationSelect) adminLocationSelect.disabled = false; // Defensive check
+                if (adminLocationSelect) adminLocationSelect.disabled = false; // Defensive check
                 locations.forEach(loc => {
                     const locDiv = document.createElement('div');
                     locDiv.className = 'list-item';
@@ -494,7 +502,7 @@ function handleAdminPage() {
                 });
 
                 // Populate admin location select dropdown
-                if(adminLocationSelect) { // Defensive check
+                if (adminLocationSelect) { // Defensive check
                     adminLocationSelect.innerHTML = '<option value="">Select a location</option>'; // Default option
                     locations.forEach(loc => {
                         const option = document.createElement('option');
@@ -555,7 +563,7 @@ function handleAdminPage() {
             const id = targetButton.dataset.id;
             const type = targetButton.dataset.type; // 'location' or 'user'
             const confirmationMessage = `Are you sure you want to delete this ${type}?`;
-            
+
             // Replaced native confirm() with custom showConfirmModal
             const confirmed = await showConfirmModal(confirmationMessage, 'Delete');
 
@@ -627,7 +635,7 @@ function handleAdminPage() {
                     location_id: adminLocationId,
                     password: adminPassword
                 });
-                
+
                 if (document.getElementById('admin-name')) document.getElementById('admin-name').value = '';
                 if (document.getElementById('admin-email')) document.getElementById('admin-email').value = '';
                 if (document.getElementById('admin-password')) document.getElementById('admin-password').value = '';
@@ -645,4 +653,100 @@ function handleAdminPage() {
     // Initial load for admin page
     loadLocations(); // Load locations and populate dropdown
     loadUsers(); // Load and display users
+}
+
+/**
+ * Handles the logic for the pricing page.
+ * Attaches event listeners to pricing tier buttons to initiate Stripe checkout sessions.
+ */
+function handlePricingPage() {
+    const freePlanBtn = document.getElementById('free-plan-btn');
+    const proPlanBtn = document.getElementById('pro-plan-btn');
+    const enterprisePlanBtn = document.getElementById('enterprise-plan-btn');
+
+    // Handle 'Current Plan' button - typically, it would just show current status or lead to account page
+    if (freePlanBtn) {
+        freePlanBtn.addEventListener('click', () => {
+            // For now, it just shows a message, but it could fetch user's current plan status
+            showModalMessage('You are currently on the Free plan. No action needed.', false);
+        });
+    }
+
+    // Handle 'Choose Pro' and 'Choose Enterprise' buttons to initiate Stripe checkout
+    const handlePlanButtonClick = async (event) => {
+        const planId = event.target.dataset.planId; // Get the plan ID from data-plan-id attribute
+
+        if (!planId) {
+            showModalMessage('Plan ID not found. Cannot proceed with checkout.', true);
+            return;
+        }
+
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) {
+            showModalMessage('Please log in to choose a plan.', true);
+            // Optionally redirect to login
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 2000);
+            return;
+        }
+
+        try {
+            // Make an API request to your backend to create a Stripe Checkout Session
+            // Your backend should have an endpoint like /create-checkout-session
+            const response = await apiRequest('POST', '/create-checkout-session', { planId: planId });
+            const sessionId = response.sessionId;
+
+            if (sessionId) {
+                // Redirect to Stripe Checkout page
+                const result = await stripe.redirectToCheckout({
+                    sessionId: sessionId,
+                });
+
+                if (result.error) {
+                    console.error('Stripe Checkout Error:', result.error.message);
+                    showModalMessage(`Stripe Checkout Error: ${result.error.message}`, true);
+                }
+            } else {
+                showModalMessage('Failed to create Stripe Checkout session. Please try again.', true);
+            }
+        } catch (error) {
+            console.error('Error initiating checkout:', error);
+            showModalMessage(`Error initiating checkout: ${error.message}`, true);
+        }
+    };
+
+    if (proPlanBtn) {
+        proPlanBtn.addEventListener('click', handlePlanButtonClick);
+    }
+    if (enterprisePlanBtn) {
+        enterprisePlanBtn.addEventListener('click', handlePlanButtonClick);
+    }
+}
+
+
+// --- Placeholder functions for other pages (replace with actual logic) ---
+
+function handleSchedulingPage() {
+    if (!localStorage.getItem('authToken')) {
+        window.location.href = 'login.html';
+        return;
+    }
+    console.log('Scheduling page logic goes here.');
+}
+
+function handleHiringPage() {
+    if (!localStorage.getItem('authToken')) {
+        window.location.href = 'login.html';
+        return;
+    }
+    console.log('Hiring page logic goes here.');
+}
+
+function handleSalesAnalyticsPage() {
+    if (!localStorage.getItem('authToken')) {
+        window.location.href = 'login.html';
+        return;
+    }
+    console.log('Sales Analytics page logic goes here.');
 }

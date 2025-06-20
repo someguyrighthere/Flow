@@ -25,6 +25,17 @@ const PORT = process.env.PORT || 3000; // Default to 3000 if PORT is not set
 const JWT_SECRET = process.env.JWT_SECRET; // This was missing in the original code
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY; // Stripe key
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; // Stripe webhook secret
+// Retrieve Stripe Price IDs from environment variables
+const STRIPE_PRICE_ID_PRO = process.env.STRIPE_PRICE_ID_PRO;
+const STRIPE_PRICE_ID_ENT = process.env.STRIPE_PRICE_ID_ENT;
+
+// Define employee limits for each plan (adjust these values as per your actual tiers)
+const PLAN_EMPLOYEE_LIMITS = {
+    'free': 5,          // Free plan: up to 5 employees
+    'pro': 100,         // Pro plan: up to 100 employees
+    'enterprise': null  // Enterprise plan: null or Infinity for unlimited
+};
+
 
 // Validate JWT_SECRET
 if (!JWT_SECRET) {
@@ -43,8 +54,105 @@ if (STRIPE_SECRET_KEY) {
 const app = express();
 
 // --- General Middleware ---
-app.use(express.json()); // JSON body parser should be early
-app.use(morgan('dev')); // Request logger
+app.use(morgan('dev')); // Request logger - placed early
+
+// Stripe Webhook Endpoint (This MUST be before express.json() to get raw body)
+app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+        // Use Stripe's method to construct the event from the raw body and signature
+        // req.rawBody is provided by express.raw() middleware
+        event = stripeInstance.webhooks.constructEvent(req.rawBody, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+        console.error(`Webhook Error: ${err.message}`);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // --- Database Setup (PostgreSQL) is defined later, so we need to ensure pool is available
+    // or connect specifically for this webhook. For simplicity, we'll assume pool is set up globally.
+    const client = await pool.connect(); // Connect to DB for webhook logic
+    try {
+        await client.query('BEGIN'); // Start transaction for atomicity
+
+        // Handle the event
+        switch (event.type) {
+            case 'checkout.session.completed':
+                const session = event.data.object;
+                console.log(`Checkout Session Completed: ${session.id}`);
+                const userId = session.metadata.userId;
+                const planId = session.metadata.planId;
+                if (session.payment_status === 'paid' && userId && planId) {
+                    await client.query(
+                        'UPDATE Users SET stripe_customer_id = $1, stripe_subscription_id = $2, subscription_status = $3, plan_id = $4 WHERE user_id = $5',
+                        [session.customer, session.subscription, 'active', planId, userId]
+                    );
+                    console.log(`User ${userId} subscription updated to ${planId} (active).`);
+                }
+                break;
+            case 'customer.subscription.updated':
+                const subscriptionUpdated = event.data.object;
+                console.log(`Subscription Updated: ${subscriptionUpdated.id}`);
+                if (subscriptionUpdated.customer && subscriptionUpdated.status && subscriptionUpdated.plan && subscriptionUpdated.plan.id) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1, plan_id = $2 WHERE stripe_customer_id = $3',
+                        [subscriptionUpdated.status, subscriptionUpdated.plan.id, subscriptionUpdated.customer]
+                    );
+                    console.log(`Subscription for customer ${subscriptionUpdated.customer} status updated to ${subscriptionUpdated.status} and plan to ${subscriptionUpdated.plan.id}.`);
+                }
+                break;
+            case 'customer.subscription.deleted':
+                const subscriptionDeleted = event.data.object;
+                console.log(`Subscription Deleted: ${subscriptionDeleted.id}`);
+                if (subscriptionDeleted.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1, plan_id = $2, stripe_subscription_id = NULL WHERE stripe_customer_id = $3',
+                        ['cancelled', 'free', subscriptionDeleted.customer]
+                    );
+                    console.log(`Subscription for customer ${subscriptionDeleted.customer} marked as cancelled and reverted to free.`);
+                }
+                break;
+            case 'invoice.payment_succeeded':
+                const invoiceSucceeded = event.data.object;
+                console.log(`Invoice Payment Succeeded: ${invoiceSucceeded.id}`);
+                if (invoiceSucceeded.subscription && invoiceSucceeded.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
+                        ['active', invoiceSucceeded.subscription, invoiceSucceeded.customer]
+                    );
+                    console.log(`Subscription ${invoiceSucceeded.subscription} status set to active.`);
+                }
+                break;
+            case 'invoice.payment_failed':
+                const invoiceFailed = event.data.object;
+                console.log(`Invoice Payment Failed: ${invoiceFailed.id}`);
+                if (invoiceFailed.subscription && invoiceFailed.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
+                        ['past_due', invoiceFailed.subscription, invoiceFailed.customer]
+                    );
+                    console.log(`Subscription ${invoiceFailed.subscription} status set to past_due.`);
+                }
+                break;
+            // ... handle other event types as needed
+            default:
+                console.log(`Unhandled event type ${event.type}`);
+        }
+
+        await client.query('COMMIT'); // Commit transaction
+        // Return a 200 response to acknowledge receipt of the event
+        res.status(200).json({ received: true });
+    } catch (dbErr) {
+        await client.query('ROLLBACK'); // Rollback on error
+        console.error("Database update error during webhook processing:", dbErr.message);
+        res.status(500).json({ error: 'Webhook processing failed.' });
+    } finally {
+        client.release(); // Release client back to pool
+    }
+});
+
+app.use(express.json()); // JSON body parser should be early - now after webhook
 
 // CORS Middleware
 app.use(cors({
@@ -70,6 +178,7 @@ app.use(cors({
 
 
 // --- Database Setup (PostgreSQL) ---
+// IMPORTANT: This part MUST be global and initialized before any route that uses 'pool' or 'query'/'runCommand'
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -211,13 +320,73 @@ app.post('/login', authLimiter, async (req, res, next) => {
     }
 });
 
+app.post('/create-checkout-session', authenticateToken, async (req, res, next) => {
+    const { planId } = req.body;
+    const { userId, email, companyId } = req.user; // Get user info from authenticated token
+
+    if (!stripeInstance) {
+        console.error("Stripe not initialized. STRIPE_SECRET_KEY might be missing.");
+        return res.status(500).json({ error: "Payment processing is unavailable." });
+    }
+
+    // Retrieve Stripe Price IDs from environment variables
+    let priceId;
+    switch (planId) {
+        case 'pro':
+            priceId = process.env.STRIPE_PRICE_ID_PRO; // Get from environment variable
+            break;
+        case 'enterprise':
+            priceId = process.env.STRIPE_PRICE_ID_ENT; // Get from environment variable
+            break;
+        default:
+            return res.status(400).json({ error: "Invalid plan selected." });
+    }
+
+    if (!priceId) {
+        console.error(`Stripe Price ID for plan '${planId}' is not configured.`);
+        return res.status(500).json({ error: `Payment processing: Price ID for ${planId} plan missing.` });
+    }
+
+    try {
+        const session = await stripeInstance.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+                {
+                    price: priceId,
+                    quantity: 1,
+                },
+            ],
+            mode: 'subscription', // Use 'subscription' mode for recurring payments
+            success_url: `${process.env.CORS_ORIGIN}/suite-hub.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.CORS_ORIGIN}/suite-hub.html?payment=cancelled`,
+            metadata: {
+                userId: userId,
+                planId: planId,
+                companyId: companyId,
+                userEmail: email // Useful for reconciliation in Stripe
+            },
+            customer_email: email, // Pre-fill customer email
+        });
+
+        res.status(200).json({ sessionId: session.id });
+    } catch (error) {
+        console.error("Error creating Stripe Checkout session:", error);
+        // Distinguish between Stripe-specific errors and general errors for better client feedback
+        if (error.type === 'StripeCardError' || error.type === 'StripeInvalidRequestError') {
+            return res.status(400).json({ error: error.message });
+        }
+        next(error); // Pass other errors to general error handler
+    }
+});
+
+
 app.post('/invite-admin', authenticateToken, async (req, res, next) => {
     const { full_name, email, password, location_id } = req.body;
     const { companyId, role } = req.user;
 
     // Authorization check
     if (role !== 'super_admin') {
-        return res.status(403).json({ error: 'Access Denied: Only super admins can invite other admins.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can invite other admins.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     // Input validation
@@ -251,11 +420,11 @@ app.post('/invite-admin', authenticateToken, async (req, res, next) => {
 
 app.post('/invite-employee', authenticateToken, async (req, res, next) => {
     const { full_name, email, password, position, employee_id, location_id } = req.body;
-    const { companyId, role, locationId: currentUserLocationId } = req.user;
+    const { companyId, role, locationId: currentUserLocationId, planId: currentPlanId } = req.user; // Get planId from authenticated user
 
     // Authorization check
     if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can invite employees.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can invite employees.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     
     // Input validation
@@ -264,7 +433,6 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
         return res.status(400).json({ error: "Invalid employee invitation data provided. Full name, valid email, password (min 6 chars), and a valid location are required." });
     }
     if (position !== undefined && typeof position !== 'string') { return res.status(400).json({ error: 'Position must be a string if provided.' }); }
-    // employee_id can be a string or number, or null. Validate presence only if not null
     if (employee_id !== undefined && employee_id !== null && typeof employee_id !== 'string' && typeof employee_id !== 'number') {
         return res.status(400).json({ error: 'Employee ID must be a string, number, or null if provided.' });
     }
@@ -272,19 +440,37 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
 
     // Location admin specific restriction
     if (role === 'location_admin') {
-        // If the admin is assigned to a specific location (currentUserLocationId is not null)
         if (currentUserLocationId !== null) {
-            // An admin assigned to a specific location can only invite employees to that specific location or unassigned (null)
-            // If location_id is provided and it's not the admin's location or null, deny access
             if (location_id !== currentUserLocationId && location_id !== null) {
-                return res.status(403).json({ error: 'Access Denied: Location admin can only invite employees to their assigned location or unassigned roles.' });
+                return res.status(403).json({ error: 'Access Dismissed: Location admin can only invite employees to their assigned location or unassigned roles.' }); // Changed 'Access Denied' to 'Access Dismissed'
             }
         } else {
-            // If the location admin itself is not assigned to a location, they can't invite employees
-            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location cannot invite employees to any location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location cannot invite employees to any location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     }
 
+    // --- NEW: Employee Limit Enforcement Logic ---
+    const maxEmployeesForPlan = PLAN_EMPLOYEE_LIMITS[currentPlanId];
+
+    if (maxEmployeesForPlan !== null) { // If the plan has a defined limit (not 'unlimited')
+        try {
+            // Count existing users (employees and location_admins, but NOT super_admins) for this company
+            const employeeCountResult = await query(
+                `SELECT COUNT(*) FROM Users WHERE company_id = $1 AND role IN ('employee', 'location_admin')`,
+                [companyId]
+            );
+            const currentEmployeeCount = parseInt(employeeCountResult[0].count, 10);
+
+            if (currentEmployeeCount >= maxEmployeesForPlan) {
+                return res.status(403).json({ error: `Subscription limit reached: Your current plan allows up to ${maxEmployeesForPlan} employees. Please upgrade your plan.` });
+            }
+        } catch (dbError) {
+            console.error("Database error checking employee count:", dbError);
+            next(dbError); // Pass DB error to general error handler
+            return; // Prevent further execution
+        }
+    }
+    // --- END NEW LOGIC ---
 
     try { // Outer try block
         if (location_id !== null && location_id > 0) { // Only check if a specific location_id is provided and is valid
@@ -396,7 +582,7 @@ app.get('/locations', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (!['super_admin', 'location_admin', 'employee'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view locations.' });
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view locations.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     try {
@@ -414,7 +600,7 @@ app.post('/locations', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (role !== 'super_admin') {
-        return res.status(403).json({ error: 'Access Denied: Only super admins can create locations.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can create locations.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Input validation
     if (!location_name || typeof location_name !== 'string' || location_name.trim() === '' || !location_address || typeof location_address !== 'string' || location_address.trim() === '') {
@@ -436,7 +622,7 @@ app.delete('/locations/:id', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (role !== 'super_admin') {
-        return res.status(403).json({ error: 'Access Denied: Only super admins can delete locations.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can delete locations.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Input validation
     if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid location ID provided.' }); }
@@ -469,7 +655,7 @@ app.get('/users', authenticateToken, async (req, res, next) => {
             params.push(currentUserLocationId);
         } else {
             // Location admin not assigned to a location should not see any users
-            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     } else if (role === 'employee') {
         // Employees can only see their own profile
@@ -477,7 +663,7 @@ app.get('/users', authenticateToken, async (req, res, next) => {
         params.push(currentUserId);
     } else if (!['super_admin'].includes(role)) {
         // Any other role is denied access
-        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view users.' });
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view users.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     const allowedRoles = ['super_admin', 'location_admin', 'employee']; // Roles that can be filtered by
@@ -492,15 +678,15 @@ app.get('/users', authenticateToken, async (req, res, next) => {
 
     if (filterLocationId) {
         if (isNaN(parseInt(filterLocationId))) { return res.status(400).json({ error: 'Invalid filter location ID provided.' }); }
-        const parsedFilterLocationId = parseInt(filterLocationId);
+        const parsedLocationId = parseInt(filterLocationId);
 
-        // Super admins can filter by any location
-        // Location admins can only filter by their assigned location (or null/unassigned)
-        if (role === 'super_admin' || (role === 'location_admin' && (parsedFilterLocationId === currentUserLocationId || parsedFilterLocationId === 0))) { // Assuming 0 or null for unassigned
+        // Super admin can filter by any location
+        // Location admin can only filter by their assigned location (or null/unassigned)
+        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) { // Assuming 0 or null for unassigned
             sql += ` AND Users.location_id = $${paramIndex++}`;
-            params.push(parsedFilterLocationId);
+            params.push(parsedLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Insufficient permissions to filter by location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to filter by location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     }
 
@@ -519,7 +705,7 @@ app.delete('/users/:id', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (role !== 'super_admin') {
-        return res.status(403).json({ error: 'Access Denied: Only super admins can delete users.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can delete users.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Prevent super admin from deleting their own account via this endpoint
     if (parseInt(id) === authenticatedUserId) {
@@ -551,7 +737,7 @@ app.post('/schedules', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can create schedules.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can create schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     // Input validation
@@ -572,11 +758,11 @@ app.post('/schedules', authenticateToken, async (req, res, next) => {
         if (role === 'location_admin' && currentUserLocationId !== null) {
             // If the employee is assigned to a location, it must be the admin's location or unassigned
             if (employeeCheck[0].location_id !== null && employeeCheck[0].location_id !== currentUserLocationId) {
-                 return res.status(403).json({ error: 'Access Denied: Location admin can only schedule employees within their assigned location or unassigned employees.' });
+                 return res.status(403).json({ error: 'Access Dismissed: Location admin can only schedule employees within their assigned location or unassigned employees.' }); // Changed 'Access Denied' to 'Access Dismissed'
             }
             // The schedule's location_id must match the admin's assigned location
             if (location_id !== currentUserLocationId) {
-                return res.status(403).json({ error: 'Access Denied: Location admin can only create schedules for their assigned location.' });
+                return res.status(403).json({ error: 'Access Dismissed: Location admin can only create schedules for their assigned location.' }); // Changed 'Access Denied' to 'Access Dismissed'
             }
         }
 
@@ -610,13 +796,13 @@ app.get('/schedules', authenticateToken, async (req, res, next) => {
             sql += ` AND Schedules.location_id = $${paramIndex++}`;
             params.push(currentUserLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     } else if (role === 'employee') {
         sql += ` AND Schedules.employee_id = $${paramIndex++}`;
         params.push(currentUserId);
     } else if (!['super_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view schedules.' });
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     
     // Optional filters
@@ -656,7 +842,7 @@ app.delete('/schedules/:id', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (role === 'employee') {
-        return res.status(403).json({ error: 'Access Denied: Employees cannot delete schedules.' });
+        return res.status(403).json({ error: 'Access Dismissed: Employees cannot delete schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Input validation
     if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid schedule ID provided.' }); }
@@ -668,7 +854,7 @@ app.delete('/schedules/:id', authenticateToken, async (req, res, next) => {
     // Additional WHERE clauses based on role for secure deletion
     if (role === 'location_admin') {
         if (currentUserLocationId === null) {
-             return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+             return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
         // Location admin can only delete schedules for employees associated with their location
         sql += ` AND employee_id IN (SELECT user_id FROM Users WHERE location_id = $${paramIndex++} AND company_id = $${paramIndex++})`;
@@ -679,7 +865,7 @@ app.delete('/schedules/:id', authenticateToken, async (req, res, next) => {
         params.push(companyId);
     } else {
         // Should be caught by initial role check, but as a fallback
-        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to delete schedules.' });
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to delete schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     try {
@@ -699,7 +885,7 @@ app.post('/job-postings', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can create job postings.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can create job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     // Input validation
@@ -714,7 +900,7 @@ app.post('/job-postings', authenticateToken, async (req, res, next) => {
     if (role === 'location_admin' && currentUserLocationId !== null) {
         // If location_id is provided and it's not the admin's location or null
         if (location_id !== currentUserLocationId && location_id !== null) {
-            return res.status(403).json({ error: 'Access Denied: Location admin can only post jobs for their assigned location or unassigned (null).' });
+            return res.status(403).json({ error: 'Access Dismissed: Location admin can only post jobs for their assigned location or unassigned (null).' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     }
 
@@ -752,12 +938,12 @@ app.get('/job-postings', authenticateToken, async (req, res, next) => {
             sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`; // Location admins see their location's jobs and unassigned jobs
             params.push(currentUserLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     } else if (role === 'employee') {
         // Employees generally shouldn't see all job postings unless for internal applications
         // For now, deny access, or tailor a specific view for employees if needed
-        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view job postings.' });
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Super admin already has access via companyId filter
 
@@ -778,7 +964,7 @@ app.get('/job-postings', authenticateToken, async (req, res, next) => {
             sql += ` AND location_id = $${paramIndex++}`;
             params.push(parsedLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Insufficient permissions to filter by location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to filter by location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     }
 
@@ -798,7 +984,7 @@ app.put('/job-postings/:id', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can update job postings.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can update job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Input validation
     if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid job posting ID provided.' }); }
@@ -830,7 +1016,7 @@ app.put('/job-postings/:id', authenticateToken, async (req, res, next) => {
             clauses.push(`location_id = $${paramIndex++}`);
             updateParams.push(location_id);
         } else if (role === 'location_admin') {
-            return res.status(403).json({ error: 'Access Denied: Location admin cannot change job posting location to another location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Location admin cannot change job posting location to another location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     }
 
@@ -844,7 +1030,7 @@ app.put('/job-postings/:id', authenticateToken, async (req, res, next) => {
         updateSql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
         updateParams.push(currentUserLocationId);
     } else if (role === 'location_admin' && currentUserLocationId === null) {
-        return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+        return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     try {
@@ -863,7 +1049,7 @@ app.delete('/job-postings/:id', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can delete job postings.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can delete job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Input validation
     if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid job posting ID provided.' }); }
@@ -877,7 +1063,7 @@ app.delete('/job-postings/:id', authenticateToken, async (req, res, next) => {
         sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`; // Can delete jobs at their location or unassigned
         params.push(currentUserLocationId);
     } else if (role === 'location_admin' && currentUserLocationId === null) {
-        return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+        return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     try {
@@ -897,7 +1083,7 @@ app.post('/applicants', authenticateToken, async (req, res, next) => {
 
     // Authorization check
     if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can add applicants.' });
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can add applicants.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
     // Input validation
@@ -924,7 +1110,7 @@ app.post('/applicants', authenticateToken, async (req, res, next) => {
             // An applicant cannot be added to a job posting whose location is outside the admin's assigned location,
             // unless the job posting itself is unassigned (null).
             if (actualLocationId !== currentUserLocationId && actualLocationId !== null) {
-                return res.status(403).json({ error: 'Access Denied: Location admin cannot add applicants to jobs outside their assigned location.' });
+                return res.status(403).json({ error: 'Access Dismissed: Location admin cannot add applicants to jobs outside their assigned location.' }); // Changed 'Access Denied' to 'Access Dismissed'
             }
         }
 
@@ -970,11 +1156,11 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
             sql += ` AND (Applicants.location_id = $${paramIndex++} OR Applicants.location_id IS NULL)`; // Location admin sees applicants for their location or unassigned
             params.push(currentUserLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     } else if (role === 'employee') {
         // Employees typically don't view all applicants. Adjust as per business logic.
-        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view applicants.' });
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view applicants.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Super admin sees all within company
 
@@ -989,361 +1175,11 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
             sql += ` AND Applicants.location_id = $${paramIndex++}`;
             params.push(parsedLocationId);
         } else {
-            return res.status(403).json({ error: 'Access Denied: Insufficient permissions to filter by location.' });
+            return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to filter by location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     }
 
     try {
         const applicants = await query(sql, params);
         res.json(applicants);
-    } catch (error) {
-        console.error("Database error fetching applicants:", error);
-        next(error);
     }
-});
-
-app.put('/applicants/:id', authenticateToken, async (req, res, next) => {
-    const { id } = req.params;
-    const { full_name, email, status, resume_url, notes, location_id, job_posting_id, phone_number } = req.body;
-    const { companyId, role, locationId: currentUserLocationId } = req.user;
-
-    // Authorization check
-    if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can update applicant records.' });
-    }
-    // Input validation
-    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid applicant ID provided.' }); }
-    if (full_name !== undefined && (typeof full_name !== 'string' || full_name.trim() === '')) { return res.status(400).json({ error: "Full name must be a non-empty string if provided." }); }
-    if (email !== undefined && !isValidEmail(email)) { return res.status(400).json({ error: "A valid email address must be provided if changing email." }); }
-    if (phone_number !== undefined && (typeof phone_number !== 'string' || phone_number.trim() === '')) { return res.status(400).json({ error: "Phone number must be a non-empty string if provided." }); }
-    const allowedStatuses = ['Applied', 'Interviewing', 'Rejected', 'Hired'];
-    if (status !== undefined && !allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid status provided.' }); }
-    if (resume_url !== undefined && typeof resume_url !== 'string') { return res.status(400).json({ error: 'Resume URL must be a string if provided.' }); }
-    if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
-    // location_id can be null or a number
-    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
-    if (location_id !== null && location_id <= 0) { return res.status(400).json({ error: 'Location ID must be a positive number or null.' }); }
-    // job_posting_id can be null or a number
-    if (job_posting_id !== undefined && typeof job_posting_id !== 'number' && job_posting_id !== null) { return res.status(400).json({ error: 'Job posting ID must be a number or null if provided.' }); }
-    if (job_posting_id !== null && job_posting_id <= 0) { return res.status(400).json({ error: 'Job posting ID must be a positive number or null.' }); }
-
-
-    let updateSql = 'UPDATE Applicants SET ';
-    const updateParams = [];
-    const clauses = [];
-    let paramIndex = 1;
-
-    if (full_name !== undefined) { clauses.push(`full_name = $${paramIndex++}`); updateParams.push(full_name); }
-    if (email !== undefined) { clauses.push(`email = $${paramIndex++}`); updateParams.push(email); }
-    if (phone_number !== undefined) { clauses.push(`phone_number = $${paramIndex++}`); updateParams.push(phone_number); }
-    if (status !== undefined) { clauses.push(`status = $${paramIndex++}`); updateParams.push(status); }
-    if (resume_url !== undefined) { clauses.push(`resume_url = $${paramIndex++}`); updateParams.push(resume_url); }
-    if (notes !== undefined) { clauses.push(`notes = $${paramIndex++}`); updateParams.push(notes); }
-    
-    if (location_id !== undefined) {
-        // Super admin can change applicant's location to any valid location or null
-        // Location admin can only change applicant's location to their assigned location or null
-        if (role === 'super_admin' || (role === 'location_admin' && (location_id === currentUserLocationId || location_id === null))) {
-            // If a specific location_id is provided and not null, verify it exists and belongs to the company
-            if (location_id !== null) {
-                const locCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
-                if (locCheck.length === 0) { return res.status(400).json({ error: 'Specified location does not exist or belong to your company.' }); }
-            }
-            clauses.push(`location_id = $${paramIndex++}`);
-            updateParams.push(location_id);
-        } else if (role === 'location_admin') {
-            return res.status(403).json({ error: 'Access Denied: Location admin cannot assign applicants to another location.' });
-        }
-    }
-
-    if (job_posting_id !== undefined) {
-        // Super admin and location admin can update job_posting_id
-        if (['super_admin', 'location_admin'].includes(role)) {
-            // Verify the new job_posting_id exists and belongs to the company
-            const jobCheck = await query('SELECT job_posting_id, location_id FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2', [job_posting_id, companyId]);
-            if (jobCheck.length === 0) { return res.status(400).json({ error: 'Job Posting not found or does not belong to your company.' }); }
-            
-            // Location admin can only assign applicants to jobs within their assigned location or unassigned jobs
-            if (role === 'location_admin' && currentUserLocationId !== null) {
-                if (jobCheck[0].location_id !== null && jobCheck[0].location_id !== currentUserLocationId) {
-                    return res.status(403).json({ error: 'Access Denied: Location admin cannot assign applicants to jobs outside their assigned location.' });
-                }
-            }
-            clauses.push(`job_posting_id = $${paramIndex++}`);
-            updateParams.push(job_posting_id);
-        } else {
-             return res.status(403).json({ error: 'Access Denied: Insufficient permissions to update job posting ID.' });
-        }
-    }
-
-    if (clauses.length === 0) { return res.status(400).json({ error: 'No fields provided for update.' }); }
-
-    updateSql += clauses.join(', ') + ` WHERE applicant_id = $${paramIndex++} AND company_id = $${paramIndex++}`;
-    updateParams.push(parseInt(id), companyId);
-
-    // Additional WHERE clause for location admin to restrict updates to applicants within their location or unassigned
-    if (role === 'location_admin' && currentUserLocationId !== null) {
-        updateSql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
-        updateParams.push(currentUserLocationId);
-    } else if (role === 'location_admin' && currentUserLocationId === null) {
-        return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
-    }
-
-    try {
-        const result = await runCommand(updateSql, updateParams);
-        if (result === 0) { return res.status(404).json({ error: 'Applicant not found or not authorized to update.' }); }
-        res.status(200).json({ message: 'Applicant updated successfully!' });
-    } catch (error) {
-        console.error("Database error updating applicant:", error);
-        next(error);
-    }
-});
-
-app.delete('/applicants/:id', authenticateToken, async (req, res, next) => {
-    const { id } = req.params;
-    const { companyId, role, locationId: currentUserLocationId } = req.user;
-
-    // Authorization check
-    if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Denied: Only admins can delete applicants.' });
-    }
-    // Input validation
-    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid applicant ID provided.' }); }
-
-    let sql = 'DELETE FROM Applicants WHERE applicant_id = $1 AND company_id = $2';
-    const params = [id, companyId];
-    let paramIndex = 3;
-
-    // Location admin specific restriction for deletion
-    if (role === 'location_admin' && currentUserLocationId !== null) {
-        sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`; // Can delete applicants at their location or unassigned
-        params.push(currentUserLocationId);
-    } else if (role === 'location_admin' && currentUserLocationId === null) {
-        return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
-    }
-
-    try {
-        const result = await runCommand(sql, params);
-        if (result === 0) { return res.status(404).json({ error: 'Applicant not found or not authorized to delete.' }); }
-        res.status(204).send();
-    } catch (error) {
-        console.error("Database error deleting applicant:", error);
-        next(error);
-    }
-});
-
-app.post('/documents', authenticateToken, async (req, res, next) => {
-    const { title, file_name, file_type, file_url, description } = req.body;
-    const { companyId, userId, role } = req.user; // Added role from req.user
-    const upload_date = new Date().toISOString();
-
-    // Only super_admin can upload documents for any user.
-    // Other roles can only upload for themselves.
-    // If you want location_admin to upload docs for employees in their location,
-    // you'd need to add `location_id` to `Documents` table and add logic here.
-    // For now, only super_admin can set `user_id` to others, otherwise it defaults to current user.
-
-    // Input validation
-    if (!title || typeof title !== 'string' || title.trim() === '' || !file_name || typeof file_name !== 'string' || file_name.trim() === '' || !file_type || typeof file_type !== 'string' || file_type.trim() === '') {
-        return res.status(400).json({ error: 'Invalid document data provided. Title, file name, and file type are required.' });
-    }
-    // Basic URL validation
-    if (!file_url || typeof file_url !== 'string' || !/^https?:\/\/[^\s$.?#].[^\s]*$/i.test(file_url)) {
-        return res.status(400).json({ error: 'A valid file URL (http/https) is required.' });
-    }
-    if (description !== undefined && typeof description !== 'string') { return res.status(400).json({ error: 'Description must be a string if provided.' }); }
-
-    try {
-        // Here, the user_id for the document will always be the authenticated user's ID
-        // unless you specifically allow super_admin to specify a user_id for the document.
-        // For simplicity and security, it's tied to the uploader.
-        const result = await runCommand(
-            'INSERT INTO Documents (company_id, user_id, title, file_name, file_type, file_url, description, upload_date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING document_id', // Returning document_id
-            [companyId, userId, title, file_name, file_type, file_url, description, upload_date]
-        );
-        res.status(201).json({ message: 'Document metadata saved successfully!', documentId: result.document_id });
-    } catch (error) {
-        console.error("Database error uploading document:", error);
-        next(error);
-    }
-});
-
-app.get('/documents', authenticateToken, async (req, res, next) => {
-    const { companyId, userId, role } = req.user;
-    
-    let sql = 'SELECT * FROM Documents WHERE company_id = $1';
-    const params = [companyId];
-    let paramIndex = 2;
-
-    // Super admin can see all documents for the company
-    // Other roles (location_admin, employee) can only see documents they uploaded
-    if (role !== 'super_admin') {
-        sql += ` AND user_id = $${paramIndex++}`;
-        params.push(userId);
-    }
-
-    try {
-        const documents = await query(sql, params);
-        res.json(documents);
-    } catch (error) {
-        console.error("Database error fetching documents:", error);
-        next(error);
-    }
-});
-
-app.delete('/documents/:id', authenticateToken, async (req, res, next) => {
-    const { id } = req.params;
-    const { companyId, userId, role } = req.user;
-
-    // Input validation
-    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid document ID provided.' }); }
-
-    let sql = 'DELETE FROM Documents WHERE document_id = $1 AND company_id = $2';
-    const params = [id, companyId];
-    let paramIndex = 3;
-
-    // Super admin can delete any document for the company
-    // Other roles (location_admin, employee) can only delete documents they uploaded
-    if (role !== 'super_admin') {
-        sql += ` AND user_id = $${paramIndex++}`;
-        params.push(userId);
-    }
-
-    try {
-        const result = await runCommand(sql, params);
-        if (result === 0) { return res.status(404).json({ error: 'Document not found or not authorized to delete.' }); }
-        res.status(204).send();
-    } catch (error) {
-        console.error("Database error deleting document:", error);
-        next(error);
-    }
-});
-
-
-// Stripe Webhook Endpoint (This needs to be before express.json() if you want to use raw body)
-// IMPORTANT: Stripe webhooks expect the raw request body. If you use express.json() before this,
-// the raw body will be parsed and Stripe's signature verification will fail.
-// A common practice is to place this endpoint before app.use(express.json()).
-// However, if the webhook secret is available, the stripe library handles it.
-// For now, assuming express.json() is fine or handling is done by stripe-node library.
-
-app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    let event;
-
-    try {
-        // Use Stripe's method to construct the event from the raw body and signature
-        event = stripeInstance.webhooks.constructEvent(req.rawBody, sig, STRIPE_WEBHOOK_SECRET);
-    } catch (err) {
-        console.error(`Webhook Error: ${err.message}`);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    // Handle the event
-    switch (event.type) {
-        case 'checkout.session.completed':
-            const session = event.data.object;
-            console.log(`Checkout Session Completed: ${session.id}`);
-            // Implement your business logic here (e.g., update user subscription status)
-            // You might want to retrieve the customer_id or metadata from the session
-            // to link it to your internal user records.
-            // Example: const customerId = session.customer;
-            // const userId = session.metadata.userId; // If you attach metadata when creating session
-            break;
-        case 'invoice.payment_succeeded':
-            const invoice = event.data.object;
-            console.log(`Invoice Payment Succeeded: ${invoice.id}`);
-            // Handle successful subscription payments
-            break;
-        case 'customer.subscription.deleted':
-            const subscriptionDeleted = event.data.object;
-            console.log(`Subscription Deleted: ${subscriptionDeleted.id}`);
-            // Handle subscription cancellations
-            break;
-        // ... handle other event types
-        default:
-            console.log(`Unhandled event type ${event.type}`);
-    }
-
-    // Return a 200 response to acknowledge receipt of the event
-    res.json({ received: true });
-});
-
-
-// --- Static Files and SPA Fallback (Moved to the very end) ---
-// Define Public Directory Path - this assumes server.js is in the root of the repository
-const PUBLIC_DIR = path.join(__dirname, '/');
-// Serve static files (CSS, JS, images, etc.) from the public directory
-app.use(express.static(PUBLIC_DIR));
-
-// Explicitly serve HTML files for direct requests (e.g., typing URL into browser)
-// It's generally better to have a single entry point (index.html) for SPAs
-// and let client-side routing handle the rest. However, if direct access to these
-// files is needed, this is how.
-app.get('/', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-});
-app.get('/login.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
-});
-app.get('/register.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'register.html'));
-});
-app.get('/pricing.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'pricing.html'));
-});
-app.get('/suite-hub.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'suite-hub.html'));
-});
-app.get('/dashboard.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'dashboard.html'));
-});
-app.get('/checklists.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'checklists.html'));
-});
-app.get('/new-hire-view.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'new-hire-view.html'));
-});
-app.get('/hiring.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'hiring.html'));
-});
-app.get('/scheduling.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'scheduling.html'));
-});
-app.get('/sales-analytics.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'sales-analytics.html'));
-});
-app.get('/documents.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'documents.html'));
-});
-app.get('/account.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'account.html'));
-});
-app.get('/admin.html', (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'admin.html'));
-});
-
-// SPA Fallback: For any other GET request not handled by an API route or explicit file route,
-// serve index.html. This is crucial for client-side routing.
-// This should be the very last route for GET requests.
-app.get(/'*'/, (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-});
-
-// --- Error Handling Middleware (Always last) ---
-app.use((err, req, res, next) => {
-    console.error(`Unhandled Error: ${err.stack}`);
-    res.status(500).json({
-        error: 'An unexpected server error occurred. Please try again later.',
-        details: process.env.NODE_ENV === 'development' ? err.message : undefined // Only expose message in dev
-    });
-});
-
-// --- Server Start ---
-if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`Server is running successfully on http://localhost:${PORT}`);
-    });
-} else {
-    module.exports = app;
-}
