@@ -1,3 +1,4 @@
+
 // --- Imports ---
 const express = require('express');
 const { Pool } = require('pg');
@@ -112,7 +113,7 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-app.post('/api/register', authLimiter, async (req, res, next) => {
+app.post('/register', ...) authLimiter, async (req, res, next) => {
     const { company_name, full_name, email, password } = req.body;
     if (!company_name || !full_name || !email || !password || password.length < 6 || !isValidEmail(email)) {
         return res.status(400).json({ error: "Invalid registration data provided." });
@@ -151,7 +152,7 @@ app.post('/api/register', authLimiter, async (req, res, next) => {
     }
 });
 
-app.post('/api/login', authLimiter, async (req, res, next) => {
+app.post('/login', ...) authLimiter, async (req, res, next) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required." });
@@ -174,7 +175,7 @@ app.post('/api/login', authLimiter, async (req, res, next) => {
     }
 });
 
-app.post('/api/invite-admin', authenticateToken, async (req, res, next) => {
+app.post('/invite-admin', ...) authenticateToken, async (req, res, next) => {
     const { full_name, email, password, location_id } = req.body;
     const { companyId, role } = req.user;
 
@@ -202,7 +203,7 @@ app.post('/api/invite-admin', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
+app.post('/invite-employee',...) authenticateToken, async (req, res, next) => {
     const { full_name, email, password, position, employee_id, location_id } = req.body;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
 
@@ -242,7 +243,7 @@ app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
     }
 }); // <--- THIS WAS THE MISSING CLOSING CURLY BRACE FOR THE OUTER TRY BLOCK
 
-app.get('/api/profile', authenticateToken, async (req, res, next) => {
+app.get('/profile', ...) authenticateToken, async (req, res, next) => {
     try {
         const userResult = await query('SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1', [req.user.userId]);
         const user = userResult[0];
@@ -254,7 +255,7 @@ app.get('/api/profile', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.put('/api/profile', authenticateToken, async (req, res, next) => {
+app.put('/profile', ...) authenticateToken, async (req, res, next) => {
     const { fullName, email, currentPassword, newPassword } = req.body;
     const { userId } = req.user;
 
@@ -311,7 +312,7 @@ app.put('/api/profile', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.get('/api/locations', authenticateToken, async (req, res, next) => {
+app.get('/locations', ...) authenticateToken, async (req, res, next) => {
     const { companyId, role } = req.user;
     let sql = 'SELECT location_id, location_name, location_address FROM Locations WHERE company_id = $1';
     const params = [companyId];
@@ -327,7 +328,7 @@ app.get('/api/locations', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.post('/api/locations', authenticateToken, async (req, res, next) => {
+app.post('/locations',  ...) authenticateToken, async (req, res, next) => {
     const { location_name, location_address } = req.body;
     const { companyId, role } = req.user;
 
@@ -345,7 +346,7 @@ app.post('/api/locations', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.delete('/api/locations/:id', authenticateToken, async (req, res, next) => {
+app.delete('/locations/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { companyId, role } = req.user;
 
@@ -362,7 +363,7 @@ app.delete('/api/locations/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.get('/api/users', authenticateToken, async (req, res, next) => {
+app.get('/users', ...) authenticateToken, async (req, res, next) => {
     const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
     const { filterRole, filterLocationId } = req.query;
 
@@ -414,7 +415,7 @@ app.get('/api/users', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.delete('/api/users/:id', authenticateToken, async (req, res, next) => {
+app.delete('/users/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { companyId, role, userId: authenticatedUserId } = req.user;
 
@@ -432,7 +433,7 @@ app.delete('/api/users/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.post('/api/schedules', authenticateToken, async (req, res, next) => {
+app.post('/schedules', ...) authenticateToken, async (req, res, next) => {
     const { employee_id, location_id, start_time, end_time, notes } = req.body;
     const { companyId, role, userId: currentUserId } = req.user;
 
@@ -459,7 +460,7 @@ app.post('/api/schedules', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.get('/api/schedules', authenticateToken, async (req, res, next) => {
+app.get('/schedules', ...) authenticateToken, async (req, res, next) => {
     const { employee_id, location_id, start_date, end_date } = req.query;
     const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
 
@@ -499,7 +500,7 @@ app.get('/api/schedules', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.delete('/api/schedules/:id', authenticateToken, async (req, res, next) => {
+app.delete('/schedules/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
 
@@ -528,7 +529,7 @@ app.delete('/api/schedules/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.post('/api/job-postings', authenticateToken, async (req, res, next) => {
+app.post('/job-postings', ...) authenticateToken, async (req, res, next) => {
     const { title, description, requirements, location_id } = req.body;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
     const created_date = new Date().toISOString();
@@ -553,7 +554,7 @@ app.post('/api/job-postings', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.get('/api/job-postings', authenticateToken, async (req, res, next) => {
+app.get('/job-postings', ...) authenticateToken, async (req, res, next) => {
     const { status, location_id } = req.query;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
 
@@ -597,7 +598,7 @@ app.get('/api/job-postings', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.put('/api/job-postings/:id', authenticateToken, async (req, res, next) => {
+app.put('/job-postings/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { title, description, requirements, status, location_id } = req.body;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
@@ -648,7 +649,7 @@ app.put('/api/job-postings/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.delete('/api/job-postings/:id', authenticateToken, async (req, res, next) => {
+app.delete('/job-postings/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
 
@@ -674,7 +675,7 @@ app.delete('/api/job-postings/:id', authenticateToken, async (req, res, next) =>
     }
 });
 
-app.post('/api/applicants', authenticateToken, async (req, res, next) => {
+app.post('/applicants', ...) authenticateToken, async (req, res, next) => {
     const { job_posting_id, full_name, email, notes, location_id, phone_number } = req.body;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
     const application_date = new Date().toISOString();
@@ -706,7 +707,7 @@ app.post('/api/applicants', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.get('/api/applicants', authenticateToken, async (req, res, next) => {
+app.get('/applicants', ...) authenticateToken, async (req, res, next) => {
     const { job_posting_id, status, location_id } = req.query;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
 
@@ -762,7 +763,7 @@ app.get('/api/applicants', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.put('/api/applicants/:id', authenticateToken, async (req, res, next) => {
+app.put('/applicants/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { full_name, email, status, resume_url, notes, location_id, job_posting_id, phone_number } = req.body;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
@@ -831,7 +832,7 @@ app.put('/api/applicants/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.delete('/api/applicants/:id', authenticateToken, async (req, res, next) => {
+app.delete('/applicants/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
 
@@ -857,7 +858,7 @@ app.delete('/api/applicants/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.post('/api/documents', authenticateToken, async (req, res, next) => {
+app.post('/documents', ...) authenticateToken, async (req, res, next) => {
     const { title, file_name, file_type, file_url, description } = req.body;
     const { companyId, userId } = req.user;
     const upload_date = new Date().toISOString();
@@ -879,7 +880,7 @@ app.post('/api/documents', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.get('/api/documents', authenticateToken, async (req, res, next) => {
+app.get('/documents', ...) authenticateToken, async (req, res, next) => {
     const { companyId, userId, role } = req.user;
     
     let sql = 'SELECT * FROM Documents WHERE company_id = $1';
@@ -900,7 +901,7 @@ app.get('/api/documents', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.delete('/api/documents/:id', authenticateToken, async (req, res, next) => {
+app.delete('/documents/:id', ...) authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const { companyId, userId, role } = req.user;
 
