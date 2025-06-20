@@ -185,7 +185,7 @@ const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-// --- API Routes (Updated for PostgreSQL - Define ALL API routes before static files) ---
+// --- API Routes (Define ALL API routes before serving static files) ---
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -537,7 +537,7 @@ app.post('/api/schedules', authenticateToken, async (req, res, next) => {
         );
         res.status(201).json({ message: 'Schedule created successfully!', scheduleId: result });
     } catch (error) {
-        console.error("Error creating schedule:", error);
+        console.error("Database error creating schedule:", error);
         next(error);
     }
 });
@@ -880,7 +880,7 @@ app.put('/api/applicants/:id', authenticateToken, async (req, res, next) => {
     }
     if (job_posting_id !== undefined) {
         if (role === 'super_admin' || (role === 'location_admin')) { 
-            const jobCheck = await query('SELECT job_posting_id, location_id FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2', [job_posting_id, companyId]);
+            const jobCheck = await query('SELECT job_posting_id FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2', [job_posting_id, companyId]);
             if (jobCheck.length === 0) { return res.status(400).json({ error: 'Job Posting not found or does not belong to your company.' }); }
             if (role === 'location_admin' && jobCheck[0].location_id !== null && jobCheck[0].location_id !== currentUserLocationId) {
                 return res.status(403).json({ error: 'Access Denied: Location admin cannot assign applicants to jobs outside their assigned location.' });
@@ -1023,4 +1023,3 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
-
