@@ -1,1313 +1,1025 @@
-const API_BASE_URL = 'https://flow-business-suite.onrender.com/api'; // <--- UPDATED WITH YOUR RENDER BACKEND URL
+// --- Imports ---
+const express = require('express');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const path = require('path');
+const csv = require('csv-parser');
+const { Readable } = require('stream');
+const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
 
-/**
- * Handles API requests to the backend.
- * Includes authentication token in headers if available.
- * @param {string} method - HTTP method (GET, POST, PUT, DELETE).
- * @param {string} path - API endpoint path (e.g., '/login', '/profile').
- * @param {object} body - Request body data (for POST, PUT).
- * @returns {Promise<object|null>} - JSON response data or null if 204.
- * @throws {Error} - If the API response is not OK.
- */
-async function apiRequest(method, path, body = null) {
-    const token = localStorage.getItem('authToken');
-    const options = {
-        method: method,
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    };
-    if (token) options.headers['Authorization'] = `Bearer ${token}`;
-    if (body) options.body = JSON.stringify(body);
-
-    const response = await fetch(`${API_BASE_URL}${path}`, options);
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Something went wrong');
-    }
-    // Return null for No Content responses (204) or empty 200 responses
-    if (response.status === 204 || (response.status === 200 && response.headers.get('content-length') === '0')) {
-        return null;
-    }
-    return response.json();
+// Load environment variables from .env file in development
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+    require('dotenv').config();
 }
 
-/**
- * Displays a custom modal message to the user.
- * @param {string} message - The message to display.
- * @param {boolean} isError - True if it's an error message, false otherwise.
- */
-function showModalMessage(message, isError = false) {
-    const modalOverlay = document.getElementById('message-modal-overlay');
-    const modalMessage = document.getElementById('modal-message-text');
-    const modalCloseButton = document.getElementById('modal-close-button');
+const stripeInstance = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-    if (modalOverlay && modalMessage && modalCloseButton) {
-        modalMessage.textContent = message;
-        modalMessage.style.color = isError ? '#ff8a80' : 'var(--text-light)'; // Apply error color or default
-        modalOverlay.style.display = 'flex'; // Show the modal
+const app = express();
 
-        // Hide the modal when the close button is clicked
-        modalCloseButton.onclick = () => {
-            modalOverlay.style.display = 'none';
-        };
+const PORT = process.env.PORT; 
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; 
 
-        // Hide the modal if clicking outside the content (optional)
-        modalOverlay.onclick = (event) => {
-            if (event.target === modalOverlay) {
-                handleCancel(); // Treat outside click as cancel
-            }
-        };
-    } else {
-        // Fallback to console log if modal elements are not found
-        console.error("Modal elements not found for showModalMessage. Message:", message);
-        // Fallback to alert for critical errors if modal isn't available
-        // Note: For a production app, ensure your modal is reliably present.
-        if (isError) {
-            console.error(`ERROR: ${message}`);
+app.use(cors({
+    origin: function (origin, callback) {
+        const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:8000', 'null'];
+
+        console.log(`CORS Check: Incoming Origin -> ${origin}`);
+        console.log(`CORS Check: Allowed Origins -> ${allowedOrigins.join(', ')}`);
+
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
         } else {
-            console.log(`MESSAGE: ${message}`);
+            const msg = `CORS Error: Origin ${origin} not allowed. Allowed: ${allowedOrigins.join(', ')}`;
+            console.error(msg);
+            callback(new Error(msg), false);
         }
+    },
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+    optionsSuccessStatus: 204
+}));
+
+app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+        event = stripeInstance.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+        console.error(`Webhook Error: ${err.message}`);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-}
 
-/**
- * Displays a custom confirmation modal.
- * @param {string} message - The confirmation message to display.
- * @param {string} confirmButtonText - Text for the confirm button (e.g., "Delete", "Proceed").
- * @returns {Promise<boolean>} - Resolves to true if confirmed, false if cancelled.
- */
-function showConfirmModal(message, confirmButtonText = 'Confirm') {
-    return new Promise((resolve) => {
-        const confirmModalOverlay = document.getElementById('confirm-modal-overlay');
-        const confirmModalMessage = document.getElementById('confirm-modal-message');
-        const modalConfirmButton = document.getElementById('modal-confirm');
-        const modalCancelButton = document.getElementById('modal-cancel');
-
-        if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
-            console.error("Confirmation modal elements not found. Falling back to native confirm.");
-            resolve(window.confirm(message)); // Fallback to native confirm
-            return;
+    const client = await pool.connect(); 
+    try {
+        await client.query('BEGIN'); 
+        switch (event.type) {
+            case 'checkout.session.completed':
+                const session = event.data.object;
+                console.log('Checkout Session Completed:', session.id);
+                const userId = session.metadata.userId;
+                const planId = session.metadata.planId;
+                if (session.payment_status === 'paid' && userId && planId) {
+                    await client.query(
+                        'UPDATE Users SET stripe_customer_id = $1, stripe_subscription_id = $2, subscription_status = $3, plan_id = $4 WHERE user_id = $5',
+                        [session.customer, session.subscription, 'active', planId, userId]
+                    );
+                    console.log(`User ${userId} subscription updated to ${planId} (active).`);
+                }
+                break;
+            case 'customer.subscription.updated':
+                const subscriptionUpdated = event.data.object;
+                console.log('Subscription Updated:', subscriptionUpdated.id);
+                if (subscriptionUpdated.customer && subscriptionUpdated.status && subscriptionUpdated.plan && subscriptionUpdated.plan.id) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1, plan_id = $2 WHERE stripe_customer_id = $3',
+                        [subscriptionUpdated.status, subscriptionUpdated.plan.id, subscriptionUpdated.customer]
+                    );
+                    console.log(`Subscription for customer ${subscriptionUpdated.customer} status updated to ${subscriptionUpdated.status} and plan to ${subscriptionUpdated.plan.id}.`);
+                }
+                break;
+            case 'customer.subscription.deleted':
+                const subscriptionDeleted = event.data.object;
+                console.log('Subscription Deleted:', subscriptionDeleted.id);
+                if (subscriptionDeleted.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1, plan_id = $2, stripe_subscription_id = NULL WHERE stripe_customer_id = $3',
+                        ['cancelled', 'free', subscriptionDeleted.customer]
+                    );
+                    console.log(`Subscription for customer ${subscriptionDeleted.customer} marked as cancelled and reverted to free.`);
+                }
+                break;
+            case 'invoice.payment_succeeded':
+                const invoiceSucceeded = event.data.object;
+                console.log('Invoice Payment Succeeded:', invoiceSucceeded.id);
+                if (invoiceSucceeded.subscription && invoiceSucceeded.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
+                        ['active', invoiceSucceeded.subscription, invoiceSucceeded.customer]
+                    );
+                    console.log(`Subscription ${invoiceSucceeded.subscription} status set to active.`);
+                }
+                break;
+            case 'invoice.payment_failed':
+                const invoiceFailed = event.data.object;
+                console.log('Invoice Payment Failed:', invoiceFailed.id);
+                if (invoiceFailed.subscription && invoiceFailed.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
+                        ['past_due', invoiceFailed.subscription, invoiceFailed.customer]
+                    );
+                    console.log(`Subscription ${invoiceFailed.subscription} status set to past_due.`);
+                }
+                break;
+            default:
+                console.log(`Unhandled event type ${event.type}`);
         }
-
-        confirmModalMessage.textContent = message;
-        modalConfirmButton.textContent = confirmButtonText;
-
-        confirmModalOverlay.style.display = 'flex'; // Show the modal
-
-        const handleConfirm = () => {
-            confirmModalOverlay.style.display = 'none';
-            modalConfirmButton.removeEventListener('click', handleConfirm);
-            modalCancelButton.removeEventListener('click', handleCancel);
-            resolve(true);
-        };
-
-        const handleCancel = () => {
-            confirmModalOverlay.style.display = 'none';
-            modalConfirmButton.removeEventListener('click', handleConfirm);
-            modalCancelButton.removeEventListener('click', handleCancel);
-            resolve(false);
-        };
-
-        modalConfirmButton.addEventListener('click', handleConfirm);
-        modalCancelButton.addEventListener('click', handleCancel);
-
-        // Allow clicking outside the modal to cancel (optional, but consistent with message modal)
-        confirmModalOverlay.onclick = (event) => {
-            if (event.target === modalOverlay) {
-                handleCancel(); // Treat outside click as cancel
-            }
-        };
-    });
-}
-
-/**
- * Sets up the functionality for the settings dropdown.
- * Toggles visibility on button click and hides on outside click.
- */
-function setupSettingsDropdown() {
-    const settingsButton = document.getElementById('settings-button');
-    const settingsDropdown = document.getElementById('settings-dropdown');
-    const logoutButton = document.getElementById('logout-button'); // Get the logout button
-
-    if (settingsButton && settingsDropdown) {
-        settingsButton.addEventListener('click', (event) => {
-            event.stopPropagation(); // Prevent the document click from immediately closing it
-            settingsDropdown.style.display = settingsDropdown.style.display === 'block' ? 'none' : 'block';
-        });
-
-        // Close dropdown if clicked outside
-        document.addEventListener('click', (event) => {
-            if (settingsDropdown.style.display === 'block' && !settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
-                settingsDropdown.style.display = 'none';
-            }
-        });
+        await client.query('COMMIT'); 
+        res.status(200).json({ received: true });
+    } catch (dbErr) {
+        await client.query('ROLLBACK'); 
+        console.error("Database update error during webhook processing:", dbErr.message);
+        res.status(500).json({ error: 'Webhook processing failed.' });
+    } finally {
+        client.release(); 
     }
-
-    // Add logout functionality
-    if (logoutButton) {
-        logoutButton.addEventListener('click', async () => {
-            const confirmed = await showConfirmModal('Are you sure you want to log out?', 'Logout');
-            if (confirmed) {
-                localStorage.removeItem('authToken'); // Clear authentication token
-                window.location.href = 'login.html'; // Redirect to login page
-            }
-        });
-    }
-}
-
-
-document.addEventListener('DOMContentLoaded', () => {
-    const page = window.location.pathname;
-    if (page.includes('login.html')) {
-        handleLoginPage();
-    } else if (page.includes('register.html')) { // New registration page handler
-        handleRegisterPage();
-    }
-    else if (page.includes('suite-hub.html')) {
-        handleSuiteHubPage();
-    } else if (page.includes('account.html')) {
-        handleAccountPage();
-    } else if (page.includes('admin.html')) {
-        handleAdminPage();
-    } else if (page.includes('pricing.html')) { // Handle pricing page
-        handlePricingPage();
-    } else if (page.includes('scheduling.html')) { // Handle scheduling page
-        handleSchedulingPage();
-    } else if (page.includes('hiring.html')) { // Handle hiring page
-        handleHiringPage();
-    } /* Removed Sales & Analytics page handler
-    else if (page.includes('sales-analytics.html')) { // Handle Sales & Analytics page
-        handleSalesAnalyticsPage();
-    } */
-    else if (page.includes('documents.html')) { // Handle Documents page
-        handleDocumentsPage();
-    }
-    setupSettingsDropdown(); // This is called on every page that includes app.js
 });
 
-/**
- * Handles the logic for the login page.
- * Manages form submission and redirects on successful login.
- */
-function handleLoginPage() {
-    const loginForm = document.getElementById('login-form');
-    // Ensure the loginForm exists before adding an event listener
-    if (!loginForm) {
-        console.error("Login form not found on this page.");
-        return;
+app.use(express.json());
+
+const JWT_SECRET = process.env.JWT_SECRET; 
+
+app.use(morgan('dev'));
+
+
+// --- Database Setup (PostgreSQL) ---
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL, 
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false 
+});
+
+pool.on('connect', () => console.log('Connected to PostgreSQL database'));
+pool.on('error', (err) => console.error('PostgreSQL database error:', err.message, err.stack));
+
+// --- Helper function for database queries (for consistency) ---
+async function query(text, params) {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(text, params);
+        return res.rows;
+    } finally {
+        client.release();
     }
+}
+async function runCommand(text, params) {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(text, params);
+        return res.rowCount; 
+    } finally {
+        client.release();
+    }
+}
 
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const emailInput = document.getElementById('email');
-        const passwordInput = document.getElementById('password');
-        const email = emailInput.value;
-        const password = passwordInput.value;
-        const errorMessage = document.getElementById('error-message'); // Existing error message p tag
-
-        // Clear previous error messages and hide
-        if (errorMessage) { // Defensive check
-            errorMessage.textContent = '';
-            errorMessage.classList.remove('visible'); // Hide it visually and from screen readers
+// --- Authentication Middleware ---
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) {
+        return res.status(401).json({ error: 'Unauthorized: No token provided.' });
+    }
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            console.error("JWT Verification Error:", err.message);
+            return res.status(403).json({ error: 'Forbidden: Invalid or expired token.' });
         }
-
-        // Basic Client-Side Validation
-        if (!email || !password) {
-            if (errorMessage) {
-                errorMessage.textContent = 'Email and password are required.';
-                errorMessage.classList.add('visible'); // Show it
-            }
-            return;
-        }
-
-        // Basic email format validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            if (errorMessage) {
-                errorMessage.textContent = 'Please enter a valid email address.';
-                errorMessage.classList.add('visible'); // Show it
-            }
-            return;
-        }
-
-        // Password length validation (matches minlength on input)
-        if (password.length < 6) {
-            if (errorMessage) {
-                errorMessage.textContent = 'Password must be at least 6 characters long.';
-                errorMessage.classList.add('visible'); // Show it
-            }
-            return;
-        }
-
-        try {
-            const data = await apiRequest('POST', '/login', { email, password });
-            localStorage.setItem('authToken', data.token);
-            if (data.role === 'super_admin' || data.role === 'location_admin') {
-                window.location.href = 'suite-hub.html';
-            } else {
-                window.location.href = 'new-hire-view.html';
-            }
-        } catch (error) {
-            if (errorMessage) {
-                errorMessage.textContent = `Login Failed: ${error.message}`;
-                errorMessage.classList.add('visible'); // Show it
-            }
-            console.error("Login API error:", error); // Log the actual error
-        }
+        req.user = user;
+        next();
     });
 }
 
-/**
- * Handles the logic for the registration page.
- * Manages form submission for new company and super admin registration.
- */
-function handleRegisterPage() {
-    const registerForm = document.getElementById('register-form');
-    if (!registerForm) {
-        console.error("Register form not found on this page.");
-        return;
+const isValidEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+// --- API Routes (Define ALL API routes before serving static files) ---
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: 'Too many login/registration attempts from this IP, please try again after 15 minutes',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.post('/api/register', authLimiter, async (req, res, next) => {
+    const { company_name, full_name, email, password } = req.body;
+    if (!company_name || !full_name || !email || !password || password.length < 6 || !isValidEmail(email)) {
+        return res.status(400).json({ error: "Invalid registration data provided." });
     }
 
-    registerForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const companyNameInput = document.getElementById('company-name');
-        const fullNameInput = document.getElementById('full-name');
-        const emailInput = document.getElementById('email');
-        const passwordInput = document.getElementById('password');
-        const errorMessage = document.getElementById('error-message');
-
-        const company_name = companyNameInput.value;
-        const full_name = fullNameInput.value;
-        const email = emailInput.value;
-        const password = passwordInput.value;
-
-        // Clear previous error messages
-        if (errorMessage) {
-            errorMessage.textContent = '';
-            errorMessage.classList.remove('visible');
-        }
-
-        // Client-side validation
-        if (!company_name || !full_name || !email || !password) {
-            if (errorMessage) {
-                errorMessage.textContent = 'All fields are required.';
-                errorMessage.classList.add('visible');
-            }
-            return;
-        }
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            if (errorMessage) {
-                errorMessage.textContent = 'Please enter a valid email address.';
-                errorMessage.classList.add('visible');
-            }
-            return;
-        }
-
-        if (password.length < 6) {
-            if (errorMessage) {
-                errorMessage.textContent = 'Password must be at least 6 characters long.';
-                errorMessage.classList.add('visible');
-            }
-            return;
-        }
-
-        try {
-            // Send registration data to the backend
-            const data = await apiRequest('POST', '/register', { company_name, full_name, email, password });
-            
-            // Assuming successful registration logs the user in automatically or provides a token
-            // For now, let's just show a success message and redirect to login
-            showModalMessage('Registration successful! Please log in with your new account.', false);
-            // After a short delay, redirect to login page
-            setTimeout(() => {
-                window.location.href = 'login.html';
-            }, 2000); // 2 second delay
-            
-        } catch (error) {
-            if (errorMessage) {
-                errorMessage.textContent = `Registration failed: ${error.message}`;
-                errorMessage.classList.add('visible');
-            }
-            console.error("Registration API error:", error);
-        }
-    });
-}
-
-/**
- * Handles the logic for the suite-hub page.
- * Redirects to login if no auth token is found.
- * Also handles post-payment feedback from Stripe.
- */
-function handleSuiteHubPage() {
-    // Redirect to login if no authentication token is present
-    if (!localStorage.getItem('authToken')) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    // Check for payment success/cancel parameters after Stripe redirect
-    const urlParams = new URLSearchParams(window.location.search);
-    const paymentStatus = urlParams.get('payment');
-    const sessionId = urlParams.get('session_id');
-
-    if (paymentStatus === 'success') {
-        showModalMessage('Payment successful! Your subscription has been updated.', false);
-        // You might want to remove these query parameters from the URL
-        history.replaceState({}, document.title, window.location.pathname);
-        // Optionally, make an API call to verify session and update user status if not already done by webhook
-        // For now, we assume webhook handles DB update, so just show message.
-    } else if (paymentStatus === 'cancelled') {
-        showModalMessage('Payment cancelled. You can try again or choose another plan.', true);
-        history.replaceState({}, document.title, window.location.pathname);
-    }
-}
-
-/**
- * Handles the logic for the account page.
- * Loads profile information and handles profile updates including password changes.
- */
-function handleAccountPage() {
-    // Redirect to login if no authentication token is present
-    if (!localStorage.getItem('authToken')) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    const displayProfileName = document.getElementById('display-profile-name');
-    const displayProfileEmail = document.getElementById('display-profile-email');
-    const profileNameInput = document.getElementById('profile-name');
-    const profileEmailInput = document.getElementById('profile-email');
-    const updateProfileForm = document.getElementById('update-profile-form');
-    const currentPasswordInput = document.getElementById('current-password');
-    const newPasswordInput = document.getElementById('new-password');
-
-    /**
-     * Fetches and displays the current user's profile information.
-     */
-    async function loadProfileInfo() {
-        try {
-            const profile = await apiRequest('GET', '/profile');
-            if (displayProfileName) displayProfileName.textContent = profile.fullName || 'N/A';
-            if (displayProfileEmail) displayProfileEmail.textContent = profile.email || 'N/A';
-            if (profileNameInput) profileNameInput.value = profile.fullName || '';
-            if (profileEmailInput) profileEmailInput.value = profile.email || '';
-        } catch (error) {
-            console.error("Error loading profile info:", error);
-            showModalMessage(`Failed to load profile: ${error.message}`, true);
-        }
-    }
-
-    /**
-     * Handles the submission of the profile update form.
-     * Updates name, email, and/or password.
-     */
-    if (updateProfileForm) {
-        updateProfileForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const fullName = profileNameInput ? profileNameInput.value : '';
-            const email = profileEmailInput ? profileEmailInput.value : '';
-            const currentPassword = currentPasswordInput ? currentPasswordInput.value : '';
-            const newPassword = newPasswordInput ? newPasswordInput.value : '';
-
-            const updatePayload = { fullName, email };
-            if (currentPassword && newPassword) {
-                updatePayload.currentPassword = currentPassword;
-                updatePayload.newPassword = newPassword;
-            }
-
-            try {
-                // Send the update request
-                const result = await apiRequest('PUT', '/profile', updatePayload);
-                
-                // If a new token is returned, update it in localStorage
-                if (result && result.token) {
-                    localStorage.setItem('authToken', result.token);
-                }
-
-                showModalMessage(result.message || 'Profile updated successfully!', false);
-                
-                // Clear password fields after successful update for security
-                if (currentPasswordInput) currentPasswordInput.value = '';
-                if (newPasswordInput) newPasswordInput.value = '';
-                
-                // Reload profile info to reflect changes immediately
-                loadProfileInfo(); 
-            } catch (error) {
-                console.error("Error updating profile:", error);
-                showModalMessage(`Failed to update profile: ${error.message}`, true);
-            }
-        });
-    }
-
-    loadProfileInfo(); // Load profile info when the account page is accessed
-}
-
-/**
- * Handles the logic for the admin page.
- * Manages location creation and user invitations.
- */
-function handleAdminPage() {
-    // Redirect to login if no authentication token is present
-    if (!localStorage.getItem('authToken')) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    const locationListDiv = document.getElementById('location-list');
-    const userListDiv = document.getElementById('user-list'); // Get the user list div
-    const newLocationForm = document.getElementById('new-location-form');
-    const inviteAdminForm = document.getElementById('invite-admin-form');
-    const adminLocationSelect = document.getElementById('admin-location-select');
-    const inviteEmployeeForm = document.getElementById('invite-employee-form'); // New employee form
-    const employeeLocationSelect = document.getElementById('employee-location-select'); // New employee location dropdown
-
-    /**
-     * Loads and displays the list of company locations.
-     */
-    async function loadLocations() {
-        if (!locationListDiv) return;
-        locationListDiv.innerHTML = '<p>Loading locations...</p>';
-        try {
-            const locations = await apiRequest('GET', '/locations');
-            locationListDiv.innerHTML = ''; // Clear loading message
-            if (locations.length === 0) {
-                locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
-                if(adminLocationSelect) { // Defensive check
-                    adminLocationSelect.innerHTML = '<option value="">No locations available</option>';
-                    adminLocationSelect.disabled = true;
-                }
-                if(employeeLocationSelect) { // Defensive check for new employee form
-                    employeeLocationSelect.innerHTML = '<option value="">No locations available</option>';
-                    employeeLocationSelect.disabled = true;
-                }
-            } else {
-                if(adminLocationSelect) adminLocationSelect.disabled = false; // Defensive check
-                if(employeeLocationSelect) employeeLocationSelect.disabled = false; // Defensive check for new employee form
-
-                // Populate admin location select dropdown
-                if(adminLocationSelect) {
-                    adminLocationSelect.innerHTML = '<option value="">Select a location</option>'; // Default option
-                    locations.forEach(loc => {
-                        const option = document.createElement('option');
-                        option.value = loc.location_id;
-                        option.textContent = loc.location_name;
-                        adminLocationSelect.appendChild(option);
-                    });
-                }
-                 // Populate employee location select dropdown
-                if(employeeLocationSelect) {
-                    employeeLocationSelect.innerHTML = '<option value="">Select a location</option>'; // Default option
-                    locations.forEach(loc => {
-                        const option = document.createElement('option');
-                        option.value = loc.location_id;
-                        option.textContent = loc.location_name;
-                        employeeLocationSelect.appendChild(option);
-                    });
-                }
-
-                locations.forEach(loc => {
-                    const locDiv = document.createElement('div');
-                    locDiv.className = 'list-item';
-                    locDiv.innerHTML = `<span>${loc.location_name} - ${loc.location_address}</span>
-                                        <button class="btn-delete" data-type="location" data-id="${loc.location_id}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                                        </button>`;
-                    locDiv.addEventListener('click', (e) => {
-                        // Prevent click on parent from triggering if button is clicked
-                        if (!e.target.closest('.btn-delete')) {
-                            showModalMessage(`Location: ${loc.location_name} (ID: ${loc.location_id}) - Address: ${loc.location_address}`, false);
-                        }
-                    });
-                    locationListDiv.appendChild(locDiv);
-                });
-            }
-        } catch (error) {
-            console.error("Error loading locations:", error);
-            showModalMessage(`Failed to load locations: ${error.message}`, true);
-        }
-    }
-
-    /**
-     * Loads and displays the list of users (admins and potentially employees).
-     */
-    async function loadUsers() {
-        if (!userListDiv) return;
-        userListDiv.innerHTML = '<p>Loading users...</p>';
-        try {
-            const users = await apiRequest('GET', '/users');
-            userListDiv.innerHTML = ''; 
-            if (users.length === 0) {
-                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users invited yet.</p>';
-            } else {
-                users.forEach(user => {
-                    const userDiv = document.createElement('div');
-                    userDiv.className = 'list-item';
-                    let userInfo = `${user.full_name} - Role: ${user.role}`;
-                    if (user.location_name) {
-                        userInfo += ` @ ${user.location_name}`;
-                    }
-                    userDiv.innerHTML = `<span>${userInfo}</span>
-                                         <button class="btn-delete" data-type="user" data-id="${user.user_id}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                                        </button>`;
-                    userListDiv.appendChild(userDiv);
-                });
-            }
-        } catch (error) {
-            console.error("Error loading users:", error);
-            userListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading users: ${error.message}</p>`;
-        }
-    }
-
-    // Consolidated event listener for delete buttons (for both locations and users)
-    // This uses event delegation on a common parent (e.g., locationListDiv or userListDiv's parent)
-    // For simplicity, attaching to document body, but ideally should be on a more specific common parent
-    document.body.addEventListener('click', async (e) => {
-        const targetButton = e.target.closest('.btn-delete');
-        if (targetButton) {
-            const id = targetButton.dataset.id;
-            const type = targetButton.dataset.type; // 'location' or 'user'
-            const confirmationMessage = `Are you sure you want to delete this ${type}?`;
-            
-            const confirmed = await showConfirmModal(confirmationMessage, 'Delete');
-
-            if (confirmed) {
-                try {
-                    if (type === 'location') {
-                        await apiRequest('DELETE', `/locations/${id}`);
-                        showModalMessage('Location deleted successfully!', false);
-                        loadLocations(); 
-                        loadUsers(); 
-                    } else if (type === 'user') {
-                        await apiRequest('DELETE', `/users/${id}`);
-                        showModalMessage('User deleted successfully!', false);
-                        loadUsers(); 
-                    }
-                } catch (error) {
-                    showModalMessage(`Error deleting ${type}: ${error.message}`, true);
-                }
-            }
-        });
-    });
-
-    // Handle new location form submission
-    if (newLocationForm) {
-        newLocationForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const nameInput = document.getElementById('new-location-name');
-            const addressInput = document.getElementById('new-location-address');
-            const location_name = nameInput.value;
-            const location_address = addressInput.value;
-
-            try {
-                await apiRequest('POST', '/locations', { location_name, location_address });
-                nameInput.value = '';
-                addressInput.value = '';
-                showModalMessage('Location created successfully!', false);
-                loadLocations(); 
-            } catch (error) {
-                console.error("Error creating location:", error);
-                showModalMessage(`Error creating location: ${error.message}`, true);
-            }
-        });
-    }
-
-    // Handle invite admin form submission
-    if (inviteAdminForm) {
-        inviteAdminForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const adminName = document.getElementById('admin-name') ? document.getElementById('admin-name').value : '';
-            const adminEmail = document.getElementById('admin-email') ? document.getElementById('admin-email').value : '';
-            const adminPassword = document.getElementById('admin-password') ? document.getElementById('admin-password').value : '';
-            const adminLocationSelectElement = document.getElementById('admin-location-select'); 
-            const adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : ''; 
-
-            if (!adminLocationId) {
-                showModalMessage('Please select a location to assign the admin.', true);
-                return;
-            }
-            if (!adminPassword) {
-                showModalMessage('Please enter a temporary password for the new admin.', true);
-                return;
-            }
-
-            try {
-                await apiRequest('POST', '/invite-admin', {
-                    full_name: adminName,
-                    email: adminEmail,
-                    location_id: adminLocationId,
-                    password: adminPassword
-                });
-                
-                if (document.getElementById('admin-name')) document.getElementById('admin-name').value = '';
-                if (document.getElementById('admin-email')) document.getElementById('admin-email').value = '';
-                if (document.getElementById('admin-password')) document.getElementById('admin-password').value = '';
-                if (adminLocationSelectElement) adminLocationSelectElement.value = '';
-
-                showModalMessage(`Admin invite sent to ${adminEmail} for selected location with the provided temporary password.`, false);
-                loadUsers(); 
-            } catch (error) { 
-                console.error("Error inviting admin:", error);
-                showModalMessage(`Failed to invite admin: ${error.message}`, true);
-            }
-        });
-    }
-
-    // Handle invite employee form submission
-    if (inviteEmployeeForm) {
-        inviteEmployeeForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const employeeName = document.getElementById('employee-name') ? document.getElementById('employee-name').value : '';
-            const employeeEmail = document.getElementById('employee-email') ? document.getElementById('employee-email').value : '';
-            const employeePassword = document.getElementById('employee-password') ? document.getElementById('employee-password').value : '';
-            const employeePosition = document.getElementById('employee-position') ? document.getElementById('employee-position').value : '';
-            const employeeId = document.getElementById('employee-id') ? document.getElementById('employee-id').value : '';
-            const employeeLocationSelectElement = document.getElementById('employee-location-select');
-            
-            let employeeLocationId = null; 
-            if (employeeLocationSelectElement && employeeLocationSelectElement.value !== "") {
-                employeeLocationId = parseInt(employeeLocationSelectElement.value);
-            }
-
-            const hasLocationsInDropdown = employeeLocationSelectElement && employeeLocationSelectElement.options.length > 1; 
-            if (!employeeName || !employeeEmail || !employeePassword || (hasLocationsInDropdown && employeeLocationId === null)) { 
-                showModalMessage('Full name, email, temporary password, and a valid location (if available) are required for new employees.', true);
-                return;
-            }
-
-            try {
-                await apiRequest('POST', '/invite-employee', { 
-                    full_name: employeeName,
-                    email: employeeEmail,
-                    password: employeePassword,
-                    position: employeePosition,
-                    employee_id: employeeId,
-                    location_id: employeeLocationId 
-                });
-
-                if (document.getElementById('employee-name')) document.getElementById('employee-name').value = '';
-                if (document.getElementById('employee-email')) document.getElementById('employee-email').value = '';
-                if (document.getElementById('employee-password')) document.getElementById('employee-password').value = '';
-                if (document.getElementById('employee-position')) document.getElementById('employee-position').value = '';
-                if (document.getElementById('employee-id')) document.getElementById('employee-id').value = '';
-                if (employeeLocationSelectElement) employeeLocationSelectElement.value = '';
-
-                showModalMessage(`Employee invite sent to ${employeeEmail} for selected location.`, false);
-                loadUsers(); 
-            } catch (error) {
-                console.error("Error inviting employee:", error);
-                showModalMessage(`Failed to invite employee: ${error.message}`, true);
-            }
-        });
-    }
-
-    // Initial load for admin page
-    loadLocations(); 
-    loadUsers(); 
-}
-
-/**
- * Handles logic for the pricing page.
- * Sets up event listeners for plan selection and Stripe checkout.
- */
-function handlePricingPage() {
-    if (!localStorage.getItem('authToken')) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    const freePlanBtn = document.getElementById('free-plan-btn');
-    const proPlanBtn = document.getElementById('pro-plan-btn');
-    const enterprisePlanBtn = document.getElementById('enterprise-plan-btn');
-
-    const stripe = Stripe('pk_test_51Ra4RJG06NHrwsY922jS3wPjF0020WbJ3PjF0020WbJ3PjF0020WbJ3f0L3hW9yTjY00l8Z7zrHY'); 
-
-    async function selectPlan(planId) {
-        try {
-            const response = await apiRequest('POST', '/create-checkout-session', { planId: planId });
-            const { url } = response;
-            window.location.href = url;
-
-        } catch (error) {
-            console.error('Error selecting plan:', error);
-            showModalMessage(`Failed to initiate checkout: ${error.message}`, true);
-        }
-    }
-
-    if (proPlanBtn) {
-        proPlanBtn.addEventListener('click', () => selectPlan('pro'));
-    }
-    if (enterprisePlanBtn) {
-        enterprisePlanBtn.addEventListener('click', () => selectPlan('enterprise'));
-    }
-
-    if (freePlanBtn) {
-        freePlanBtn.addEventListener('click', () => {
-            showModalMessage('You are currently on the Free plan. To upgrade, choose Pro or Enterprise.', false);
-        });
-    }
-}
-
-/**
- * Handles logic for the scheduling page.
- * Fetches and displays schedules, handles filter and create shift forms.
- */
-function handleSchedulingPage() {
-    if (!localStorage.getItem('authToken')) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    const calendarGrid = document.getElementById('calendar-grid');
-    const currentWeekDisplay = document.getElementById('current-week-display');
-    const prevWeekBtn = document.getElementById('prev-week-btn');
-    const nextWeekBtn = document.getElementById('next-week-btn');
-    const employeeSelect = document.getElementById('employee-select');
-    const locationSelect = document.getElementById('location-select');
-    const createShiftForm = document.getElementById('create-shift-form');
-
-    const filterEmployeeSelect = document.getElementById('filter-employee-select');
-    const filterLocationSelect = document.getElementById('filter-location-select');
-    const filterStartDate = document.getElementById('filter-start-date');
-    const filterEndDate = document.getElementById('filter-end-date');
-    const applyFiltersBtn = document.getElementById('apply-filters-btn');
-    const clearFiltersBtn = document.getElementById('clear-filters-btn');
-
-    let currentWeekStart = new Date(); 
-
-    function initializeWeek() {
-        const today = new Date();
-        const dayOfWeek = today.getDay(); 
-        currentWeekStart = new Date(today);
-        currentWeekStart.setDate(today.getDate() - dayOfWeek); 
-        currentWeekStart.setHours(0, 0, 0, 0); 
-    }
-
-    async function populateDropdowns() {
-        try {
-            const employees = await apiRequest('GET', '/users?filterRole=employee'); 
-            const locations = await apiRequest('GET', '/locations');
-
-            if (employeeSelect) {
-                employeeSelect.innerHTML = '<option value="">Select Employee</option>';
-                employees.forEach(emp => {
-                    const option = document.createElement('option');
-                    option.value = emp.user_id;
-                    option.textContent = emp.full_name;
-                    employeeSelect.appendChild(option);
-                });
-            }
-            if (filterEmployeeSelect) {
-                filterEmployeeSelect.innerHTML = '<option value="">All Employees</option>';
-                employees.forEach(emp => {
-                    const option = document.createElement('option');
-                    option.value = emp.user_id;
-                    option.textContent = emp.full_name;
-                    filterEmployeeSelect.appendChild(option);
-                });
-            }
-
-            if (locationSelect) {
-                locationSelect.innerHTML = '<option value="">Select Location</option>';
-                locations.forEach(loc => {
-                    const option = document.createElement('option');
-                    option.value = loc.location_id;
-                    option.textContent = loc.location_name;
-                    locationSelect.appendChild(option);
-                });
-            }
-            if (filterLocationSelect) {
-                filterLocationSelect.innerHTML = '<option value="">All Locations</option>';
-                locations.forEach(loc => {
-                    const option = document.createElement('option');
-                    option.value = loc.location_id;
-                    option.textContent = loc.location_name;
-                    filterLocationSelect.appendChild(option);
-                });
-            }
-
-        } catch (error) {
-            console.error("Error populating dropdowns:", error);
-            showModalMessage(`Failed to load employees or locations: ${error.message}`, true);
-        }
-    }
-
-    async function renderCalendar(schedules = []) {
-        if (!calendarGrid) return;
-
-        calendarGrid.querySelectorAll('.calendar-day-header:not(:first-child), .calendar-day-cell').forEach(el => el.remove());
-
-        const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const currentWeekEndDate = new Date(currentWeekStart);
-        currentWeekEndDate.setDate(currentWeekEndDate.getDate() + 6); 
-
-        currentWeekDisplay.textContent = `${currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${currentWeekEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(currentWeekStart);
-            date.setDate(currentWeekStart.getDate() + i);
-
-            const dayHeader = document.createElement('div');
-            dayHeader.className = 'calendar-day-header';
-            dayHeader.textContent = `${daysOfWeek[date.getDay()]} (${date.getMonth() + 1}/${date.getDate()})`;
-            dayHeader.style.gridColumn = i + 2; 
-            dayHeader.style.gridRow = 1;
-            calendarGrid.appendChild(dayHeader);
-
-            const dayCell = document.createElement('div');
-            dayCell.className = 'calendar-day-cell';
-            dayCell.dataset.date = date.toISOString().split('T')[0]; 
-            dayCell.style.gridColumn = i + 2;
-            dayCell.style.gridRow = '2 / span 24'; 
-            calendarGrid.appendChild(dayCell);
-            dayCells[date.toISOString().split('T')[0]] = dayCell; 
-        }
-
-        const timeColumn = document.getElementById('time-column');
-        if (timeColumn && timeColumn.children.length === 0) { 
-            for (let i = 0; i < 24; i++) {
-                const timeSlot = document.createElement('div');
-                timeSlot.className = 'calendar-time-slot';
-                const hour = i < 10 ? `0${i}` : `${i}`;
-                timeSlot.textContent = `${hour}:00`;
-                timeColumn.appendChild(timeSlot);
-            }
-        }
-
-        schedules.forEach(shift => {
-            const shiftStartTime = new Date(shift.start_time);
-            const shiftEndTime = new Date(shift.end_time);
-            const shiftDate = shiftStartTime.toISOString().split('T')[0]; 
-
-            const targetCell = dayCells[shiftDate];
-            if (targetCell) {
-                const shiftDiv = document.createElement('div');
-                shiftDiv.className = 'calendar-shift';
-                
-                const startHour = shiftStartTime.getHours() + shiftStartTime.getMinutes() / 60;
-                const endHour = shiftEndTime.getHours() + shiftEndTime.getMinutes() / 60;
-                const durationHours = endHour - startHour;
-
-                const topOffset = (startHour * 30); 
-                const height = (durationHours * 30);
-
-                shiftDiv.style.top = `${topOffset}px`;
-                shiftDiv.style.height = `${height}px`;
-
-                shiftDiv.innerHTML = `<strong>${shift.employee_name}</strong><br>${shiftStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${shiftEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-                if (shift.notes) {
-                    shiftDiv.title = shift.notes; 
-                }
-
-                const deleteButton = document.createElement('button');
-                deleteButton.className = 'btn-delete';
-                deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>`;
-                deleteButton.onclick = async (e) => {
-                    e.stopPropagation(); 
-                    const confirmDelete = await showConfirmModal(`Are you sure you want to delete this shift for ${shift.employee_name}?`, 'Delete Shift');
-                    if (confirmDelete) {
-                        try {
-                            await apiRequest('DELETE', `/schedules/${shift.schedule_id}`);
-                            showModalMessage('Shift deleted successfully!', false);
-                            loadSchedules(); 
-                        } catch (error) {
-                            showModalMessage(`Failed to delete shift: ${error.message}`, true);
-                        }
-                    }
-                };
-                shiftDiv.appendChild(deleteButton);
-
-
-                targetCell.appendChild(shiftDiv);
-            }
-        });
-    }
-
-    async function loadSchedules() {
-        const employeeId = filterEmployeeSelect ? filterEmployeeSelect.value : '';
-        const locationId = filterLocationSelect ? filterLocationSelect.value : '';
-        const startDate = filterStartDate ? filterStartDate.value : '';
-        const endDate = filterEndDate ? filterEndDate.value : '';
-
-        const apiStartDate = currentWeekStart.toISOString().split('T')[0];
-        const apiEndDate = new Date(currentWeekStart);
-        apiEndDate.setDate(currentWeekStart.getDate() + 6); 
-        const apiEndDateString = apiEndDate.toISOString().split('T')[0];
-
-        const queryParams = new URLSearchParams({
-            start_date: apiStartDate,
-            end_date: apiEndDateString
-        });
-        if (employeeId) queryParams.append('employee_id', employeeId);
-        if (locationId) queryParams.append('location_id', locationId);
-        if (startDate && endDate) {
-            queryParams.set('start_date', startDate);
-            queryParams.set('end_date', endDate);
-        }
-
-        try {
-            const schedules = await apiRequest('GET', `/schedules?${queryParams.toString()}`);
-            renderCalendar(schedules);
-        } catch (error) {
-            console.error("Error loading schedules:", error);
-            showModalMessage(`Failed to load schedules: ${error.message}`, true);
-            renderCalendar([]); 
-        }
-    }
-
-    if (prevWeekBtn) {
-        prevWeekBtn.addEventListener('click', () => {
-            currentWeekStart.setDate(currentWeekStart.getDate() - 7);
-            loadSchedules();
-        });
-    }
-    if (nextWeekBtn) {
-        nextWeekBtn.addEventListener('click', () => {
-            currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-            loadSchedules();
-        });
-    }
-
-    if (createShiftForm) {
-        createShiftForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const employeeId = document.getElementById('employee-select').value;
-            const locationId = document.getElementById('location-select').value;
-            const startTime = document.getElementById('start-time-input').value;
-            const endTime = document.getElementById('end-time-input').value;
-            const notes = document.getElementById('notes-input').value;
-
-            try {
-                await apiRequest('POST', '/schedules', {
-                    employee_id: employeeId,
-                    location_id: locationId,
-                    start_time: startTime,
-                    end_time: endTime,
-                    notes: notes
-                });
-                showModalMessage('Shift created successfully!', false);
-                createShiftForm.reset(); 
-                loadSchedules(); 
-            } catch (error) {
-                console.error("Error creating shift:", error);
-                showModalMessage(`Failed to create shift: ${error.message}`, true);
-            }
-        });
-    }
-
-    if (applyFiltersBtn) {
-        applyFiltersBtn.addEventListener('click', loadSchedules);
-    }
-    if (clearFiltersBtn) {
-        clearFiltersBtn.addEventListener('click', () => {
-            if (filterEmployeeSelect) filterEmployeeSelect.value = '';
-            if (filterLocationSelect) filterLocationSelect.value = '';
-            if (filterStartDate) filterStartDate.value = '';
-            if (filterEndDate) filterEndDate.value = '';
-            initializeWeek(); 
-            loadSchedules();
-        });
-    }
-
-    initializeWeek(); 
-    populateDropdowns(); 
-    loadSchedules(); 
-}
-
-/**
- * Handles logic for the hiring page.
- * Manages job posting creation, listing, and applicant tracking.
- */
-function handleHiringPage() {
-    if (!localStorage.getItem('authToken')) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    const createJobPostingForm = document.getElementById('create-job-posting-form');
-    const jobPostingList = document.getElementById('job-posting-list');
-    const jobPostingLocationSelect = document.getElementById('job-posting-location-select'); 
-    
-    const applicantList = document.getElementById('applicant-list');
-    const filterApplicantJobPostingSelect = document.getElementById('filter-applicant-job-posting-select');
-    const filterApplicantStatus = document.getElementById('filter-applicant-status');
-    const filterApplicantLocationSelect = document.getElementById('filter-applicant-location-select');
-    const applyApplicantFiltersBtn = document.getElementById('apply-applicant-filters-btn');
-    const clearApplicantFiltersBtn = document.getElementById('clear-applicant-filters-btn');
-
-    const shareLinkModalOverlay = document.getElementById('share-link-modal-overlay');
-    const shareJobLinkInput = document.getElementById('share-job-link-input');
-    const shareJobEmbedCodeInput = document.getElementById('share-job-embed-code-input');
-    const copyLinkBtn = document.getElementById('copy-link-btn');
-    const copyEmbedBtn = document.getElementById('copy-embed-btn');
-    const shareLinkModalCloseButton = document.getElementById('share-link-modal-close-button');
-
-
-    async function populateLocationDropdowns() {
-        try {
-            const locations = await apiRequest('GET', '/locations');
-            const defaultOption = '<option value="">Company Wide (All Locations)</option>';
-            
-            if (jobPostingLocationSelect) {
-                jobPostingLocationSelect.innerHTML = defaultOption;
-                locations.forEach(loc => {
-                    const option = document.createElement('option');
-                    option.value = loc.location_id;
-                    option.textContent = loc.location_name;
-                    jobPostingLocationSelect.appendChild(option);
-                });
-            }
-            if (filterApplicantLocationSelect) {
-                filterApplicantLocationSelect.innerHTML = defaultOption;
-                locations.forEach(loc => {
-                    const option = document.createElement('option');
-                    option.value = loc.location_id;
-                    option.textContent = loc.location_name;
-                    filterApplicantLocationSelect.appendChild(option);
-                });
-            }
-        } catch (error) {
-            console.error("Error populating location dropdowns:", error);
-            showModalMessage(`Failed to load locations: ${error.message}`, true);
-        }
-    }
-
-    async function populateJobPostingDropdown() {
-        try {
-            const jobPostings = await apiRequest('GET', '/job-postings');
-            const defaultOption = '<option value="">All Job Postings</option>';
-            if (filterApplicantJobPostingSelect) {
-                filterApplicantJobPostingSelect.innerHTML = defaultOption;
-                jobPostings.forEach(job => {
-                    const option = document.createElement('option');
-                    option.value = job.job_posting_id;
-                    option.textContent = job.title;
-                    filterApplicantJobPostingSelect.appendChild(option);
-                });
-            }
-        } catch (error) {
-            console.error("Error populating job posting dropdown:", error);
-            showModalMessage(`Failed to load job postings for filter: ${error.message}`, true);
-        }
-    }
-
-
-    async function loadJobPostings() {
-        if (!jobPostingList) return;
-        jobPostingList.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>';
-        try {
-            const postings = await apiRequest('GET', '/job-postings');
-            jobPostingList.innerHTML = '';
-            if (postings.length === 0) {
-                jobPostingList.innerHTML = '<p style="color: var(--text-medium);">No job postings found.</p>';
-            } else {
-                postings.forEach(posting => {
-                    const jobCard = document.createElement('div');
-                    jobCard.className = 'job-posting-item';
-                    jobCard.innerHTML = `
-                        <h4>${posting.title}</h4>
-                        <p><strong>Description:</strong> ${posting.description.substring(0, 100)}...</p>
-                        ${posting.requirements ? `<p><strong>Requirements:</strong> ${posting.requirements.substring(0, 100)}...</p>` : ''}
-                        <p><strong>Status:</strong> ${posting.status}</p>
-                        <p><strong>Posted:</strong> ${new Date(posting.created_date).toLocaleDateString()}</p>
-                        <div class="actions">
-                            <button class="btn btn-secondary btn-sm edit-job-btn" data-id="${posting.job_posting_id}">Edit</button>
-                            <button class="btn share-btn" data-id="${posting.job_posting_id}" data-title="${posting.title}">Share Link</button>
-                            <button class="btn-delete" data-type="job-posting" data-id="${posting.job_posting_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    jobPostingList.appendChild(jobCard);
-                });
-                attachJobPostingListeners(); 
-            }
-        } catch (error) {
-            console.error("Error loading job postings:", error);
-            showModalMessage(`Failed to load job postings: ${error.message}`, true);
-        }
-    }
-
-    function attachJobPostingListeners() {
-        jobPostingList.querySelectorAll('.btn-delete[data-type="job-posting"]').forEach(button => { 
-            button.onclick = async (e) => {
-                e.stopPropagation(); 
-                const id = button.dataset.id;
-                const confirmDelete = await showConfirmModal('Are you sure you want to delete this job posting? This will also remove associated applicants.', 'Delete Job Posting');
-                if (confirmDelete) {
-                    try {
-                        await apiRequest('DELETE', `/job-postings/${id}`);
-                        showModalMessage('Job posting deleted successfully!', false);
-                        loadJobPostings(); 
-                        populateJobPostingDropdown(); 
-                        loadApplicants(); 
-                    }
-                    catch (error) {
-                        showModalMessage(`Failed to delete job posting: ${error.message}`, true);
-                    }
-                }
-            };
-        });
-
-        jobPostingList.querySelectorAll('.share-btn').forEach(button => {
-            button.onclick = (e) => {
-                e.stopPropagation(); 
-                const id = button.dataset.id;
-                const title = button.dataset.title;
-                const directLink = `http://localhost:8000/apply.html?job_id=${id}`;
-                const embedCode = `<iframe src="http://localhost:8000/embed-job-apply.html?job_id=${id}" width="600" height="400" frameborder="0"></iframe>`;
-                
-                if (shareJobLinkInput) shareJobLinkInput.value = directLink;
-                if (shareJobEmbedCodeInput) shareJobEmbedCodeInput.value = embedCode;
-                if (shareLinkModalOverlay) shareLinkModalOverlay.style.display = 'flex';
-            };
-        });
-
-        if (shareLinkModalCloseButton) {
-            shareLinkModalCloseButton.onclick = () => {
-                if (shareLinkModalOverlay) shareLinkModalOverlay.style.display = 'none';
-            };
-        }
-        if (copyLinkBtn) {
-            copyLinkBtn.onclick = () => {
-                if (shareJobLinkInput) {
-                    shareJobLinkInput.select();
-                    document.execCommand('copy');
-                    showModalMessage('Direct link copied to clipboard!', false);
-                }
-            };
-        }
-        if (copyEmbedBtn) {
-            copyEmbedBtn.onclick = () => {
-                if (shareJobEmbedCodeInput) {
-                    shareJobEmbedCodeInput.select();
-                    document.execCommand('copy');
-                    showModalMessage('Embed code copied to clipboard!', false);
-                }
-            };
-        });
-
-        jobPostingList.querySelectorAll('.edit-job-btn').forEach(button => {
-            button.onclick = (e) => {
-                e.stopPropagation();
-                const id = button.dataset.id;
-                showModalMessage(`Edit functionality for Job Posting ID: ${id} is coming soon!`, false);
-            };
-        });
-    }
-
-    async function loadApplicants() {
-        if (!applicantList) return;
-        applicantList.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
+    try {
+        const password_hash = await bcrypt.hash(password, 10);
         
-        const params = new URLSearchParams();
-        if (filterApplicantJobPostingSelect && filterApplicantJobPostingSelect.value) {
-            params.append('job_posting_id', filterApplicantJobPostingSelect.value);
-        }
-        if (filterApplicantStatus && filterApplicantStatus.value) {
-            params.append('status', filterApplicantStatus.value);
-        }
-        if (filterApplicantLocationSelect && filterApplicantLocationSelect.value) {
-            params.append('location_id', filterApplicantLocationSelect.value);
-        }
-
+        const client = await pool.connect();
         try {
-            const applicants = await apiRequest('GET', `/applicants?${params.toString()}`);
-            applicantList.innerHTML = ''; 
-            if (applicants.length === 0) {
-                applicantList.innerHTML = '<p style="color: var(--text-medium);">No applicants found matching criteria.</p>';
-            } else {
-                applicants.forEach(applicant => {
-                    const applicantCard = document.createElement('div');
-                    applicantCard.className = 'applicant-item';
-                    applicantCard.innerHTML = `
-                        <h4>${applicant.full_name}</h4>
-                        <p><strong>Email:</strong> ${applicant.email}</p>
-                        <p><strong>Phone:</strong> ${applicant.phone_number || 'N/A'}</p>
-                        <p><strong>Job Applied:</strong> ${applicant.job_title_name || 'N/A'}</p>
-                        <p><strong>Status:</strong> ${applicant.status}</p>
-                        <p><strong>Applied:</strong> ${new Date(applicant.application_date).toLocaleDateString()}</p>
-                        <div class="actions">
-                            <button class="btn btn-secondary btn-sm edit-applicant-btn" data-id="${applicant.applicant_id}">Edit Status</button>
-                            ${applicant.resume_url ? `<a href="${applicant.resume_url}" target="_blank" class="btn btn-secondary btn-sm">View Resume</a>` : ''}
-                            <button class="btn-delete" data-type="applicant" data-id="${applicant.applicant_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    applicantList.appendChild(applicantCard);
-                });
-                attachApplicantListeners(); 
+            await client.query('BEGIN');
+            const companyResult = await client.query('INSERT INTO Companies (company_name) VALUES ($1) RETURNING company_id', [company_name]);
+            const newCompanyId = companyResult.rows[0].company_id;
+
+            const userResult = await client.query(
+                `INSERT INTO Users (company_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, 'super_admin', 'active', 'free') RETURNING user_id`,
+                [newCompanyId, full_name, email, password_hash]
+            );
+            const newUserId = userResult.rows[0].user_id;
+
+            await client.query('COMMIT');
+            res.status(201).json({ message: "Company and user registered successfully!", userId: newUserId });
+        } catch (dbErr) {
+            await client.query('ROLLBACK');
+            console.error("Database error during registration:", dbErr);
+            if (dbErr.message && dbErr.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
+                return res.status(409).json({ error: 'Email already registered.' });
             }
-        } catch (error) {
-            console.error("Error loading applicants:", error);
-            showModalMessage(`Failed to load applicants: ${error.message}`, true);
+            next(dbErr);
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error("Registration error:", error);
+        next(error);
+    }
+});
+
+app.post('/api/login', authLimiter, async (req, res, next) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required." });
+    }
+
+    try {
+        const userResult = await query("SELECT * FROM Users WHERE email = $1", [email]);
+        const user = userResult[0];
+
+        if (!user) { return res.status(401).json({ error: "Invalid credentials." }); }
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        if (!isMatch) { return res.status(401).json({ error: "Invalid credentials." }); }
+
+        const payload = { userId: user.user_id, email: user.email, role: user.role, fullName: user.full_name, companyId: user.company_id, locationId: user.location_id, subscriptionStatus: user.subscription_status, planId: user.plan_id };
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+        res.status(200).json({ message: "Login successful!", token, role: user.role });
+    } catch (error) {
+        console.error("Login API error:", error);
+        next(error);
+    }
+});
+
+app.post('/api/invite-admin', authenticateToken, async (req, res, next) => {
+    const { full_name, email, password, location_id } = req.body;
+    const { companyId, role } = req.user;
+
+    if (role !== 'super_admin') { return res.status(403).json({ error: 'Access Denied: Only super admins can invite other admins.' }); }
+    if (!full_name || !email || !password || password.length < 6 || !isValidEmail(email) || typeof location_id !== 'number' || location_id <= 0) {
+        return res.status(400).json({ error: "Invalid admin invitation data provided." });
+    }
+
+    try {
+        const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
+        if (locationCheck.length === 0) { return res.status(400).json({ error: 'Selected location does not exist or does not belong to your company.' }); }
+
+        const password_hash = await bcrypt.hash(password, 10);
+        const result = await runCommand(
+            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, 'location_admin', 'active', 'free')`,
+            [companyId, location_id, full_name, email, password_hash]
+        );
+        res.status(201).json({ message: "Location admin invited successfully!", userId: result });
+    } catch (error) {
+        console.error("Invite admin error:", error);
+        if (error.message && error.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
+            return res.status(409).json({ error: 'Email already registered.' });
+        }
+        next(error);
+    }
+});
+
+app.post('/api/invite-employee', authenticateToken, async (req, res, next) => {
+    const { full_name, email, password, position, employee_id, location_id } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can invite employees.' }); }
+    
+    const isLocationIdValid = location_id === null || (typeof location_id === 'number' && !isNaN(location_id) && location_id > 0);
+    if (!full_name || !email || !password || password.length < 6 || !isValidEmail(email) || !isLocationIdValid) {
+        return res.status(400).json({ error: "Invalid employee invitation data provided. Full name, email, password, and a valid location are required." });
+    }
+
+    if (role === 'location_admin') {
+        if (location_id !== currentUserLocationId) {
+            if (!(location_id === null && currentUserLocationId === null)) { 
+                return res.status(403).json({ error: 'Access Denied: Location admin can only invite employees to their assigned location.' });
+            }
         }
     }
 
-    function attachApplicantListeners() {
-        applicantList.querySelectorAll('.btn-delete[data-type="applicant"]').forEach(button => { 
-            button.onclick = async (e) => {
-                e.stopPropagation();
-                const id = button.dataset.id;
-                const confirmDelete = await showConfirmModal('Are you sure you want to delete this document?', 'Delete Document');
-                if (confirmDelete) {
-                    try {
-                        await apiRequest('DELETE', `/documents/${id}`);
-                        showModalMessage('Document deleted successfully!', false);
-                        loadDocuments(); 
-                    } catch (error) {
-                        showModalMessage(`Failed to delete document: ${error.message}`, true);
-                    }
-                }
-            };
-        });
+    try {
+        if (location_id !== null) {
+            const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
+            if (locationCheck.length === 0) { return res.status(400).json({ error: 'Selected location does not exist or does not belong to your company.' }); }
+        }
+
+        const password_hash = await bcrypt.hash(password, 10);
+        const result = await runCommand(
+            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, position, employee_id, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 'employee', 'active', 'free')`,
+            [companyId, location_id, full_name, email, password_hash, position, employee_id]
+        );
+        res.status(201).json({ message: "Employee invited successfully!", userId: result });
+    } catch (error) {
+        console.error("Invite employee error:", error);
+        if (error.message && error.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
+            return res.status(409).json({ error: 'Email already registered.' });
+        }
+        next(error);
+    }
+});
+
+app.get('/api/profile', authenticateToken, async (req, res, next) => {
+    try {
+        const userResult = await query('SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1', [req.user.userId]);
+        const user = userResult[0];
+        if (!user) { return res.status(404).json({ error: 'User not found.' }); }
+        res.status(200).json(user);
+    }  catch (error) {
+        console.error("Error fetching profile info:", error);
+        next(error);
+    }
+});
+
+app.put('/api/profile', authenticateToken, async (req, res, next) => {
+    const { fullName, email, currentPassword, newPassword } = req.body;
+    const { userId } = req.user;
+
+    if (fullName === undefined && email === undefined && (!currentPassword || !newPassword)) { return res.status(400).json({ error: 'No data provided for update.' }); }
+    if (fullName !== undefined && (typeof fullName !== 'string' || fullName.trim() === '')) { return res.status(400).json({ error: "Full name must be a non-empty string if provided." }); }
+    if (email !== undefined && !isValidEmail(email)) { return res.status(400).json({ error: "A valid email address must be provided if changing email." }); }
+    if (newPassword !== undefined && (typeof newPassword !== 'string' || newPassword.length < 6)) { return res.status(400).json({ error: "New password must be at least 6 characters long if changing password." }); }
+    if ((currentPassword && !newPassword) || (!currentPassword && newPassword)) { return res.status(400).json({ error: 'Both current password and new password are required to change password.' }); }
+
+    try {
+        const userResult = await query("SELECT * FROM Users WHERE user_id = $1", [userId]);
+        const user = userResult[0];
+        if (!user) { return res.status(404).json({ error: "User not found." }); }
+
+        let updateSql = 'UPDATE Users SET ';
+        const updateParams = [];
+        const clauses = [];
+        let paramIndex = 1;
+
+        if (fullName !== undefined && fullName !== user.full_name) {
+            clauses.push(`full_name = $${paramIndex++}`);
+            updateParams.push(fullName);
+        }
+        if (email !== undefined && email !== user.email) {
+            const existingUser = await query("SELECT user_id FROM Users WHERE email = $1 AND user_id != $2", [email, userId]);
+            if (existingUser.length > 0) { return res.status(409).json({ error: 'Email already in use by another account.' }); }
+            clauses.push(`email = $${paramIndex++}`);
+            updateParams.push(email);
+        }
+        if (currentPassword && newPassword) {
+            const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+            if (!isMatch) { return res.status(401).json({ error: "Current password incorrect." }); }
+            const newPasswordHash = await bcrypt.hash(newPassword, 10);
+            clauses.push(`password_hash = $${paramIndex++}`);
+            updateParams.push(newPasswordHash);
+        }
+
+        if (clauses.length === 0) { return res.status(200).json({ message: 'No changes detected. Profile remains the same.' }); }
+
+        updateSql += clauses.join(', ') + ` WHERE user_id = $${paramIndex}`;
+        updateParams.push(userId);
+
+        await runCommand(updateSql, updateParams);
+        
+        const updatedUserResult = await query("SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1", [userId]);
+        const updatedUser = updatedUserResult[0];
+        const newPayload = { userId: updatedUser.user_id, email: updatedUser.email, role: updatedUser.role, fullName: updatedUser.full_name, companyId: updatedUser.company_id, locationId: updatedUser.location_id, subscriptionStatus: updatedUser.subscription_status, planId: updatedUser.plan_id };
+        const newToken = jwt.sign(newPayload, JWT_SECRET, { expiresIn: '1h' });
+        res.status(200).json({ message: 'Profile updated successfully!', token: newToken });
+
+    } catch (error) {
+        console.error("Error updating profile:", error);
+        next(error);
+    }
+});
+
+app.get('/api/locations', authenticateToken, async (req, res, next) => {
+    const { companyId, role } = req.user;
+    let sql = 'SELECT location_id, location_name, location_address FROM Locations WHERE company_id = $1';
+    const params = [companyId];
+
+    if (!['super_admin', 'location_admin', 'employee'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view locations.' }); }
+
+    try {
+        const locations = await query(sql, params);
+        res.json(locations);
+    } catch (error) {
+        console.error("Database error fetching locations:", error);
+        next(error);
+    }
+});
+
+app.post('/api/locations', authenticateToken, async (req, res, next) => {
+    const { location_name, location_address } = req.body;
+    const { companyId, role } = req.user;
+
+    if (role !== 'super_admin') { return res.status(403).json({ error: 'Access Denied: Only super admins can create locations.' }); }
+    if (!location_name || typeof location_name !== 'string' || location_name.trim() === '' || !location_address || typeof location_address !== 'string' || location_address.trim() === '') {
+        return res.status(400).json({ error: "Location name and address are required and must be non-empty strings." });
     }
 
-    if (uploadDocumentForm) {
-        uploadDocumentForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const title = document.getElementById('document-title').value;
-            const fileInput = document.getElementById('document-file');
-            const description = document.getElementById('document-description').value;
-            const file = fileInput.files[0];
+    try {
+        const result = await query('INSERT INTO Locations (company_id, location_name, location_address) VALUES ($1, $2, $3) RETURNING location_id', [companyId, location_name, location_address]);
+        res.status(201).json({ message: 'Location created!', locationId: result[0].location_id });
+    }  catch (error) {
+        console.error("Database error creating location:", error);
+        next(error);
+    }
+});
 
-            if (!file) {
-                showModalMessage('Please select a file to upload.', true);
-                return;
-            }
+app.delete('/api/locations/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role } = req.user;
 
-            const mockFileUploadResponse = {
-                file_url: `https://placehold.co/300x200/C86DD7/ffffff?text=${encodeURIComponent(file.name)}`, 
-                file_type: file.type || 'application/octet-stream'
-            };
-            
-            if (!isImageFile(file.type)) {
-                mockFileUploadResponse.file_url = `https://example.com/uploads/${Date.now()}-${file.name}`; 
-            }
+    if (role !== 'super_admin') { return res.status(403).json({ error: 'Access Denied: Only super admins can delete locations.' }); }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid location ID provided.' }); }
 
-            try {
-                await apiRequest('POST', '/documents', {
-                    title: title,
-                    file_name: file.name,
-                    file_type: mockFileUploadResponse.file_type,
-                    file_url: mockFileUploadResponse.file_url,
-                    description: description
-                });
+    try {
+        const result = await runCommand('DELETE FROM Locations WHERE location_id = $1 AND company_id = $2', [id, companyId]);
+        if (result === 0) { return res.status(404).json({ error: 'Location not found or not authorized to delete.' }); }
+        res.status(204).send();
+    } catch (error) {
+        console.error("Database error deleting location:", error);
+        next(error);
+    }
+});
 
-                showModalMessage('Document uploaded and saved successfully!', false);
-                uploadDocumentForm.reset(); 
-                loadDocuments(); 
-            } catch (error) {
-                console.error("Error uploading document:", error);
-                showModalMessage(`Failed to upload document: ${error.message}`, true);
-            }
-        });
+app.get('/api/users', authenticateToken, async (req, res, next) => {
+    const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
+    const { filterRole, filterLocationId } = req.query;
+
+    let sql = `SELECT Users.user_id, Users.full_name, Users.email, Users.role, Locations.location_name
+               FROM Users
+               LEFT JOIN Locations ON Users.location_id = Locations.location_id
+               WHERE Users.company_id = $1`;
+    const params = [companyId];
+    let paramIndex = 2;
+
+    if (role === 'location_admin') {
+        if (currentUserLocationId) {
+            sql += ` AND (Users.location_id = $${paramIndex++} OR Users.location_id IS NULL)`;
+            params.push(currentUserLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+        }
+    } else if (role === 'employee') {
+        sql += ` AND Users.user_id = $${paramIndex++}`;
+        params.push(currentUserId);
+    } else if (!['super_admin'].includes(role)) { 
+        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view users.' });
     }
 
-    loadDocuments(); 
+    const allowedRoles = ['super_admin', 'location_admin', 'employee'];
+    if (filterRole) {
+        if (!allowedRoles.includes(filterRole) || (role === 'location_admin' && filterRole === 'super_admin')) {
+            return res.status(400).json({ error: 'Invalid filter role provided or insufficient permissions to filter by this role.' });
+        }
+        sql += ` AND Users.role = $${paramIndex++}`;
+        params.push(filterRole);
+    }
+    if (filterLocationId) {
+        if (isNaN(parseInt(filterLocationId))) { return res.status(400).json({ error: 'Invalid filter location ID provided.' }); }
+        if (role === 'super_admin' || (role === 'location_admin' && parseInt(filterLocationId) === currentUserLocationId)) {
+            sql += ` AND Users.location_id = $${paramIndex++}`;
+            params.push(parseInt(filterLocationId));
+        } else {
+            return res.status(403).json({ error: 'Access Denied: Insufficient permissions to filter by location.' });
+        }
+    }
+
+    try {
+        const users = await query(sql, params);
+        res.json(users);
+    } catch (error) {
+        console.error("Database error fetching users:", error);
+        next(error);
+    }
+});
+
+app.delete('/api/users/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role, userId: authenticatedUserId } = req.user;
+
+    if (role !== 'super_admin') { return res.status(403).json({ error: 'Access Denied: Only super admins can delete users.' }); }
+    if (parseInt(id) === authenticatedUserId) { return res.status(403).json({ error: 'Cannot delete your own super admin account via this interface.' }); }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid user ID provided.' }); }
+
+    try {
+        const result = await runCommand('DELETE FROM Users WHERE user_id = $1 AND company_id = $2 AND role != \'super_admin\'', [id, companyId]);
+        if (result === 0) { return res.status(404).json({ error: 'User not found or not authorized to delete.' }); }
+        res.status(204).send();
+    } catch (error) {
+        console.error("Database error deleting user:", error);
+        next(error);
+    }
+});
+
+app.post('/api/schedules', authenticateToken, async (req, res, next) => {
+    const { employee_id, location_id, start_time, end_time, notes } = req.body;
+    const { companyId, role, userId: currentUserId } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can create schedules.' }); }
+    if (typeof employee_id !== 'number' || employee_id <= 0 || typeof location_id !== 'number' || location_id <= 0 || !start_time || !end_time || isNaN(new Date(start_time).getTime()) || isNaN(new Date(end_time).getTime()) || new Date(start_time) >= new Date(end_time)) {
+        return res.status(400).json({ error: 'Invalid schedule data provided.' });
+    }
+    if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
+
+    try {
+        const employeeCheck = await query('SELECT user_id FROM Users WHERE user_id = $1 AND company_id = $2', [employee_id, companyId]);
+        if (employeeCheck.length === 0) { return res.status(400).json({ error: 'Employee not found in your company.' }); }
+        const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
+        if (locationCheck.length === 0) { return res.status(400).json({ error: 'Location not found in your company.' }); }
+
+        const result = await runCommand(
+            'INSERT INTO Schedules (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+            [employee_id, location_id, start_time, end_time, notes]
+        );
+        res.status(201).json({ message: 'Schedule created successfully!', scheduleId: result });
+    } catch (error) {
+        console.error("Database error creating schedule:", error);
+        next(error);
+    }
+});
+
+app.get('/api/schedules', authenticateToken, async (req, res, next) => {
+    const { employee_id, location_id, start_date, end_date } = req.query;
+    const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
+
+    let sql = `SELECT Schedules.*, Users.full_name AS employee_name, Users.email AS employee_email, Locations.location_name
+               FROM Schedules
+               JOIN Users ON Schedules.employee_id = Users.user_id
+               JOIN Locations ON Schedules.location_id = Locations.location_id
+               WHERE Users.company_id = $1`;
+    const params = [companyId];
+    let paramIndex = 2;
+
+    if (role === 'location_admin') {
+        if (currentUserLocationId) {
+            sql += ` AND Schedules.location_id = $${paramIndex++}`;
+            params.push(currentUserLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+        }
+    } else if (role === 'employee') {
+        sql += ` AND Schedules.employee_id = $${paramIndex++}`;
+        params.push(currentUserId);
+    } else if (!['super_admin'].includes(role)) { 
+        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view schedules.' });
+    }
+    
+    if (employee_id) { sql += ` AND Schedules.employee_id = $${paramIndex++}`; params.push(parseInt(employee_id)); }
+    if (location_id) { sql += ` AND Schedules.location_id = $${paramIndex++}`; params.push(parseInt(location_id)); }
+    if (start_date) { sql += ` AND Schedules.start_time >= $${paramIndex++}`; params.push(start_date); }
+    if (end_date) { sql += ` AND Schedules.end_time <= $${paramIndex++}`; params.push(end_date); }
+
+    try {
+        const schedules = await query(sql, params);
+        res.json(schedules);
+    } catch (error) {
+        console.error("Database error fetching schedules:", error);
+        next(error);
+    }
+});
+
+app.delete('/api/schedules/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
+
+    if (role === 'employee') { return res.status(403).json({ error: 'Access Denied: Employees cannot delete schedules.' }); }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid schedule ID provided.' }); }
+
+    let sql = `DELETE FROM Schedules WHERE schedule_id = $1`;
+    const params = [id];
+    let paramIndex = 2;
+
+    if (role === 'location_admin') {
+        sql += ` AND employee_id IN (SELECT user_id FROM Users WHERE location_id = $${paramIndex++} AND company_id = $${paramIndex++})`;
+        params.push(currentUserLocationId, companyId);
+    } else if (role === 'super_admin') {
+        sql += ` AND employee_id IN (SELECT user_id FROM Users WHERE company_id = $${paramIndex++})`;
+        params.push(companyId);
+    }
+
+    try {
+        const result = await runCommand(sql, params);
+        if (result === 0) { return res.status(404).json({ error: 'Schedule not found or not authorized to delete.' }); }
+        res.status(204).send();
+    } catch (error) {
+        console.error("Database error deleting schedule:", error);
+        next(error);
+    }
+});
+
+app.post('/api/job-postings', authenticateToken, async (req, res, next) => {
+    const { title, description, requirements, location_id } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+    const created_date = new Date().toISOString();
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can create job postings.' }); }
+    if (!title || typeof title !== 'string' || title.trim() === '') { return res.status(400).json({ error: "Job title is required and must be a non-empty string." }); }
+    if (description !== undefined && (typeof description !== 'string' || description.trim() === '')) { return res.status(400).json({ error: 'Description must be a non-empty string if provided.' }); }
+    if (requirements !== undefined && typeof requirements !== 'string') { return res.status(400).json({ error: 'Requirements must be a string if provided.' }); }
+    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
+
+    if (role === 'location_admin' && location_id && location_id !== currentUserLocationId) { return res.status(403).json({ error: 'Access Denied: Location admin can only post jobs for their assigned location.' }); }
+
+    try {
+        const result = await query(
+            'INSERT INTO JobPostings (company_id, location_id, title, description, requirements, status, created_date) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING job_posting_id',
+            [companyId, location_id, title, description, requirements, 'Open', created_date]
+        );
+        res.status(201).json({ message: 'Job posting created successfully!', jobPostingId: result[0].job_posting_id });
+    } catch (error) {
+        console.error("Database error creating job posting:", error);
+        next(error);
+    }
+});
+
+app.get('/api/job-postings', authenticateToken, async (req, res, next) => {
+    const { status, location_id } = req.query;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    let sql = 'SELECT * FROM JobPostings WHERE company_id = $1';
+    const params = [companyId];
+    let paramIndex = 2;
+
+    if (role === 'location_admin') {
+        if (currentUserLocationId) {
+            sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
+            params.push(currentUserLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+        }
+    } else if (role === 'employee') {
+        return res.status(403).json({ error: 'Access Deny: Insufficient permissions to view job postings.' });
+    }
+
+    const allowedStatuses = ['Open', 'Closed', 'Filled'];
+    if (status) {
+        if (!allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid job posting status filter provided.' }); }
+        sql += ` AND status = $${paramIndex++}`;
+        params.push(status);
+    }
+    if (location_id) {
+        if (isNaN(parseInt(location_id))) { return res.status(400).json({ error: 'Invalid location ID filter provided.' }); }
+        if (role === 'super_admin' || (role === 'location_admin' && parseInt(location_id) === currentUserLocationId)) {
+            sql += ` AND location_id = $${paramIndex++}`;
+            params.push(parseInt(location_id));
+        } else {
+            return res.status(403).json({ error: 'Access Denied: Insufficient permissions to filter by location.' });
+        }
+    }
+
+    try {
+        const postings = await query(sql, params);
+        res.json(postings);
+    } catch (error) {
+        console.error("Database error fetching job postings:", error);
+        next(error);
+    }
+});
+
+app.put('/api/job-postings/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { title, description, requirements, status, location_id } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can update job postings.' }); }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid job posting ID provided.' }); }
+    if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) { return res.status(400).json({ error: "Job title is required and must be a non-empty string." }); }
+    if (description !== undefined && (typeof description !== 'string' || description.trim() === '')) { return res.status(400).json({ error: 'Description must be a non-empty string if provided.' }); }
+    if (requirements !== undefined && typeof requirements !== 'string') { return res.status(400).json({ error: 'Requirements must be a string if provided.' }); }
+    const allowedStatuses = ['Open', 'Closed', 'Filled'];
+    if (status !== undefined && !allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid status provided.' }); }
+    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
+
+    let updateSql = 'UPDATE JobPostings SET ';
+    const updateParams = [];
+    const clauses = [];
+    let paramIndex = 1;
+
+    if (title !== undefined) { clauses.push(`title = $${paramIndex++}`); updateParams.push(title); }
+    if (description !== undefined) { clauses.push(`description = $${paramIndex++}`); updateParams.push(description); }
+    if (requirements !== undefined) { clauses.push(`requirements = $${paramIndex++}`); updateParams.push(requirements); }
+    if (status !== undefined) { clauses.push(`status = $${paramIndex++}`); updateParams.push(status); }
+    if (location_id !== undefined) {
+        if (role === 'super_admin' || (role === 'location_admin' && location_id === currentUserLocationId)) {
+            clauses.push(`location_id = $${paramIndex++}`); updateParams.push(location_id);
+        } else if (role === 'location_admin') {
+            return res.status(403).json({ error: 'Access Denied: Location admin cannot change job posting location to another location.' });
+        }
+    }
+
+    if (clauses.length === 0) { return res.status(400).json({ error: 'No fields provided for update.' }); }
+
+    updateSql += clauses.join(', ') + ` WHERE job_posting_id = $${paramIndex++} AND company_id = $${paramIndex++}`;
+    updateParams.push(parseInt(id), companyId);
+
+    if (role === 'location_admin') {
+        updateSql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
+        updateParams.push(currentUserLocationId);
+    }
+
+    try {
+        const result = await runCommand(updateSql, updateParams);
+        if (result === 0) { return res.status(404).json({ error: 'Job posting not found or not authorized to update.' }); }
+        res.status(200).json({ message: 'Job posting updated successfully!' });
+    } catch (error) {
+        console.error("Database error updating job posting:", error);
+        next(error);
+    }
+});
+
+app.delete('/api/job-postings/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can delete job postings.' }); }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid job posting ID provided.' }); }
+
+    let sql = 'DELETE FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2';
+    const params = [id, companyId];
+    let paramIndex = 3;
+
+    if (role === 'location_admin') {
+        sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
+        params.push(currentUserLocationId);
+    }
+
+    try {
+        const result = await runCommand(sql, params);
+        if (result === 0) { return res.status(404).json({ error: 'Job posting not found or not authorized to delete.' }); }
+        res.status(204).send();
+    } catch (error) {
+        console.error("Database error deleting job posting:", error);
+        next(error);
+    }
+});
+
+app.post('/api/applicants', authenticateToken, async (req, res, next) => {
+    const { job_posting_id, full_name, email, notes, location_id, phone_number } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+    const application_date = new Date().toISOString();
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can add applicants.' }); }
+    if (typeof job_posting_id !== 'number' || job_posting_id <= 0 || !full_name || !email || !isValidEmail(email) || !phone_number) {
+        return res.status(400).json({ error: 'Invalid applicant data provided. Job posting ID, full name, email, and phone number are required.' });
+    }
+    if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
+    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
+
+    try {
+        const jobPostingCheck = await query('SELECT job_posting_id, location_id FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2', [job_posting_id, companyId]);
+        if (jobPostingCheck.length === 0) { return res.status(400).json({ error: 'Job Posting not found or does not belong to your company.' }); }
+        const actualLocationId = location_id === undefined ? jobPostingCheck[0].location_id : location_id;
+
+        if (role === 'location_admin' && actualLocationId !== currentUserLocationId && actualLocationId !== null) {
+            return res.status(403).json({ error: 'Access Denied: Location admin cannot add applicants to jobs outside their assigned location.' });
+        }
+
+        const result = await runCommand(
+            'INSERT INTO Applicants (company_id, location_id, job_posting_id, full_name, email, phone_number, notes, application_date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [companyId, actualLocationId, job_posting_id, full_name, email, phone_number, notes, application_date]
+        );
+        res.status(201).json({ message: 'Applicant added successfully!', applicantId: result });
+    } catch (error) {
+        console.error("Database error creating applicant:", error);
+        next(error);
+    }
+});
+
+app.get('/api/applicants', authenticateToken, async (req, res, next) => {
+    const { job_posting_id, status, location_id } = req.query;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    let sql = `SELECT Applicants.*, JobPostings.title AS job_title_name
+               FROM Applicants
+               LEFT JOIN JobPostings ON Applicants.job_posting_id = JobPostings.job_posting_id
+               WHERE Applicants.company_id = $1`;
+    const params = [companyId];
+    let paramIndex = 2;
+
+    if (status) {
+        const allowedStatuses = ['Applied', 'Interviewing', 'Rejected', 'Hired'];
+        if (!allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid applicant status filter provided.' }); }
+        sql += ` AND Applicants.status = $${paramIndex++}`;
+        params.push(status);
+    }
+    if (job_posting_id) {
+        if (isNaN(parseInt(job_posting_id))) { return res.status(400).json({ error: 'Invalid job posting ID filter provided.' }); }
+        sql += ` AND Applicants.job_posting_id = $${paramIndex++}`;
+        params.push(parseInt(job_posting_id));
+    }
+
+    if (role === 'location_admin') {
+        if (currentUserLocationId) {
+            sql += ` AND (Applicants.location_id = $${paramIndex++} OR Applicants.location_id IS NULL)`;
+            params.push(currentUserLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Denied: Location admin not assigned to a location.' });
+        }
+    } else if (role === 'employee') {
+        return res.status(403).json({ error: 'Access Denied: Insufficient permissions to view applicants.' });
+    }
+
+    if (location_id) {
+        if (isNaN(parseInt(location_id))) { return res.status(400).json({ error: 'Invalid location ID filter provided.' }); }
+        if (role === 'super_admin' || (role === 'location_admin' && parseInt(location_id) === currentUserLocationId)) {
+            sql += ` AND Applicants.location_id = $${paramIndex++}`;
+            params.push(parseInt(location_id));
+        } else {
+            return res.status(403).json({ error: 'Access Denied: Insufficient permissions to filter by location.' });
+        }
+    }
+
+    try {
+        const applicants = await query(sql, params);
+        res.json(applicants);
+    } catch (error) {
+        console.error("Database error fetching applicants:", error);
+        next(error);
+    }
+});
+
+app.put('/api/applicants/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { full_name, email, status, resume_url, notes, location_id, job_posting_id, phone_number } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can update applicant records.' }); }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid applicant ID provided.' }); }
+    if (full_name !== undefined && (typeof full_name !== 'string' || full_name.trim() === '')) { return res.status(400).json({ error: "Full name must be a non-empty string if provided." }); }
+    if (email !== undefined && !isValidEmail(email)) { return res.status(400).json({ error: "A valid email address must be provided if changing email." }); }
+    if (phone_number !== undefined && (typeof phone_number !== 'string' || phone_number.trim() === '')) { return res.status(400).json({ error: "Phone number must be a non-empty string if provided." }); }
+    const allowedStatuses = ['Applied', 'Interviewing', 'Rejected', 'Hired'];
+    if (status !== undefined && !allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid status provided.' }); }
+    if (resume_url !== undefined && typeof resume_url !== 'string') { return res.status(400).json({ error: 'Resume URL must be a string if provided.' }); }
+    if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
+    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
+    if (job_posting_id !== undefined && typeof job_posting_id !== 'number' && job_posting_id !== null) { return res.status(400).json({ error: 'Job posting ID must be a number or null if provided.' }); }
+
+    let updateSql = 'UPDATE Applicants SET ';
+    const updateParams = [];
+    const clauses = [];
+    let paramIndex = 1;
+
+    if (full_name !== undefined) { clauses.push(`full_name = $${paramIndex++}`); updateParams.push(full_name); }
+    if (email !== undefined) { clauses.push(`email = $${paramIndex++}`); updateParams.push(email); }
+    if (phone_number !== undefined) { clauses.push(`phone_number = $${paramIndex++}`); updateParams.push(phone_number); }
+    if (status !== undefined) { clauses.push(`status = $${paramIndex++}`); updateParams.push(status); }
+    if (resume_url !== undefined) { clauses.push(`resume_url = $${paramIndex++}`); updateParams.push(resume_url); }
+    if (notes !== undefined) { clauses.push(`notes = $${paramIndex++}`); updateParams.push(notes); }
+    
+    if (location_id !== undefined) {
+        if (role === 'super_admin' || (role === 'location_admin' && location_id === currentUserLocationId)) {
+            clauses.push(`location_id = $${paramIndex++}`); updateParams.push(location_id);
+        } else if (role === 'location_admin') {
+            return res.status(403).json({ error: 'Access Denied: Location admin cannot assign applicants to another location.' });
+        }
+    }
+    if (job_posting_id !== undefined) {
+        if (role === 'super_admin' || (role === 'location_admin')) { 
+            const jobCheck = await query('SELECT job_posting_id FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2', [job_posting_id, companyId]);
+            if (jobCheck.length === 0) { return res.status(400).json({ error: 'Job Posting not found or does not belong to your company.' }); }
+            if (role === 'location_admin' && jobCheck[0].location_id !== null && jobCheck[0].location_id !== currentUserLocationId) {
+                return res.status(403).json({ error: 'Access Denied: Location admin cannot assign applicants to jobs outside their assigned location.' });
+            }
+            clauses.push(`job_posting_id = $${paramIndex++}`); updateParams.push(job_posting_id);
+        } else {
+             return res.status(403).json({ error: 'Access Denied: Insufficient permissions to update job posting ID.' });
+        }
+    }
+
+    if (clauses.length === 0) { return res.status(400).json({ error: 'No fields provided for update.' }); }
+
+    updateSql += clauses.join(', ') + ` WHERE applicant_id = $${paramIndex++} AND company_id = $${paramIndex++}`;
+    updateParams.push(parseInt(id), companyId);
+
+    if (role === 'location_admin') {
+        updateSql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
+        updateParams.push(currentUserLocationId);
+    }
+
+    try {
+        const result = await runCommand(updateSql, updateParams);
+        if (result === 0) { return res.status(404).json({ error: 'Applicant not found or not authorized to update.' }); }
+        res.status(200).json({ message: 'Applicant updated successfully!' });
+    } catch (error) {
+        console.error("Database error updating applicant:", error);
+        next(error);
+    }
+});
+
+app.delete('/api/applicants/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) { return res.status(403).json({ error: 'Access Denied: Only admins can delete applicants.' }); }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid applicant ID provided.' }); }
+
+    let sql = 'DELETE FROM Applicants WHERE applicant_id = $1 AND company_id = $2';
+    const params = [id, companyId];
+    let paramIndex = 3;
+
+    if (role === 'location_admin') {
+        sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
+        params.push(currentUserLocationId);
+    }
+
+    try {
+        const result = await runCommand(sql, params);
+        if (result === 0) { return res.status(404).json({ error: 'Applicant not found or not authorized to delete.' }); }
+        res.status(204).send();
+    } catch (error) {
+        console.error("Database error deleting applicant:", error);
+        next(error);
+    }
+});
+
+app.post('/api/documents', authenticateToken, async (req, res, next) => {
+    const { title, file_name, file_type, file_url, description } = req.body;
+    const { companyId, userId } = req.user;
+    const upload_date = new Date().toISOString();
+
+    if (!title || typeof title !== 'string' || title.trim() === '' || !file_name || typeof file_name !== 'string' || file_name.trim() === '' || !file_type || typeof file_type !== 'string' || file_type.trim() === '' || !file_url || typeof file_url !== 'string' || !/^https?:\/\/[^\s$.?#].[^\s]*$/i.test(file_url)) {
+        return res.status(400).json({ error: 'Invalid document data provided. Title, file name, type, and a valid URL are required.' });
+    }
+    if (description !== undefined && typeof description !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
+
+    try {
+        const result = await runCommand(
+            'INSERT INTO Documents (company_id, user_id, title, file_name, file_type, file_url, description, upload_date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [companyId, userId, title, file_name, file_type, file_url, description, upload_date]
+        );
+        res.status(201).json({ message: 'Document metadata saved successfully!', documentId: result });
+    } catch (error) {
+        console.error("Database error uploading document:", error);
+        next(error);
+    }
+});
+
+app.get('/api/documents', authenticateToken, async (req, res, next) => {
+    const { companyId, userId, role } = req.user;
+    
+    let sql = 'SELECT * FROM Documents WHERE company_id = $1';
+    const params = [companyId];
+    let paramIndex = 2;
+
+    if (role !== 'super_admin') {
+        sql += ` AND user_id = $${paramIndex++}`;
+        params.push(userId);
+    }
+
+    try {
+        const documents = await query(sql, params);
+        res.json(documents);
+    } catch (error) {
+        console.error("Database error fetching documents:", error);
+        next(error);
+    }
+});
+
+app.delete('/api/documents/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, userId, role } = req.user;
+
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid document ID provided.' }); }
+
+    let sql = 'DELETE FROM Documents WHERE document_id = $1 AND company_id = $2';
+    const params = [id, companyId];
+    let paramIndex = 3;
+
+    if (role !== 'super_admin') {
+        sql += ` AND user_id = $${paramIndex++}`;
+        params.push(userId);
+    }
+
+    try {
+        const result = await runCommand(sql, params);
+        if (result === 0) { return res.status(404).json({ error: 'Document not found or not authorized to delete.' }); }
+        res.status(204).send();
+    } catch (error) {
+        console.error("Database error deleting document:", error);
+        next(error);
+    }
+});
+
+app.get(/'*'/, (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
+
+app.use((err, req, res, next) => {
+    console.error(`Unhandled Error: ${err.stack}`);
+    res.status(500).json({
+        error: 'An unexpected server error occurred. Please try again later.',
+    });
+});
+
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server is running successfully on http://localhost:${PORT}`);
+    });
+} else {
+    module.exports = app;
 }
