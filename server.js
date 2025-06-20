@@ -1,4 +1,4 @@
-// --- Imports ---
+// --// --- Imports ---
 const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
@@ -22,6 +22,9 @@ const app = express();
 const PORT = process.env.PORT; 
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; 
 
+// --- General Middleware ---
+app.use(express.json()); // JSON body parser should be early
+app.use(morgan('dev')); // Request logger
 app.use(cors({
     origin: function (origin, callback) {
         const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:8000', 'null'];
@@ -41,98 +44,6 @@ app.use(cors({
     credentials: true,
     optionsSuccessStatus: 204
 }));
-
-app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    let event;
-
-    try {
-        event = stripeInstance.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
-    } catch (err) {
-        console.error(`Webhook Error: ${err.message}`);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    const client = await pool.connect(); 
-    try {
-        await client.query('BEGIN'); 
-        switch (event.type) {
-            case 'checkout.session.completed':
-                const session = event.data.object;
-                console.log('Checkout Session Completed:', session.id);
-                const userId = session.metadata.userId;
-                const planId = session.metadata.planId;
-                if (session.payment_status === 'paid' && userId && planId) {
-                    await client.query(
-                        'UPDATE Users SET stripe_customer_id = $1, stripe_subscription_id = $2, subscription_status = $3, plan_id = $4 WHERE user_id = $5',
-                        [session.customer, session.subscription, 'active', planId, userId]
-                    );
-                    console.log(`User ${userId} subscription updated to ${planId} (active).`);
-                }
-                break;
-            case 'customer.subscription.updated':
-                const subscriptionUpdated = event.data.object;
-                console.log('Subscription Updated:', subscriptionUpdated.id);
-                if (subscriptionUpdated.customer && subscriptionUpdated.status && subscriptionUpdated.plan && subscriptionUpdated.plan.id) {
-                    await client.query(
-                        'UPDATE Users SET subscription_status = $1, plan_id = $2 WHERE stripe_customer_id = $3',
-                        [subscriptionUpdated.status, subscriptionUpdated.plan.id, subscriptionUpdated.customer]
-                    );
-                    console.log(`Subscription for customer ${subscriptionUpdated.customer} status updated to ${subscriptionUpdated.status} and plan to ${subscriptionUpdated.plan.id}.`);
-                }
-                break;
-            case 'customer.subscription.deleted':
-                const subscriptionDeleted = event.data.object;
-                console.log('Subscription Deleted:', subscriptionDeleted.id);
-                if (subscriptionDeleted.customer) {
-                    await client.query(
-                        'UPDATE Users SET subscription_status = $1, plan_id = $2, stripe_subscription_id = NULL WHERE stripe_customer_id = $3',
-                        ['cancelled', 'free', subscriptionDeleted.customer]
-                    );
-                    console.log(`Subscription for customer ${subscriptionDeleted.customer} marked as cancelled and reverted to free.`);
-                }
-                break;
-            case 'invoice.payment_succeeded':
-                const invoiceSucceeded = event.data.object;
-                console.log('Invoice Payment Succeeded:', invoiceSucceeded.id);
-                if (invoiceSucceeded.subscription && invoiceSucceeded.customer) {
-                    await client.query(
-                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
-                        ['active', invoiceSucceeded.subscription, invoiceSucceeded.customer]
-                    );
-                    console.log(`Subscription ${invoiceSucceeded.subscription} status set to active.`);
-                }
-                break;
-            case 'invoice.payment_failed':
-                const invoiceFailed = event.data.object;
-                console.log('Invoice Payment Failed:', invoiceFailed.id);
-                if (invoiceFailed.subscription && invoiceFailed.customer) {
-                    await client.query(
-                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
-                        ['past_due', invoiceFailed.subscription, invoiceFailed.customer]
-                    );
-                    console.log(`Subscription ${invoiceFailed.subscription} status set to past_due.`);
-                }
-                break;
-            default:
-                console.log(`Unhandled event type ${event.type}`);
-        }
-        await client.query('COMMIT'); 
-        res.status(200).json({ received: true });
-    } catch (dbErr) {
-        await client.query('ROLLBACK'); 
-        console.error("Database update error during webhook processing:", dbErr.message);
-        res.status(500).json({ error: 'Webhook processing failed.' });
-    } finally {
-        client.release(); 
-    }
-});
-
-app.use(express.json());
-
-const JWT_SECRET = process.env.JWT_SECRET; 
-
-app.use(morgan('dev'));
 
 
 // --- Database Setup (PostgreSQL) ---
@@ -185,7 +96,7 @@ const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-// --- API Routes (Define ALL API routes before serving static files) ---
+// --- API Routes (Define ALL API routes FIRST) ---
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -1009,7 +920,7 @@ app.delete('/api/documents/:id', authenticateToken, async (req, res, next) => {
 });
 
 app.get(/'*'/, (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html')); // Fallback to index.html for SPA routing
 });
 
 app.use((err, req, res, next) => {
@@ -1026,3 +937,4 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
+
