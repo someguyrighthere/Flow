@@ -1192,7 +1192,7 @@ app.get('/applicants', authenticateToken, async (req, res, next) => {
     } catch (error) {
         console.error("Database error fetching applicants:", error);
         next(error);
-   } // Final closing curly brace for the catch block and the route handler
+    // Final closing curly brace for the catch block and the route handler
 
 // --- Static Files and SPA Fallback (Moved to the very end) ---
 // Define Public Directory Path - this assumes server.js is in the root of the repository
