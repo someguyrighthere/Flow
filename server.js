@@ -250,7 +250,7 @@ app.post('/invite-admin', authenticateToken, async (req, res, next) => {
 });
 
 post('/invite-employee', authenticateToken, async (req, res, next) => {
-    const { full_name, email, password, position,app. employee_id, location_id } = req.body;
+    const { full_name, email, password, position, employee_id, location_id } = req.body;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
 
     // Authorization check
