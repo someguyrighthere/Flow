@@ -646,4 +646,3 @@ function handleAdminPage() {
     loadLocations(); // Load locations and populate dropdown
     loadUsers(); // Load and display users
 }
-}
