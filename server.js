@@ -255,7 +255,7 @@ app.get('/api/profile', authenticateToken, async (req, res, next) => {
     }  catch (error) {
         console.error("Error fetching profile info:", error);
         next(error);
-    }
+    
 });
 
 app.put('/api/profile', authenticateToken, async (req, res, next) => {
