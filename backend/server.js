@@ -1005,8 +1005,11 @@ app.delete('/api/documents/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-app.get(/'*'/, (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+// Serve static frontend (React build output)
+app.use(express.static(path.join(__dirname, 'client', 'build')));
+
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
 });
 
 app.use((err, req, res, next) => {
