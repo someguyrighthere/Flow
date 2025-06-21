@@ -11,7 +11,7 @@ const API_BASE_URL = 'https://flow-gz1r.onrender.com';
 // IMPORTANT: Replace 'pk_live_YOUR_STRIPE_PUBLISHABLE_KEY' with your actual Stripe Publishable Key
 // from your Stripe dashboard (e.g., pk_live_************************).
 // This key should NOT be stored as a backend environment variable.
-const stripe = Stripe('pk_live_YOUR_STRIPE_PUBLISHABLE_KEY');
+const stripe = Stripe('pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td');
 
 
 /**
