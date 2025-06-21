@@ -8,9 +8,10 @@ const API_BASE_URL = 'https://flow-gz1r.onrender.com';
 
 // Initialize Stripe.js with your public key (replace with your actual publishable key)
 // This key should be retrieved from your backend or securely stored in your client-side config.
-// For now, using a placeholder. You'd typically load this from an environment variable or a meta tag.
-// IMPORTANT: Replace 'pk_test_YOUR_STRIPE_PUBLISHABLE_KEY' with your actual Stripe Publishable Key
-const stripe = Stripe('pk_test_YOUR_STRIPE_PUBLISHABLE_KEY'); 
+// IMPORTANT: Replace 'pk_live_YOUR_STRIPE_PUBLISHABLE_KEY' with your actual Stripe Publishable Key
+// from your Stripe dashboard (e.g., pk_live_************************).
+// This key should NOT be stored as a backend environment variable.
+const stripe = Stripe('pk_live_YOUR_STRIPE_PUBLISHABLE_KEY'); 
 
 
 /**
@@ -181,48 +182,7 @@ function setupSettingsDropdown() {
 }
 
 
-// --- Page Specific Handlers ---
-
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOMContentLoaded: Script loaded and DOM ready.'); // DEBUG
-    const page = window.location.pathname; // Get the current page path
-    console.log('DOMContentLoaded: Current page path:', page); // DEBUG
-
-    // Call the appropriate handler based on the page
-    if (page.includes('login.html')) {
-        console.log('DOMContentLoaded: Handling login page.'); // DEBUG
-        handleLoginPage();
-    } else if (page.includes('register.html')) {
-        console.log('DOMContentLoaded: Handling register page.'); // DEBUG
-        handleRegisterPage();
-    } else if (page.includes('suite-hub.html')) {
-        console.log('DOMContentLoaded: Handling suite-hub page.'); // DEBUG
-        handleSuiteHubPage();
-    } else if (page.includes('account.html')) {
-        console.log('DOMContentLoaded: Handling account page.'); // DEBUG
-        handleAccountPage();
-    } else if (page.includes('admin.html')) {
-        console.log('DOMContentLoaded: Handling admin page.'); // DEBUG
-        handleAdminPage();
-    } else if (page.includes('pricing.html')) {
-        console.log('DOMContentLoaded: Handling pricing page.'); // DEBUG
-        handlePricingPage(); // Added handler for pricing page
-    } else if (page.includes('scheduling.html')) {
-        console.log('DOMContentLoaded: Handling scheduling page.'); // DEBUG
-        handleSchedulingPage();
-    } else if (page.includes('hiring.html')) {
-        console.log('DOMContentLoaded: Handling hiring page.'); // DEBUG
-        handleHiringPage();
-    } else if (page.includes('sales-analytics.html')) {
-        console.log('DOMContentLoaded: Handling sales-analytics page.'); // DEBUG
-        handleSalesAnalyticsPage();
-    } else {
-        console.log('DOMContentLoaded: No specific handler for this page.'); // DEBUG
-    }
-    // Call global setup functions that might be needed on multiple pages
-    setupSettingsDropdown();
-});
-
+// --- Page Specific Handlers (DEFINED BEFORE DOMContentLoaded) ---
 
 /**
  * Handles the logic for the login page.
@@ -546,8 +506,13 @@ function handleAdminPage() {
             if (locations.length === 0) {
                 locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
                 if(adminLocationSelect) { // Defensive check
-                    adminLocationSelect.innerHTML = '<option value="">No locations available</option>';
-                    adminLocationSelect.disabled = true;
+                    adminLocationSelect.innerHTML = '<option value="">Select a location</option>'; // Default option
+                    locations.forEach(loc => {
+                        const option = document.createElement('option');
+                        option.value = loc.location_id;
+                        option.textContent = loc.location_name;
+                        adminLocationSelect.appendChild(option);
+                    });
                 }
             } else {
                 if(adminLocationSelect) adminLocationSelect.disabled = false; // Defensive check
