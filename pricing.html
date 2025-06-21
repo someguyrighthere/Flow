@@ -9,9 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
-    <!-- Stripe.js library already present -->
-    <script src="https://js.stripe.com/v3/"></script>
     <style>
+        /* Base styles from your existing pricing.html */
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
         .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
         .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
@@ -76,6 +75,87 @@
             padding: 10px 25px;
             font-size: 1rem;
         }
+
+        /* NEW: Styles for the Register/Checkout Modal */
+        #register-checkout-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            z-index: 1001; /* Higher than other modals */
+        }
+
+        #register-checkout-modal-overlay .modal-content {
+            max-width: 500px; /* Adjust as needed */
+            text-align: left;
+        }
+
+        #register-checkout-modal-overlay h3 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+            color: var(--text-light);
+        }
+
+        #register-checkout-modal-overlay .form-group {
+            margin-bottom: 18px;
+        }
+
+        #register-checkout-modal-overlay label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        #register-checkout-modal-overlay input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+            font-size: 1rem;
+        }
+
+        #register-checkout-modal-overlay input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        #register-checkout-error-message {
+            color: #ff8a80;
+            display: none;
+            margin-bottom: 15px;
+            font-weight: 500;
+            visibility: hidden;
+            height: 0;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        #register-checkout-error-message.visible {
+            display: block;
+            visibility: visible;
+            height: auto;
+        }
+
+        #register-checkout-modal-overlay .modal-buttons {
+            display: flex;
+            justify-content: space-between; /* Space out buttons */
+            gap: 15px;
+            margin-top: 25px;
+        }
+        #register-checkout-modal-overlay .modal-buttons .btn {
+            flex-grow: 1; /* Make buttons take equal space */
+        }
     </style>
 </head>
 <body>
@@ -124,7 +204,8 @@
             </div>
         </section>
     </div>
-    <!-- Message Modal Overlay (for showModalMessage function) - needed on this page too -->
+
+    <!-- Message Modal Overlay (for showModalMessage function) -->
     <div id="message-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <p id="modal-message-text"></p>
@@ -133,6 +214,40 @@
             </div>
         </div>
     </div>
+
+    <!-- NEW: Register/Checkout Modal -->
+    <div id="register-checkout-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="register-checkout-modal-title">Sign Up & Subscribe to Plan</h3>
+            <form id="register-checkout-form">
+                <div class="form-group">
+                    <label for="reg-co-name">Company Name</label>
+                    <input type="text" id="reg-co-name" required placeholder="Your Company Inc.">
+                </div>
+                <div class="form-group">
+                    <label for="reg-full-name">Your Full Name</label>
+                    <input type="text" id="reg-full-name" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="reg-email">Email Address</label>
+                    <input type="email" id="reg-email" required placeholder="you@company.com">
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">Password</label>
+                    <input type="password" id="reg-password" required minlength="6" placeholder="••••••••">
+                </div>
+                <p id="register-checkout-error-message" role="alert" aria-live="polite" class="sr-only"></p>
+                <div class="modal-buttons">
+                    <button type="button" id="reg-checkout-cancel-btn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Sign Up & Continue to Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- END NEW: Register/Checkout Modal -->
+
+    <!-- Stripe.js library MUST be loaded before your app.min.js -->
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="js/app.min.js"></script>
 </body>
 </html>
