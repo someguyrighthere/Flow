@@ -554,8 +554,9 @@ app.post('/documents/upload', authenticateToken, upload.single('document_file'),
 
     try {
         const result = await runCommand(
-            `INSERT INTO Documents (company_id, title, description, file_path, file_name, mime_type, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING document_id, file_path`,
-            [companyId, title, description, file.path, file.originalname, file.mimetype, userId]
+            // Removed mime_type from the INSERT statement temporarily for debugging database schema
+            `INSERT INTO Documents (company_id, title, description, file_path, file_name, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING document_id, file_path`,
+            [companyId, title, description, file.path, file.originalname, userId] // Removed file.mimetype
         );
         res.status(201).json({ message: 'Document uploaded successfully!', documentId: result.document_id, filePath: result.file_path });
     } catch (error) {
@@ -573,11 +574,8 @@ app.get('/documents', authenticateToken, async (req, res, next) => {
     // Authorization: Any user within the company should be able to view documents for now
     // If specific roles should be restricted, add checks here.
 
-    // NEW FIX: Selecting uploaded_by_user_id directly from Documents table
-    // and removing the join for now to explicitly address the column existence issue.
-    // Frontend will display the ID or "Unknown User" for existing documents.
-    // Updated to also select 'uploaded_by_user_id' explicitly as it's being used in the frontend display now.
-    let sql = `SELECT document_id, title, description, file_name, mime_type, upload_date, file_path,
+    // Removed mime_type from SELECT statement temporarily for debugging database schema
+    let sql = `SELECT document_id, title, description, file_name, upload_date, file_path,
                       uploaded_by_user_id -- Select the ID directly from Documents table
                FROM Documents
                WHERE company_id = $1`;
@@ -607,7 +605,8 @@ app.get('/documents/download/:document_id', authenticateToken, async (req, res, 
 
     try {
         const docResult = await query(
-            'SELECT file_path, file_name, mime_type, company_id FROM Documents WHERE document_id = $1',
+            // Removed mime_type from SELECT statement temporarily
+            'SELECT file_path, file_name, company_id FROM Documents WHERE document_id = $1',
             [document_id]
         );
         const document = docResult[0];
@@ -623,7 +622,7 @@ app.get('/documents/download/:document_id', authenticateToken, async (req, res, 
 
         const filePath = document.file_path;
         const fileName = document.file_name;
-        const mimeType = document.mime_type;
+        // const mimeType = document.mime_type; // No longer retrieving from DB for now
 
         // Check if file exists on disk
         if (!fs.existsSync(filePath)) {
@@ -631,7 +630,11 @@ app.get('/documents/download/:document_id', authenticateToken, async (req, res, 
             return res.status(404).json({ error: 'File not found on server storage.' });
         }
 
-        res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+        // For download, we need the mime_type. Since we're bypassing the DB for it,
+        // we'll have to infer it or default to a generic type.
+        // A more robust solution would be to use a library to infer mime type from file extension
+        // or ensure the DB column exists.
+        res.setHeader('Content-Type', 'application/octet-stream'); // Default to generic type
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.sendFile(filePath); // Send the file from local storage
 
@@ -928,7 +931,7 @@ app.delete('/users/:id', authenticateToken, async (req, res, next) => {
         const result = await runCommand('DELETE FROM Users WHERE user_id = $1 AND company_id = $2', [id, companyId]);
         if (result === 0) { return res.status(404).json({ error: 'User not found or not authorized to delete.' }); }
         res.status(204).send();
-    } catch (error) {
+    }  catch (error) {
         console.error("Database error deleting user:", error);
         next(error);
     }
@@ -965,7 +968,7 @@ app.post('/schedules', authenticateToken, async (req, res, next) => {
             }
             // The schedule's location_id must match the admin's assigned location
             if (location_id !== currentUserLocationId) {
-                return res.status(403).json({ error: 'Access Dismissed: Location admin can only create schedules for their assigned location.' }); // Changed 'Access Dismissed' to 'Access Dismissed'
+                return res.status(403).json({ error: 'Access Dismissed: Location admin can only create schedules for their assigned location.' }); // Changed 'Access Denied' to 'Access Dismissed'
             }
         }
 
@@ -1076,7 +1079,7 @@ app.delete('/schedules/:id', authenticateToken, async (req, res, next) => {
         const result = await runCommand(sql, params);
         if (result === 0) { return res.status(404).json({ error: 'Schedule not found or not authorized to delete.' }); }
         res.status(204).send();
-    } catch (error) {
+    }  catch (error) {
         console.error("Database error deleting schedule:", error);
         next(error);
     }
@@ -1408,3 +1411,69 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
+```
+
+The error `column "mime_type" of relation "documents" does not exist` is still occurring even after our previous attempts to resolve it. This indicates a persistent schema mismatch on your deployed database on Render.
+
+I have updated the "server-js-fix" Canvas with temporary adjustments to the `/documents/upload` POST route and the `/documents` GET route. I have removed `mime_type` from the `INSERT` statement in the upload route and from the `SELECT` statement in the fetch route.
+
+**What was changed in the Canvas (`server.js`):**
+
+1.  **`app.post('/documents/upload', ...)` route:**
+    * Removed `mime_type` from the `INSERT` query's column list.
+    * Removed `file.mimetype` from the values array.
+    ```javascript
+    // Previous INSERT statement:
+    // `INSERT INTO Documents (company_id, title, description, file_path, file_name, mime_type, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING document_id, file_path`,
+    // [companyId, title, description, file.path, file.originalname, file.mimetype, userId]
+
+    // Updated INSERT statement (in the Canvas):
+    `INSERT INTO Documents (company_id, title, description, file_path, file_name, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING document_id, file_path`,
+    [companyId, title, description, file.path, file.originalname, userId]
+    ```
+
+2.  **`app.get('/documents', ...)` route:**
+    * Removed `mime_type` from the `SELECT` query's column list.
+    ```javascript
+    // Previous SELECT statement:
+    // `SELECT document_id, title, description, file_name, mime_type, upload_date, file_path, uploaded_by_user_id FROM Documents WHERE company_id = $1`
+
+    // Updated SELECT statement (in the Canvas):
+    `SELECT document_id, title, description, file_name, upload_date, file_path,
+                      uploaded_by_user_id -- Select the ID directly from Documents table
+               FROM Documents
+               WHERE company_id = $1`
+    ```
+
+3.  **`app.get('/documents/download/:document_id', ...)` route:**
+    * Removed `mime_type` from the `SELECT` statement and hardcoded `Content-Type` to `application/octet-stream`.
+    ```javascript
+    // Previous SELECT statement:
+    // 'SELECT file_path, file_name, mime_type, company_id FROM Documents WHERE document_id = $1'
+
+    // Updated SELECT statement (in the Canvas):
+    'SELECT file_path, file_name, company_id FROM Documents WHERE document_id = $1'
+
+    // And later in the same route:
+    // Removed: const mimeType = document.mime_type;
+    // Added: res.setHeader('Content-Type', 'application/octet-stream');
+    ```
+
+**Why these changes?**
+
+These are **temporary diagnostic changes** to bypass the "column does not exist" errors that are preventing your `documents.html` page from functioning at all. By removing the problematic columns from the SQL queries, the backend should stop crashing due to those specific missing columns.
+
+This will allow us to:
+1.  Verify if the `documents.html` page can now load and if new documents can be uploaded (without `mime_type` being saved/retrieved).
+2.  **Crucially, confirm that your database migration process on Render is the root cause.** The persistent missing column errors, despite you running `ALTER TABLE` commands, point to an issue with how schema changes are applied and retained in your Render environment.
+
+**Next Steps for you:**
+
+1.  **Replace your current `server.js` file** with the entire code provided in the "server-js-fix" Canvas.
+2.  **Crucial: Force a redeploy/restart of your backend service on Render.** This is the most important step after changing server-side code.
+3.  **Test the `documents.html` page again.**
+    * Check if documents now load (you won't see mime type in the display, and it might show 'Unknown User' for uploader).
+    * Try uploading a new document.
+    * **Inspect your backend logs closely for ANY new errors.**
+
+This step is to unblock the basic functionality of the `documents.html` page. Once it's working without these column errors, we can focus on the *correct* way to perform database migrations on Render to align your schema with your application's expectatio
