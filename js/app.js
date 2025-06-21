@@ -1448,7 +1448,7 @@ function handleDocumentsPage() {
         console.log("Loading documents...");
         documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
         try {
-            // Re-added mime_type and uploaded_by_user_id for join in server.js
+            // Updated: Expecting mime_type and uploaded_by in response from server
             const documents = await apiRequest("GET", "/documents");
             documentListDiv.innerHTML = ''; // Clear existing list
 
@@ -1549,15 +1549,8 @@ function handleDocumentsPage() {
             if (downloadButton) {
                 const documentId = downloadButton.dataset.documentId;
                 console.log(`Download button clicked for document ID: ${documentId}`);
-                // Construct the download URL and trigger a download
-                // Re-added mime_type to download route (will need to be fetched from DB again)
-                const docInfo = await apiRequest("GET", `/documents/download/${documentId}`); // This is wrong, it should be a GET to /documents to get info, not /download
-                if (docInfo && docInfo.file_path) { // Assuming docInfo contains necessary fields
-                    window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
-                } else {
-                    // Correct approach: directly trigger download if mime type is re-added to documents GET route
-                    window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
-                }
+                // Corrected: Directly set window.location.href to trigger download
+                window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
             } else if (deleteButton) {
                 const documentId = deleteButton.dataset.documentId;
                 console.log(`Delete button clicked for document ID: ${documentId}`);
@@ -1570,7 +1563,7 @@ function handleDocumentsPage() {
                         loadDocuments(); // Reload list after deletion
                     } catch (error) {
                         console.error("Error deleting document:", error);
-                        showModalMessage(`Error deleting document: ${error.message}`, true);
+                        showModalMessage(`Failed to delete document: ${error.message}`, true);
                     }
                 }
             }
