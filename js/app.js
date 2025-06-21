@@ -163,6 +163,8 @@ function setupSettingsDropdown() {
 }
 
 
+// --- Page Specific Handlers (DEFINED GLOBALLY TO ENSURE AVAILABILITY) ---
+
 /**
  * Handles the logic for the login page.
  * Manages form submission and redirects on successful login.
@@ -189,7 +191,6 @@ function handleLoginPage() {
         if (!email || !password) {
             if (errorMessage) {
                 errorMessage.textContent = 'Email and password are required.';
-                errorMessage.classList.add('visible');
             }
             return;
         }
@@ -198,7 +199,6 @@ function handleLoginPage() {
         if (!emailRegex.test(email)) {
             if (errorMessage) {
                 errorMessage.textContent = 'Please enter a valid email address.';
-                errorMessage.classList.add('visible');
             }
             return;
         }
@@ -206,7 +206,6 @@ function handleLoginPage() {
         if (password.length < 6) {
             if (errorMessage) {
                 errorMessage.textContent = 'Password must be at least 6 characters long.';
-                errorMessage.classList.add('visible');
             }
             return;
         }
@@ -424,7 +423,7 @@ function handleAdminPage() {
             if (locations.length === 0) {
                 locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
                 if(adminLocationSelect) {
-                    adminLocationSelect.innerHTML = '<option value="">No locations available</option>';
+                    adminLocationSelect.innerHTML = '<option value="">Select a location</option>';
                     adminLocationSelect.disabled = true;
                 }
             } else {
@@ -656,13 +655,13 @@ function handlePricingPage() {
         console.log('handlePricingPage: Auth token found, proceeding with checkout session creation.');
 
         try {
-            console.log('handlePricingPage: Making API request to /create-checkout-session...');
+            console.log('handlePricingPage: Making API request to /create-checkout-session.');
             const response = await apiRequest('POST', '/create-checkout-session', { planId: planId });
             const sessionId = response.sessionId;
             console.log('handlePricingPage: Received session ID from backend:', sessionId);
 
             if (sessionId) {
-                console.log('handlePricingPage: Redirecting to Stripe Checkout...');
+                console.log('handlePricingPage: Redirecting to Stripe Checkout.');
                 const result = await stripe.redirectToCheckout({
                     sessionId: sessionId,
                 });
@@ -722,15 +721,4 @@ function handleSalesAnalyticsPage() {
         window.location.href = 'login.html';
         return;
     }
-    console.log('Sales Analytics page logic goes here.');
-}
-" code between  and  in the most up-to-date Canvas "Updated Client-Side JavaScript (app.js) - Final Verified Structure" document above and am asking a query about/based on this code below.
-Instructions to follow:
-  * Don't output/edit the document if the query is Direct/Simple. For example, if the query asks for a simple explanation, output a direct answer.
-  * Make sure to **edit** the document if the query shows the intent of editing the document, in which case output the entire edited document, **not just that section or the edits**.
-    * Don't output the same document/empty document and say that you have edited it.
-    * Don't change unrelated code in the document.
-  * Don't output  and  in your final response.
-  * Any references like "this" or "selected code" refers to the code between  and  tags.
-  * Just acknowledge my request in the introduction.
-  * Make sure to refer to the document as "Canvas" in your response.
+    console.log('Sales Analytics page logic goes here.')
