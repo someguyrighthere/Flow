@@ -36,8 +36,6 @@ async function apiRequest(method, path, body = null) {
     if (token) options.headers['Authorization'] = `Bearer ${token}`;
     if (body) options.body = JSON.stringify(body);
 
-    // Construct the full API URL. Since server.js routes are now /login, /register etc.,
-    // we append the path directly to API_BASE_URL.
     const response = await fetch(`${API_BASE_URL}${path}`, options);
 
     if (!response.ok) {
@@ -140,36 +138,27 @@ function showConfirmModal(message, confirmButtonText = 'Confirm') {
  * Assumes elements with IDs 'settings-button', 'settings-dropdown', and 'logout-button' exist on relevant pages.
  */
 function setupSettingsDropdown() {
-    console.log('setupSettingsDropdown: Initializing.');
     const settingsButton = document.getElementById('settings-button');
     const settingsDropdown = document.getElementById('settings-dropdown');
     if (settingsButton && settingsDropdown) {
-        console.log('setupSettingsDropdown: Found settings button and dropdown.');
         settingsButton.addEventListener('click', (event) => {
             event.stopPropagation();
             settingsDropdown.style.display = settingsDropdown.style.display === 'block' ? 'none' : 'block';
-            console.log('setupSettingsDropdown: Button clicked, toggling dropdown.');
         });
         document.addEventListener('click', (event) => {
             if (!settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
                 settingsDropdown.style.display = 'none';
             }
         });
-    } else {
-        console.log('setupSettingsDropdown: Settings button or dropdown not found on this page.');
     }
 
     const logoutButton = document.getElementById('logout-button');
     if (logoutButton) {
-        console.log('setupSettingsDropdown: Found logout button.');
         logoutButton.addEventListener('click', () => {
             localStorage.removeItem('authToken');
             localStorage.removeItem('userRole');
-            console.log('setupSettingsDropdown: Logout button clicked, redirecting.');
             window.location.href = 'login.html';
         });
-    } else {
-        console.log('setupSettingsDropdown: Logout button not found on this page.');
     }
 }
 
@@ -179,16 +168,12 @@ function setupSettingsDropdown() {
  * Manages form submission and redirects on successful login.
  */
 function handleLoginPage() {
-    console.log('handleLoginPage: Initializing.');
     const loginForm = document.getElementById('login-form');
     if (!loginForm) {
-        console.log('handleLoginPage: Login form not found.');
         return;
     }
-    console.log('handleLoginPage: Login form found, attaching listener.');
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        console.log('handleLoginPage: Form submitted.');
 
         const emailInput = document.getElementById('email');
         const passwordInput = document.getElementById('password');
@@ -202,7 +187,6 @@ function handleLoginPage() {
         }
 
         if (!email || !password) {
-            console.log('handleLoginPage: Client-side validation failed: Missing email or password.');
             if (errorMessage) {
                 errorMessage.textContent = 'Email and password are required.';
                 errorMessage.classList.add('visible');
@@ -212,7 +196,6 @@ function handleLoginPage() {
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            console.log('handleLoginPage: Client-side validation failed: Invalid email format.');
             if (errorMessage) {
                 errorMessage.textContent = 'Please enter a valid email address.';
                 errorMessage.classList.add('visible');
@@ -221,7 +204,6 @@ function handleLoginPage() {
         }
 
         if (password.length < 6) {
-            console.log('handleLoginPage: Client-side validation failed: Password too short.');
             if (errorMessage) {
                 errorMessage.textContent = 'Password must be at least 6 characters long.';
                 errorMessage.classList.add('visible');
@@ -230,18 +212,14 @@ function handleLoginPage() {
         }
 
         try {
-            console.log('handleLoginPage: Making API request to /login...');
             const data = await apiRequest('POST', '/login', { email, password });
-            console.log('handleLoginPage: API request successful, data:', data);
 
             localStorage.setItem('authToken', data.token);
             localStorage.setItem('userRole', data.role);
 
             if (data.role === 'super_admin' || data.role === 'location_admin') {
-                console.log('handleLoginPage: Redirecting to suite-hub.html.');
                 window.location.href = 'suite-hub.html';
             } else {
-                console.log('handleLoginPage: Redirecting to new-hire-view.html.');
                 window.location.href = 'new-hire-view.html';
             }
         } catch (error) {
@@ -260,17 +238,12 @@ function handleLoginPage() {
  * Manages form submission and redirects on successful registration.
  */
 function handleRegisterPage() {
-    console.log('handleRegisterPage: Initializing.');
     const registerForm = document.getElementById('register-form');
     if (!registerForm) {
-        console.log('handleRegisterPage: Register form not found.');
         return;
     }
-    console.log('handleRegisterPage: Register form found, attaching listener.');
-
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        console.log('handleRegisterPage: Form submitted.');
 
         const companyNameInput = document.getElementById('company-name');
         const fullNameInput = document.getElementById('full-name');
@@ -288,16 +261,13 @@ function handleRegisterPage() {
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email)) {
-            console.log('handleRegisterPage: Client-side validation failed.');
             errorMessage.textContent = 'Please fill all fields correctly. Password must be at least 6 characters and email valid.';
             errorMessage.classList.add('visible');
             return;
         }
 
         try {
-            console.log('handleRegisterPage: Making API request to /register...');
             const data = await apiRequest('POST', '/register', { company_name, full_name, email, password });
-            console.log('handleRegisterPage: API request successful, data:', data);
 
             showModalMessage('Account created successfully! Please log in.', false);
             companyNameInput.value = '';
@@ -305,7 +275,6 @@ function handleRegisterPage() {
             emailInput.value = '';
             passwordInput.value = '';
 
-            console.log('handleRegisterPage: Redirecting to login.html.');
             setTimeout(() => {
                 window.location.href = 'login.html';
             }, 2000);
@@ -328,9 +297,7 @@ function handleRegisterPage() {
  * Also handles post-payment feedback from Stripe.
  */
 function handleSuiteHubPage() {
-    console.log('handleSuiteHubPage: Initializing.');
     if (!localStorage.getItem('authToken')) {
-        console.log('handleSuiteHubPage: No auth token found, redirecting to login.');
         window.location.href = 'login.html';
         return;
     }
@@ -340,11 +307,9 @@ function handleSuiteHubPage() {
     const sessionId = urlParams.get('session_id');
 
     if (paymentStatus === 'success') {
-        console.log('handleSuiteHubPage: Payment success detected.');
         showModalMessage('Payment successful! Your subscription has been updated.', false);
         history.replaceState({}, document.title, window.location.pathname);
     } else if (paymentStatus === 'cancelled') {
-        console.log('handleSuiteHubPage: Payment cancelled detected.');
         showModalMessage('Payment cancelled. You can try again or choose another plan.', true);
         history.replaceState({}, document.title, window.location.pathname);
     }
@@ -355,9 +320,7 @@ function handleSuiteHubPage() {
  * Loads profile information and handles profile updates including password changes.
  */
 function handleAccountPage() {
-    console.log('handleAccountPage: Initializing.');
     if (!localStorage.getItem('authToken')) {
-        console.log('handleAccountPage: No auth token found, redirecting to login.');
         window.location.href = 'login.html';
         return;
     }
@@ -374,10 +337,8 @@ function handleAccountPage() {
      * Fetches and displays the current user's profile information.
      */
     async function loadProfileInfo() {
-        console.log('handleAccountPage: Loading profile info...');
         try {
             const profile = await apiRequest('GET', '/profile');
-            console.log('handleAccountPage: Profile info loaded:', profile);
             if (displayProfileName) displayProfileName.textContent = profile.fullName || 'N/A';
             if (displayProfileEmail) displayProfileEmail.textContent = profile.email || 'N/A';
             if (profileNameInput) profileNameInput.value = profile.fullName || '';
@@ -394,10 +355,8 @@ function handleAccountPage() {
      * Updates name, email, and/or password.
      */
     if (updateProfileForm) {
-        console.log('handleAccountPage: Profile update form found, attaching listener.');
         updateProfileForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            console.log('handleAccountPage: Profile form submitted.');
 
             const fullName = profileNameInput ? profileNameInput.value : '';
             const email = profileEmailInput ? profileEmailInput.value : '';
@@ -409,16 +368,12 @@ function handleAccountPage() {
                 updatePayload.currentPassword = currentPassword;
                 updatePayload.newPassword = newPassword;
             }
-            console.log('handleAccountPage: Update payload:', updatePayload);
 
             try {
-                console.log('handleAccountPage: Making API request to /profile (PUT)...');
                 const result = await apiRequest('PUT', '/profile', updatePayload);
-                console.log('handleAccountPage: Profile update API successful, result:', result);
                 
                 if (result && result.token) {
                     localStorage.setItem('authToken', result.token);
-                    console.log('handleAccountPage: New auth token received and stored.');
                 }
 
                 showModalMessage(result.message || 'Profile updated successfully!', false);
@@ -444,9 +399,7 @@ function handleAccountPage() {
  * Manages location creation and user invitations.
  */
 function handleAdminPage() {
-    console.log('handleAdminPage: Initializing.');
     if (!localStorage.getItem('authToken')) {
-        console.log('handleAdminPage: No auth token found, redirecting to login.');
         window.location.href = 'login.html';
         return;
     }
@@ -461,15 +414,12 @@ function handleAdminPage() {
      * Loads and displays the list of company locations.
      */
     async function loadLocations() {
-        console.log('handleAdminPage: Loading locations...');
         if (!locationListDiv) {
-            console.log('handleAdminPage: Location list div not found.');
             return;
         }
         locationListDiv.innerHTML = '<p>Loading locations...</p>';
         try {
             const locations = await apiRequest('GET', '/locations');
-            console.log('handleAdminPage: Locations loaded:', locations);
             locationListDiv.innerHTML = '';
             if (locations.length === 0) {
                 locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
@@ -514,7 +464,6 @@ function handleAdminPage() {
      * Loads and displays the list of users (admins and potentially employees).
      */
     async function loadUsers() {
-        console.log('handleAdminPage: Loading users.');
         if (!userListDiv)
             return;
         userListDiv.innerHTML = "<p>Loading users...</p>";
@@ -570,7 +519,6 @@ function handleAdminPage() {
                     }
                     console.log(`handleAdminPage: ${type} deleted successfully.`);
                 } catch (error) {
-                    console.error(`Error deleting ${type}:`, error);
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
@@ -776,3 +724,13 @@ function handleSalesAnalyticsPage() {
     }
     console.log('Sales Analytics page logic goes here.');
 }
+" code between  and  in the most up-to-date Canvas "Updated Client-Side JavaScript (app.js) - Final Verified Structure" document above and am asking a query about/based on this code below.
+Instructions to follow:
+  * Don't output/edit the document if the query is Direct/Simple. For example, if the query asks for a simple explanation, output a direct answer.
+  * Make sure to **edit** the document if the query shows the intent of editing the document, in which case output the entire edited document, **not just that section or the edits**.
+    * Don't output the same document/empty document and say that you have edited it.
+    * Don't change unrelated code in the document.
+  * Don't output  and  in your final response.
+  * Any references like "this" or "selected code" refers to the code between  and  tags.
+  * Just acknowledge my request in the introduction.
+  * Make sure to refer to the document as "Canvas" in your response.
