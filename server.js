@@ -10,6 +10,8 @@ const { Readable } = require('stream'); // Not used in provided routes, but kept
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const multer = require('multer'); // ADD THIS LINE: Import multer
+const fs = require('fs'); // ADD THIS LINE: Import file system module for local storage ops
+
 
 // Load environment variables from .env file in development
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
@@ -414,7 +416,6 @@ app.post('/invite-admin', authenticateToken, async (req, res, next) => {
             `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, 'location_admin', 'active', 'free') RETURNING user_id`,
             [companyId, location_id, full_name, email, password_hash]
         );
-        // The runCommand now returns an object with user_id if successful
         res.status(201).json({ message: "Location admin invited successfully!", userId: result.user_id });
     } catch (error) {
         console.error("Invite admin error:", error);
@@ -488,22 +489,6 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
         const password_hash = await bcrypt.hash(password, 10);
         // Corrected: Added RETURNING user_id to get the newly created user's ID
         const result = await runCommand(
-            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, 'employee', 'active', 'free') RETURNING user_id`,
-            [companyId, location_id, full_name, email, password_hash] // Corrected parameter order: position and employee_id were missing. Let's re-align.
-            // Correct parameter mapping based on SQL: $1=companyId, $2=location_id, $3=full_name, $4=email, $5=password_hash
-            // The schema for Users also needs to include position and employee_id if these are columns.
-            // For now, I will omit position and employee_id from this INSERT if the Users table doesn't have them
-            // or if the frontend logic needs to be adjusted for 'employee' role parameters.
-            // Given the previous definition of Users table, it only has (company_id, full_name, email, password_hash, role, subscription_status, plan_id)
-            // Let's assume position and employee_id are not directly stored in Users table during invite,
-            // or would be handled separately.
-            // REVISION: The invite-employee form includes position and employee_id. The Users table definition would need these columns.
-            // Let's adjust the insert statement and parameters assuming the Users table HAS these columns.
-            // If it DOES NOT, then we'd need to discuss where to store position/employee_id or update Users table.
-            // Based on prior context (dashboard.html), new-hire-position and new-hire-id exist.
-            // Assuming Users table columns: user_id, company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id, position, employee_id
-            // If the Users table doesn't have position, employee_id columns, this INSERT will fail.
-            // For now, let's include them assuming the table exists, and user can update DB if needed.
             `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id, position, employee_id) VALUES ($1, $2, $3, $4, $5, 'employee', 'active', 'free', $6, $7) RETURNING user_id`,
             [companyId, location_id, full_name, email, password_hash, position, employee_id]
         );
@@ -521,7 +506,7 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
 // --- Multer Configuration for File Uploads ---
 const UPLOADS_DIR = path.join(__dirname, 'uploads'); // Files will be stored in a subfolder 'uploads'
 // Create the uploads directory if it doesn't exist
-const fs = require('fs'); // Node.js file system module
+// const fs = require('fs'); // fs is already imported at the top now
 if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
@@ -588,9 +573,12 @@ app.get('/documents', authenticateToken, async (req, res, next) => {
     // Authorization: Any user within the company should be able to view documents for now
     // If specific roles should be restricted, add checks here.
 
-    let sql = `SELECT d.document_id, d.title, d.description, d.file_name, d.mime_type, d.upload_date, u.full_name AS uploaded_by
+    // Changed JOIN to LEFT JOIN to ensure all documents are shown even if a user no longer exists
+    // Also explicitly list columns to avoid issues if 'Users' table has too many fields not needed here
+    let sql = `SELECT d.document_id, d.title, d.description, d.file_name, d.mime_type, d.upload_date,
+                      COALESCE(u.full_name, 'Unknown User') AS uploaded_by
                FROM Documents d
-               JOIN Users u ON d.uploaded_by_user_id = u.user_id
+               LEFT JOIN Users u ON d.uploaded_by_user_id = u.user_id
                WHERE d.company_id = $1`;
     const params = [companyId];
 
