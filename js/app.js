@@ -722,3 +722,5 @@ function handleSalesAnalyticsPage() {
         return;
     }
     console.log('Sales Analytics page logic goes here.')
+
+}
