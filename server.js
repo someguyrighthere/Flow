@@ -17,7 +17,7 @@ const fs = require('fs'); // ADD THIS LINE: Import file system module for local 
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
     try {
         require('fs').accessSync(path.join(__dirname, '.env'));
-        require('dotenv').config();
+        dotenv.config(); // Use dotenv.config() here
     } catch (e) {
         console.warn("Warning: .env file not found or accessible locally. Relying on system environment variables.");
     }
@@ -55,6 +55,10 @@ if (STRIPE_SECRET_KEY) {
 }
 
 const app = express();
+
+// NEW: Trust proxy for Express when behind a load balancer (like Render)
+// This is crucial for rate-limiting middleware to correctly identify client IPs.
+app.set('trust proxy', 1); // Trust the first proxy (Render's load balancer)
 
 // --- General Middleware ---
 app.use(morgan('dev')); // Request logger - placed early
@@ -453,7 +457,7 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
                 return res.status(403).json({ error: 'Access Dismissed: Location admin can only invite employees to their assigned location or unassigned roles.' }); // Changed 'Access Denied' to 'Access Dismissed'
             }
         } else {
-            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location cannot invite employees to any location.' }); // Changed 'Access Dismissed' to 'Access Dismissed'
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location cannot invite employees to any location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     }
 
@@ -523,7 +527,11 @@ const storage = multer.diskStorage({
 });
 
 // Configure Multer to accept single file uploads with the field name 'document_file'
-const upload = multer({ storage: storage });
+// NEW: Increased limits to multer for file size to 1GB
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 1 * 1024 * 1024 * 1024 } // 1 GB limit (1 * 1024 * 1024 * 1024 bytes)
+});
 
 // --- Document Management API Routes ---
 app.post('/documents/upload', authenticateToken, upload.single('document_file'), async (req, res, next) => {
@@ -546,11 +554,10 @@ app.post('/documents/upload', authenticateToken, upload.single('document_file'),
     if (!file) {
         return res.status(400).json({ error: "No file provided for upload." });
     }
-    // Basic file validation (optional but recommended)
-    if (file.size > 10 * 1024 * 1024) { // Max 10MB file size
-        return res.status(400).json({ error: "File size exceeds 10MB limit." });
-    }
-    // You might want to validate mime_type here as well
+    // The Multer 'limits' option above handles file size before this point.
+    // If a file exceeds the limit, Multer will throw an FAILED_TO_PARSE_BODY error with code 'LIMIT_FILE_SIZE'
+    // that needs to be caught by the general error handler.
+    // The previous manual size check is now removed as Multer's limits are more robust.
 
     try {
         const result = await runCommand(
@@ -864,11 +871,9 @@ app.get('/users', authenticateToken, async (req, res, next) => {
             return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
         }
     } else if (role === 'employee') {
-        // Employees can only see their own profile
         sql += ` AND Users.user_id = $${paramIndex++}`;
         params.push(currentUserId);
     } else if (!['super_admin'].includes(role)) {
-        // Any other role is denied access
         return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view users.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
 
@@ -1278,7 +1283,7 @@ app.delete('/job-postings/:id', authenticateToken, async (req, res, next) => {
         const result = await runCommand(sql, params);
         if (result === 0) { return res.status(404).json({ error: 'Job posting not found or not authorized to delete.' }); }
         res.status(204).send();
-    } catch (error) {
+    }  catch (error) {
         console.error("Database error deleting job posting:", error);
         next(error);
     }
