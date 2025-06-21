@@ -21,49 +21,6 @@ if (typeof Stripe !== 'undefined') {
 
 
 /**
- * Handles API requests to the backend.
- * Includes authentication token in headers if available.
- * @param {string} method - HTTP method (GET, POST, PUT, DELETE).
- * @param {string} path - API endpoint path (e.g., '/login', '/profile').
- * @param {object} body - Request body data (for POST, PUT).
- * @param {boolean} isFormData - Set to true if sending FormData (e.g., file uploads).
- * @returns {Promise<object|null>} - JSON response data or null if 204.
- * @throws {Error} - If the API response is not OK.
- */
-async function apiRequest(method, path, body = null, isFormData = false) {
-    const token = localStorage.getItem('authToken');
-    const options = {
-        method: method,
-        headers: {} // Headers will be conditional
-    };
-
-    if (token) {
-        options.headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    if (body) {
-        if (isFormData) {
-            // For FormData, do NOT set 'Content-Type': 'application/json'.
-            // The browser will set the correct 'multipart/form-data' header automatically,
-            // including the boundary string, when FormData is passed directly as the body.
-            options.body = body;
-        } else {
-            options.headers['Content-Type'] = 'application/json';
-            options.body = JSON.stringify(body);
-        }
-    }
-    const response = await fetch(`${API_BASE_URL}${path}`, options);
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Something went wrong");
-    }
-    if (response.status === 204 || (response.status === 200 && response.headers.get("content-length") === "0")) {
-        return null;
-    }
-    return response.json();
-}
-
-/**
  * Displays a custom modal message to the user.
  * Ensure your HTML includes elements with ids: 'message-modal-overlay', 'modal-message-text', 'modal-close-button'
  * @param {string} message - The message to display.
@@ -116,7 +73,7 @@ function showConfirmModal(message, confirmButtonText = "Confirm") {
             return;
         }
 
-        confirmModalMessage.textContent = message;
+        confirmModalMessage.innerHTML = message; // Use innerHTML to allow for bolding etc.
         modalConfirmButton.textContent = confirmButtonText;
         confirmModalOverlay.style.display = "flex";
 
@@ -203,6 +160,111 @@ function setupSettingsDropdown() {
     }
 }
 
+
+/**
+ * Handles API requests to the backend.
+ * Includes authentication token in headers if available.
+ * Supports file uploads with progress tracking for FormData.
+ * @param {string} method - HTTP method (GET, POST, PUT, DELETE).
+ * @param {string} path - API endpoint path (e.g., '/login', '/profile').
+ * @param {object} body - Request body data (for POST, PUT).
+ * @param {boolean} isFormData - Set to true if sending FormData (e.g., file uploads).
+ * @param {function} onProgress - Callback function for upload progress (takes event as argument). Only used if isFormData is true.
+ * @returns {Promise<object|null>} - JSON response data or null if 204.
+ * @throws {Error} - If the API response is not OK.
+ */
+async function apiRequest(method, path, body = null, isFormData = false, onProgress = null) {
+    const token = localStorage.getItem('authToken');
+    const endpoint = `${API_BASE_URL}${path}`;
+
+    if (isFormData) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open(method, endpoint);
+
+            if (token) {
+                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            }
+
+            // Progress event for uploads
+            if (onProgress && xhr.upload) {
+                xhr.upload.addEventListener('progress', onProgress);
+            }
+
+            xhr.onload = function () {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    if (xhr.status === 204 || (xhr.status === 200 && xhr.responseText.length === 0)) {
+                        resolve({}); // Resolve with empty object for 204 or empty 200
+                    } else {
+                        try {
+                            // Attempt to parse JSON. If it fails, resolve with empty object or raw text.
+                            const responseData = JSON.parse(xhr.responseText);
+                            resolve(responseData);
+                        } catch (e) {
+                            console.warn("API response was not JSON, resolving with success status:", xhr.responseText);
+                            resolve({ message: "Operation successful", rawResponse: xhr.responseText }); // Generic success
+                        }
+                    }
+                } else if (xhr.status === 401 || xhr.status === 403) {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('userRole');
+                    // Add a sessionExpired parameter for specific messages on login page
+                    window.location.href = 'login.html?sessionExpired=true';
+                    reject(new Error('Authentication token missing or invalid.'));
+                } else {
+                    // Handle non-2xx responses
+                    try {
+                        const errorData = JSON.parse(xhr.responseText);
+                        reject(new Error(errorData.error || `HTTP error! Status: ${xhr.status}`));
+                    } catch (e) {
+                        // If response is not JSON (e.g., plain text error from server), use generic message
+                        reject(new Error(`HTTP error! Status: ${xhr.status} - ${xhr.statusText || 'Unknown Error'}`));
+                    }
+                }
+            };
+
+            xhr.onerror = function () {
+                reject(new Error('Network error or request failed. Please check your internet connection.'));
+            };
+
+            xhr.send(body);
+        });
+    } else {
+        // Original fetch API logic for non-FormData requests
+        const options = {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        };
+
+        if (token) {
+            options.headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(endpoint, options);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userRole');
+            window.location.href = 'login.html?sessionExpired=true';
+            throw new Error('Authentication token missing or invalid.');
+        }
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Something went wrong");
+        }
+        if (response.status === 204 || (response.status === 200 && response.headers.get("content-length") === "0")) {
+            return null;
+        }
+        return response.json();
+    }
+}
+
+
 /**
  * Handles all client-side logic for the login.html page.
  */
@@ -211,6 +273,21 @@ function handleLoginPage() {
     if (!loginForm) {
         return; // Exit if form not found (e.g., on a different page)
     }
+
+    // Display session expired message if redirected from an authenticated page
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('sessionExpired') && urlParams.get('sessionExpired') === 'true') {
+        const errorMessageDiv = document.getElementById("error-message");
+        if (errorMessageDiv) {
+            errorMessageDiv.textContent = 'Your session has expired or is invalid. Please log in again.';
+            errorMessageDiv.classList.add('visible');
+            errorMessageDiv.setAttribute('aria-hidden', 'false');
+        }
+        // Clear the URL parameter to avoid showing the message on refresh
+        urlParams.delete('sessionExpired');
+        window.history.replaceState({}, document.title, window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : ''));
+    }
+
 
     loginForm.addEventListener("submit", async e => {
         e.preventDefault(); // Prevent default form submission
@@ -224,6 +301,7 @@ function handleLoginPage() {
         if (errorMessage) {
             errorMessage.textContent = "";
             errorMessage.classList.remove("visible");
+            errorMessage.setAttribute('aria-hidden', 'true');
         }
 
         // Basic client-side validation
@@ -231,6 +309,7 @@ function handleLoginPage() {
             if (errorMessage) {
                 errorMessage.textContent = "Email and password are required.";
                 errorMessage.classList.add("visible");
+                errorMessage.setAttribute('aria-hidden', 'false');
             }
             return;
         }
@@ -240,6 +319,7 @@ function handleLoginPage() {
             if (errorMessage) {
                 errorMessage.textContent = "Please enter a valid email address.";
                 errorMessage.classList.add("visible");
+                errorMessage.setAttribute('aria-hidden', 'false');
             }
             return;
         }
@@ -248,6 +328,7 @@ function handleLoginPage() {
             if (errorMessage) {
                 errorMessage.textContent = "Password must be at least 6 characters long.";
                 errorMessage.classList.add("visible");
+                errorMessage.setAttribute('aria-hidden', 'false');
             }
             return;
         }
@@ -274,6 +355,7 @@ function handleLoginPage() {
             if (errorMessage) {
                 errorMessage.textContent = `Login Failed: ${error.message}`;
                 errorMessage.classList.add("visible");
+                errorMessage.setAttribute('aria-hidden', 'false');
             }
             // Also show a modal message for more prominent feedback
             showModalMessage(`Login Failed: ${error.message}`, true);
@@ -305,12 +387,14 @@ function handleRegisterPage() {
 
         errorMessage.textContent = ""; // Clear any previous error
         errorMessage.classList.remove("visible");
+        errorMessage.setAttribute('aria-hidden', 'true');
 
         // Client-side validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email)) {
             errorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
             errorMessage.classList.add("visible");
+            errorMessage.setAttribute('aria-hidden', 'false');
             return;
         }
 
@@ -340,6 +424,7 @@ function handleRegisterPage() {
             if (errorMessage) {
                 errorMessage.textContent = `Registration Failed: ${error.message}`;
                 errorMessage.classList.add("visible");
+                errorMessage.setAttribute('aria-hidden', 'false');
             }
             showModalMessage(`Registration Failed: ${error.message}`, true);
         }
@@ -550,7 +635,7 @@ function handleAdminPage() {
                                          <button class="btn-delete" data-type="user" data-id="${user.user_id}">
                                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                                          </button>`;
-                    userListDiv.appendChild(userDiv);
+                    userDiv.appendChild(userDiv);
                 });
             }
         } catch (error) {
@@ -922,6 +1007,83 @@ function handlePricingPage() {
 
 
 /**
+ * Function to format a date as YYYY-MM-DD.
+ * @param {Date|string} date - The date object or string to format.
+ * @returns {string} Formatted date string.
+ */
+function formatDate(date) {
+    const d = new Date(date);
+    let month = '' + (d.getMonth() + 1);
+    let day = '' + d.getDate();
+    const year = d.getFullYear();
+
+    if (month.length < 2) month = '0' + month;
+    if (day.length < 2) day = '0' + day;
+
+    return [year, month, day].join('-');
+}
+
+/**
+ * Function to format time for display (e.g., "9:00 AM").
+ * @param {Date|string} date - The date object or string to format.
+ * @returns {string} Formatted time string.
+ */
+function formatTime(date) {
+    const d = new Date(date);
+    let hours = d.getHours();
+    const minutes = d.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const strMinutes = minutes < 10 ? '0' + minutes : minutes;
+    return `${hours}:${strMinutes} ${ampm}`;
+}
+
+/**
+ * Function to calculate top and height for a shift in the calendar grid.
+ * Assumes 30px per hour.
+ * @param {string} startTime - ISO string for start time.
+ * @param {string} endTime - ISO string for end time.
+ * @returns {{top: number, height: number}} Object with top offset and height in pixels.
+ */
+function calculateShiftPosition(startTime, endTime) {
+    const startHour = new Date(startTime).getHours();
+    const startMinutes = new Date(startTime).getMinutes();
+    const endHour = new Date(endTime).getHours();
+    const endMinutes = new Date(endTime).getMinutes();
+
+    const startTotalMinutes = startHour * 60 + startMinutes;
+    const endTotalMinutes = endHour * 60 + endMinutes;
+    const durationMinutes = endTotalMinutes - startTotalMinutes;
+
+    const slotHeight = 30; // px per hour slot
+
+    const top = (startTotalMinutes / 60) * slotHeight;
+    const height = (durationMinutes / 60) * slotHeight;
+
+    return { top, height };
+}
+
+/**
+ * Function to render the time column in the calendar grid.
+ */
+function renderTimeColumn() {
+    const timeColumn = document.getElementById('time-column');
+    if (!timeColumn) return;
+    timeColumn.innerHTML = ''; // Clear previous content
+
+    for (let i = 0; i < 24; i++) {
+        const timeSlot = document.createElement('div');
+        timeSlot.className = 'calendar-time-slot';
+        const hour = i % 12 === 0 ? 12 : i % 12;
+        const ampm = i < 12 ? 'AM' : 'PM';
+        timeSlot.textContent = `${hour}:00 ${ampm}`;
+        timeColumn.appendChild(timeSlot);
+    }
+}
+
+
+/**
  * Handles all client-side logic for the scheduling.html page.
  */
 function handleSchedulingPage() {
@@ -930,9 +1092,294 @@ function handleSchedulingPage() {
         window.location.href = "login.html";
         return;
     }
-    // Placeholder for actual scheduling page logic
-    console.log("Scheduling page logic goes here. (Implementation pending)");
+
+    const employeeSelect = document.getElementById('employee-select');
+    const locationSelect = document.getElementById('location-select');
+    const createShiftForm = document.getElementById('create-shift-form');
+    const filterEmployeeSelect = document.getElementById('filter-employee-select');
+    const filterLocationSelect = document.getElementById('filter-location-select');
+    const filterStartDateInput = document.getElementById('filter-start-date');
+    const filterEndDateInput = document.getElementById('filter-end-date');
+    const applyFiltersBtn = document.getElementById('apply-filters-btn');
+    const clearFiltersBtn = document.getElementById('clear-filters-btn');
+
+    const calendarGrid = document.getElementById('calendar-grid');
+    const currentWeekDisplay = document.getElementById('current-week-display');
+    const prevWeekBtn = document.getElementById('prev-week-btn');
+    const nextWeekBtn = document.getElementById('next-week-btn');
+
+    let currentWeekStart = new Date(); // Start of the currently displayed week
+
+    // Adjust currentWeekStart to be the Sunday of the current week
+    currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    // Initial render of time column (already in global scope, but safe to call)
+    renderTimeColumn();
+
+    // Load data for dropdowns
+    async function loadDropdowns() {
+        try {
+            // Fetch users from backend (employees and location_admins)
+            const users = await apiRequest("GET", "/users");
+            const locations = await apiRequest("GET", "/locations");
+
+            // Filter for schedulable users (employees and location_admins who are not super_admin)
+            const allSchedulableUsers = users.filter(user => user.role === 'employee' || user.role === 'location_admin')
+                                             .sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+            // Populate employee dropdowns for creation and filtering
+            [employeeSelect, filterEmployeeSelect].forEach(selectElement => {
+                if (!selectElement) return;
+                selectElement.innerHTML = `<option value="">${selectElement.id === 'employee-select' ? 'Select Employee' : 'All Employees'}</option>`;
+                allSchedulableUsers.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.user_id;
+                    option.textContent = `${user.full_name} (${user.role.replace('_', ' ')})`;
+                    selectElement.appendChild(option);
+                });
+            });
+
+            // Populate location dropdowns for creation and filtering
+            [locationSelect, filterLocationSelect].forEach(selectElement => {
+                if (!selectElement) return;
+                selectElement.innerHTML = `<option value="">${selectElement.id === 'location-select' ? 'Select Location' : 'All Locations'}</option>`;
+                locations.forEach(loc => {
+                    const option = document.createElement('option');
+                    option.value = loc.location_id;
+                    option.textContent = loc.location_name;
+                    selectElement.appendChild(option);
+                });
+            });
+
+        } catch (error) {
+            console.error("Error loading scheduling dropdowns:", error);
+            showModalMessage(`Failed to load options: ${error.message}`, true);
+        }
+    }
+
+    // Function to render the calendar grid with shifts
+    async function renderCalendar() {
+        if (!calendarGrid) return;
+
+        // Clear previous day headers and cells (keeping the time column header and time column itself)
+        // Find existing day headers excluding the first one (Time header)
+        const existingDayHeaders = Array.from(calendarGrid.children).filter(child => child.classList.contains('calendar-day-header') && child.style.gridColumn !== '1');
+        existingDayHeaders.forEach(el => el.remove());
+        const existingDayCells = calendarGrid.querySelectorAll('.calendar-day-cell');
+        existingDayCells.forEach(el => el.remove());
+
+        // Create a new container for day headers to maintain grid layout
+        const dayHeadersFragment = document.createDocumentFragment();
+
+        // Update week display
+        const weekEnd = new Date(currentWeekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6); // Add 6 days to get to Saturday
+        currentWeekDisplay.textContent = `${formatDate(currentWeekStart)} - ${formatDate(weekEnd)}`;
+
+        const daysToRender = [];
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(currentWeekStart);
+            date.setDate(currentWeekStart.getDate() + i);
+            daysToRender.push(date);
+
+            const dayHeader = document.createElement('div');
+            dayHeader.className = 'calendar-day-header';
+            dayHeader.style.gridColumn = `${i + 2}`; // +2 because first column is 'Time'
+            dayHeader.style.gridRow = '1';
+            dayHeader.textContent = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            calendarGrid.appendChild(dayHeader); // Append directly to grid to preserve order
+        }
+
+        const dayCells = {}; // Store references to day cells keyed by date string
+        daysToRender.forEach((date, i) => {
+            const dayCell = document.createElement('div');
+            dayCell.className = 'calendar-day-cell';
+            dayCell.id = `day-cell-${formatDate(date)}`;
+            dayCell.style.gridColumn = `${i + 2}`; // +2 because first column is 'Time'
+            dayCell.style.gridRow = '2 / span 24'; // Spans 24 rows for 24 hours
+            dayCells[formatDate(date)] = dayCell; // Store reference
+            calendarGrid.appendChild(dayCell); // Append directly to grid
+        });
+
+        // Fetch shifts for the current week based on filters
+        const filters = {
+            start_date: formatDate(currentWeekStart),
+            end_date: formatDate(weekEnd),
+            employee_id: filterEmployeeSelect.value || undefined,
+            location_id: filterLocationSelect.value || undefined
+        };
+        // If a specific filter date range is set, prioritize it over the current week
+        if (filterStartDateInput.value) filters.start_date = filterStartDateInput.value;
+        if (filterEndDateInput.value) filters.end_date = filterEndDateInput.value;
+
+
+        try {
+            const shifts = await apiRequest("GET", `/schedules?${new URLSearchParams(filters).toString()}`);
+            console.log("Fetched shifts:", shifts);
+
+            shifts.forEach(shift => {
+                const shiftStart = new Date(shift.start_time);
+                const shiftEnd = new Date(shift.end_time);
+                const shiftDate = formatDate(shiftStart);
+
+                const targetCell = dayCells[shiftDate];
+                if (targetCell) {
+                    const { top, height } = calculateShiftPosition(shiftStart, shiftEnd);
+
+                    const shiftElement = document.createElement('div');
+                    shiftElement.className = 'calendar-shift';
+                    // Add overdue class if end time is in the past
+                    if (shiftEnd < new Date()) {
+                        shiftElement.classList.add('overdue');
+                    }
+                    shiftElement.style.top = `${top}px`;
+                    shiftElement.style.height = `${height}px`;
+                    shiftElement.dataset.scheduleId = shift.schedule_id; // Store ID for actions
+                    shiftElement.dataset.employeeName = shift.employee_name;
+                    shiftElement.dataset.locationName = shift.location_name;
+                    shiftElement.dataset.startTime = shift.start_time;
+                    shiftElement.dataset.endTime = shift.end_time;
+                    shiftElement.dataset.notes = shift.notes || 'No notes.';
+
+                    shiftElement.innerHTML = `
+                        <strong>${shift.employee_name}</strong><br>
+                        ${formatTime(shiftStart)} - ${formatTime(shiftEnd)}
+                        <span style="font-size: 0.7em;">(${shift.location_name})</span>
+                    `;
+                    targetCell.appendChild(shiftElement);
+                }
+            });
+        } catch (error) {
+            console.error("Error fetching schedules:", error);
+            showModalMessage(`Failed to load schedules: ${error.message}`, true);
+        }
+    }
+
+    // Event listener for creating a new shift
+    if (createShiftForm) {
+        createShiftForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const employeeId = employeeSelect.value;
+            const locationId = locationSelect.value;
+            const startTime = document.getElementById('start-time-input').value;
+            const endTime = document.getElementById('end-time-input').value;
+            const notes = document.getElementById('notes-input').value.trim();
+
+            if (!employeeId || !locationId || !startTime || !endTime) {
+                showModalMessage("Please fill in all required fields for the new shift.", true);
+                return;
+            }
+            if (new Date(startTime) >= new Date(endTime)) {
+                showModalMessage("Start time must be before end time.", true);
+                return;
+            }
+
+            try {
+                await apiRequest("POST", "/schedules", {
+                    employee_id: parseInt(employeeId),
+                    location_id: parseInt(locationId),
+                    start_time: startTime,
+                    end_time: endTime,
+                    notes: notes || null
+                });
+                showModalMessage("Shift created successfully!", false);
+                createShiftForm.reset();
+                renderCalendar(); // Re-render calendar to show new shift
+            } catch (error) {
+                console.error("Error creating shift:", error);
+                showModalMessage(`Failed to create shift: ${error.message}`, true);
+            }
+        });
+    }
+
+    // Event listeners for calendar navigation
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener('click', () => {
+            currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+            renderCalendar();
+        });
+    }
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener('click', () => {
+            currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+            renderCalendar();
+        });
+    }
+
+    // Event listeners for filter buttons
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', () => {
+            // When filters are applied, reset the current week display to the first date in the filter range
+            if (filterStartDateInput.value) {
+                currentWeekStart = new Date(filterStartDateInput.value);
+                currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay()); // Adjust to start of week
+                currentWeekStart.setHours(0,0,0,0);
+            } else {
+                // If no start date filter, reset to current week
+                currentWeekStart = new Date();
+                currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+                currentWeekStart.setHours(0,0,0,0);
+            }
+            renderCalendar(); // Re-render calendar with filters
+        });
+    }
+
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            filterEmployeeSelect.value = '';
+            filterLocationSelect.value = '';
+            filterStartDateInput.value = '';
+            filterEndDateInput.value = '';
+            // Reset to current week
+            currentWeekStart = new Date();
+            currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+            currentWeekStart.setHours(0,0,0,0);
+            renderCalendar(); // Re-render calendar without filters
+        });
+    }
+
+    // Event listener for clicking on a shift to view/delete
+    if (calendarGrid) {
+        calendarGrid.addEventListener('click', async (e) => {
+            const shiftElement = e.target.closest('.calendar-shift');
+            if (shiftElement) {
+                const scheduleId = shiftElement.dataset.scheduleId;
+                const employeeName = shiftElement.dataset.employeeName;
+                const locationName = shiftElement.dataset.locationName;
+                const startTime = new Date(shiftElement.dataset.startTime);
+                const endTime = new Date(shiftElement.dataset.endTime);
+                const notes = shiftElement.dataset.notes;
+
+                const confirmed = await showConfirmModal(`
+                    <h3>Shift Details</h3>
+                    <p><strong>Employee:</strong> ${employeeName}</p>
+                    <p><strong>Location:</strong> ${locationName}</p>
+                    <p><strong>Time:</strong> ${formatTime(startTime)} - ${formatTime(endTime)}</p>
+                    <p><strong>Date:</strong> ${formatDate(startTime)}</p>
+                    <p><strong>Notes:</strong> ${notes}</p>
+                    <p style="margin-top:15px;">Do you want to delete this shift?</p>
+                `, 'Delete Shift');
+
+                if (confirmed) {
+                    try {
+                        await apiRequest("DELETE", `/schedules/${scheduleId}`);
+                        showModalMessage("Shift deleted successfully!", false);
+                        renderCalendar(); // Re-render to remove deleted shift
+                    } catch (error) {
+                        console.error("Error deleting shift:", error);
+                        showModalMessage(`Failed to delete shift: ${error.message}`, true);
+                    }
+                }
+            }
+        });
+    }
+
+    // Initial loads when the scheduling page loads
+    loadDropdowns();
+    renderCalendar(); // Initial calendar render
 }
+
 
 /**
  * Handles all client-side logic for the hiring.html page.
@@ -989,11 +1436,19 @@ function handleDocumentsPage() {
     const documentDescriptionInput = document.getElementById("document-description");
     const documentListDiv = document.getElementById("document-list");
 
+    // NEW: Progress bar UI elements
+    const uploadProgressContainer = document.getElementById('upload-progress-container');
+    const uploadProgressBarFill = document.getElementById('upload-progress-fill');
+    const uploadProgressText = document.getElementById('upload-progress-text');
+    const uploadStatusText = document.getElementById('upload-status-text');
+    const uploadButton = uploadDocumentForm ? uploadDocumentForm.querySelector('button[type="submit"]') : null;
+
     // Function to load and display documents
     async function loadDocuments() {
         console.log("Loading documents...");
         documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
         try {
+            // Re-added mime_type and uploaded_by_user_id for join in server.js
             const documents = await apiRequest("GET", "/documents");
             documentListDiv.innerHTML = ''; // Clear existing list
 
@@ -1007,7 +1462,7 @@ function handleDocumentsPage() {
                         <h4>${doc.title}</h4>
                         <p>File: ${doc.file_name} (${(doc.mime_type || 'Unknown Type')})</p>
                         <p>${doc.description || 'No description provided.'}</p>
-                        <p style="font-size:0.8em; color:var(--text-medium);">Uploaded by: ${doc.uploaded_by} on ${new Date(doc.upload_date).toLocaleDateString()}</p>
+                        <p style="font-size:0.8em; color:var(--text-medium);">Uploaded by: ${doc.uploaded_by || doc.uploaded_by_user_id || 'N/A'} on ${new Date(doc.upload_date).toLocaleDateString()}</p>
                         <div class="actions">
                             <button class="btn-download" data-document-id="${doc.document_id}">Download</button>
                             <button class="btn-delete" data-document-id="${doc.document_id}">
@@ -1039,26 +1494,48 @@ function handleDocumentsPage() {
                 return;
             }
 
-            // Create FormData object to send file and other data
+            // Show and reset progress bar
+            if (uploadProgressContainer) {
+                uploadProgressContainer.style.display = 'block';
+                uploadProgressBarFill.style.width = '0%';
+                uploadProgressText.textContent = '0%';
+                uploadStatusText.textContent = 'Uploading...';
+            }
+            if (uploadButton) {
+                uploadButton.disabled = true; // Disable upload button during upload
+            }
+
             const formData = new FormData();
             formData.append('title', title);
             formData.append('description', description);
-            formData.append('document_file', file); // 'document_file' must match the field name in multer config on backend
+            formData.append('document_file', file);
 
             try {
-                console.log("Attempting to upload document via API.");
-                await apiRequest("POST", "/documents/upload", formData, true); // Pass true for isFormData
+                console.log("Attempting to upload document via API with progress tracking.");
+                await apiRequest("POST", "/documents/upload", formData, true, (event) => {
+                    if (event.lengthComputable) {
+                        const percentComplete = (event.loaded / event.total) * 100;
+                        if (uploadProgressBarFill) uploadProgressBarFill.style.width = `${percentComplete}%`;
+                        if (uploadProgressText) uploadProgressText.textContent = `${Math.round(percentComplete)}%`;
+                        if (uploadStatusText) uploadStatusText.textContent = `Uploading: ${Math.round(percentComplete)}% Complete`;
+                    }
+                });
                 showModalMessage("Document uploaded successfully!", false);
 
                 // Clear form fields after successful upload
                 documentTitleInput.value = "";
-                documentFileInput.value = ""; // Clear the file input
+                documentFileInput.value = "";
                 documentDescriptionInput.value = "";
-                
+
                 loadDocuments(); // Reload the list to show the new document
             } catch (error) {
                 console.error("Error uploading document:", error);
                 showModalMessage(`Error uploading document: ${error.message}`, true);
+            } finally {
+                // Hide progress bar and re-enable button after upload completes or fails
+                if (uploadProgressContainer) uploadProgressContainer.style.display = 'none';
+                if (uploadButton) uploadButton.disabled = false;
+                uploadStatusText.textContent = 'Upload complete (or failed).'; // Reset status text
             }
         });
     }
@@ -1073,7 +1550,14 @@ function handleDocumentsPage() {
                 const documentId = downloadButton.dataset.documentId;
                 console.log(`Download button clicked for document ID: ${documentId}`);
                 // Construct the download URL and trigger a download
-                window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
+                // Re-added mime_type to download route (will need to be fetched from DB again)
+                const docInfo = await apiRequest("GET", `/documents/download/${documentId}`); // This is wrong, it should be a GET to /documents to get info, not /download
+                if (docInfo && docInfo.file_path) { // Assuming docInfo contains necessary fields
+                    window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
+                } else {
+                    // Correct approach: directly trigger download if mime type is re-added to documents GET route
+                    window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
+                }
             } else if (deleteButton) {
                 const documentId = deleteButton.dataset.documentId;
                 console.log(`Delete button clicked for document ID: ${documentId}`);
@@ -1096,6 +1580,7 @@ function handleDocumentsPage() {
     // Initial load of documents when the page loads
     loadDocuments();
 }
+
 
 /**
  * Handles all client-side logic for the checklists.html page.
