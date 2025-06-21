@@ -233,33 +233,54 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
         // Original fetch API logic for non-FormData requests
         const options = {
             method: method,
-            headers: {
-                'Content-Type': 'application/json',
-            }
+            headers: {} // Start with empty headers to add Content-Type conditionally
         };
 
         if (token) {
             options.headers['Authorization'] = `Bearer ${token}`;
         }
 
-        if (body) {
-            options.body = JSON.stringify(body);
+        // Only set Content-Type if there's a body and it's not a GET/HEAD request
+        if (body && method !== 'GET' && method !== 'HEAD') {
+             options.headers['Content-Type'] = 'application/json';
+             options.body = JSON.stringify(body);
+        } else if (body && (method === 'GET' || method === 'HEAD')) {
+            // For GET/HEAD with a body, typically it's a mistake or very specific use-case.
+            // For file download, we expect a Blob, not JSON.
+            // If the expected response is a file (Blob), we adjust headers accordingly if possible,
+            // or rely on server to set Content-Type header correctly.
+            // The logic below for 'response.blob()' is specific to file download via fetch.
         }
 
+
         const response = await fetch(endpoint, options);
+
         if (response.status === 401 || response.status === 403) {
             localStorage.removeItem('authToken');
             localStorage.removeItem('userRole');
             window.location.href = 'login.html?sessionExpired=true';
             throw new Error('Authentication token missing or invalid.');
         }
+
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Something went wrong");
+            // Attempt to parse error as JSON, fallback to status text
+            try {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+            } catch (e) {
+                throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText || 'Unknown Error'}`);
+            }
         }
+
+        // Special handling for file downloads: return blob instead of JSON
+        if (path.includes('/documents/download/')) {
+            return response.blob(); // Return the raw binary data as a Blob
+        }
+
         if (response.status === 204 || (response.status === 200 && response.headers.get("content-length") === "0")) {
             return null;
         }
+
         return response.json();
     }
 }
@@ -425,6 +446,8 @@ function handleRegisterPage() {
                 errorMessage.textContent = `Registration Failed: ${error.message}`;
                 errorMessage.classList.add("visible");
                 errorMessage.setAttribute('aria-hidden', 'false');
+            } else { // This 'else' was causing the SyntaxError, removed unnecessary block
+                console.error("Registration API error - No errorMessage element found:", error);
             }
             showModalMessage(`Registration Failed: ${error.message}`, true);
         }
@@ -1036,7 +1059,7 @@ function formatTime(date) {
     hours = hours % 12;
     hours = hours ? hours : 12; // the hour '0' should be '12'
     const strMinutes = minutes < 10 ? '0' + minutes : minutes;
-    return `${hours}:${strMinutes} ${ampm}`;
+    return `${hours}:${strMinutes} ${amppm}`;
 }
 
 /**
@@ -1448,7 +1471,7 @@ function handleDocumentsPage() {
         console.log("Loading documents...");
         documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
         try {
-            // Updated: Expecting mime_type and uploaded_by in response from server
+            // Expecting mime_type and uploaded_by in response from server now
             const documents = await apiRequest("GET", "/documents");
             documentListDiv.innerHTML = ''; // Clear existing list
 
@@ -1464,7 +1487,7 @@ function handleDocumentsPage() {
                         <p>${doc.description || 'No description provided.'}</p>
                         <p style="font-size:0.8em; color:var(--text-medium);">Uploaded by: ${doc.uploaded_by || doc.uploaded_by_user_id || 'N/A'} on ${new Date(doc.upload_date).toLocaleDateString()}</p>
                         <div class="actions">
-                            <button class="btn-download" data-document-id="${doc.document_id}">Download</button>
+                            <button class="btn-download" data-document-id="${doc.document_id}" data-document-filename="${doc.file_name}" data-document-mimetype="${doc.mime_type}">Download</button>
                             <button class="btn-delete" data-document-id="${doc.document_id}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                             </button>
@@ -1548,9 +1571,31 @@ function handleDocumentsPage() {
 
             if (downloadButton) {
                 const documentId = downloadButton.dataset.documentId;
+                const fileName = downloadButton.dataset.documentFilename; // Get filename from dataset
+                const mimeType = downloadButton.dataset.documentMimetype || 'application/octet-stream'; // Get mimeType, default if null
+
                 console.log(`Download button clicked for document ID: ${documentId}`);
-                // Corrected: Directly set window.location.href to trigger download
-                window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
+                try {
+                    // Make an API request to get the file as a Blob
+                    const blob = await apiRequest("GET", `/documents/download/${documentId}`, null, false, null); // Pass null for body/onProgress
+                    
+                    // Create a Blob URL and trigger download
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = fileName || `download_${documentId}`; // Use original filename, or generic
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url); // Clean up the URL
+                    a.remove(); // Clean up the anchor tag
+
+                    showModalMessage(`Downloading "${fileName}"...`, false);
+
+                } catch (error) {
+                    console.error("Error downloading document:", error);
+                    showModalMessage(`Failed to download document: ${error.message}`, true);
+                }
             } else if (deleteButton) {
                 const documentId = deleteButton.dataset.documentId;
                 console.log(`Delete button clicked for document ID: ${documentId}`);
@@ -1563,7 +1608,7 @@ function handleDocumentsPage() {
                         loadDocuments(); // Reload list after deletion
                     } catch (error) {
                         console.error("Error deleting document:", error);
-                        showModalMessage(`Failed to delete document: ${error.message}`, true);
+                        showModalMessage(`Error deleting document: ${error.message}`, true);
                     }
                 }
             }
