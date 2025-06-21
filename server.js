@@ -965,7 +965,7 @@ app.post('/schedules', authenticateToken, async (req, res, next) => {
             }
             // The schedule's location_id must match the admin's assigned location
             if (location_id !== currentUserLocationId) {
-                return res.status(403).json({ error: 'Access Dismissed: Location admin can only create schedules for their assigned location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+                return res.status(403).json({ error: 'Access Dismissed: Location admin can only create schedules for their assigned location.' }); // Changed 'Access Dismissed' to 'Access Dismissed'
             }
         }
 
@@ -975,7 +975,7 @@ app.post('/schedules', authenticateToken, async (req, res, next) => {
             [employee_id, location_id, start_time, end_time, notes]
         );
         res.status(201).json({ message: 'Schedule created successfully!', scheduleId: result.schedule_id });
-    } catch (error) {
+    }  catch (error) {
         console.error("Database error creating schedule:", error);
         next(error);
     }
@@ -1118,7 +1118,7 @@ app.post('/job-postings', authenticateToken, async (req, res, next) => {
         }
 
         const result = await runCommand(
-            'INSERT INTO JobPostings (company_id, location_id, title, description, requirements, status, created_date) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING job_posting_id',
+            `INSERT INTO JobPostings (company_id, location_id, title, description, requirements, status, created_date) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING job_posting_id`,
             [companyId, location_id, title, description, requirements, 'Open', created_date]
         );
         res.status(201).json({ message: 'Job posting created successfully!', jobPostingId: result[0].job_posting_id });
@@ -1320,7 +1320,7 @@ app.post('/applicants', authenticateToken, async (req, res, next) => {
         }
 
         const result = await runCommand(
-            'INSERT INTO Applicants (company_id, location_id, job_posting_id, full_name, email, phone_number, notes, application_date, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING applicant_id', // Added status with default and returning ID
+            `INSERT INTO Applicants (company_id, location_id, job_posting_id, full_name, email, phone_number, notes, application_date, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING applicant_id`, // Added status with default and returning ID
             [companyId, actualLocationId, job_posting_id, full_name, email, phone_number, notes, application_date, 'Applied'] // Default status 'Applied'
         );
         res.status(201).json({ message: 'Applicant added successfully!', applicantId: result.applicant_id });
