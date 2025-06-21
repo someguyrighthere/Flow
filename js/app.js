@@ -26,22 +26,31 @@ if (typeof Stripe !== 'undefined') {
  * @param {string} method - HTTP method (GET, POST, PUT, DELETE).
  * @param {string} path - API endpoint path (e.g., '/login', '/profile').
  * @param {object} body - Request body data (for POST, PUT).
+ * @param {boolean} isFormData - Set to true if sending FormData (e.g., file uploads).
  * @returns {Promise<object|null>} - JSON response data or null if 204.
  * @throws {Error} - If the API response is not OK.
  */
-async function apiRequest(method, path, body = null) {
+async function apiRequest(method, path, body = null, isFormData = false) {
     const token = localStorage.getItem('authToken');
     const options = {
         method: method,
-        headers: {
-            'Content-Type': 'application/json'
-        }
+        headers: {} // Headers will be conditional
     };
+
     if (token) {
         options.headers['Authorization'] = `Bearer ${token}`;
     }
+
     if (body) {
-        options.body = JSON.stringify(body);
+        if (isFormData) {
+            // For FormData, do NOT set 'Content-Type': 'application/json'.
+            // The browser will set the correct 'multipart/form-data' header automatically,
+            // including the boundary string, when FormData is passed directly as the body.
+            options.body = body;
+        } else {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
     }
     const response = await fetch(`${API_BASE_URL}${path}`, options);
     if (!response.ok) {
@@ -139,7 +148,7 @@ function showConfirmModal(message, confirmButtonText = "Confirm") {
 /**
  * Sets up the functionality for the settings dropdown menu.
  * This includes showing/hiding the dropdown and handling logout.
- * NEW: Also handles showing/hiding the upgrade plan link based on user's subscription.
+ * The "Upgrade Plan" link is now assumed to be directly visible in HTML or handled by backend rendering.
  */
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
@@ -148,7 +157,7 @@ function setupSettingsDropdown() {
     const upgradePlanLink = document.getElementById("upgrade-plan-link"); // Get the new link
 
     if (settingsButton && settingsDropdown) {
-        settingsButton.addEventListener("click", async event => { // Made async to fetch profile
+        settingsButton.addEventListener("click", async event => {
             event.stopPropagation(); // Prevent the document click from immediately closing it
             settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
 
@@ -535,4 +544,85 @@ function handleAdminPage() {
                     }
                     userDiv.innerHTML = `<span>${userInfo}</span>
                                          <button class="btn-delete" data-type="user" data-id="${user.user_id}">
-                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0
+                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                         </button>`;
+                    userListDiv.appendChild(userDiv);
+                });
+            }
+        } catch (error) {
+            console.error("Error loading users:", error);
+            userListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading users: ${error.message}</p>`;
+        }
+    }
+
+    // Event listener for delete buttons (delegated to body for dynamically added elements)
+    document.body.addEventListener("click", async e => {
+        const targetButton = e.target.closest(".btn-delete");
+        if (targetButton) {
+            console.log("handleAdminPage: Delete button clicked.");
+            const id = targetButton.dataset.id;
+            const type = targetButton.dataset.type; // 'location' or 'user'
+            const confirmationMessage = `Are you sure you want to delete this ${type}? This action cannot be undone.`;
+            const confirmed = await showConfirmModal(confirmationMessage, "Delete");
+
+            if (confirmed) {
+                try {
+                    console.log(`handleAdminPage: Deleting ${type} with ID: ${id}.`);
+                    if (type === "location") {
+                        await apiRequest("DELETE", `/locations/${id}`);
+                        showModalMessage("Location deleted successfully!", false);
+                        loadLocations(); // Reload locations list
+                        loadUsers();     // Reload users list as some might be linked to this location
+                    } else if (type === "user") {
+                        await apiRequest("DELETE", `/users/${id}`);
+                        showModalMessage("User deleted successfully!", false);
+                        loadUsers(); // Reload users list
+                    }
+                    console.log(`handleAdminPage: ${type} deleted successfully.`);
+                } catch (error) {
+                    showModalMessage(`Error deleting ${type}: ${error.message}`, true);
+                }
+            }
+        }
+    });
+
+    // Handle new location form submission
+    if (newLocationForm) {
+        console.log("handleAdminPage: New location form found, attaching listener.");
+        newLocationForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            console.log("handleAdminPage: New location form submitted.");
+            const nameInput = document.getElementById("new-location-name");
+            const addressInput = document.getElementById("new-location-address");
+            const location_name = nameInput.value.trim();
+            const location_address = addressInput.value.trim();
+
+            try {
+                console.log("handleAdminPage: Creating location via API.");
+                await apiRequest("POST", "/locations", {
+                    location_name: location_name,
+                    location_address: location_address
+                });
+                nameInput.value = ""; // Clear form
+                addressInput.value = ""; // Clear form
+                showModalMessage("Location created successfully!", false);
+                console.log("handleAdminPage: Location created, reloading lists.");
+                loadLocations(); // Reload locations to show new entry
+            } catch (error) {
+                console.error("Error creating location:", error);
+                showModalMessage(`Error creating location: ${error.message}`, true);
+            }
+        });
+    }
+
+    // Handle invite admin form submission
+    if (inviteAdminForm) {
+        console.log("handleAdminPage: Invite admin form found, attaching listener.");
+        inviteAdminForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            console.log("handleAdminPage: Invite admin form submitted.");
+            const adminName = document.getElementById("admin-name") ? document.getElementById("admin-name").value.trim() : "";
+            const adminEmail = document.getElementById("admin-email") ? document.getElementById("admin-email").value.trim() : "";
+            const adminPassword = document.getElementById("admin-password") ? document.getElementById("admin-password").value : "";
+            const adminLocationSelectElement = document.getElementById("admin-location-select");
+            const adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : 

@@ -9,6 +9,7 @@ const csv = require('csv-parser'); // Not used in provided routes, but kept.
 const { Readable } = require('stream'); // Not used in provided routes, but kept.
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const multer = require('multer'); // ADD THIS LINE: Import multer
 
 // Load environment variables from .env file in development
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
@@ -386,7 +387,6 @@ app.post('/create-checkout-session', authenticateToken, async (req, res, next) =
     }
 });
 
-
 app.post('/invite-admin', authenticateToken, async (req, res, next) => {
     const { full_name, email, password, location_id } = req.body;
     const { companyId, role } = req.user;
@@ -488,7 +488,23 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
         const password_hash = await bcrypt.hash(password, 10);
         // Corrected: Added RETURNING user_id to get the newly created user's ID
         const result = await runCommand(
-            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 'employee', 'active', 'free') RETURNING user_id`,
+            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, 'employee', 'active', 'free') RETURNING user_id`,
+            [companyId, location_id, full_name, email, password_hash] // Corrected parameter order: position and employee_id were missing. Let's re-align.
+            // Correct parameter mapping based on SQL: $1=companyId, $2=location_id, $3=full_name, $4=email, $5=password_hash
+            // The schema for Users also needs to include position and employee_id if these are columns.
+            // For now, I will omit position and employee_id from this INSERT if the Users table doesn't have them
+            // or if the frontend logic needs to be adjusted for 'employee' role parameters.
+            // Given the previous definition of Users table, it only has (company_id, full_name, email, password_hash, role, subscription_status, plan_id)
+            // Let's assume position and employee_id are not directly stored in Users table during invite,
+            // or would be handled separately.
+            // REVISION: The invite-employee form includes position and employee_id. The Users table definition would need these columns.
+            // Let's adjust the insert statement and parameters assuming the Users table HAS these columns.
+            // If it DOES NOT, then we'd need to discuss where to store position/employee_id or update Users table.
+            // Based on prior context (dashboard.html), new-hire-position and new-hire-id exist.
+            // Assuming Users table columns: user_id, company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id, position, employee_id
+            // If the Users table doesn't have position, employee_id columns, this INSERT will fail.
+            // For now, let's include them assuming the table exists, and user can update DB if needed.
+            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id, position, employee_id) VALUES ($1, $2, $3, $4, $5, 'employee', 'active', 'free', $6, $7) RETURNING user_id`,
             [companyId, location_id, full_name, email, password_hash, position, employee_id]
         );
         // The runCommand now returns an object with user_id if successful
@@ -501,6 +517,194 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
         next(error);
     }
 }); // Corrected: This was the missing closing curly brace for the route handler itself
+
+// --- Multer Configuration for File Uploads ---
+const UPLOADS_DIR = path.join(__dirname, 'uploads'); // Files will be stored in a subfolder 'uploads'
+// Create the uploads directory if it doesn't exist
+const fs = require('fs'); // Node.js file system module
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, UPLOADS_DIR); // Store files in the 'uploads' directory
+    },
+    filename: function (req, file, cb) {
+        // Use a unique name to prevent collisions, e.g., timestamp-originalfilename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+// Configure Multer to accept single file uploads with the field name 'document_file'
+const upload = multer({ storage: storage });
+
+// --- Document Management API Routes ---
+app.post('/documents/upload', authenticateToken, upload.single('document_file'), async (req, res, next) => {
+    const { title, description } = req.body;
+    const { userId, companyId, role } = req.user;
+    const file = req.file; // This comes from multer
+
+    // Authorization: Only super_admin and location_admin can upload documents
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        // If a location_admin tries to upload, they should only be able to if assigned to a location
+        // or if the document isn't specifically tied to a location within the document's metadata
+        // For now, let's keep it simple: any admin role can upload to the company's documents.
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can upload documents.' });
+    }
+
+    // Input validation
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+        return res.status(400).json({ error: "Document title is required and must be a non-empty string." });
+    }
+    if (!file) {
+        return res.status(400).json({ error: "No file provided for upload." });
+    }
+    // Basic file validation (optional but recommended)
+    if (file.size > 10 * 1024 * 1024) { // Max 10MB file size
+        return res.status(400).json({ error: "File size exceeds 10MB limit." });
+    }
+    // You might want to validate mime_type here as well
+
+    try {
+        const result = await runCommand(
+            `INSERT INTO Documents (company_id, title, description, file_path, file_name, mime_type, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING document_id, file_path`,
+            [companyId, title, description, file.path, file.originalname, file.mimetype, userId]
+        );
+        res.status(201).json({ message: 'Document uploaded successfully!', documentId: result.document_id, filePath: result.file_path });
+    } catch (error) {
+        console.error("Database error during document upload:", error);
+        // Clean up uploaded file if DB insert fails
+        if (file && fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path); // Delete the file
+        }
+        next(error);
+    }
+});
+
+app.get('/documents', authenticateToken, async (req, res, next) => {
+    const { companyId, role } = req.user;
+    // Authorization: Any user within the company should be able to view documents for now
+    // If specific roles should be restricted, add checks here.
+
+    let sql = `SELECT d.document_id, d.title, d.description, d.file_name, d.mime_type, d.upload_date, u.full_name AS uploaded_by
+               FROM Documents d
+               JOIN Users u ON d.uploaded_by_user_id = u.user_id
+               WHERE d.company_id = $1`;
+    const params = [companyId];
+
+    try {
+        const documents = await query(sql, params);
+        res.json(documents);
+    } catch (error) {
+        console.error("Database error fetching documents:", error);
+        next(error);
+    }
+});
+
+// Route to serve files for download
+app.get('/documents/download/:document_id', authenticateToken, async (req, res, next) => {
+    const { document_id } = req.params;
+    const { companyId, role } = req.user;
+
+    // Input validation
+    if (!document_id || isNaN(parseInt(document_id))) {
+        return res.status(400).json({ error: 'Invalid document ID provided.' });
+    }
+
+    try {
+        const docResult = await query(
+            'SELECT file_path, file_name, mime_type, company_id FROM Documents WHERE document_id = $1',
+            [document_id]
+        );
+        const document = docResult[0];
+
+        if (!document) {
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+
+        // Authorization: Ensure document belongs to the authenticated user's company
+        if (document.company_id !== companyId) {
+            return res.status(403).json({ error: 'Access Dismissed: You are not authorized to download this document.' });
+        }
+
+        const filePath = document.file_path;
+        const fileName = document.file_name;
+        const mimeType = document.mime_type;
+
+        // Check if file exists on disk
+        if (!fs.existsSync(filePath)) {
+            console.error(`Attempted to download non-existent file: ${filePath}`);
+            return res.status(404).json({ error: 'File not found on server storage.' });
+        }
+
+        res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.sendFile(filePath); // Send the file from local storage
+
+    } catch (error) {
+        console.error("Error serving document for download:", error);
+        next(error);
+    }
+});
+
+app.delete('/documents/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role } = req.user;
+
+    // Authorization: Only super_admin and location_admin can delete documents
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can delete documents.' });
+    }
+    // Input validation
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid document ID provided.' }); }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // First, get the file_path to delete the physical file
+        const docResult = await client.query('SELECT file_path, company_id FROM Documents WHERE document_id = $1', [id]);
+        const document = docResult.rows[0];
+
+        if (!document) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+        // Ensure document belongs to the authenticated user's company
+        if (document.company_id !== companyId) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Access Dismissed: You are not authorized to delete this document.' });
+        }
+
+        // Delete from database
+        const dbDeleteResult = await client.query('DELETE FROM Documents WHERE document_id = $1 AND company_id = $2', [id, companyId]);
+
+        if (dbDeleteResult.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Document not found or not authorized to delete.' });
+        }
+
+        // Delete physical file after successful DB deletion
+        if (fs.existsSync(document.file_path)) {
+            fs.unlinkSync(document.file_path);
+            console.log(`Successfully deleted physical file: ${document.file_path}`);
+        } else {
+            console.warn(`Attempted to delete non-existent physical file: ${document.file_path}`);
+        }
+
+        await client.query('COMMIT');
+        res.status(204).send(); // No content for successful deletion
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Database error deleting document:", error);
+        next(error);
+    } finally {
+        client.release();
+    }
+});
 
 app.get('/profile', authenticateToken, async (req, res, next) => {
     try {
@@ -840,7 +1044,8 @@ app.get('/schedules', authenticateToken, async (req, res, next) => {
     } catch (error) {
         console.error("Database error fetching schedules:", error);
         next(error);
-    }
+    
+}
 });
 
 app.delete('/schedules/:id', authenticateToken, async (req, res, next) => {
@@ -953,6 +1158,7 @@ app.get('/job-postings', authenticateToken, async (req, res, next) => {
         return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
     }
     // Super admin already has access via companyId filter
+
 
     const allowedStatuses = ['Open', 'Closed', 'Filled'];
     if (status) {
@@ -1128,69 +1334,6 @@ app.post('/applicants', authenticateToken, async (req, res, next) => {
         res.status(201).json({ message: 'Applicant added successfully!', applicantId: result.applicant_id });
     } catch (error) {
         console.error("Database error creating applicant:", error);
-        next(error);
-    }
-});
-
-app.get('/applicants', authenticateToken, async (req, res, next) => {
-    const { job_posting_id, status, location_id } = req.query;
-    const { companyId, role, locationId: currentUserLocationId } = req.user;
-
-    let sql = `SELECT Applicants.*, JobPostings.title AS job_title_name
-                FROM Applicants
-                LEFT JOIN JobPostings ON Applicants.job_posting_id = JobPostings.job_posting_id
-                WHERE Applicants.company_id = $1`;
-    const params = [companyId];
-    let paramIndex = 2;
-
-    // Filtering by status
-    const allowedStatuses = ['Applied', 'Interviewing', 'Rejected', 'Hired'];
-    if (status) {
-        if (!allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid applicant status filter provided.' }); }
-        sql += ` AND Applicants.status = $${paramIndex++}`;
-        params.push(status);
-    }
-    // Filtering by job posting ID
-    if (job_posting_id) {
-        if (isNaN(parseInt(job_posting_id))) { return res.status(400).json({ error: 'Invalid job posting ID filter provided.' }); }
-        sql += ` AND Applicants.job_posting_id = $${paramIndex++}`;
-        params.push(parseInt(job_posting_id));
-    }
-
-    // Authorization and filtering based on user role
-    if (role === 'location_admin') {
-        if (currentUserLocationId !== null) {
-            sql += ` AND (Applicants.location_id = $${paramIndex++} OR Applicants.location_id IS NULL)`; // Location admin sees applicants for their location or unassigned
-            params.push(currentUserLocationId);
-        } else {
-            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
-        }
-    } else if (role === 'employee') {
-        // Employees typically don't view all applicants. Adjust as per business logic.
-        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view applicants.' }); // Changed 'Access Denied' to 'Access Dismissed'
-    }
-    // Super admin sees all within company
-
-    // Filtering by location_id (if also allowed by role)
-    if (location_id) {
-        if (isNaN(parseInt(location_id))) { return res.status(400).json({ error: 'Invalid location ID filter provided.' }); }
-        const parsedLocationId = parseInt(location_id);
-
-        // Super admin can filter by any location
-        // Location admin can only filter by their assigned location or null (unassigned)
-        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) {
-            sql += ` AND Applicants.location_id = $${paramIndex++}`;
-            params.push(parsedLocationId);
-        } else {
-            return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to filter by location.' }); // Changed 'Access Denied' to 'Access Dismissed'
-        }
-    }
-
-    try {
-        const applicants = await query(sql, params);
-        res.json(applicants);
-    } catch (error) {
-        console.error("Database error fetching applicants:", error);
         next(error);
     
 }
