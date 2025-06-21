@@ -182,7 +182,7 @@ function setupSettingsDropdown() {
 }
 
 
-// --- Page Specific Handlers (DEFINED BEFORE DOMContentLoaded) ---
+// --- Page Specific Handlers (DEFINED BEFORE DOMContentLoaded to ensure they are available) ---
 
 /**
  * Handles the logic for the login page.
