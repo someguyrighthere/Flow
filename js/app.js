@@ -630,11 +630,539 @@ function handleAdminPage() {
             const adminPassword = document.getElementById("admin-password") ? document.getElementById("admin-password").value : "";
             const adminLocationSelectElement = document.getElementById("admin-location-select");
             const adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : "";
-```
 
-**Step 1: Replace your `app.js` file** with the content from the "Updated app.js (Final Document Management Logic)" Canvas above.
-**Step 2: Rebuild `app.min.js`**: Open your terminal in your project's root directory and run `npm run build:js`. This is crucial to get the latest JavaScript into your minified file.
-**Step 3: Commit and Deploy**: Push your updated `app.js` (and the resulting `app.min.js`) to your GitHub repository, and trigger a new deploy on Render.
-**Step 4: Clear Browser Cache**: Perform a hard refresh and clear all site data in your browser's developer tools for your application's domain.
+            if (!adminName || !adminEmail || !adminPassword || adminPassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+                showModalMessage("Please provide a full name, valid email, and a password (min 6 chars) for the new admin.", true);
+                return;
+            }
+            if (!adminLocationId) {
+                showModalMessage("Please select a location to assign the admin.", true);
+                return;
+            }
 
-After these steps, your "Upload Document" button should now trigger the backend upload process, and documents should appear in the "Your Uploaded Documents" section once successfully upload
+            try {
+                console.log("handleAdminPage: Inviting admin via API.");
+                await apiRequest("POST", "/invite-admin", {
+                    full_name: adminName,
+                    email: adminEmail,
+                    location_id: parseInt(adminLocationId), // Ensure it's an integer
+                    password: adminPassword
+                });
+                // Clear form fields
+                if (document.getElementById("admin-name")) document.getElementById("admin-name").value = "";
+                if (document.getElementById("admin-email")) document.getElementById("admin-email").value = "";
+                if (document.getElementById("admin-password")) document.getElementById("admin-password").value = "";
+                if (adminLocationSelectElement) adminLocationSelectElement.value = ""; // Reset dropdown
+
+                showModalMessage(`Admin invite sent to ${adminEmail} for selected location with the provided temporary password.`, false);
+                console.log("handleAdminPage: Admin invited, reloading users.");
+                loadUsers(); // Reload users to show new admin
+            } catch (error) {
+                console.error("Error inviting admin:", error);
+                showModalMessage(`Failed to invite admin: ${error.message}`, true);
+            }
+        });
+    }
+
+    // Handle invite employee form submission
+    if (inviteEmployeeForm) {
+        console.log("handleAdminPage: Invite employee form found, attaching listener.");
+        inviteEmployeeForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            console.log("handleAdminPage: Invite employee form submitted.");
+            const employeeName = document.getElementById("employee-name") ? document.getElementById("employee-name").value.trim() : "";
+            const employeeEmail = document.getElementById("employee-email") ? document.getElementById("employee-email").value.trim() : "";
+            const employeePassword = document.getElementById("employee-password") ? document.getElementById("employee-password").value : "";
+            const employeePosition = document.getElementById("employee-position") ? document.getElementById("employee-position").value.trim() : "";
+            const employeeId = document.getElementById("employee-id") ? document.getElementById("employee-id").value.trim() : null; // Can be null or empty string
+            const employeeLocationSelectElement = document.getElementById("employee-location-select");
+            const employeeLocationId = employeeLocationSelectElement ? employeeLocationSelectElement.value : "";
+
+            // Client-side validation for employee invite
+            if (!employeeName || !employeeEmail || !employeePassword || employeePassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail)) {
+                showModalMessage("Full name, valid email, and a password (min 6 chars) are required for employee invitation.", true);
+                return;
+            }
+
+            // Convert location ID to number or null (if empty string)
+            const locationIdToSend = employeeLocationId ? parseInt(employeeLocationId) : null;
+            // Convert employee_id to number or string or null (if empty string)
+            const employeeIdToSend = employeeId ? (isNaN(parseInt(employeeId)) ? employeeId : parseInt(employeeId)) : null;
+
+            try {
+                console.log("handleAdminPage: Inviting employee via API.");
+                await apiRequest("POST", "/invite-employee", {
+                    full_name: employeeName,
+                    email: employeeEmail,
+                    password: employeePassword,
+                    position: employeePosition || null, // Send null if empty
+                    employee_id: employeeIdToSend,     // Send null if empty, or parsed value
+                    location_id: locationIdToSend      // Send null if empty/unassigned
+                });
+                // Clear form fields
+                if (document.getElementById("employee-name")) document.getElementById("employee-name").value = "";
+                if (document.getElementById("employee-email")) document.getElementById("employee-email").value = "";
+                if (document.getElementById("employee-password")) document.getElementById("employee-password").value = "";
+                if (document.getElementById("employee-position")) document.getElementById("employee-position").value = "";
+                if (document.getElementById("employee-id")) document.getElementById("employee-id").value = "";
+                if (employeeLocationSelectElement) employeeLocationSelectElement.value = ""; // Reset dropdown
+
+                showModalMessage(`Employee invite sent to ${employeeEmail} with the provided temporary password.`, false);
+                console.log("handleAdminPage: Employee invited, reloading users.");
+                loadUsers(); // Reload users to show new employee
+            } catch (error) {
+                console.error("Error inviting employee:", error);
+                showModalMessage(`Failed to invite employee: ${error.message}`, true);
+            }
+        });
+    }
+
+    // Initial loads when the admin page loads
+    loadLocations();
+    loadUsers();
+}
+
+/**
+ * Handles all client-side logic for the pricing.html page.
+ */
+function handlePricingPage() {
+    console.log("handlePricingPage: Initializing pricing page logic.");
+    const freePlanBtn = document.getElementById("free-plan-btn");
+    const proPlanBtn = document.getElementById("pro-plan-btn");
+    const enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
+
+    // Ensure all required elements are present
+    if (!freePlanBtn || !proPlanBtn || !enterprisePlanBtn) {
+        console.error("handlePricingPage: One or more pricing plan buttons not found. Check IDs in HTML.");
+        return;
+    }
+    console.log("handlePricingPage: All pricing plan buttons found.");
+
+    // Get references to the new registration/checkout modal elements
+    const registerCheckoutModalOverlay = document.getElementById('register-checkout-modal-overlay');
+    const registerCheckoutForm = document.getElementById('register-checkout-form');
+    const regCheckoutModalTitle = document.getElementById('register-checkout-modal-title');
+    const regCheckoutErrorMessage = document.getElementById('register-checkout-error-message');
+    const regCheckoutCancelBtn = document.getElementById('reg-checkout-cancel-btn');
+
+    let selectedPlanForRegistration = null; // Stores the plan ID chosen when the modal is shown
+
+    // Handle Free plan button click (no checkout needed)
+    if (freePlanBtn) {
+        freePlanBtn.addEventListener("click", () => {
+            console.log("handlePricingPage: Free plan button clicked.");
+            showModalMessage("You are currently on the Free plan. No action needed.", false);
+        });
+    }
+
+    /**
+     * Centralized function to initiate Stripe Checkout.
+     * @param {string} planId - The ID of the plan to subscribe to ('pro' or 'enterprise').
+     * @param {string} token - The authentication token of the user.
+     */
+    async function initiateStripeCheckout(planId, token) {
+        console.log(`initiateStripeCheckout: Proceeding with checkout for plan: ${planId}`);
+        try {
+            // Check if stripe object is defined. It should be on pricing.html due to script order.
+            if (typeof stripe === 'undefined' || stripe === null) {
+                console.error("Stripe object is not initialized. Cannot proceed with checkout.");
+                showModalMessage("Payment processing is unavailable. Please refresh the page.", true);
+                return;
+            }
+
+            // Call backend to create a Stripe Checkout Session
+            // The apiRequest function will automatically include the token in headers
+            const response = await apiRequest("POST", "/create-checkout-session", {
+                planId: planId
+            });
+            const sessionId = response.sessionId;
+            console.log("initiateStripeCheckout: Received session ID from backend:", sessionId);
+
+            if (sessionId) {
+                console.log("initiateStripeCheckout: Redirecting to Stripe Checkout.");
+                // Redirect to Stripe's hosted checkout page
+                const result = await stripe.redirectToCheckout({
+                    sessionId: sessionId
+                });
+
+                if (result.error) {
+                    // This typically occurs if there's an issue with the Stripe.js client
+                    console.error("Stripe Checkout Error:", result.error.message);
+                    showModalMessage(`Stripe Checkout Error: ${result.error.message}`, true);
+                }
+            } else {
+                console.error("initiateStripeCheckout: Session ID not received from backend.");
+                showModalMessage("Failed to create Stripe Checkout session. Please try again.", true);
+            }
+        } catch (error) {
+            // Handle errors from the API request itself (e.g., network issues, backend errors)
+            console.error("Error initiating checkout:", error);
+            showModalMessage(`Error initiating checkout: ${error.message}`, true);
+        }
+    }
+
+    /**
+     * Main handler for Pro/Enterprise plan button clicks.
+     * Checks authentication status and either shows registration modal or initiates checkout.
+     */
+    const handlePlanButtonClick = async event => {
+        console.log("handlePricingPage: Plan button clicked. Target:", event.target);
+        const planId = event.target.dataset.planId;
+        if (!planId) {
+            console.error("handlePricingPage: Plan ID not found on button. Check data-plan-id attribute.");
+            showModalMessage("Plan ID not found. Cannot proceed with checkout.", true);
+            return;
+        }
+
+        selectedPlanForRegistration = planId; // Store the selected plan ID for the modal flow
+
+        const authToken = localStorage.getItem("authToken");
+        if (!authToken) {
+            console.log("handlePricingPage: No auth token found, displaying registration modal.");
+            // Customize modal title based on selected plan
+            regCheckoutModalTitle.textContent = `Sign Up & Subscribe to ${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan`;
+            regCheckoutErrorMessage.textContent = ""; // Clear previous errors
+            regCheckoutErrorMessage.classList.remove("visible"); // Hide error message div
+            registerCheckoutModalOverlay.style.display = "flex"; // Show the modal
+            // Clear previous inputs in the modal if any
+            document.getElementById('reg-co-name').value = '';
+            document.getElementById('reg-full-name').value = '';
+            document.getElementById('reg-email').value = '';
+            document.getElementById('reg-password').value = '';
+            return; // Stop execution here, user needs to interact with modal
+        }
+
+        // If user is already logged in, proceed directly to Stripe checkout
+        console.log("handlePricingPage: Auth token found, proceeding directly with checkout.");
+        await initiateStripeCheckout(planId, authToken);
+    };
+
+    // Attach click listeners to Pro and Enterprise plan buttons
+    if (proPlanBtn) {
+        proPlanBtn.addEventListener("click", handlePlanButtonClick);
+        console.log("handlePricingPage: Attached click listener to Pro button.");
+    }
+    if (enterprisePlanBtn) {
+        enterprisePlanBtn.addEventListener("click", handlePlanButtonClick);
+        console.log("handlePricingPage: Attached click listener to Enterprise button.");
+    }
+
+    // Handle submission of the new registration/checkout form inside the modal
+    if (registerCheckoutForm) {
+        registerCheckoutForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log("Register/Checkout Form Submitted from modal.");
+
+            const companyName = document.getElementById('reg-co-name').value.trim();
+            const fullName = document.getElementById('reg-full-name').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const password = document.getElementById('reg-password').value;
+
+            // Client-side validation for the modal form
+            regCheckoutErrorMessage.textContent = "";
+            regCheckoutErrorMessage.classList.remove("visible");
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!companyName || !fullName || !email || !password || password.length < 6 || !emailRegex.test(email)) {
+                regCheckoutErrorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
+                regCheckoutErrorMessage.classList.add("visible");
+                return;
+            }
+
+            try {
+                console.log("Attempting to register new user via API call.");
+                const registerResponse = await apiRequest("POST", "/register", {
+                    company_name: companyName,
+                    full_name: fullName,
+                    email: email,
+                    password: password
+                });
+
+                if (registerResponse) {
+                    console.log("Registration successful. Now attempting to log in the new user to get an auth token for checkout.");
+                    // After successful registration, immediately log in to get a token
+                    const loginResponse = await apiRequest("POST", "/login", {
+                        email: email,
+                        password: password
+                    });
+
+                    if (loginResponse && loginResponse.token) {
+                        localStorage.setItem("authToken", loginResponse.token);
+                        localStorage.setItem("userRole", loginResponse.role);
+                        registerCheckoutModalOverlay.style.display = "none"; // Hide the registration modal
+
+                        showModalMessage("Account created successfully! Redirecting to payment...", false);
+
+                        // Proceed to Stripe checkout with the newly acquired token and the previously selected plan
+                        await initiateStripeCheckout(selectedPlanForRegistration, loginResponse.token);
+                    } else {
+                        // This case should ideally not happen if registration was successful, but good for robust error handling
+                        throw new Error("Failed to log in after successful registration. Please try logging in manually.");
+                    }
+                } else {
+                    // This implies the API returned a non-OK status, but didn't throw an error with errorData (unlikely with current apiRequest)
+                    throw new Error("Registration failed unexpectedly. Please try again.");
+                }
+            } catch (error) {
+                console.error("Registration/Checkout process error:", error);
+                regCheckoutErrorMessage.textContent = `Error: ${error.message}`;
+                regCheckoutErrorMessage.classList.add("visible"); // Show error message in modal
+                showModalMessage(`Registration/Payment failed: ${error.message}`, true); // Also show global modal message
+            }
+        });
+    }
+
+    // Handle cancel button click for the new registration modal
+    if (regCheckoutCancelBtn) {
+        regCheckoutCancelBtn.addEventListener('click', () => {
+            registerCheckoutModalOverlay.style.display = 'none'; // Hide the modal
+        });
+    }
+}
+
+
+/**
+ * Handles all client-side logic for the scheduling.html page.
+ */
+function handleSchedulingPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+    // Placeholder for actual scheduling page logic
+    console.log("Scheduling page logic goes here. (Implementation pending)");
+}
+
+/**
+ * Handles all client-side logic for the hiring.html page.
+ */
+function handleHiringPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+    // Placeholder for actual hiring page logic
+    console.log("Hiring page logic goes here. (Implementation pending)");
+}
+
+/**
+ * Handles all client-side logic for the sales-analytics.html page.
+ */
+function handleSalesAnalyticsPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+    // Placeholder for actual sales analytics page logic
+    console.log("Sales Analytics page logic goes here. (Implementation pending)");
+}
+
+/**
+ * Handles all client-side logic for the dashboard.html page (Onboarding Dashboard).
+ */
+function handleDashboardPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+    // Placeholder for actual dashboard page logic
+    console.log("Dashboard page logic goes here. (Implementation pending)");
+}
+
+/**
+ * Handles all client-side logic for the documents.html page.
+ */
+function handleDocumentsPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+
+    const uploadDocumentForm = document.getElementById("upload-document-form");
+    const documentTitleInput = document.getElementById("document-title");
+    const documentFileInput = document.getElementById("document-file");
+    const documentDescriptionInput = document.getElementById("document-description");
+    const documentListDiv = document.getElementById("document-list");
+
+    // Function to load and display documents
+    async function loadDocuments() {
+        console.log("Loading documents...");
+        documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
+        try {
+            const documents = await apiRequest("GET", "/documents");
+            documentListDiv.innerHTML = ''; // Clear existing list
+
+            if (documents.length === 0) {
+                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
+            } else {
+                documents.forEach(doc => {
+                    const docItem = document.createElement("div");
+                    docItem.className = "document-item";
+                    docItem.innerHTML = `
+                        <h4>${doc.title}</h4>
+                        <p>File: ${doc.file_name} (${(doc.mime_type || 'Unknown Type')})</p>
+                        <p>${doc.description || 'No description provided.'}</p>
+                        <p style="font-size:0.8em; color:var(--text-medium);">Uploaded by: ${doc.uploaded_by} on ${new Date(doc.upload_date).toLocaleDateString()}</p>
+                        <div class="actions">
+                            <button class="btn-download" data-document-id="${doc.document_id}">Download</button>
+                            <button class="btn-delete" data-document-id="${doc.document_id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    documentListDiv.appendChild(docItem);
+                });
+            }
+        } catch (error) {
+            console.error("Error loading documents:", error);
+            documentListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading documents: ${error.message}</p>`;
+        }
+    }
+
+    // Handle document upload form submission
+    if (uploadDocumentForm) {
+        uploadDocumentForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            console.log("Upload document form submitted.");
+
+            const title = documentTitleInput.value.trim();
+            const description = documentDescriptionInput.value.trim();
+            const file = documentFileInput.files[0]; // Get the selected file
+
+            if (!title || !file) {
+                showModalMessage("Document title and a file are required for upload.", true);
+                return;
+            }
+
+            // Create FormData object to send file and other data
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('document_file', file); // 'document_file' must match the field name in multer config on backend
+
+            try {
+                console.log("Attempting to upload document via API.");
+                await apiRequest("POST", "/documents/upload", formData, true); // Pass true for isFormData
+                showModalMessage("Document uploaded successfully!", false);
+
+                // Clear form fields after successful upload
+                documentTitleInput.value = "";
+                documentFileInput.value = ""; // Clear the file input
+                documentDescriptionInput.value = "";
+                
+                loadDocuments(); // Reload the list to show the new document
+            } catch (error) {
+                console.error("Error uploading document:", error);
+                showModalMessage(`Error uploading document: ${error.message}`, true);
+            }
+        });
+    }
+
+    // Handle clicks for download and delete buttons using event delegation
+    if (documentListDiv) {
+        documentListDiv.addEventListener("click", async e => {
+            const downloadButton = e.target.closest(".btn-download");
+            const deleteButton = e.target.closest(".btn-delete");
+
+            if (downloadButton) {
+                const documentId = downloadButton.dataset.documentId;
+                console.log(`Download button clicked for document ID: ${documentId}`);
+                // Construct the download URL and trigger a download
+                window.location.href = `${API_BASE_URL}/documents/download/${documentId}`;
+            } else if (deleteButton) {
+                const documentId = deleteButton.dataset.documentId;
+                console.log(`Delete button clicked for document ID: ${documentId}`);
+                const confirmed = await showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
+                if (confirmed) {
+                    try {
+                        console.log(`Attempting to delete document ID: ${documentId} via API.`);
+                        await apiRequest("DELETE", `/documents/${documentId}`);
+                        showModalMessage("Document deleted successfully!", false);
+                        loadDocuments(); // Reload list after deletion
+                    } catch (error) {
+                        console.error("Error deleting document:", error);
+                        showModalMessage(`Error deleting document: ${error.message}`, true);
+                    }
+                }
+            }
+        });
+    }
+
+    // Initial load of documents when the page loads
+    loadDocuments();
+}
+
+/**
+ * Handles all client-side logic for the checklists.html page.
+ */
+function handleChecklistsPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+    // Placeholder for actual checklists page logic
+    console.log("Checklists page logic goes here. (Implementation pending)");
+}
+
+/**
+ * Handles all client-side logic for the new-hire-view.html page.
+ */
+function handleNewHireViewPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+    // Placeholder for actual new hire view page logic
+    console.log("New Hire View page logic goes here. (Implementation pending)");
+}
+
+
+// --- Main Entry Point: Execute appropriate page handler on DOMContentLoaded ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Setup general UI elements like the settings dropdown that are present on many pages
+    setupSettingsDropdown();
+
+    // Route to specific page handlers based on the current URL
+    const path = window.location.pathname;
+    console.log("DOMContentLoaded: Current path is", path); // Debugging log to see which path is detected
+
+    if (path.includes('login.html')) {
+        handleLoginPage();
+    } else if (path.includes('register.html')) {
+        handleRegisterPage();
+    } else if (path.includes('pricing.html')) {
+        handlePricingPage();
+    } else if (path.includes('suite-hub.html')) {
+        handleSuiteHubPage();
+    } else if (path.includes('account.html')) {
+        handleAccountPage();
+    } else if (path.includes('admin.html')) {
+        handleAdminPage();
+    } else if (path.includes('scheduling.html')) {
+        handleSchedulingPage();
+    } else if (path.includes('hiring.html')) {
+        handleHiringPage();
+    } else if (path.includes('dashboard.html')) {
+        handleDashboardPage();
+    } else if (path.includes('documents.html')) {
+        handleDocumentsPage();
+    } else if (path.includes('checklists.html')) {
+        handleChecklistsPage();
+    } else if (path.includes('new-hire-view.html')) {
+        handleNewHireViewPage();
+    }
+    // For the root path ('/' or empty), or index.html, no specific handler might be needed beyond setupSettingsDropdown
+    else if (path === '/' || path === '/index.html' || path === '') {
+        console.log("Index or root page loaded.");
+        // Add any specific logic for the landing page here if needed
+    } else {
+        console.warn(`No specific handler found for path: ${path}`);
+    }
+});
