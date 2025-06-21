@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Documents - Flow Business Suite</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/theme.css">
+    <!-- Changed to link to minified CSS files for consistency with other pages -->
+    <link rel="stylesheet" href="css/style.min.css">
+    <link rel="stylesheet" href="css/theme.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
@@ -45,11 +46,29 @@
             border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
             color: var(--text-light); box-sizing: border-box;
         }
+        /* Adjusted file input styling to blend better or align with theme */
         .form-group input[type="file"] {
-            background-color: transparent;
-            border: 1px dashed rgba(255, 255, 255, 0.3);
+            background-color: rgba(0, 0, 0, 0.3); /* Slightly darker background */
+            border: 1px solid rgba(255, 255, 255, 0.3); /* Solid border to match other inputs */
             padding: 12px;
+            color: var(--text-light); /* Ensure text color is consistent */
+            cursor: pointer;
         }
+        /* Further styling for the "Choose File" button part of the input, if necessary */
+        .form-group input[type="file"]::file-selector-button {
+            background-color: var(--primary-accent); /* Apply primary accent to the button */
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-right: 10px; /* Space between button and filename */
+        }
+        .form-group input[type="file"]::file-selector-button:hover {
+            background-color: #A95DBC; /* Slightly darker hover color */
+        }
+
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
 
         .document-grid {
@@ -169,12 +188,13 @@
                 <button id="settings-button" class="btn btn-secondary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
-               <div id="settings-dropdown" class="settings-dropdown">
-    <a href="account.html">My Account</a>
-    <a href="admin.html">Admin Settings</a>
-    <a href="pricing.html" id="upgrade-plan-link" style="display: none;">Upgrade Plan</a>
-    <button id="logout-button">Logout</button>
-</div>
+                <div id="settings-dropdown" class="settings-dropdown">
+                    <a href="account.html">My Account</a>
+                    <!-- Changed link to no ID and no inline style to be always visible, per your successful fix -->
+                    <a href="pricing.html">Upgrade Plan</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <button id="logout-button">Logout</button>
+                </div>
             </div>
         </header>
         <nav class="main-nav">
