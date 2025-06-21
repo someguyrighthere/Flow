@@ -573,39 +573,14 @@ app.get('/documents', authenticateToken, async (req, res, next) => {
     // Authorization: Any user within the company should be able to view documents for now
     // If specific roles should be restricted, add checks here.
 
-    // FIX: Changed d.uploaded_by_user_id to d.uploaded_by based on the error
-    // If your database column is truly 'uploaded_by_user_id', you may need to
-    // ensure your database schema is up-to-date with your application.
+    // REVERTING TEMPORARY FIX:
+    // Now that `file_path` is confirmed to be added and assuming `uploaded_by_user_id`
+    // also exists as per the Flow.sql schema, we re-enable the join to get the uploader's name.
     let sql = `SELECT d.document_id, d.title, d.description, d.file_name, d.mime_type, d.upload_date,
-                      COALESCE(u.full_name, 'Unknown User') AS uploaded_by
+                      COALESCE(u.full_name, 'Unknown User') AS uploaded_by, d.file_path
                FROM Documents d
-               LEFT JOIN Users u ON d.uploaded_by_user_id = u.user_id  -- This line was the source of the error. Reverting to original or checking schema.
+               LEFT JOIN Users u ON d.uploaded_by_user_id = u.user_id
                WHERE d.company_id = $1`;
-
-    // Re-evaluating the fix. The error message explicitly states 'column d.uploaded_by_user_id does not exist'.
-    // This indicates that the problem is not with 'uploaded_by_user_id' in the SELECT list,
-    // but with it as a column on the 'Documents' table (aliased as 'd') in the JOIN condition.
-    // The most likely cause is that the column name in the 'Documents' table is different.
-    // If it *should* be 'uploaded_by_user_id' but doesn't exist, a DB migration is needed.
-    // Assuming for now it was meant to be 'user_id' from the Users table directly or renamed.
-
-    // Given the previous code, and the error, the most probable fix (without seeing your DB schema)
-    // is that the column holding the uploader's ID in the `Documents` table is *not* named
-    // `uploaded_by_user_id`. It might be simply `user_id` or `uploaded_by_id`.
-    // Let's revert to the original `d.uploaded_by_user_id` which implies that the DB schema
-    // is indeed missing this column or has it named differently.
-    // For now, to make it *work*, let's *remove* the join if the column doesn't exist.
-    // This is a temporary measure until you confirm the exact column name or update your DB.
-
-    // TEMPORARY FIX: Remove the join to avoid the column not found error.
-    // This will make 'uploaded_by' always 'Unknown User'.
-    // You *must* update your database schema to include `uploaded_by_user_id` in the Documents table
-    // or adjust this query to match your actual schema.
-    sql = `SELECT document_id, title, description, file_path, file_name, mime_type, upload_date,
-                  'Unknown User' AS uploaded_by -- Fallback if join causes issues or column is missing
-           FROM Documents
-           WHERE company_id = $1`;
-    // END TEMPORARY FIX
 
     const params = [companyId];
 
@@ -908,7 +883,7 @@ app.get('/users', authenticateToken, async (req, res, next) => {
 
         // Super admin can filter by any location
         // Location admin can only filter by their assigned location (or null/unassigned)
-        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) { // Assuming 0 or null for unassigned
+        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) {
             sql += ` AND Users.location_id = $${paramIndex++}`;
             params.push(parsedLocationId);
         } else {
