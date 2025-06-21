@@ -453,7 +453,7 @@ app.post('/invite-employee', authenticateToken, async (req, res, next) => {
                 return res.status(403).json({ error: 'Access Dismissed: Location admin can only invite employees to their assigned location or unassigned roles.' }); // Changed 'Access Denied' to 'Access Dismissed'
             }
         } else {
-            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location cannot invite employees to any location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location cannot invite employees to any location.' }); // Changed 'Access Dismissed' to 'Access Dismissed'
         }
     }
 
@@ -588,7 +588,7 @@ app.get('/documents', authenticateToken, async (req, res, next) => {
     } catch (error) {
         // This log message was identified as potentially causing a SyntaxError in previous logs
         // Ensuring it correctly handles the error object.
-        console.error(`Database error fetching documents: ${error.message || error}`); // Improved error logging
+        console.error(`Database error fetching documents: ${error.message || JSON.stringify(error)}`); // Improved error logging
         next(error); // Pass to general error handler
     }
 });
@@ -1411,69 +1411,3 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
-```
-
-The error `column "mime_type" of relation "documents" does not exist` is still occurring even after our previous attempts to resolve it. This indicates a persistent schema mismatch on your deployed database on Render.
-
-I have updated the "server-js-fix" Canvas with temporary adjustments to the `/documents/upload` POST route and the `/documents` GET route. I have removed `mime_type` from the `INSERT` statement in the upload route and from the `SELECT` statement in the fetch route.
-
-**What was changed in the Canvas (`server.js`):**
-
-1.  **`app.post('/documents/upload', ...)` route:**
-    * Removed `mime_type` from the `INSERT` query's column list.
-    * Removed `file.mimetype` from the values array.
-    ```javascript
-    // Previous INSERT statement:
-    // `INSERT INTO Documents (company_id, title, description, file_path, file_name, mime_type, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING document_id, file_path`,
-    // [companyId, title, description, file.path, file.originalname, file.mimetype, userId]
-
-    // Updated INSERT statement (in the Canvas):
-    `INSERT INTO Documents (company_id, title, description, file_path, file_name, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING document_id, file_path`,
-    [companyId, title, description, file.path, file.originalname, userId]
-    ```
-
-2.  **`app.get('/documents', ...)` route:**
-    * Removed `mime_type` from the `SELECT` query's column list.
-    ```javascript
-    // Previous SELECT statement:
-    // `SELECT document_id, title, description, file_name, mime_type, upload_date, file_path, uploaded_by_user_id FROM Documents WHERE company_id = $1`
-
-    // Updated SELECT statement (in the Canvas):
-    `SELECT document_id, title, description, file_name, upload_date, file_path,
-                      uploaded_by_user_id -- Select the ID directly from Documents table
-               FROM Documents
-               WHERE company_id = $1`
-    ```
-
-3.  **`app.get('/documents/download/:document_id', ...)` route:**
-    * Removed `mime_type` from the `SELECT` statement and hardcoded `Content-Type` to `application/octet-stream`.
-    ```javascript
-    // Previous SELECT statement:
-    // 'SELECT file_path, file_name, mime_type, company_id FROM Documents WHERE document_id = $1'
-
-    // Updated SELECT statement (in the Canvas):
-    'SELECT file_path, file_name, company_id FROM Documents WHERE document_id = $1'
-
-    // And later in the same route:
-    // Removed: const mimeType = document.mime_type;
-    // Added: res.setHeader('Content-Type', 'application/octet-stream');
-    ```
-
-**Why these changes?**
-
-These are **temporary diagnostic changes** to bypass the "column does not exist" errors that are preventing your `documents.html` page from functioning at all. By removing the problematic columns from the SQL queries, the backend should stop crashing due to those specific missing columns.
-
-This will allow us to:
-1.  Verify if the `documents.html` page can now load and if new documents can be uploaded (without `mime_type` being saved/retrieved).
-2.  **Crucially, confirm that your database migration process on Render is the root cause.** The persistent missing column errors, despite you running `ALTER TABLE` commands, point to an issue with how schema changes are applied and retained in your Render environment.
-
-**Next Steps for you:**
-
-1.  **Replace your current `server.js` file** with the entire code provided in the "server-js-fix" Canvas.
-2.  **Crucial: Force a redeploy/restart of your backend service on Render.** This is the most important step after changing server-side code.
-3.  **Test the `documents.html` page again.**
-    * Check if documents now load (you won't see mime type in the display, and it might show 'Unknown User' for uploader).
-    * Try uploading a new document.
-    * **Inspect your backend logs closely for ANY new errors.**
-
-This step is to unblock the basic functionality of the `documents.html` page. Once it's working without these column errors, we can focus on the *correct* way to perform database migrations on Render to align your schema with your application's expectatio
