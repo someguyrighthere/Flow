@@ -502,4 +502,139 @@ function handleAdminPage() {
                     locDiv.className = "list-item";
                     locDiv.innerHTML = `<span>${loc.location_name} - ${loc.location_address}</span>
                                         <button class="btn-delete" data-type="location" data-id="${loc.location_id}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                        </button>`;
+                    locDiv.addEventListener("click", e => {
+                        if (!e.target.closest(".btn-delete")) {
+                            showModalMessage(`Location: ${loc.location_name} (ID: ${loc.location_id}) - Address: ${loc.location_address}`, false);
+                        }
+                    });
+                    locationListDiv.appendChild(locDiv);
+                });
+                // Populate both admin and employee location selects
+                const locationOptionsHtml = locations.map(loc => `<option value="${loc.location_id}">${loc.location_name}</option>`).join('');
+                if (adminLocationSelect) {
+                    adminLocationSelect.innerHTML = `<option value="">Select a location</option>${locationOptionsHtml}`;
+                }
+                if (employeeLocationSelect) {
+                    employeeLocationSelect.innerHTML = `<option value="">Select a location</option>${locationOptionsHtml}`;
+                }
+            }
+        } catch (error) {
+            console.error("Error loading locations:", error);
+            showModalMessage(`Failed to load locations: ${error.message}`, true);
+        }
+    }
+
+    /**
+     * Fetches and displays the list of users.
+     */
+    async function loadUsers() {
+        if (!userListDiv)
+            return; // Exit if div not found
+        userListDiv.innerHTML = "<p>Loading users...</p>";
+        try {
+            const users = await apiRequest("GET", "/users");
+            userListDiv.innerHTML = "";
+            if (users.length === 0) {
+                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users invited yet.</p>';
+            } else {
+                users.forEach(user => {
+                    const userDiv = document.createElement("div");
+                    userDiv.className = "list-item";
+                    let userInfo = `${user.full_name} - Role: ${user.role}`;
+                    if (user.location_name) {
+                        userInfo += ` @ ${user.location_name}`;
+                    }
+                    userDiv.innerHTML = `<span>${userInfo}</span>
+                                         <button class="btn-delete" data-type="user" data-id="${user.user_id}">
+                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                         </button>`;
+                    userListDiv.appendChild(userDiv);
+                });
+            }
+        } catch (error) {
+            console.error("Error loading users:", error);
+            userListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading users: ${error.message}</p>`;
+        }
+    }
+
+    // Event listener for delete buttons (delegated to body for dynamically added elements)
+    document.body.addEventListener("click", async e => {
+        const targetButton = e.target.closest(".btn-delete");
+        if (targetButton) {
+            console.log("handleAdminPage: Delete button clicked.");
+            const id = targetButton.dataset.id;
+            const type = targetButton.dataset.type; // 'location' or 'user'
+            const confirmationMessage = `Are you sure you want to delete this ${type}? This action cannot be undone.`;
+            const confirmed = await showConfirmModal(confirmationMessage, "Delete");
+
+            if (confirmed) {
+                try {
+                    console.log(`handleAdminPage: Deleting ${type} with ID: ${id}.`);
+                    if (type === "location") {
+                        await apiRequest("DELETE", `/locations/${id}`);
+                        showModalMessage("Location deleted successfully!", false);
+                        loadLocations(); // Reload locations list
+                        loadUsers();     // Reload users list as some might be linked to this location
+                    } else if (type === "user") {
+                        await apiRequest("DELETE", `/users/${id}`);
+                        showModalMessage("User deleted successfully!", false);
+                        loadUsers(); // Reload users list
+                    }
+                    console.log(`handleAdminPage: ${type} deleted successfully.`);
+                } catch (error) {
+                    showModalMessage(`Error deleting ${type}: ${error.message}`, true);
+                }
+            }
+        }
+    });
+
+    // Handle new location form submission
+    if (newLocationForm) {
+        console.log("handleAdminPage: New location form found, attaching listener.");
+        newLocationForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            console.log("handleAdminPage: New location form submitted.");
+            const nameInput = document.getElementById("new-location-name");
+            const addressInput = document.getElementById("new-location-address");
+            const location_name = nameInput.value.trim();
+            const location_address = addressInput.value.trim();
+
+            try {
+                console.log("handleAdminPage: Creating location via API.");
+                await apiRequest("POST", "/locations", {
+                    location_name: location_name,
+                    location_address: location_address
+                });
+                nameInput.value = ""; // Clear form
+                addressInput.value = ""; // Clear form
+                showModalMessage("Location created successfully!", false);
+                console.log("handleAdminPage: Location created, reloading lists.");
+                loadLocations(); // Reload locations to show new entry
+            } catch (error) {
+                console.error("Error creating location:", error);
+                showModalMessage(`Error creating location: ${error.message}`, true);
+            }
+        });
+    }
+
+    // Handle invite admin form submission
+    if (inviteAdminForm) {
+        console.log("handleAdminPage: Invite admin form found, attaching listener.");
+        inviteAdminForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            console.log("handleAdminPage: Invite admin form submitted.");
+            const adminName = document.getElementById("admin-name") ? document.getElementById("admin-name").value.trim() : "";
+            const adminEmail = document.getElementById("admin-email") ? document.getElementById("admin-email").value.trim() : "";
+            const adminPassword = document.getElementById("admin-password") ? document.getElementById("admin-password").value : "";
+            const adminLocationSelectElement = document.getElementById("admin-location-select");
+            const adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : "";
+```
+
+**Step 1: Replace your `app.js` file** with the content from the "Updated app.js (Final Document Management Logic)" Canvas above.
+**Step 2: Rebuild `app.min.js`**: Open your terminal in your project's root directory and run `npm run build:js`. This is crucial to get the latest JavaScript into your minified file.
+**Step 3: Commit and Deploy**: Push your updated `app.js` (and the resulting `app.min.js`) to your GitHub repository, and trigger a new deploy on Render.
+**Step 4: Clear Browser Cache**: Perform a hard refresh and clear all site data in your browser's developer tools for your application's domain.
+
+After these steps, your "Upload Document" button should now trigger the backend upload process, and documents should appear in the "Your Uploaded Documents" section once successfully upload
