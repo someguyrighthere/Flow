@@ -8,15 +8,7 @@ const API_BASE_URL = 'https://flow-gz1r.onrender.com';
 
 // Initialize Stripe.js with your public key
 // This key should be retrieved from your backend or securely stored in your client-side config.
-// The Stripe object is defined by the Stripe.js script loaded in pricing.html.
-let stripe; // Declare as 'let' because it will be initialized conditionally
-
-// Add a check to ensure Stripe is defined before initializing
-if (typeof Stripe !== 'undefined') {
-    stripe = Stripe('pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td');
-} else {
-    console.warn("Stripe.js not loaded. Stripe functionalities will not work on this page.");
-}
+const stripe = Stripe('pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td');
 
 
 /**
@@ -464,7 +456,7 @@ function handleAdminPage() {
                     locDiv.className = "list-item";
                     locDiv.innerHTML = `<span>${loc.location_name} - ${loc.location_address}</span>
                                         <button class="btn-delete" data-type="location" data-id="${loc.location_id}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                                         </button>`;
                     locDiv.addEventListener("click", e => {
                         if (!e.target.closest(".btn-delete")) {
@@ -510,7 +502,7 @@ function handleAdminPage() {
                     }
                     userDiv.innerHTML = `<span>${userInfo}</span>
                                          <button class="btn-delete" data-type="user" data-id="${user.user_id}">
-                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                                          </button>`;
                     userListDiv.appendChild(userDiv);
                 });
@@ -721,17 +713,11 @@ function handlePricingPage() {
     /**
      * Centralized function to initiate Stripe Checkout.
      * @param {string} planId - The ID of the plan to subscribe to ('pro' or 'enterprise').
+     * @param {string} token - The authentication token of the user.
      */
-    async function initiateStripeCheckout(planId) {
+    async function initiateStripeCheckout(planId, token) {
         console.log(`initiateStripeCheckout: Proceeding with checkout for plan: ${planId}`);
         try {
-            // Check if stripe object is defined. It should be on pricing.html due to script order.
-            if (typeof stripe === 'undefined' || stripe === null) {
-                console.error("Stripe object is not initialized. Cannot proceed with checkout.");
-                showModalMessage("Payment processing is unavailable. Please refresh the page.", true);
-                return;
-            }
-
             // Call backend to create a Stripe Checkout Session
             // The apiRequest function will automatically include the token in headers
             const response = await apiRequest("POST", "/create-checkout-session", {
@@ -791,12 +777,12 @@ function handlePricingPage() {
             document.getElementById('reg-full-name').value = '';
             document.getElementById('reg-email').value = '';
             document.getElementById('reg-password').value = '';
-            return; // Stop execution, user needs to interact with modal
+            return; // Stop execution here, user needs to interact with modal
         }
 
         // If user is already logged in, proceed directly to Stripe checkout
         console.log("handlePricingPage: Auth token found, proceeding directly with checkout.");
-        await initiateStripeCheckout(planId);
+        await initiateStripeCheckout(planId, authToken);
     };
 
     // Attach click listeners to Pro and Enterprise plan buttons
@@ -842,7 +828,7 @@ function handlePricingPage() {
 
                 if (registerResponse) {
                     console.log("Registration successful. Now attempting to log in the new user to get an auth token for checkout.");
-                    // After successful registration, immediately log in to get a token
+                    // After successful registration, immediately log in to get a token for the new user
                     const loginResponse = await apiRequest("POST", "/login", {
                         email: email,
                         password: password
@@ -856,12 +842,13 @@ function handlePricingPage() {
                         showModalMessage("Account created successfully! Redirecting to payment...", false);
 
                         // Proceed to Stripe checkout with the newly acquired token and the previously selected plan
-                        await initiateStripeCheckout(selectedPlanForRegistration);
+                        await initiateStripeCheckout(selectedPlanForRegistration, loginResponse.token);
                     } else {
-                        throw new Error("Failed to log in after registration. Please try logging in manually.");
+                        // This case should ideally not happen if registration was successful, but good for robust error handling
+                        throw new Error("Failed to log in after successful registration. Please try logging in manually.");
                     }
                 } else {
-                    // This case is unlikely with the current apiRequest implementation which throws on !response.ok
+                    // This implies the API returned a non-OK status, but didn't throw an error with errorData (unlikely with current apiRequest)
                     throw new Error("Registration failed unexpectedly. Please try again.");
                 }
             } catch (error) {
