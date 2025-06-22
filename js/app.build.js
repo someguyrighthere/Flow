@@ -605,6 +605,8 @@ function handleAccountPage() {
           case 1:
             profile = _context5.v;
             if (displayProfileName) displayProfileName.textContent = profile.fullName || "N/A";
+            if (displayProfileEmail) displayProfileEmail.textContent = profile.email || "N/A";
+            if (profileNameInput) profileNameInput.value = profile.fullName || "";
             if (profileEmailInput) profileEmailInput.value = profile.email || "";
             _context5.n = 3;
             break;
@@ -1944,7 +1946,7 @@ function handlePricingPage() {
   }
   // Close modal if clicking outside
   if (registerCheckoutModalOverlay) {
-    registerCheckoutModalOverlay.addEventListener("click", function (event) {
+    regCheckoutModalOverlay.addEventListener("click", function (event) {
       if (event.target === registerCheckoutModalOverlay) {
         registerCheckoutModalOverlay.style.display = "none";
         currentSelectedPlan = null;
