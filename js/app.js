@@ -849,14 +849,39 @@ function handleChecklistsPage() {
     const timeGroupCountLabel = document.getElementById("time-group-count-label");
     const tasksInputArea = document.getElementById("tasks-input-area");
 
-    let taskCounter = 0;
+    // Elements for the Edit Checklist Modal
+    const editChecklistModalOverlay = document.getElementById("edit-checklist-modal-overlay");
+    const editChecklistIdInput = document.getElementById("edit-checklist-id");
+    const editChecklistPositionInput = document.getElementById("edit-checklist-position");
+    const editChecklistTitleInput = document.getElementById("edit-checklist-title");
+    const editStructureTypeSelect = document.getElementById("edit-structure-type-select");
+    const editTimeGroupCountContainer = document.getElementById("edit-time-group-count-container");
+    const editTimeGroupCountInput = document.getElementById("edit-time-group-count");
+    const editTimeGroupCountLabel = document.getElementById("edit-time-group-count-label");
+    const editTasksInputArea = document.getElementById("edit-tasks-input-area");
+    const addEditTaskBtn = document.getElementById("add-edit-task-btn");
+    const editChecklistCancelBtn = document.getElementById("edit-checklist-cancel-btn");
+    const editChecklistForm = document.getElementById("edit-checklist-form");
 
-    function addSingleTaskInput(container, taskId = null, taskText = '') {
+
+    let taskCounter = 0; // For new checklist creation
+    let editTaskCounter = 0; // For edit checklist modal
+
+    /**
+     * Adds a single task input field.
+     * @param {HTMLElement} container - The container to add the input to.
+     * @param {string|number} taskId - Optional ID for the task input. Used primarily for existing tasks.
+     * @param {string} taskText - Optional initial text for the task.
+     * @param {boolean} isCompleted - Optional initial completed status for the task. (Note: currently tasks are always saved as `completed:false` from edit modal for simplicity).
+     */
+    function addSingleTaskInput(container, taskId = null, taskText = '', isCompleted = false) {
         const div = document.createElement('div');
         div.className = 'form-group task-input-group';
+        // Use a unique ID for the input field to prevent conflicts across multiple forms/modals
+        const uniqueInputId = `task-input-${container.id}-${taskId || (container.id === 'tasks-input-area' ? taskCounter++ : editTaskCounter++)}`;
         div.innerHTML = `
-            <label for="task-${taskId || taskCounter}">Task Description</label>
-            <input type="text" id="task-${taskId || taskCounter}" class="task-description-input" value="${taskText}" placeholder="e.g., Complete HR paperwork" required>
+            <label for="${uniqueInputId}">Task Description</label>
+            <input type="text" id="${uniqueInputId}" class="task-description-input" value="${taskText}" placeholder="e.g., Complete HR paperwork" required>
             <button type="button" class="btn btn-secondary remove-task-btn" style="margin-top: 5px;">Remove</button>
         `;
         container.appendChild(div);
@@ -864,11 +889,11 @@ function handleChecklistsPage() {
         div.querySelector('.remove-task-btn').addEventListener('click', () => {
             div.remove();
         });
-        taskCounter++;
     }
 
-    function renderTaskInputs() {
-        tasksInputArea.innerHTML = '';
+    // Function to dynamically render task input fields for the NEW checklist form
+    function renderNewChecklistTaskInputs() {
+        tasksInputArea.innerHTML = ''; // Clear previous inputs
         const structureType = structureTypeSelect.value;
         const groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
 
@@ -894,7 +919,7 @@ function handleChecklistsPage() {
                 tasksInputArea.appendChild(groupContainer);
 
                 const tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
-                addSingleTaskInput(tasksInGroupDiv);
+                addSingleTaskInput(tasksInGroupDiv); // Add one task by default
 
                 groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', (event) => {
                     const targetGroupIndex = event.target.dataset.groupIndex;
@@ -907,6 +932,55 @@ function handleChecklistsPage() {
         }
     }
 
+    // Function to dynamically render task input fields for the EDIT checklist form
+    function renderEditChecklistTaskInputs(tasksData, structureType, groupCount) {
+        editTasksInputArea.innerHTML = ''; // Clear previous inputs
+        editTaskCounter = 0; // Reset counter for edit modal
+
+        if (structureType === 'single_list') {
+            if (tasksData && tasksData.length > 0) {
+                tasksData.forEach(task => {
+                    addSingleTaskInput(editTasksInputArea, task.id, task.description, task.completed);
+                });
+            } else {
+                addSingleTaskInput(editTasksInputArea); // Add at least one empty task input
+            }
+        } else { // 'daily' or 'weekly'
+            for (let i = 0; i < groupCount; i++) {
+                const groupTitle = structureType === 'daily' ? `Day ${i + 1}` : `Week ${i + 1}`;
+                const groupContainer = document.createElement('div');
+                groupContainer.className = 'card time-group-container';
+                groupContainer.innerHTML = `
+                    <h4 style="color: var(--text-light); margin-top: 0;'>${groupTitle}</h4>
+                    <div class="tasks-in-group" data-group-index="${i}"></div>
+                    <button type="button" class="btn btn-secondary add-task-to-group-btn" style="margin-top: 10px;" data-group-index="${i}">Add Task to ${groupTitle} +</button>
+                `;
+                editTasksInputArea.appendChild(groupContainer);
+
+                const tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
+                const currentGroupTasks = tasksData[i] && tasksData[i].tasks ? tasksData[i].tasks : [];
+
+                if (currentGroupTasks.length > 0) {
+                    currentGroupTasks.forEach(task => {
+                        addSingleTaskInput(tasksInGroupDiv, task.id, task.description, task.completed);
+                    });
+                } else {
+                    addSingleTaskInput(tasksInGroupDiv); // Add at least one empty task input
+                }
+
+                groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', (event) => {
+                    const targetGroupIndex = event.target.dataset.groupIndex;
+                    const targetGroupDiv = editTasksInputArea.querySelector(`.tasks-in-group[data-group-index="${targetGroupIndex}"]`);
+                    if (targetGroupDiv) {
+                        addSingleTaskInput(targetGroupDiv);
+                    }
+                });
+            }
+        }
+    }
+
+
+    // Event listener for structure type change (for NEW checklist form)
     if (structureTypeSelect) {
         structureTypeSelect.addEventListener('change', () => {
             const type = structureTypeSelect.value;
@@ -916,16 +990,21 @@ function handleChecklistsPage() {
             } else {
                 timeGroupCountContainer.style.display = 'none';
             }
-            renderTaskInputs();
+            renderNewChecklistTaskInputs(); // Re-render tasks based on new structure
         });
     }
 
+    // Event listener for time group count change (for NEW checklist form)
     if (timeGroupCountInput) {
-        timeGroupCountInput.addEventListener('input', renderTaskInputs);
+        timeGroupCountInput.addEventListener('input', renderNewChecklistTaskInputs);
     }
 
-    renderTaskInputs();
+    // Initial render of task inputs for NEW checklist form
+    renderNewChecklistTaskInputs();
 
+    /**
+     * Loads and displays existing task lists.
+     */
     async function loadChecklists() {
         if (!checklistListDiv) return;
         checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
@@ -952,7 +1031,9 @@ function handleChecklistsPage() {
                     checklistListDiv.appendChild(checklistItem);
                 });
 
-                // Attach click listeners using event delegation on the checklistListDiv
+                // --- Event Delegation for Checklist Items ---
+                // We attach a single click listener to the parent container (checklistListDiv)
+                // and then determine which button was clicked based on its class.
                 checklistListDiv.addEventListener('click', async (event) => {
                     const viewButton = event.target.closest('.view-checklist-btn');
                     const deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
@@ -960,8 +1041,37 @@ function handleChecklistsPage() {
                     if (viewButton) {
                         event.stopPropagation(); // Prevent clicks on view button from bubbling up
                         const checklistId = viewButton.dataset.checklistId;
-                        showModalMessage(`Viewing/Editing Checklist ID: ${checklistId} (Functionality to be implemented)`, false);
-                        // Future: Implement actual modal or page navigation for editing
+                        
+                        // Fetch checklist details and open the edit modal
+                        try {
+                            const checklistDetails = await apiRequest("GET", `/checklists/${checklistId}`);
+                            if (checklistDetails) {
+                                editChecklistIdInput.value = checklistDetails.id;
+                                editChecklistPositionInput.value = checklistDetails.position;
+                                editChecklistTitleInput.value = checklistDetails.title;
+                                editStructureTypeSelect.value = checklistDetails.structure_type;
+
+                                // Show/hide time group count based on structure type
+                                if (checklistDetails.structure_type === 'daily' || checklistDetails.structure_type === 'weekly') {
+                                    editTimeGroupCountContainer.style.display = 'block';
+                                    editTimeGroupCountInput.value = checklistDetails.group_count;
+                                    editTimeGroupCountLabel.textContent = `Number of ${checklistDetails.structure_type === 'daily' ? 'Days' : 'Weeks'}`;
+                                } else {
+                                    editTimeGroupCountContainer.style.display = 'none';
+                                }
+                                
+                                // Render tasks in the edit modal
+                                renderEditChecklistTaskInputs(checklistDetails.tasks, checklistDetails.structure_type, checklistDetails.group_count);
+
+                                editChecklistModalOverlay.style.display = 'flex'; // Show the modal
+                            } else {
+                                showModalMessage('Checklist details not found.', true);
+                            }
+                        } catch (error) {
+                            console.error('Error fetching checklist details:', error);
+                            showModalMessage(`Failed to load checklist details: ${error.message}`, true);
+                        }
+
                     } else if (deleteButton) {
                         event.stopPropagation(); // Prevent clicks on delete button from bubbling up
                         const checklistId = deleteButton.dataset.id;
@@ -987,6 +1097,7 @@ function handleChecklistsPage() {
         }
     }
 
+    // Event listeners for the NEW checklist form submission
     if (newChecklistForm) {
         newChecklistForm.addEventListener("submit", async e => {
             e.preventDefault();
@@ -1033,15 +1144,123 @@ function handleChecklistsPage() {
 
                 showModalMessage(`Task List "${title}" created successfully!`, false);
                 newChecklistForm.reset();
-                renderTaskInputs();
-                loadChecklists();
+                renderNewChecklistTaskInputs(); // Reset task inputs for new form
+                loadChecklists(); // Reload the list of checklists
             } catch (error) {
                 showModalMessage(`Error creating task list: ${error.message}`, true);
             }
         });
     }
 
-    loadChecklists();
+    // Event listeners for EDIT checklist modal
+    if (editChecklistCancelBtn) {
+        editChecklistCancelBtn.addEventListener('click', () => {
+            editChecklistModalOverlay.style.display = 'none';
+        });
+    }
+
+    if (editChecklistModalOverlay) {
+        editChecklistModalOverlay.addEventListener('click', (event) => {
+            if (event.target === editChecklistModalOverlay) {
+                editChecklistModalOverlay.style.display = 'none';
+            }
+        });
+    }
+
+    if (editStructureTypeSelect) {
+        editStructureTypeSelect.addEventListener('change', () => {
+            const type = editStructureTypeSelect.value;
+            if (type === 'daily' || type === 'weekly') {
+                editTimeGroupCountContainer.style.display = 'block';
+                editTimeGroupCountInput.value = '1'; // Reset to 1 when changing type
+                editTimeGroupCountLabel.textContent = `Number of ${type === 'daily' ? 'Days' : 'Weeks'}`;
+            } else {
+                editTimeGroupCountContainer.style.display = 'none';
+            }
+            renderEditChecklistTaskInputs([], type, parseInt(editTimeGroupCountInput.value, 10)); // Re-render tasks based on new structure
+        });
+    }
+
+    if (editTimeGroupCountInput) {
+        editTimeGroupCountInput.addEventListener('input', () => {
+            renderEditChecklistTaskInputs([], editStructureTypeSelect.value, parseInt(editTimeGroupCountInput.value, 10));
+        });
+    }
+
+    if (addEditTaskBtn) {
+        addEditTaskBtn.addEventListener('click', () => {
+            const structureType = editStructureTypeSelect.value;
+            if (structureType === 'single_list') {
+                addSingleTaskInput(editTasksInputArea);
+            } else {
+                const lastGroup = editTasksInputArea.querySelector('.tasks-in-group:last-child');
+                if (lastGroup) {
+                    addSingleTaskInput(lastGroup);
+                } else {
+                    // This scenario should ideally not happen if groups are always rendered.
+                    // But as a fallback, add to the main area.
+                    addSingleTaskInput(editTasksInputArea);
+                }
+            }
+        });
+    }
+
+    if (editChecklistForm) {
+        editChecklistForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            const checklistId = editChecklistIdInput.value;
+            const position = editChecklistPositionInput.value.trim();
+            const title = editChecklistTitleInput.value.trim();
+            const structure_type = editStructureTypeSelect.value;
+            const group_count = (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(editTimeGroupCountInput.value, 10) : 0;
+
+            let tasks = [];
+            if (structure_type === 'single_list') {
+                editTasksInputArea.querySelectorAll('.task-description-input').forEach(input => {
+                    if (input.value.trim()) {
+                        tasks.push({ description: input.value.trim(), completed: false }); // Assume not completed on edit for simplicity, or add checkbox
+                    }
+                });
+            } else {
+                editTasksInputArea.querySelectorAll('.tasks-in-group').forEach((groupDiv, index) => {
+                    const groupTasks = [];
+                    groupDiv.querySelectorAll('.task-description-input').forEach(input => {
+                        if (input.value.trim()) {
+                            groupTasks.push({ description: input.value.trim(), completed: false });
+                        }
+                    });
+                    tasks.push({
+                        groupTitle: structure_type === 'daily' ? `Day ${index + 1}` : `Week ${index + 1}`,
+                        tasks: groupTasks
+                    });
+                });
+            }
+
+            if (!position || !title || tasks.length === 0 || (structure_type !== 'single_list' && tasks.every(group => group.tasks.length === 0))) {
+                showModalMessage("Please provide a position, title, and at least one task for the checklist.", true);
+                return;
+            }
+
+            try {
+                await apiRequest("PUT", `/checklists/${checklistId}`, {
+                    position: position,
+                    title: title,
+                    structure_type: structure_type,
+                    group_count: group_count,
+                    tasks: tasks
+                });
+
+                showModalMessage(`Task List "${title}" updated successfully!`, false);
+                editChecklistModalOverlay.style.display = 'none'; // Hide modal
+                loadChecklists(); // Reload the list of checklists
+            } catch (error) {
+                showModalMessage(`Error updating task list: ${error.message}`, true);
+            }
+        });
+    }
+
+
+    loadChecklists(); // Initial load of checklists when the page loads
 }
 
 /**
@@ -1215,7 +1434,7 @@ function handlePricingPage() {
 
     if (freePlanBtn) {
         freePlanBtn.addEventListener("click", async () => {
-            const userRole = localStorage.getItem("authToken"); // Should be userRole not authToken for this check
+            const userRole = localStorage.getItem("userRole"); 
             if (userRole) {
                 const profile = await apiRequest("GET", "/profile");
                 if (profile && profile.plan_id === 'free') {
@@ -1804,10 +2023,8 @@ function handleSchedulingPage() {
     }
 
     if (nextWeekBtn) {
-        nextWeekBtn.addEventListener("click", () => {
-            currentWeekStart.add(1, 'isoWeek');
-            renderCalendar();
-        });
+        nextWeekStart.add(1, 'isoWeek');
+        renderCalendar();
     }
 
     if (createShiftForm) {

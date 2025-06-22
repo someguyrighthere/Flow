@@ -198,7 +198,7 @@ function apiRequest(_x2, _x3) {
  * Handles all client-side logic for the login.html page.
  */
 function _apiRequest() {
-  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee32(method, path) {
+  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee33(method, path) {
     var body,
       isFormData,
       onProgress,
@@ -208,22 +208,22 @@ function _apiRequest() {
       options,
       response,
       errorData,
-      _args32 = arguments,
-      _t31;
-    return _regenerator().w(function (_context32) {
-      while (1) switch (_context32.n) {
+      _args33 = arguments,
+      _t33;
+    return _regenerator().w(function (_context33) {
+      while (1) switch (_context33.n) {
         case 0:
-          body = _args32.length > 2 && _args32[2] !== undefined ? _args32[2] : null;
-          isFormData = _args32.length > 3 && _args32[3] !== undefined ? _args32[3] : false;
-          onProgress = _args32.length > 4 && _args32[4] !== undefined ? _args32[4] : null;
-          expectBlobResponse = _args32.length > 5 && _args32[5] !== undefined ? _args32[5] : false;
+          body = _args33.length > 2 && _args33[2] !== undefined ? _args33[2] : null;
+          isFormData = _args33.length > 3 && _args33[3] !== undefined ? _args33[3] : false;
+          onProgress = _args33.length > 4 && _args33[4] !== undefined ? _args33[4] : null;
+          expectBlobResponse = _args33.length > 5 && _args33[5] !== undefined ? _args33[5] : false;
           token = localStorage.getItem('authToken');
           endpoint = "".concat(API_BASE_URL).concat(path); // For FormData, use XMLHttpRequest for progress tracking
           if (!isFormData) {
-            _context32.n = 1;
+            _context33.n = 1;
             break;
           }
-          return _context32.a(2, new Promise(function (resolve, reject) {
+          return _context33.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
             if (token) {
@@ -287,12 +287,12 @@ function _apiRequest() {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
           }
-          _context32.n = 2;
+          _context33.n = 2;
           return fetch(endpoint, options);
         case 2:
-          response = _context32.v;
+          response = _context33.v;
           if (!(response.status === 401 || response.status === 403)) {
-            _context32.n = 3;
+            _context33.n = 3;
             break;
           }
           localStorage.removeItem('authToken');
@@ -302,37 +302,37 @@ function _apiRequest() {
           throw new Error('Authentication token missing or invalid.');
         case 3:
           if (response.ok) {
-            _context32.n = 7;
+            _context33.n = 7;
             break;
           }
-          _context32.p = 4;
-          _context32.n = 5;
+          _context33.p = 4;
+          _context33.n = 5;
           return response.json();
         case 5:
-          errorData = _context32.v;
+          errorData = _context33.v;
           throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
         case 6:
-          _context32.p = 6;
-          _t31 = _context32.v;
+          _context33.p = 6;
+          _t33 = _context33.v;
           throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
         case 7:
           if (!expectBlobResponse) {
-            _context32.n = 8;
+            _context33.n = 8;
             break;
           }
-          return _context32.a(2, response.blob());
+          return _context33.a(2, response.blob());
         case 8:
           if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
-            _context32.n = 9;
+            _context33.n = 9;
             break;
           }
-          return _context32.a(2, null);
+          return _context33.a(2, null);
         case 9:
-          return _context32.a(2, response.json());
+          return _context33.a(2, response.json());
         case 10:
-          return _context32.a(2);
+          return _context33.a(2);
       }
-    }, _callee32, null, [[4, 6]]);
+    }, _callee33, null, [[4, 6]]);
   }));
   return _apiRequest.apply(this, arguments);
 }
@@ -1134,21 +1134,48 @@ function handleChecklistsPage() {
   var timeGroupCountInput = document.getElementById("time-group-count");
   var timeGroupCountLabel = document.getElementById("time-group-count-label");
   var tasksInputArea = document.getElementById("tasks-input-area");
-  var taskCounter = 0;
+
+  // Elements for the Edit Checklist Modal
+  var editChecklistModalOverlay = document.getElementById("edit-checklist-modal-overlay");
+  var editChecklistIdInput = document.getElementById("edit-checklist-id");
+  var editChecklistPositionInput = document.getElementById("edit-checklist-position");
+  var editChecklistTitleInput = document.getElementById("edit-checklist-title");
+  var editStructureTypeSelect = document.getElementById("edit-structure-type-select");
+  var editTimeGroupCountContainer = document.getElementById("edit-time-group-count-container");
+  var editTimeGroupCountInput = document.getElementById("edit-time-group-count");
+  var editTimeGroupCountLabel = document.getElementById("edit-time-group-count-label");
+  var editTasksInputArea = document.getElementById("edit-tasks-input-area");
+  var addEditTaskBtn = document.getElementById("add-edit-task-btn");
+  var editChecklistCancelBtn = document.getElementById("edit-checklist-cancel-btn");
+  var editChecklistForm = document.getElementById("edit-checklist-form");
+  var taskCounter = 0; // For new checklist creation
+  var editTaskCounter = 0; // For edit checklist modal
+
+  /**
+   * Adds a single task input field.
+   * @param {HTMLElement} container - The container to add the input to.
+   * @param {string|number} taskId - Optional ID for the task input. Used primarily for existing tasks.
+   * @param {string} taskText - Optional initial text for the task.
+   * @param {boolean} isCompleted - Optional initial completed status for the task. (Note: currently tasks are always saved as `completed:false` from edit modal for simplicity).
+   */
   function addSingleTaskInput(container) {
     var taskId = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
     var taskText = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : '';
+    var isCompleted = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : false;
     var div = document.createElement('div');
     div.className = 'form-group task-input-group';
-    div.innerHTML = "\n            <label for=\"task-".concat(taskId || taskCounter, "\">Task Description</label>\n            <input type=\"text\" id=\"task-").concat(taskId || taskCounter, "\" class=\"task-description-input\" value=\"").concat(taskText, "\" placeholder=\"e.g., Complete HR paperwork\" required>\n            <button type=\"button\" class=\"btn btn-secondary remove-task-btn\" style=\"margin-top: 5px;\">Remove</button>\n        ");
+    // Use a unique ID for the input field to prevent conflicts across multiple forms/modals
+    var uniqueInputId = "task-input-".concat(container.id, "-").concat(taskId || (container.id === 'tasks-input-area' ? taskCounter++ : editTaskCounter++));
+    div.innerHTML = "\n            <label for=\"".concat(uniqueInputId, "\">Task Description</label>\n            <input type=\"text\" id=\"").concat(uniqueInputId, "\" class=\"task-description-input\" value=\"").concat(taskText, "\" placeholder=\"e.g., Complete HR paperwork\" required>\n            <button type=\"button\" class=\"btn btn-secondary remove-task-btn\" style=\"margin-top: 5px;\">Remove</button>\n        ");
     container.appendChild(div);
     div.querySelector('.remove-task-btn').addEventListener('click', function () {
       div.remove();
     });
-    taskCounter++;
   }
-  function renderTaskInputs() {
-    tasksInputArea.innerHTML = '';
+
+  // Function to dynamically render task input fields for the NEW checklist form
+  function renderNewChecklistTaskInputs() {
+    tasksInputArea.innerHTML = ''; // Clear previous inputs
     var structureType = structureTypeSelect.value;
     var groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
     if (structureType === 'single_list') {
@@ -1170,7 +1197,8 @@ function handleChecklistsPage() {
         groupContainer.innerHTML = "\n                    <h4 style=\"color: var(--text-light); margin-top: 0;'>".concat(groupTitle, "</h4>\n                    <div class=\"tasks-in-group\" data-group-index=\"").concat(i, "\"></div>\n                    <button type=\"button\" class=\"btn btn-secondary add-task-to-group-btn\" style=\"margin-top: 10px;\" data-group-index=\"").concat(i, "\">Add Task to ").concat(groupTitle, " +</button>\n                ");
         tasksInputArea.appendChild(groupContainer);
         var tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
-        addSingleTaskInput(tasksInGroupDiv);
+        addSingleTaskInput(tasksInGroupDiv); // Add one task by default
+
         groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', function (event) {
           var targetGroupIndex = event.target.dataset.groupIndex;
           var targetGroupDiv = tasksInputArea.querySelector(".tasks-in-group[data-group-index=\"".concat(targetGroupIndex, "\"]"));
@@ -1181,6 +1209,52 @@ function handleChecklistsPage() {
       }
     }
   }
+
+  // Function to dynamically render task input fields for the EDIT checklist form
+  function renderEditChecklistTaskInputs(tasksData, structureType, groupCount) {
+    editTasksInputArea.innerHTML = ''; // Clear previous inputs
+    editTaskCounter = 0; // Reset counter for edit modal
+
+    if (structureType === 'single_list') {
+      if (tasksData && tasksData.length > 0) {
+        tasksData.forEach(function (task) {
+          addSingleTaskInput(editTasksInputArea, task.id, task.description, task.completed);
+        });
+      } else {
+        addSingleTaskInput(editTasksInputArea); // Add at least one empty task input
+      }
+    } else {
+      var _loop = function _loop() {
+        var groupTitle = structureType === 'daily' ? "Day ".concat(i + 1) : "Week ".concat(i + 1);
+        var groupContainer = document.createElement('div');
+        groupContainer.className = 'card time-group-container';
+        groupContainer.innerHTML = "\n                    <h4 style=\"color: var(--text-light); margin-top: 0;'>".concat(groupTitle, "</h4>\n                    <div class=\"tasks-in-group\" data-group-index=\"").concat(i, "\"></div>\n                    <button type=\"button\" class=\"btn btn-secondary add-task-to-group-btn\" style=\"margin-top: 10px;\" data-group-index=\"").concat(i, "\">Add Task to ").concat(groupTitle, " +</button>\n                ");
+        editTasksInputArea.appendChild(groupContainer);
+        var tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
+        var currentGroupTasks = tasksData[i] && tasksData[i].tasks ? tasksData[i].tasks : [];
+        if (currentGroupTasks.length > 0) {
+          currentGroupTasks.forEach(function (task) {
+            addSingleTaskInput(tasksInGroupDiv, task.id, task.description, task.completed);
+          });
+        } else {
+          addSingleTaskInput(tasksInGroupDiv); // Add at least one empty task input
+        }
+        groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', function (event) {
+          var targetGroupIndex = event.target.dataset.groupIndex;
+          var targetGroupDiv = editTasksInputArea.querySelector(".tasks-in-group[data-group-index=\"".concat(targetGroupIndex, "\"]"));
+          if (targetGroupDiv) {
+            addSingleTaskInput(targetGroupDiv);
+          }
+        });
+      };
+      // 'daily' or 'weekly'
+      for (var i = 0; i < groupCount; i++) {
+        _loop();
+      }
+    }
+  }
+
+  // Event listener for structure type change (for NEW checklist form)
   if (structureTypeSelect) {
     structureTypeSelect.addEventListener('change', function () {
       var type = structureTypeSelect.value;
@@ -1190,34 +1264,42 @@ function handleChecklistsPage() {
       } else {
         timeGroupCountContainer.style.display = 'none';
       }
-      renderTaskInputs();
+      renderNewChecklistTaskInputs(); // Re-render tasks based on new structure
     });
   }
+
+  // Event listener for time group count change (for NEW checklist form)
   if (timeGroupCountInput) {
-    timeGroupCountInput.addEventListener('input', renderTaskInputs);
+    timeGroupCountInput.addEventListener('input', renderNewChecklistTaskInputs);
   }
-  renderTaskInputs();
+
+  // Initial render of task inputs for NEW checklist form
+  renderNewChecklistTaskInputs();
+
+  /**
+   * Loads and displays existing task lists.
+   */
   function loadChecklists() {
     return _loadChecklists.apply(this, arguments);
-  }
+  } // Event listeners for the NEW checklist form submission
   function _loadChecklists() {
-    _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13() {
-      var checklists, _t13;
-      return _regenerator().w(function (_context13) {
-        while (1) switch (_context13.n) {
+    _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14() {
+      var checklists, _t15;
+      return _regenerator().w(function (_context14) {
+        while (1) switch (_context14.n) {
           case 0:
             if (checklistListDiv) {
-              _context13.n = 1;
+              _context14.n = 1;
               break;
             }
-            return _context13.a(2);
+            return _context14.a(2);
           case 1:
             checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
-            _context13.p = 2;
-            _context13.n = 3;
+            _context14.p = 2;
+            _context14.n = 3;
             return apiRequest("GET", "/checklists");
           case 3:
-            checklists = _context13.v;
+            checklists = _context14.v;
             checklistListDiv.innerHTML = '';
             if (checklists && checklists.length > 0) {
               checklists.forEach(function (checklist) {
@@ -1227,75 +1309,109 @@ function handleChecklistsPage() {
                 checklistListDiv.appendChild(checklistItem);
               });
 
-              // Attach click listeners using event delegation on the checklistListDiv
+              // --- Event Delegation for Checklist Items ---
+              // We attach a single click listener to the parent container (checklistListDiv)
+              // and then determine which button was clicked based on its class.
               checklistListDiv.addEventListener('click', /*#__PURE__*/function () {
-                var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12(event) {
-                  var viewButton, deleteButton, checklistId, _checklistId, _confirmed2, _t12;
-                  return _regenerator().w(function (_context12) {
-                    while (1) switch (_context12.n) {
+                var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13(event) {
+                  var viewButton, deleteButton, checklistId, checklistDetails, _checklistId, _confirmed2, _t13, _t14;
+                  return _regenerator().w(function (_context13) {
+                    while (1) switch (_context13.n) {
                       case 0:
                         viewButton = event.target.closest('.view-checklist-btn');
                         deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
                         if (!viewButton) {
-                          _context12.n = 1;
+                          _context13.n = 5;
                           break;
                         }
                         event.stopPropagation(); // Prevent clicks on view button from bubbling up
-                        checklistId = viewButton.dataset.checklistId;
-                        showModalMessage("Viewing/Editing Checklist ID: ".concat(checklistId, " (Functionality to be implemented)"), false);
-                        // Future: Implement actual modal or page navigation for editing
-                        _context12.n = 6;
+                        checklistId = viewButton.dataset.checklistId; // Fetch checklist details and open the edit modal
+                        _context13.p = 1;
+                        _context13.n = 2;
+                        return apiRequest("GET", "/checklists/".concat(checklistId));
+                      case 2:
+                        checklistDetails = _context13.v;
+                        if (checklistDetails) {
+                          editChecklistIdInput.value = checklistDetails.id;
+                          editChecklistPositionInput.value = checklistDetails.position;
+                          editChecklistTitleInput.value = checklistDetails.title;
+                          editStructureTypeSelect.value = checklistDetails.structure_type;
+
+                          // Show/hide time group count based on structure type
+                          if (checklistDetails.structure_type === 'daily' || checklistDetails.structure_type === 'weekly') {
+                            editTimeGroupCountContainer.style.display = 'block';
+                            editTimeGroupCountInput.value = checklistDetails.group_count;
+                            editTimeGroupCountLabel.textContent = "Number of ".concat(checklistDetails.structure_type === 'daily' ? 'Days' : 'Weeks');
+                          } else {
+                            editTimeGroupCountContainer.style.display = 'none';
+                          }
+
+                          // Render tasks in the edit modal
+                          renderEditChecklistTaskInputs(checklistDetails.tasks, checklistDetails.structure_type, checklistDetails.group_count);
+                          editChecklistModalOverlay.style.display = 'flex'; // Show the modal
+                        } else {
+                          showModalMessage('Checklist details not found.', true);
+                        }
+                        _context13.n = 4;
                         break;
-                      case 1:
+                      case 3:
+                        _context13.p = 3;
+                        _t13 = _context13.v;
+                        console.error('Error fetching checklist details:', _t13);
+                        showModalMessage("Failed to load checklist details: ".concat(_t13.message), true);
+                      case 4:
+                        _context13.n = 10;
+                        break;
+                      case 5:
                         if (!deleteButton) {
-                          _context12.n = 6;
+                          _context13.n = 10;
                           break;
                         }
                         event.stopPropagation(); // Prevent clicks on delete button from bubbling up
                         _checklistId = deleteButton.dataset.id;
-                        _context12.n = 2;
+                        _context13.n = 6;
                         return showConfirmModal("Are you sure you want to delete this task list? This action cannot be undone.", "Delete");
-                      case 2:
-                        _confirmed2 = _context12.v;
+                      case 6:
+                        _confirmed2 = _context13.v;
                         if (!_confirmed2) {
-                          _context12.n = 6;
+                          _context13.n = 10;
                           break;
                         }
-                        _context12.p = 3;
-                        _context12.n = 4;
+                        _context13.p = 7;
+                        _context13.n = 8;
                         return apiRequest("DELETE", "/checklists/".concat(_checklistId));
-                      case 4:
+                      case 8:
                         showModalMessage("Task list deleted successfully!", false);
                         loadChecklists(); // Reload the list after deletion
-                        _context12.n = 6;
+                        _context13.n = 10;
                         break;
-                      case 5:
-                        _context12.p = 5;
-                        _t12 = _context12.v;
-                        showModalMessage("Failed to delete task list: ".concat(_t12.message), true);
-                      case 6:
-                        return _context12.a(2);
+                      case 9:
+                        _context13.p = 9;
+                        _t14 = _context13.v;
+                        showModalMessage("Failed to delete task list: ".concat(_t14.message), true);
+                      case 10:
+                        return _context13.a(2);
                     }
-                  }, _callee12, null, [[3, 5]]);
+                  }, _callee13, null, [[7, 9], [1, 3]]);
                 }));
-                return function (_x1) {
-                  return _ref9.apply(this, arguments);
+                return function (_x10) {
+                  return _ref0.apply(this, arguments);
                 };
               }());
             } else {
               checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
             }
-            _context13.n = 5;
+            _context14.n = 5;
             break;
           case 4:
-            _context13.p = 4;
-            _t13 = _context13.v;
-            console.error("Error loading checklists:", _t13);
-            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t13.message, "</p>");
+            _context14.p = 4;
+            _t15 = _context14.v;
+            console.error("Error loading checklists:", _t15);
+            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t15.message, "</p>");
           case 5:
-            return _context13.a(2);
+            return _context14.a(2);
         }
-      }, _callee13, null, [[2, 4]]);
+      }, _callee14, null, [[2, 4]]);
     }));
     return _loadChecklists.apply(this, arguments);
   }
@@ -1360,8 +1476,8 @@ function handleChecklistsPage() {
               response = _context11.v;
               showModalMessage("Task List \"".concat(title, "\" created successfully!"), false);
               newChecklistForm.reset();
-              renderTaskInputs();
-              loadChecklists();
+              renderNewChecklistTaskInputs(); // Reset task inputs for new form
+              loadChecklists(); // Reload the list of checklists
               _context11.n = 4;
               break;
             case 3:
@@ -1378,7 +1494,134 @@ function handleChecklistsPage() {
       };
     }());
   }
-  loadChecklists();
+
+  // Event listeners for EDIT checklist modal
+  if (editChecklistCancelBtn) {
+    editChecklistCancelBtn.addEventListener('click', function () {
+      editChecklistModalOverlay.style.display = 'none';
+    });
+  }
+  if (editChecklistModalOverlay) {
+    editChecklistModalOverlay.addEventListener('click', function (event) {
+      if (event.target === editChecklistModalOverlay) {
+        editChecklistModalOverlay.style.display = 'none';
+      }
+    });
+  }
+  if (editStructureTypeSelect) {
+    editStructureTypeSelect.addEventListener('change', function () {
+      var type = editStructureTypeSelect.value;
+      if (type === 'daily' || type === 'weekly') {
+        editTimeGroupCountContainer.style.display = 'block';
+        editTimeGroupCountInput.value = '1'; // Reset to 1 when changing type
+        editTimeGroupCountLabel.textContent = "Number of ".concat(type === 'daily' ? 'Days' : 'Weeks');
+      } else {
+        editTimeGroupCountContainer.style.display = 'none';
+      }
+      renderEditChecklistTaskInputs([], type, parseInt(editTimeGroupCountInput.value, 10)); // Re-render tasks based on new structure
+    });
+  }
+  if (editTimeGroupCountInput) {
+    editTimeGroupCountInput.addEventListener('input', function () {
+      renderEditChecklistTaskInputs([], editStructureTypeSelect.value, parseInt(editTimeGroupCountInput.value, 10));
+    });
+  }
+  if (addEditTaskBtn) {
+    addEditTaskBtn.addEventListener('click', function () {
+      var structureType = editStructureTypeSelect.value;
+      if (structureType === 'single_list') {
+        addSingleTaskInput(editTasksInputArea);
+      } else {
+        var lastGroup = editTasksInputArea.querySelector('.tasks-in-group:last-child');
+        if (lastGroup) {
+          addSingleTaskInput(lastGroup);
+        } else {
+          // This scenario should ideally not happen if groups are always rendered.
+          // But as a fallback, add to the main area.
+          addSingleTaskInput(editTasksInputArea);
+        }
+      }
+    });
+  }
+  if (editChecklistForm) {
+    editChecklistForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12(e) {
+        var checklistId, position, title, structure_type, group_count, tasks, _t12;
+        return _regenerator().w(function (_context12) {
+          while (1) switch (_context12.n) {
+            case 0:
+              e.preventDefault();
+              checklistId = editChecklistIdInput.value;
+              position = editChecklistPositionInput.value.trim();
+              title = editChecklistTitleInput.value.trim();
+              structure_type = editStructureTypeSelect.value;
+              group_count = structure_type === 'daily' || structure_type === 'weekly' ? parseInt(editTimeGroupCountInput.value, 10) : 0;
+              tasks = [];
+              if (structure_type === 'single_list') {
+                editTasksInputArea.querySelectorAll('.task-description-input').forEach(function (input) {
+                  if (input.value.trim()) {
+                    tasks.push({
+                      description: input.value.trim(),
+                      completed: false
+                    }); // Assume not completed on edit for simplicity, or add checkbox
+                  }
+                });
+              } else {
+                editTasksInputArea.querySelectorAll('.tasks-in-group').forEach(function (groupDiv, index) {
+                  var groupTasks = [];
+                  groupDiv.querySelectorAll('.task-description-input').forEach(function (input) {
+                    if (input.value.trim()) {
+                      groupTasks.push({
+                        description: input.value.trim(),
+                        completed: false
+                      });
+                    }
+                  });
+                  tasks.push({
+                    groupTitle: structure_type === 'daily' ? "Day ".concat(index + 1) : "Week ".concat(index + 1),
+                    tasks: groupTasks
+                  });
+                });
+              }
+              if (!(!position || !title || tasks.length === 0 || structure_type !== 'single_list' && tasks.every(function (group) {
+                return group.tasks.length === 0;
+              }))) {
+                _context12.n = 1;
+                break;
+              }
+              showModalMessage("Please provide a position, title, and at least one task for the checklist.", true);
+              return _context12.a(2);
+            case 1:
+              _context12.p = 1;
+              _context12.n = 2;
+              return apiRequest("PUT", "/checklists/".concat(checklistId), {
+                position: position,
+                title: title,
+                structure_type: structure_type,
+                group_count: group_count,
+                tasks: tasks
+              });
+            case 2:
+              showModalMessage("Task List \"".concat(title, "\" updated successfully!"), false);
+              editChecklistModalOverlay.style.display = 'none'; // Hide modal
+              loadChecklists(); // Reload the list of checklists
+              _context12.n = 4;
+              break;
+            case 3:
+              _context12.p = 3;
+              _t12 = _context12.v;
+              showModalMessage("Error updating task list: ".concat(_t12.message), true);
+            case 4:
+              return _context12.a(2);
+          }
+        }, _callee12, null, [[1, 3]]);
+      }));
+      return function (_x1) {
+        return _ref9.apply(this, arguments);
+      };
+    }());
+  }
+  loadChecklists(); // Initial load of checklists when the page loads
 }
 
 /**
@@ -1413,35 +1656,35 @@ function handleNewHireViewPage() {
     return _loadOnboardingTasks.apply(this, arguments);
   }
   function _loadOnboardingTasks() {
-    _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15() {
-      var profile, tasksData, checklist, allTasksCompleted, _t15;
-      return _regenerator().w(function (_context15) {
-        while (1) switch (_context15.n) {
+    _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16() {
+      var profile, tasksData, checklist, allTasksCompleted, _t17;
+      return _regenerator().w(function (_context16) {
+        while (1) switch (_context16.n) {
           case 0:
             if (taskListSection) {
-              _context15.n = 1;
+              _context16.n = 1;
               break;
             }
-            return _context15.a(2);
+            return _context16.a(2);
           case 1:
             taskListSection.innerHTML = '<p style="color: var(--text-medium);">Loading your tasks...</p>';
-            _context15.p = 2;
-            _context15.n = 3;
+            _context16.p = 2;
+            _context16.n = 3;
             return apiRequest("GET", "/profile");
           case 3:
-            profile = _context15.v;
+            profile = _context16.v;
             if (!(!profile || !profile.user_id)) {
-              _context15.n = 4;
+              _context16.n = 4;
               break;
             }
             taskListSection.innerHTML = '<p style="color: #e74c3c;">Could not load user profile.</p>';
-            return _context15.a(2);
+            return _context16.a(2);
           case 4:
             welcomeHeading.textContent = "Welcome, ".concat(profile.full_name, "!");
-            _context15.n = 5;
+            _context16.n = 5;
             return apiRequest("GET", "/onboarding-tasks/".concat(profile.user_id));
           case 5:
-            tasksData = _context15.v;
+            tasksData = _context16.v;
             taskListSection.innerHTML = '';
             if (tasksData && tasksData.checklist && tasksData.checklist.tasks) {
               checklist = tasksData.checklist;
@@ -1474,17 +1717,17 @@ function handleNewHireViewPage() {
               }
               taskListSection.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
                 checkbox.addEventListener('change', /*#__PURE__*/function () {
-                  var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(event) {
-                    var taskId, isCompleted, taskType, groupIndex, currentAllTasksCompleted, _t14;
-                    return _regenerator().w(function (_context14) {
-                      while (1) switch (_context14.n) {
+                  var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15(event) {
+                    var taskId, isCompleted, taskType, groupIndex, currentAllTasksCompleted, _t16;
+                    return _regenerator().w(function (_context15) {
+                      while (1) switch (_context15.n) {
                         case 0:
                           taskId = event.target.dataset.taskId;
                           isCompleted = event.target.checked;
                           taskType = event.target.dataset.taskType;
                           groupIndex = event.target.dataset.groupIndex;
-                          _context14.p = 1;
-                          _context14.n = 2;
+                          _context15.p = 1;
+                          _context15.n = 2;
                           return apiRequest("PUT", "/onboarding-tasks/".concat(taskId), {
                             completed: isCompleted,
                             type: taskType,
@@ -1502,20 +1745,20 @@ function handleNewHireViewPage() {
                           if (currentAllTasksCompleted) {
                             triggerFireworks();
                           }
-                          _context14.n = 4;
+                          _context15.n = 4;
                           break;
                         case 3:
-                          _context14.p = 3;
-                          _t14 = _context14.v;
-                          showModalMessage("Failed to update task status: ".concat(_t14.message), true);
+                          _context15.p = 3;
+                          _t16 = _context15.v;
+                          showModalMessage("Failed to update task status: ".concat(_t16.message), true);
                           event.target.checked = !isCompleted;
                         case 4:
-                          return _context14.a(2);
+                          return _context15.a(2);
                       }
-                    }, _callee14, null, [[1, 3]]);
+                    }, _callee15, null, [[1, 3]]);
                   }));
-                  return function (_x10) {
-                    return _ref0.apply(this, arguments);
+                  return function (_x11) {
+                    return _ref1.apply(this, arguments);
                   };
                 }());
               });
@@ -1525,17 +1768,17 @@ function handleNewHireViewPage() {
             } else {
               taskListSection.innerHTML = '<p style="color: var(--text-medium);">No onboarding tasks assigned or found.</p>';
             }
-            _context15.n = 7;
+            _context16.n = 7;
             break;
           case 6:
-            _context15.p = 6;
-            _t15 = _context15.v;
-            console.error("Error loading onboarding tasks:", _t15);
-            taskListSection.innerHTML = "<p style=\"color: #e74c3c;\">Error loading tasks: ".concat(_t15.message, "</p>");
+            _context16.p = 6;
+            _t17 = _context16.v;
+            console.error("Error loading onboarding tasks:", _t17);
+            taskListSection.innerHTML = "<p style=\"color: #e74c3c;\">Error loading tasks: ".concat(_t17.message, "</p>");
           case 7:
-            return _context15.a(2);
+            return _context16.a(2);
         }
-      }, _callee15, null, [[2, 6]]);
+      }, _callee16, null, [[2, 6]]);
     }));
     return _loadOnboardingTasks.apply(this, arguments);
   }
@@ -1577,52 +1820,52 @@ function handlePricingPage() {
   var proPlanBtn = document.getElementById("pro-plan-btn");
   var enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
   if (freePlanBtn) {
-    freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16() {
-      var userRole, profile, _confirmed3, _t16;
-      return _regenerator().w(function (_context16) {
-        while (1) switch (_context16.n) {
+    freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17() {
+      var userRole, profile, _confirmed3, _t18;
+      return _regenerator().w(function (_context17) {
+        while (1) switch (_context17.n) {
           case 0:
-            userRole = localStorage.getItem("authToken"); // Should be userRole not authToken for this check
+            userRole = localStorage.getItem("userRole");
             if (!userRole) {
-              _context16.n = 8;
+              _context17.n = 8;
               break;
             }
-            _context16.n = 1;
+            _context17.n = 1;
             return apiRequest("GET", "/profile");
           case 1:
-            profile = _context16.v;
+            profile = _context17.v;
             if (!(profile && profile.plan_id === 'free')) {
-              _context16.n = 2;
+              _context17.n = 2;
               break;
             }
             showModalMessage("You are already on the Free plan.", false);
-            _context16.n = 7;
+            _context17.n = 7;
             break;
           case 2:
-            _context16.n = 3;
+            _context17.n = 3;
             return showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
           case 3:
-            _confirmed3 = _context16.v;
+            _confirmed3 = _context17.v;
             if (!_confirmed3) {
-              _context16.n = 7;
+              _context17.n = 7;
               break;
             }
-            _context16.p = 4;
-            _context16.n = 5;
+            _context17.p = 4;
+            _context17.n = 5;
             return apiRequest("POST", "/cancel-subscription");
           case 5:
             showModalMessage("Successfully downgraded to Free plan. Your subscription will be updated.", false);
             setTimeout(function () {
               window.location.href = 'suite-hub.html';
             }, 1500);
-            _context16.n = 7;
+            _context17.n = 7;
             break;
           case 6:
-            _context16.p = 6;
-            _t16 = _context16.v;
-            showModalMessage("Failed to downgrade: ".concat(_t16.message), true);
+            _context17.p = 6;
+            _t18 = _context17.v;
+            showModalMessage("Failed to downgrade: ".concat(_t18.message), true);
           case 7:
-            _context16.n = 9;
+            _context17.n = 9;
             break;
           case 8:
             showModalMessage("The Free plan is available upon regular sign-up.", false);
@@ -1630,9 +1873,9 @@ function handlePricingPage() {
               window.location.href = 'register.html';
             }, 1500);
           case 9:
-            return _context16.a(2);
+            return _context17.a(2);
         }
-      }, _callee16, null, [[4, 6]]);
+      }, _callee17, null, [[4, 6]]);
     })));
   }
   if (proPlanBtn) {
@@ -1645,27 +1888,27 @@ function handlePricingPage() {
       return handlePlanSelection("enterprise");
     });
   }
-  function handlePlanSelection(_x11) {
+  function handlePlanSelection(_x12) {
     return _handlePlanSelection.apply(this, arguments);
   }
   function _handlePlanSelection() {
-    _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(planId) {
-      var token, session, _t18;
-      return _regenerator().w(function (_context18) {
-        while (1) switch (_context18.n) {
+    _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(planId) {
+      var token, session, _t20;
+      return _regenerator().w(function (_context19) {
+        while (1) switch (_context19.n) {
           case 0:
             token = localStorage.getItem("authToken");
             if (!token) {
-              _context18.n = 4;
+              _context19.n = 4;
               break;
             }
-            _context18.p = 1;
-            _context18.n = 2;
+            _context19.p = 1;
+            _context19.n = 2;
             return apiRequest("POST", "/create-checkout-session", {
               planId: planId
             });
           case 2:
-            session = _context18.v;
+            session = _context19.v;
             if (stripe && session.sessionId) {
               showModalMessage("Account created! Redirecting to payment...", false);
               stripe.redirectToCheckout({
@@ -1674,19 +1917,19 @@ function handlePricingPage() {
             } else {
               showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
             }
-            _context18.n = 4;
+            _context19.n = 4;
             break;
           case 3:
-            _context18.p = 3;
-            _t18 = _context18.v;
-            console.error("Error creating checkout session:", _t18);
-            showModalMessage("Failed to proceed with payment: ".concat(_t18.message), true);
+            _context19.p = 3;
+            _t20 = _context19.v;
+            console.error("Error creating checkout session:", _t20);
+            showModalMessage("Failed to proceed with payment: ".concat(_t20.message), true);
           case 4:
             ;
           case 5:
-            return _context18.a(2);
+            return _context19.a(2);
         }
-      }, _callee18, null, [[1, 3]]);
+      }, _callee19, null, [[1, 3]]);
     }));
     return _handlePlanSelection.apply(this, arguments);
   }
@@ -1708,10 +1951,10 @@ function handlePricingPage() {
   }
   if (registerCheckoutForm) {
     registerCheckoutForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(e) {
-        var company_name, full_name, email, password, emailRegex, registrationData, loginData, session, _t17;
-        return _regenerator().w(function (_context17) {
-          while (1) switch (_context17.n) {
+      var _ref11 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(e) {
+        var company_name, full_name, email, password, emailRegex, registrationData, loginData, session, _t19;
+        return _regenerator().w(function (_context18) {
+          while (1) switch (_context18.n) {
             case 0:
               e.preventDefault();
               company_name = regCoNameInput.value.trim();
@@ -1723,16 +1966,16 @@ function handlePricingPage() {
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
               emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               if (!(!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email))) {
-                _context17.n = 1;
+                _context18.n = 1;
                 break;
               }
               regCheckoutErrorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
               regCheckoutErrorMessage.classList.add('visible');
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-              return _context17.a(2);
+              return _context18.a(2);
             case 1:
-              _context17.p = 1;
-              _context17.n = 2;
+              _context18.p = 1;
+              _context18.n = 2;
               return apiRequest("POST", "/register", {
                 company_name: company_name,
                 full_name: full_name,
@@ -1740,22 +1983,22 @@ function handlePricingPage() {
                 password: password
               });
             case 2:
-              registrationData = _context17.v;
-              _context17.n = 3;
+              registrationData = _context18.v;
+              _context18.n = 3;
               return apiRequest("POST", "/login", {
                 email: email,
                 password: password
               });
             case 3:
-              loginData = _context17.v;
+              loginData = _context18.v;
               localStorage.setItem("authToken", loginData.token);
               localStorage.setItem("userRole", loginData.role);
-              _context17.n = 4;
+              _context18.n = 4;
               return apiRequest("POST", "/create-checkout-session", {
                 planId: currentSelectedPlan
               });
             case 4:
-              session = _context17.v;
+              session = _context18.v;
               if (stripe && session.sessionId) {
                 showModalMessage("Account created! Redirecting to payment...", false);
                 stripe.redirectToCheckout({
@@ -1767,23 +2010,23 @@ function handlePricingPage() {
                   window.location.href = 'login.html';
                 }, 2000);
               }
-              _context17.n = 6;
+              _context18.n = 6;
               break;
             case 5:
-              _context17.p = 5;
-              _t17 = _context17.v;
-              console.error("Register/Checkout error:", _t17);
-              regCheckoutErrorMessage.textContent = "Sign Up Failed: ".concat(_t17.message);
+              _context18.p = 5;
+              _t19 = _context18.v;
+              console.error("Register/Checkout error:", _t19);
+              regCheckoutErrorMessage.textContent = "Sign Up Failed: ".concat(_t19.message);
               regCheckoutErrorMessage.classList.add('visible');
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-              showModalMessage("Sign Up Failed: ".concat(_t17.message), true);
+              showModalMessage("Sign Up Failed: ".concat(_t19.message), true);
             case 6:
-              return _context17.a(2);
+              return _context18.a(2);
           }
-        }, _callee17, null, [[1, 5]]);
+        }, _callee18, null, [[1, 5]]);
       }));
-      return function (_x12) {
-        return _ref10.apply(this, arguments);
+      return function (_x13) {
+        return _ref11.apply(this, arguments);
       };
     }());
   }
@@ -1816,23 +2059,23 @@ function handleHiringPage() {
     return _loadJobPostingLocations.apply(this, arguments);
   }
   function _loadJobPostingLocations() {
-    _loadJobPostingLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21() {
-      var locations, _t20;
-      return _regenerator().w(function (_context21) {
-        while (1) switch (_context21.n) {
+    _loadJobPostingLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee22() {
+      var locations, _t22;
+      return _regenerator().w(function (_context22) {
+        while (1) switch (_context22.n) {
           case 0:
             if (jobPostingLocationSelect) {
-              _context21.n = 1;
+              _context22.n = 1;
               break;
             }
-            return _context21.a(2);
+            return _context22.a(2);
           case 1:
             jobPostingLocationSelect.innerHTML = '<option value="">Loading locations...</option>';
-            _context21.p = 2;
-            _context21.n = 3;
+            _context22.p = 2;
+            _context22.n = 3;
             return apiRequest("GET", "/locations");
           case 3:
-            locations = _context21.v;
+            locations = _context22.v;
             jobPostingLocationSelect.innerHTML = '<option value="">Company Wide (All Locations)</option>'; // Default option
             if (locations && locations.length > 0) {
               locations.forEach(function (loc) {
@@ -1845,19 +2088,19 @@ function handleHiringPage() {
               jobPostingLocationSelect.innerHTML = '<option value="">No locations available</option>';
             }
             filterApplicantLocationSelect.innerHTML = jobPostingLocationSelect.innerHTML; // Copy options to filter dropdown
-            _context21.n = 5;
+            _context22.n = 5;
             break;
           case 4:
-            _context21.p = 4;
-            _t20 = _context21.v;
-            console.error("Error loading job posting locations:", _t20);
+            _context22.p = 4;
+            _t22 = _context22.v;
+            console.error("Error loading job posting locations:", _t22);
             jobPostingLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
             filterApplicantLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            showModalMessage("Failed to load locations for job postings: ".concat(_t20.message), true);
+            showModalMessage("Failed to load locations for job postings: ".concat(_t22.message), true);
           case 5:
-            return _context21.a(2);
+            return _context22.a(2);
         }
-      }, _callee21, null, [[2, 4]]);
+      }, _callee22, null, [[2, 4]]);
     }));
     return _loadJobPostingLocations.apply(this, arguments);
   }
@@ -1865,29 +2108,29 @@ function handleHiringPage() {
     return _loadJobPostings.apply(this, arguments);
   }
   function _loadJobPostings() {
-    _loadJobPostings = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee22() {
-      var queryParams, jobPostings, _t21;
-      return _regenerator().w(function (_context22) {
-        while (1) switch (_context22.n) {
+    _loadJobPostings = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23() {
+      var queryParams, jobPostings, _t23;
+      return _regenerator().w(function (_context23) {
+        while (1) switch (_context23.n) {
           case 0:
             if (jobPostingListDiv) {
-              _context22.n = 1;
+              _context23.n = 1;
               break;
             }
-            return _context22.a(2);
+            return _context23.a(2);
           case 1:
             jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>';
-            _context22.p = 2;
+            _context23.p = 2;
             queryParams = new URLSearchParams();
             if (filterApplicantJobPostingSelect.value) {// This filter is for applicants, not job postings directly
               // Not filtering loadJobPostings directly by ID from applicant filter
             }
             // For now, only show 'Open' jobs on the main list unless otherwise specified
             queryParams.append('status', 'Open'); // Fetch only open jobs by default for this list
-            _context22.n = 3;
+            _context23.n = 3;
             return apiRequest("GET", "/job-postings?".concat(queryParams.toString()));
           case 3:
-            jobPostings = _context22.v;
+            jobPostings = _context23.v;
             jobPostingListDiv.innerHTML = '';
             filterApplicantJobPostingSelect.innerHTML = '<option value="">All Job Postings</option>'; // Reset applicant filter
 
@@ -1907,17 +2150,17 @@ function handleHiringPage() {
             } else {
               jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">No job postings found.</p>';
             }
-            _context22.n = 5;
+            _context23.n = 5;
             break;
           case 4:
-            _context22.p = 4;
-            _t21 = _context22.v;
-            console.error("Error loading job postings:", _t21);
-            jobPostingListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading job postings: ".concat(_t21.message, "</p>");
+            _context23.p = 4;
+            _t23 = _context23.v;
+            console.error("Error loading job postings:", _t23);
+            jobPostingListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading job postings: ".concat(_t23.message, "</p>");
           case 5:
-            return _context22.a(2);
+            return _context23.a(2);
         }
-      }, _callee22, null, [[2, 4]]);
+      }, _callee23, null, [[2, 4]]);
     }));
     return _loadJobPostings.apply(this, arguments);
   }
@@ -1925,32 +2168,32 @@ function handleHiringPage() {
     return _loadApplicants.apply(this, arguments);
   }
   function _loadApplicants() {
-    _loadApplicants = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23() {
+    _loadApplicants = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee24() {
       var filters,
         queryParams,
         applicants,
-        _args23 = arguments,
-        _t22;
-      return _regenerator().w(function (_context23) {
-        while (1) switch (_context23.n) {
+        _args24 = arguments,
+        _t24;
+      return _regenerator().w(function (_context24) {
+        while (1) switch (_context24.n) {
           case 0:
-            filters = _args23.length > 0 && _args23[0] !== undefined ? _args23[0] : {};
+            filters = _args24.length > 0 && _args24[0] !== undefined ? _args24[0] : {};
             if (applicantListDiv) {
-              _context23.n = 1;
+              _context24.n = 1;
               break;
             }
-            return _context23.a(2);
+            return _context24.a(2);
           case 1:
             applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
-            _context23.p = 2;
+            _context24.p = 2;
             queryParams = new URLSearchParams();
             if (filters.job_posting_id) queryParams.append('job_posting_id', filters.job_posting_id);
             if (filters.status) queryParams.append('status', filters.status);
             if (filters.location_id) queryParams.append('location_id', filters.location_id);
-            _context23.n = 3;
+            _context24.n = 3;
             return apiRequest("GET", "/applicants?".concat(queryParams.toString()));
           case 3:
-            applicants = _context23.v;
+            applicants = _context24.v;
             applicantListDiv.innerHTML = '';
             if (applicants && applicants.length > 0) {
               applicants.forEach(function (applicant) {
@@ -1962,26 +2205,26 @@ function handleHiringPage() {
             } else {
               applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">No applicants found with current filters.</p>';
             }
-            _context23.n = 5;
+            _context24.n = 5;
             break;
           case 4:
-            _context23.p = 4;
-            _t22 = _context23.v;
-            console.error("Error loading applicants:", _t22);
-            applicantListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading applicants: ".concat(_t22.message, "</p>");
+            _context24.p = 4;
+            _t24 = _context24.v;
+            console.error("Error loading applicants:", _t24);
+            applicantListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading applicants: ".concat(_t24.message, "</p>");
           case 5:
-            return _context23.a(2);
+            return _context24.a(2);
         }
-      }, _callee23, null, [[2, 4]]);
+      }, _callee24, null, [[2, 4]]);
     }));
     return _loadApplicants.apply(this, arguments);
   }
   if (createJobPostingForm) {
     createJobPostingForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref11 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(e) {
-        var title, description, requirements, locationId, response, _t19;
-        return _regenerator().w(function (_context19) {
-          while (1) switch (_context19.n) {
+      var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(e) {
+        var title, description, requirements, locationId, response, _t21;
+        return _regenerator().w(function (_context20) {
+          while (1) switch (_context20.n) {
             case 0:
               e.preventDefault();
               title = document.getElementById("job-title-input").value.trim();
@@ -1989,14 +2232,14 @@ function handleHiringPage() {
               requirements = document.getElementById("job-requirements-input").value.trim();
               locationId = jobPostingLocationSelect.value ? parseInt(jobPostingLocationSelect.value, 10) : null;
               if (!(!title || !description)) {
-                _context19.n = 1;
+                _context20.n = 1;
                 break;
               }
               showModalMessage("Job Title and Description are required.", true);
-              return _context19.a(2);
+              return _context20.a(2);
             case 1:
-              _context19.p = 1;
-              _context19.n = 2;
+              _context20.p = 1;
+              _context20.n = 2;
               return apiRequest("POST", "/job-postings", {
                 title: title,
                 description: description,
@@ -2004,23 +2247,23 @@ function handleHiringPage() {
                 location_id: locationId
               });
             case 2:
-              response = _context19.v;
+              response = _context20.v;
               showModalMessage("Job \"".concat(title, "\" posted successfully!"), false);
               createJobPostingForm.reset();
               loadJobPostings();
-              _context19.n = 4;
+              _context20.n = 4;
               break;
             case 3:
-              _context19.p = 3;
-              _t19 = _context19.v;
-              showModalMessage("Error posting job: ".concat(_t19.message), true);
+              _context20.p = 3;
+              _t21 = _context20.v;
+              showModalMessage("Error posting job: ".concat(_t21.message), true);
             case 4:
-              return _context19.a(2);
+              return _context20.a(2);
           }
-        }, _callee19, null, [[1, 3]]);
+        }, _callee20, null, [[1, 3]]);
       }));
-      return function (_x13) {
-        return _ref11.apply(this, arguments);
+      return function (_x14) {
+        return _ref12.apply(this, arguments);
       };
     }());
   }
@@ -2055,10 +2298,10 @@ function handleHiringPage() {
     });
   }
   document.body.addEventListener("click", /*#__PURE__*/function () {
-    var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(e) {
+    var _ref13 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21(e) {
       var shareButton, jobId, jobTitle, directLink, embedCode, copyLink, copyEmbed, editApplicantButton, applicantId;
-      return _regenerator().w(function (_context20) {
-        while (1) switch (_context20.n) {
+      return _regenerator().w(function (_context21) {
+        while (1) switch (_context21.n) {
           case 0:
             shareButton = e.target.closest(".share-btn");
             if (shareButton) {
@@ -2097,12 +2340,12 @@ function handleHiringPage() {
               // Here you'd typically open a modal or navigate to an edit page for the applicant
             }
           case 1:
-            return _context20.a(2);
+            return _context21.a(2);
         }
-      }, _callee20);
+      }, _callee21);
     }));
-    return function (_x14) {
-      return _ref12.apply(this, arguments);
+    return function (_x15) {
+      return _ref13.apply(this, arguments);
     };
   }());
 
@@ -2161,24 +2404,24 @@ function handleSchedulingPage() {
     return _loadEmployeesForScheduling.apply(this, arguments);
   }
   function _loadEmployeesForScheduling() {
-    _loadEmployeesForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee25() {
-      var employees, _t24;
-      return _regenerator().w(function (_context25) {
-        while (1) switch (_context25.n) {
+    _loadEmployeesForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee26() {
+      var employees, _t26;
+      return _regenerator().w(function (_context26) {
+        while (1) switch (_context26.n) {
           case 0:
             if (employeeSelect) {
-              _context25.n = 1;
+              _context26.n = 1;
               break;
             }
-            return _context25.a(2);
+            return _context26.a(2);
           case 1:
             employeeSelect.innerHTML = '<option value="">Loading employees...</option>';
             filterEmployeeSelect.innerHTML = '<option value="">All Employees</option>'; // Always have "All Employees" option
-            _context25.p = 2;
-            _context25.n = 3;
+            _context26.p = 2;
+            _context26.n = 3;
             return apiRequest("GET", "/users?filterRole=employee");
           case 3:
-            employees = _context25.v;
+            employees = _context26.v;
             // Assuming an API to get employees
             if (employees && employees.length > 0) {
               employeeSelect.innerHTML = '<option value="">Select Employee</option>';
@@ -2194,19 +2437,19 @@ function handleSchedulingPage() {
               employeeSelect.innerHTML = '<option value="">No employees available</option>';
               filterEmployeeSelect.innerHTML = '<option value="">No employees available</option>';
             }
-            _context25.n = 5;
+            _context26.n = 5;
             break;
           case 4:
-            _context25.p = 4;
-            _t24 = _context25.v;
-            console.error("Error loading employees for scheduling:", _t24);
+            _context26.p = 4;
+            _t26 = _context26.v;
+            console.error("Error loading employees for scheduling:", _t26);
             employeeSelect.innerHTML = '<option value="">Error loading employees</option>';
             filterEmployeeSelect.innerHTML = '<option value="">Error loading employees</option>';
-            showModalMessage("Failed to load employees: ".concat(_t24.message), true);
+            showModalMessage("Failed to load employees: ".concat(_t26.message), true);
           case 5:
-            return _context25.a(2);
+            return _context26.a(2);
         }
-      }, _callee25, null, [[2, 4]]);
+      }, _callee26, null, [[2, 4]]);
     }));
     return _loadEmployeesForScheduling.apply(this, arguments);
   }
@@ -2214,24 +2457,24 @@ function handleSchedulingPage() {
     return _loadLocationsForScheduling.apply(this, arguments);
   }
   function _loadLocationsForScheduling() {
-    _loadLocationsForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee26() {
-      var locations, _t25;
-      return _regenerator().w(function (_context26) {
-        while (1) switch (_context26.n) {
+    _loadLocationsForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee27() {
+      var locations, _t27;
+      return _regenerator().w(function (_context27) {
+        while (1) switch (_context27.n) {
           case 0:
             if (locationSelect) {
-              _context26.n = 1;
+              _context27.n = 1;
               break;
             }
-            return _context26.a(2);
+            return _context27.a(2);
           case 1:
             locationSelect.innerHTML = '<option value="">Loading locations...</option>';
             filterLocationSelect.innerHTML = '<option value="">All Locations</option>'; // Always have "All Locations" option
-            _context26.p = 2;
-            _context26.n = 3;
+            _context27.p = 2;
+            _context27.n = 3;
             return apiRequest("GET", "/locations");
           case 3:
-            locations = _context26.v;
+            locations = _context27.v;
             if (locations && locations.length > 0) {
               locationSelect.innerHTML = '<option value="">Select Location</option>';
               locations.forEach(function (loc) {
@@ -2246,19 +2489,19 @@ function handleSchedulingPage() {
               locationSelect.innerHTML = '<option value="">No locations available</option>';
               filterLocationSelect.innerHTML = '<option value="">No locations available</option>';
             }
-            _context26.n = 5;
+            _context27.n = 5;
             break;
           case 4:
-            _context26.p = 4;
-            _t25 = _context26.v;
-            console.error("Error loading locations for scheduling:", _t25);
+            _context27.p = 4;
+            _t27 = _context27.v;
+            console.error("Error loading locations for scheduling:", _t27);
             locationSelect.innerHTML = '<option value="">Error loading locations</option>';
             filterLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            showModalMessage("Failed to load locations: ".concat(_t25.message), true);
+            showModalMessage("Failed to load locations: ".concat(_t27.message), true);
           case 5:
-            return _context26.a(2);
+            return _context27.a(2);
         }
-      }, _callee26, null, [[2, 4]]);
+      }, _callee27, null, [[2, 4]]);
     }));
     return _loadLocationsForScheduling.apply(this, arguments);
   }
@@ -2266,16 +2509,16 @@ function handleSchedulingPage() {
     return _renderCalendar.apply(this, arguments);
   }
   function _renderCalendar() {
-    _renderCalendar = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28() {
-      var existingDayElements, dates, i, startOfWeek, endOfWeek, filters, shifts, _t27;
-      return _regenerator().w(function (_context28) {
-        while (1) switch (_context28.n) {
+    _renderCalendar = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29() {
+      var existingDayElements, dates, i, startOfWeek, endOfWeek, filters, shifts, _t29;
+      return _regenerator().w(function (_context29) {
+        while (1) switch (_context29.n) {
           case 0:
             if (calendarGrid) {
-              _context28.n = 1;
+              _context29.n = 1;
               break;
             }
-            return _context28.a(2);
+            return _context29.a(2);
           case 1:
             // Clear existing day headers and cells (except the fixed time column)
             existingDayElements = calendarGrid.querySelectorAll('.calendar-day-header:not([style*="grid-column: 1"]), .calendar-day-cell');
@@ -2317,11 +2560,11 @@ function handleSchedulingPage() {
               employee_id: filterEmployeeSelect.value || null,
               location_id: filterLocationSelect.value || null
             };
-            _context28.p = 2;
-            _context28.n = 3;
+            _context29.p = 2;
+            _context29.n = 3;
             return apiRequest("GET", "/schedules?".concat(new URLSearchParams(filters).toString()));
           case 3:
-            shifts = _context28.v;
+            shifts = _context29.v;
             shifts.forEach(function (shift) {
               var shiftStart = moment(shift.start_time);
               var shiftEnd = moment(shift.end_time);
@@ -2343,50 +2586,50 @@ function handleSchedulingPage() {
                 shiftDiv.style.top = "".concat(topPosition, "px");
                 shiftDiv.style.height = "".concat(height, "px");
                 shiftDiv.textContent = "".concat(shift.employee_name, " @ ").concat(shift.location_name, " (").concat(shiftStart.format('h:mm A'), " - ").concat(shiftEnd.format('h:mm A'), ")");
-                shiftDiv.addEventListener('click', /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee27() {
-                  var confirmDelete, _t26;
-                  return _regenerator().w(function (_context27) {
-                    while (1) switch (_context27.n) {
+                shiftDiv.addEventListener('click', /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28() {
+                  var confirmDelete, _t28;
+                  return _regenerator().w(function (_context28) {
+                    while (1) switch (_context28.n) {
                       case 0:
-                        _context27.n = 1;
+                        _context28.n = 1;
                         return showConfirmModal("\n                            <h4>Shift Details:</h4>\n                            <p><strong>Employee:</strong> ".concat(shift.employee_name, "</p>\n                            <p><strong>Location:</strong> ").concat(shift.location_name, "</p>\n                            <p><strong>Time:</strong> ").concat(shiftStart.format('MMM DD, h:mm A'), " - ").concat(shiftEnd.format('MMM DD, h:mm A'), "</p>\n                            <p><strong>Notes:</strong> ").concat(shift.notes || 'None', "</p>\n                            <p style=\"margin-top: 15px;\">Are you sure you want to delete this shift?</p>\n                        "), "Delete Shift");
                       case 1:
-                        confirmDelete = _context27.v;
+                        confirmDelete = _context28.v;
                         if (!confirmed) {
-                          _context27.n = 5;
+                          _context28.n = 5;
                           break;
                         }
-                        _context27.p = 2;
-                        _context27.n = 3;
+                        _context28.p = 2;
+                        _context28.n = 3;
                         return apiRequest("DELETE", "/schedules/".concat(shift.schedule_id));
                       case 3:
                         showModalMessage("Shift deleted successfully!", false);
                         renderCalendar(); // Re-render calendar
-                        _context27.n = 5;
+                        _context28.n = 5;
                         break;
                       case 4:
-                        _context27.p = 4;
-                        _t26 = _context27.v;
-                        showModalMessage("Failed to delete shift: ".concat(_t26.message), true);
+                        _context28.p = 4;
+                        _t28 = _context28.v;
+                        showModalMessage("Failed to delete shift: ".concat(_t28.message), true);
                       case 5:
-                        return _context27.a(2);
+                        return _context28.a(2);
                     }
-                  }, _callee27, null, [[2, 4]]);
+                  }, _callee28, null, [[2, 4]]);
                 })));
                 targetCell.appendChild(shiftDiv);
               }
             });
-            _context28.n = 5;
+            _context29.n = 5;
             break;
           case 4:
-            _context28.p = 4;
-            _t27 = _context28.v;
-            console.error("Error loading schedules:", _t27);
-            calendarGrid.querySelector('p').textContent = "Error loading schedules: ".concat(_t27.message);
+            _context29.p = 4;
+            _t29 = _context29.v;
+            console.error("Error loading schedules:", _t29);
+            calendarGrid.querySelector('p').textContent = "Error loading schedules: ".concat(_t29.message);
           case 5:
-            return _context28.a(2);
+            return _context29.a(2);
         }
-      }, _callee28, null, [[2, 4]]);
+      }, _callee29, null, [[2, 4]]);
     }));
     return _renderCalendar.apply(this, arguments);
   }
@@ -2397,17 +2640,15 @@ function handleSchedulingPage() {
     });
   }
   if (nextWeekBtn) {
-    nextWeekBtn.addEventListener("click", function () {
-      currentWeekStart.add(1, 'isoWeek');
-      renderCalendar();
-    });
+    nextWeekStart.add(1, 'isoWeek');
+    renderCalendar();
   }
   if (createShiftForm) {
     createShiftForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref13 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee24(e) {
-        var employeeId, locationId, startTime, endTime, notes, _t23;
-        return _regenerator().w(function (_context24) {
-          while (1) switch (_context24.n) {
+      var _ref14 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee25(e) {
+        var employeeId, locationId, startTime, endTime, notes, _t25;
+        return _regenerator().w(function (_context25) {
+          while (1) switch (_context25.n) {
             case 0:
               e.preventDefault();
               employeeId = employeeSelect.value ? parseInt(employeeSelect.value, 10) : null;
@@ -2416,21 +2657,21 @@ function handleSchedulingPage() {
               endTime = endTimeInput.value;
               notes = notesInput.value.trim();
               if (!(!employeeId || !locationId || !startTime || !endTime)) {
-                _context24.n = 1;
+                _context25.n = 1;
                 break;
               }
               showModalMessage("Please select an employee, location, and valid start/end times.", true);
-              return _context24.a(2);
+              return _context25.a(2);
             case 1:
               if (!(new Date(startTime) >= new Date(endTime))) {
-                _context24.n = 2;
+                _context25.n = 2;
                 break;
               }
               showModalMessage("Start time must be before end time.", true);
-              return _context24.a(2);
+              return _context25.a(2);
             case 2:
-              _context24.p = 2;
-              _context24.n = 3;
+              _context25.p = 2;
+              _context25.n = 3;
               return apiRequest("POST", "/schedules", {
                 employee_id: employeeId,
                 location_id: locationId,
@@ -2442,19 +2683,19 @@ function handleSchedulingPage() {
               showModalMessage("Shift created successfully!", false);
               createShiftForm.reset();
               renderCalendar();
-              _context24.n = 5;
+              _context25.n = 5;
               break;
             case 4:
-              _context24.p = 4;
-              _t23 = _context24.v;
-              showModalMessage("Error creating shift: ".concat(_t23.message), true);
+              _context25.p = 4;
+              _t25 = _context25.v;
+              showModalMessage("Error creating shift: ".concat(_t25.message), true);
             case 5:
-              return _context24.a(2);
+              return _context25.a(2);
           }
-        }, _callee24, null, [[2, 4]]);
+        }, _callee25, null, [[2, 4]]);
       }));
-      return function (_x15) {
-        return _ref13.apply(this, arguments);
+      return function (_x16) {
+        return _ref14.apply(this, arguments);
       };
     }());
   }
@@ -2533,23 +2774,23 @@ function handleDocumentsPage() {
     return _loadDocuments.apply(this, arguments);
   } // Handle document upload form submission
   function _loadDocuments() {
-    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31() {
-      var documents, _t30;
-      return _regenerator().w(function (_context31) {
-        while (1) switch (_context31.n) {
+    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee32() {
+      var documents, _t32;
+      return _regenerator().w(function (_context32) {
+        while (1) switch (_context32.n) {
           case 0:
             if (documentListDiv) {
-              _context31.n = 1;
+              _context32.n = 1;
               break;
             }
-            return _context31.a(2);
+            return _context32.a(2);
           case 1:
             documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
-            _context31.p = 2;
-            _context31.n = 3;
+            _context32.p = 2;
+            _context32.n = 3;
             return apiRequest("GET", "/documents");
           case 3:
-            documents = _context31.v;
+            documents = _context32.v;
             documentListDiv.innerHTML = '';
             if (documents.length === 0) {
               documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
@@ -2562,45 +2803,45 @@ function handleDocumentsPage() {
                 documentListDiv.appendChild(docItem);
               });
             }
-            _context31.n = 5;
+            _context32.n = 5;
             break;
           case 4:
-            _context31.p = 4;
-            _t30 = _context31.v;
-            console.error("Error loading documents:", _t30);
-            documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(_t30.message, "</p>");
+            _context32.p = 4;
+            _t32 = _context32.v;
+            console.error("Error loading documents:", _t32);
+            documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(_t32.message, "</p>");
           case 5:
-            return _context31.a(2);
+            return _context32.a(2);
         }
-      }, _callee31, null, [[2, 4]]);
+      }, _callee32, null, [[2, 4]]);
     }));
     return _loadDocuments.apply(this, arguments);
   }
   if (uploadDocumentForm) {
     uploadDocumentForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref15 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29(e) {
-        var title, file, description, formData, result, _t28;
-        return _regenerator().w(function (_context29) {
-          while (1) switch (_context29.n) {
+      var _ref16 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30(e) {
+        var title, file, description, formData, result, _t30;
+        return _regenerator().w(function (_context30) {
+          while (1) switch (_context30.n) {
             case 0:
               e.preventDefault();
               title = documentTitleInput.value.trim();
               file = documentFileInput.files[0];
               description = documentDescriptionInput.value.trim();
               if (!(!title || !file)) {
-                _context29.n = 1;
+                _context30.n = 1;
                 break;
               }
               showModalMessage("Please provide a document title and select a file.", true);
-              return _context29.a(2);
+              return _context30.a(2);
             case 1:
               formData = new FormData();
               formData.append('title', title);
               formData.append('document_file', file);
               formData.append('description', description);
-              _context29.p = 2;
+              _context30.p = 2;
               showUploadProgress(0, 'Starting upload...');
-              _context29.n = 3;
+              _context30.n = 3;
               return apiRequest("POST", "/documents/upload", formData, true,
               // isFormData: true
               function (event) {
@@ -2610,64 +2851,19 @@ function handleDocumentsPage() {
                 }
               });
             case 3:
-              result = _context29.v;
+              result = _context30.v;
               showModalMessage("Document uploaded successfully!", false);
               uploadDocumentForm.reset();
               hideUploadProgress();
               loadDocuments(); // Reload the list of documents from the backend
-              _context29.n = 5;
-              break;
-            case 4:
-              _context29.p = 4;
-              _t28 = _context29.v;
-              console.error("Document upload error:", _t28);
-              showModalMessage("Failed to upload document: ".concat(_t28.message), true);
-              hideUploadProgress();
-            case 5:
-              return _context29.a(2);
-          }
-        }, _callee29, null, [[2, 4]]);
-      }));
-      return function (_x16) {
-        return _ref15.apply(this, arguments);
-      };
-    }());
-  }
-
-  // Event listener for delete buttons on documents page (using delegation)
-  if (documentListDiv) {
-    documentListDiv.addEventListener("click", /*#__PURE__*/function () {
-      var _ref16 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30(e) {
-        var targetButton, idToDelete, _confirmed4, _t29;
-        return _regenerator().w(function (_context30) {
-          while (1) switch (_context30.n) {
-            case 0:
-              targetButton = e.target.closest(".btn-delete");
-              if (!(targetButton && targetButton.dataset.type === "document")) {
-                _context30.n = 5;
-                break;
-              }
-              idToDelete = parseInt(targetButton.dataset.id, 10);
-              _context30.n = 1;
-              return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
-            case 1:
-              _confirmed4 = _context30.v;
-              if (!_confirmed4) {
-                _context30.n = 5;
-                break;
-              }
-              _context30.p = 2;
-              _context30.n = 3;
-              return apiRequest("DELETE", "/documents/".concat(idToDelete));
-            case 3:
-              showModalMessage("Document deleted successfully!", false);
-              loadDocuments(); // Reload the list of documents to reflect the change
               _context30.n = 5;
               break;
             case 4:
               _context30.p = 4;
-              _t29 = _context30.v;
-              showModalMessage("Error deleting document: ".concat(_t29.message), true);
+              _t30 = _context30.v;
+              console.error("Document upload error:", _t30);
+              showModalMessage("Failed to upload document: ".concat(_t30.message), true);
+              hideUploadProgress();
             case 5:
               return _context30.a(2);
           }
@@ -2675,6 +2871,51 @@ function handleDocumentsPage() {
       }));
       return function (_x17) {
         return _ref16.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Event listener for delete buttons on documents page (using delegation)
+  if (documentListDiv) {
+    documentListDiv.addEventListener("click", /*#__PURE__*/function () {
+      var _ref17 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31(e) {
+        var targetButton, idToDelete, _confirmed4, _t31;
+        return _regenerator().w(function (_context31) {
+          while (1) switch (_context31.n) {
+            case 0:
+              targetButton = e.target.closest(".btn-delete");
+              if (!(targetButton && targetButton.dataset.type === "document")) {
+                _context31.n = 5;
+                break;
+              }
+              idToDelete = parseInt(targetButton.dataset.id, 10);
+              _context31.n = 1;
+              return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
+            case 1:
+              _confirmed4 = _context31.v;
+              if (!_confirmed4) {
+                _context31.n = 5;
+                break;
+              }
+              _context31.p = 2;
+              _context31.n = 3;
+              return apiRequest("DELETE", "/documents/".concat(idToDelete));
+            case 3:
+              showModalMessage("Document deleted successfully!", false);
+              loadDocuments(); // Reload the list of documents to reflect the change
+              _context31.n = 5;
+              break;
+            case 4:
+              _context31.p = 4;
+              _t31 = _context31.v;
+              showModalMessage("Error deleting document: ".concat(_t31.message), true);
+            case 5:
+              return _context31.a(2);
+          }
+        }, _callee31, null, [[2, 4]]);
+      }));
+      return function (_x18) {
+        return _ref17.apply(this, arguments);
       };
     }());
   }
