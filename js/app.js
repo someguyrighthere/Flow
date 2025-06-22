@@ -321,6 +321,7 @@ function handleLoginPage() {
 
         // Basic client-side validation
         if (!email || !password) {
+            console.log("Login Validation: Email or password empty."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Email and password are required.";
                 errorMessage.classList.add("visible");
@@ -331,6 +332,7 @@ function handleLoginPage() {
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
+            console.log("Login Validation: Invalid email format."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Please enter a valid email address.";
                 errorMessage.classList.add("visible");
@@ -340,6 +342,7 @@ function handleLoginPage() {
         }
 
         if (password.length < 6) {
+            console.log("Login Validation: Password too short."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Password must be at least 6 characters long.";
                 errorMessage.classList.add("visible");
@@ -688,6 +691,7 @@ function handleAdminPage() {
             }
         }
     });
+
 
     // Handle new location form submission
     if (newLocationForm) {
