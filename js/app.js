@@ -284,6 +284,7 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
  * Handles all client-side logic for the login.html page.
  */
 function handleLoginPage() {
+    console.log("handleLoginPage: Initializing login page logic."); // DEBUG LOG
     const loginForm = document.getElementById("login-form");
     if (!loginForm) {
         return; // Exit if form not found (e.g., on a different page)
