@@ -605,8 +605,6 @@ function handleAccountPage() {
           case 1:
             profile = _context5.v;
             if (displayProfileName) displayProfileName.textContent = profile.fullName || "N/A";
-            if (displayProfileEmail) displayProfileEmail.textContent = profile.email || "N/A";
-            if (profileNameInput) profileNameInput.value = profile.fullName || "";
             if (profileEmailInput) profileEmailInput.value = profile.email || "";
             _context5.n = 3;
             break;
@@ -881,8 +879,6 @@ function handleAdminPage() {
             _t6 = _context6.v;
             showModalMessage("Error deleting ".concat(type, ": ").concat(_t6.message), true);
           case 8:
-            ;
-          case 9:
             return _context6.a(2);
         }
       }, _callee6, null, [[2, 7]]);
@@ -1393,7 +1389,7 @@ function handleChecklistsPage() {
         var groupTitle = structureType === 'daily' ? "Day ".concat(i + 1) : "Week ".concat(i + 1);
         var groupContainer = document.createElement('div');
         groupContainer.className = 'card time-group-container';
-        groupContainer.innerHTML = "\n                    <h4 style=\"color: var(--text-light); margin-top: 0;\">".concat(groupTitle, "</h4>\n                    <div class=\"tasks-in-group\" data-group-index=\"").concat(i, "\"></div>\n                    <button type=\"button\" class=\"btn btn-secondary add-task-to-group-btn\" style=\"margin-top: 10px;\" data-group-index=\"").concat(i, "\">Add Task to ").concat(groupTitle, " +</button>\n                ");
+        groupContainer.innerHTML = "\n                    <h4 style=\"color: var(--text-light); margin-top: 0;'>".concat(groupTitle, "</h4>\n                    <div class=\"tasks-in-group\" data-group-index=\"").concat(i, "\"></div>\n                    <button type=\"button\" class=\"btn btn-secondary add-task-to-group-btn\" style=\"margin-top: 10px;\" data-group-index=\"").concat(i, "\">Add Task to ").concat(groupTitle, " +</button>\n                ");
         tasksInputArea.appendChild(groupContainer);
 
         // Add initial task input to the group
@@ -1916,7 +1912,7 @@ function handlePricingPage() {
                 sessionId: session.sessionId
               });
             } else {
-              showModalMessage("Failed to initiate checkout. Stripe or session ID missing.", true);
+              showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
             }
             _context20.n = 4;
             break;

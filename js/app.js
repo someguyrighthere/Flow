@@ -504,10 +504,6 @@ function handleAccountPage() {
             const profile = await apiRequest("GET", "/profile");
             if (displayProfileName)
                 displayProfileName.textContent = profile.fullName || "N/A";
-            if (displayProfileEmail)
-                displayProfileEmail.textContent = profile.email || "N/A";
-            if (profileNameInput)
-                profileNameInput.value = profile.fullName || "";
             if (profileEmailInput)
                 profileEmailInput.value = profile.email || "";
         } catch (error) {
@@ -695,7 +691,7 @@ function handleAdminPage() {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
-        };
+        } // Removed extra ')' here
     });
 
 
@@ -1070,7 +1066,7 @@ function handleChecklistsPage() {
                 const groupContainer = document.createElement('div');
                 groupContainer.className = 'card time-group-container';
                 groupContainer.innerHTML = `
-                    <h4 style="color: var(--text-light); margin-top: 0;">${groupTitle}</h4>
+                    <h4 style="color: var(--text-light); margin-top: 0;'>${groupTitle}</h4>
                     <div class="tasks-in-group" data-group-index="${i}"></div>
                     <button type="button" class="btn btn-secondary add-task-to-group-btn" style="margin-top: 10px;" data-group-index="${i}">Add Task to ${groupTitle} +</button>
                 `;
@@ -1468,7 +1464,7 @@ function handlePricingPage() {
                     showModalMessage("Account created! Redirecting to payment...", false);
                     stripe.redirectToCheckout({ sessionId: session.sessionId });
                 } else {
-                    showModalMessage("Failed to initiate checkout. Stripe or session ID missing.", true);
+                    showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
                 }
             } catch (error) {
                 console.error("Error creating checkout session:", error);
