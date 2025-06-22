@@ -204,7 +204,7 @@ function apiRequest(_x2, _x3) {
  * Handles all client-side logic for the login.html page.
  */
 function _apiRequest() {
-  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31(method, path) {
+  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee32(method, path) {
     var body,
       isFormData,
       onProgress,
@@ -214,22 +214,22 @@ function _apiRequest() {
       options,
       response,
       errorData,
-      _args31 = arguments,
+      _args32 = arguments,
       _t27;
-    return _regenerator().w(function (_context31) {
-      while (1) switch (_context31.n) {
+    return _regenerator().w(function (_context32) {
+      while (1) switch (_context32.n) {
         case 0:
-          body = _args31.length > 2 && _args31[2] !== undefined ? _args31[2] : null;
-          isFormData = _args31.length > 3 && _args31[3] !== undefined ? _args31[3] : false;
-          onProgress = _args31.length > 4 && _args31[4] !== undefined ? _args31[4] : null;
-          expectBlobResponse = _args31.length > 5 && _args31[5] !== undefined ? _args31[5] : false;
+          body = _args32.length > 2 && _args32[2] !== undefined ? _args32[2] : null;
+          isFormData = _args32.length > 3 && _args32[3] !== undefined ? _args32[3] : false;
+          onProgress = _args32.length > 4 && _args32[4] !== undefined ? _args32[4] : null;
+          expectBlobResponse = _args32.length > 5 && _args32[5] !== undefined ? _args32[5] : false;
           token = localStorage.getItem('authToken');
           endpoint = "".concat(API_BASE_URL).concat(path); // For FormData, use XMLHttpRequest for progress tracking
           if (!isFormData) {
-            _context31.n = 1;
+            _context32.n = 1;
             break;
           }
-          return _context31.a(2, new Promise(function (resolve, reject) {
+          return _context32.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
             if (token) {
@@ -293,12 +293,12 @@ function _apiRequest() {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
           }
-          _context31.n = 2;
+          _context32.n = 2;
           return fetch(endpoint, options);
         case 2:
-          response = _context31.v;
+          response = _context32.v;
           if (!(response.status === 401 || response.status === 403)) {
-            _context31.n = 3;
+            _context32.n = 3;
             break;
           }
           localStorage.removeItem('authToken');
@@ -308,37 +308,37 @@ function _apiRequest() {
           throw new Error('Authentication token missing or invalid.');
         case 3:
           if (response.ok) {
-            _context31.n = 7;
+            _context32.n = 7;
             break;
           }
-          _context31.p = 4;
-          _context31.n = 5;
+          _context32.p = 4;
+          _context32.n = 5;
           return response.json();
         case 5:
-          errorData = _context31.v;
+          errorData = _context32.v;
           throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
         case 6:
-          _context31.p = 6;
-          _t27 = _context31.v;
+          _context32.p = 6;
+          _t27 = _context32.v;
           throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
         case 7:
           if (!expectBlobResponse) {
-            _context31.n = 8;
+            _context32.n = 8;
             break;
           }
-          return _context31.a(2, response.blob());
+          return _context32.a(2, response.blob());
         case 8:
           if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
-            _context31.n = 9;
+            _context32.n = 9;
             break;
           }
-          return _context31.a(2, null);
+          return _context32.a(2, null);
         case 9:
-          return _context31.a(2, response.json());
+          return _context32.a(2, response.json());
         case 10:
-          return _context31.a(2);
+          return _context32.a(2);
       }
-    }, _callee31, null, [[4, 6]]);
+    }, _callee32, null, [[4, 6]]);
   }));
   return _apiRequest.apply(this, arguments);
 }
@@ -2076,7 +2076,6 @@ function handleHiringPage() {
  * Handles all client-side logic for the scheduling.html page.
  */
 function handleSchedulingPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
@@ -2243,7 +2242,7 @@ function handleSchedulingPage() {
             existingDayElements.forEach(function (el) {
               return el.remove();
             });
-            currentWeekDisplay.textContent = "".concat(currentWeekStart.format('MMM DD'), " - ").concat(moment(currentWeekStart).endOf('isoWeek').format('MMM DD, YYYY'));
+            currentWeekDisplay.textContent = "".concat(currentWeekStart.format('MMM DD'), " - ").concat(moment(currentWeekStart).endOf('isoWeek').format('MMM DD,YYYY'));
             dates = [];
             for (i = 0; i < 7; i++) {
               dates.push(moment(currentWeekStart).add(i, 'days'));
@@ -2496,16 +2495,16 @@ function handleDocumentsPage() {
     return _loadDocuments.apply(this, arguments);
   } // Handle document upload form submission
   function _loadDocuments() {
-    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30() {
+    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31() {
       var dummyDocuments;
-      return _regenerator().w(function (_context30) {
-        while (1) switch (_context30.n) {
+      return _regenerator().w(function (_context31) {
+        while (1) switch (_context31.n) {
           case 0:
             if (documentListDiv) {
-              _context30.n = 1;
+              _context31.n = 1;
               break;
             }
-            return _context30.a(2);
+            return _context31.a(2);
           case 1:
             documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
 
@@ -2531,9 +2530,9 @@ function handleDocumentsPage() {
               documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(error.message, "</p>");
             }
           case 2:
-            return _context30.a(2);
+            return _context31.a(2);
         }
-      }, _callee30);
+      }, _callee31);
     }));
     return _loadDocuments.apply(this, arguments);
   }
@@ -2561,10 +2560,6 @@ function handleDocumentsPage() {
               formData.append('description', description);
               try {
                 showUploadProgress(0, 'Starting upload...');
-                // In a real application, you would use:
-                // const result = await apiRequest("POST", "/documents/upload", formData, true, event => { ... });
-                // For this self-contained demo, we'll simulate the upload and add to local storage.
-
                 // Simulate upload progress
                 loaded = 0;
                 total = file.size;
@@ -2623,13 +2618,49 @@ function handleDocumentsPage() {
     }());
   }
 
-  // Event listener for delete buttons (using delegation)
-  // This listener is now handled by the global `document.body.addEventListener("click", ...)` in `handleAdminPage`.
-  // We just need to ensure `handleAdminPage` is called on load or the event listener is moved to a shared location.
-  // For this app, `handleAdminPage` is called in the main `DOMContentLoaded` listener,
-  // so we will just need to make sure delete action from `handleAdminPage`
-  // correctly calls `handleDocumentsPage()` to refresh documents list.
-  // This is updated in the `handleAdminPage` delete listener above.
+  // Event listener for delete buttons on documents page
+  // Using delegation on documentListDiv for dynamically added elements
+  if (documentListDiv) {
+    documentListDiv.addEventListener("click", /*#__PURE__*/function () {
+      var _ref16 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30(e) {
+        var targetButton, idToDelete, confirmed, dummyDocuments;
+        return _regenerator().w(function (_context30) {
+          while (1) switch (_context30.n) {
+            case 0:
+              targetButton = e.target.closest(".btn-delete"); // Ensure it's a delete button and specifically for a document
+              if (!(targetButton && targetButton.dataset.type === "document")) {
+                _context30.n = 2;
+                break;
+              }
+              idToDelete = parseInt(targetButton.dataset.id, 10);
+              _context30.n = 1;
+              return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
+            case 1:
+              confirmed = _context30.v;
+              if (confirmed) {
+                try {
+                  // Mock the deletion: remove from localStorage
+                  dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
+                  dummyDocuments = dummyDocuments.filter(function (doc) {
+                    return doc.document_id !== idToDelete;
+                  });
+                  localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
+                  showModalMessage("Document deleted successfully!", false);
+                  loadDocuments(); // Reload the list of documents to reflect the change
+                } catch (error) {
+                  showModalMessage("Error deleting document: ".concat(error.message), true);
+                }
+              }
+            case 2:
+              return _context30.a(2);
+          }
+        }, _callee30);
+      }));
+      return function (_x16) {
+        return _ref16.apply(this, arguments);
+      };
+    }());
+  }
 
   // Initial load of documents when the page loads
   loadDocuments();

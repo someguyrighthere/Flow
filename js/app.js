@@ -509,7 +509,8 @@ function handleAccountPage() {
                 if (newPasswordInput)
                     newPasswordInput.value = "";
                 loadProfileInfo();
-            } catch (error) {
+            }
+            catch (error) {
                 console.error("Error updating profile:", error);
                 showModalMessage(`Failed to update profile: ${error.message}`, true);
             }
@@ -1576,7 +1577,6 @@ function handleHiringPage() {
  * Handles all client-side logic for the scheduling.html page.
  */
 function handleSchedulingPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
@@ -1686,7 +1686,7 @@ function handleSchedulingPage() {
         const existingDayElements = calendarGrid.querySelectorAll('.calendar-day-header:not([style*="grid-column: 1"]), .calendar-day-cell');
         existingDayElements.forEach(el => el.remove());
 
-        currentWeekDisplay.textContent = `${currentWeekStart.format('MMM DD')} - ${moment(currentWeekStart).endOf('isoWeek').format('MMM DD, YYYY')}`;
+        currentWeekDisplay.textContent = `${currentWeekStart.format('MMM DD')} - ${moment(currentWeekStart).endOf('isoWeek').format('MMM DD,YYYY')}`;
 
         const dates = [];
         for (let i = 0; i < 7; i++) {
@@ -1965,10 +1965,6 @@ function handleDocumentsPage() {
 
             try {
                 showUploadProgress(0, 'Starting upload...');
-                // In a real application, you would use:
-                // const result = await apiRequest("POST", "/documents/upload", formData, true, event => { ... });
-                // For this self-contained demo, we'll simulate the upload and add to local storage.
-
                 // Simulate upload progress
                 let loaded = 0;
                 const total = file.size;
@@ -2010,13 +2006,33 @@ function handleDocumentsPage() {
         });
     }
 
-    // Event listener for delete buttons (using delegation)
-    // This listener is now handled by the global `document.body.addEventListener("click", ...)` in `handleAdminPage`.
-    // We just need to ensure `handleAdminPage` is called on load or the event listener is moved to a shared location.
-    // For this app, `handleAdminPage` is called in the main `DOMContentLoaded` listener,
-    // so we will just need to make sure delete action from `handleAdminPage`
-    // correctly calls `handleDocumentsPage()` to refresh documents list.
-    // This is updated in the `handleAdminPage` delete listener above.
+    // Event listener for delete buttons on documents page
+    // Using delegation on documentListDiv for dynamically added elements
+    if (documentListDiv) {
+        documentListDiv.addEventListener("click", async e => {
+            const targetButton = e.target.closest(".btn-delete");
+            // Ensure it's a delete button and specifically for a document
+            if (targetButton && targetButton.dataset.type === "document") {
+                const idToDelete = parseInt(targetButton.dataset.id, 10);
+                const confirmed = await showConfirmModal(`Are you sure you want to delete this document? This action cannot be undone.`, "Delete");
+
+                if (confirmed) {
+                    try {
+                        // Mock the deletion: remove from localStorage
+                        let dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
+                        dummyDocuments = dummyDocuments.filter(doc => doc.document_id !== idToDelete);
+                        localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
+
+                        showModalMessage("Document deleted successfully!", false);
+                        loadDocuments(); // Reload the list of documents to reflect the change
+                    } catch (error) {
+                        showModalMessage(`Error deleting document: ${error.message}`, true);
+                    }
+                }
+            }
+        });
+    }
+
 
     // Initial load of documents when the page loads
     loadDocuments();
