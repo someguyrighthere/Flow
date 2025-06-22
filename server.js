@@ -17,7 +17,7 @@ const fs = require('fs'); // ADD THIS LINE: Import file system module for local 
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
     try {
         require('fs').accessSync(path.join(__dirname, '.env'));
-        dotenv.config(); // Use dotenv.config() here
+        require('dotenv').config(); // Use dotenv.config() here
     } catch (e) {
         console.warn("Warning: .env file not found or accessible locally. Relying on system environment variables.");
     }
@@ -347,10 +347,10 @@ app.post('/create-checkout-session', authenticateToken, async (req, res, next) =
     let priceId;
     switch (planId) {
         case 'pro':
-            priceId = process.env.STRIPE_PRICE_ID_PRO; // Get from environment variable
+            priceId = STRIPE_PRICE_ID_PRO; // Get from environment variable
             break;
         case 'enterprise':
-            priceId = process.env.STRIPE_PRICE_ID_ENT; // Get from environment variable
+            priceId = STRIPE_PRICE_ID_ENT; // Get from environment variable
             break;
         default:
             return res.status(400).json({ error: "Invalid plan selected." });
@@ -779,7 +779,7 @@ app.put('/profile', authenticateToken, async (req, res, next) => {
             subscriptionStatus: updatedUser.subscription_status,
             planId: updatedUser.plan_id
         };
-        const newToken = jwt.sign(newPayload, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign(newPayload, JWT_SECRET, { expiresIn: '1h' }); // Token expires in 1 hour
         res.status(200).json({ message: 'Profile updated successfully!', token: newToken });
 
     } catch (error) {
@@ -952,7 +952,7 @@ app.post('/schedules', authenticateToken, async (req, res, next) => {
     }
 
     // Input validation
-    if (typeof employee_id !== 'number' || employee_id <= 0 || typeof location_id !== 'number' || location_id <= 0 || !start_time || !end_time || isNaN(new Date(start_time).getTime()) || isNaN(new Date(end_time).getTime()) || new Date(start_time) >= new Date(end_time)) {
+    if (typeof employee_id !== 'number' || employee_id <= 0 || typeof location_id !== 'number' || location_id <= 0 || !start_time || !end_time || isNaN(new Date(start_time).getTime()) || new Date(start_time) >= new Date(end_time)) {
         return res.status(400).json({ error: 'Invalid schedule data provided. Ensure employee_id, location_id are valid numbers, and start_time is before end_time.' });
     }
     if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
@@ -986,7 +986,8 @@ app.post('/schedules', authenticateToken, async (req, res, next) => {
     }  catch (error) {
         console.error("Database error creating schedule:", error);
         next(error);
-    }
+    
+}
 });
 
 app.get('/schedules', authenticateToken, async (req, res, next) => {
@@ -1339,6 +1340,436 @@ app.post('/applicants', authenticateToken, async (req, res, next) => {
 }
 });
 
+
+// NEW API ROUTES for Onboarding (Dashboard, Checklists, New Hire View)
+
+// Get list of positions (for onboarding new employees)
+app.get('/positions', authenticateToken, async (req, res, next) => {
+    const { companyId } = req.user;
+    try {
+        // Fetch unique positions from existing employees within the company
+        const positions = await query(
+            `SELECT DISTINCT position FROM Users WHERE company_id = $1 AND position IS NOT NULL`,
+            [companyId]
+        );
+        // Format to a more client-friendly array of objects with id and name
+        const formattedPositions = positions.map((p, index) => ({
+            id: p.position, // Use the position string as the ID for simplicity
+            name: p.position
+        }));
+        res.json({ positions: formattedPositions });
+    } catch (error) {
+        console.error("Error fetching positions:", error);
+        next(error);
+    }
+});
+
+// Create Onboarding Session (Invite Employee via Dashboard)
+app.post('/onboard-employee', authenticateToken, async (req, res, next) => {
+    const { full_name, email, position_id, employee_id } = req.body; // position_id now maps to 'position' column in Users
+    const { companyId, role, planId: currentPlanId } = req.user;
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can onboard employees.' });
+    }
+
+    // Input validation
+    if (!full_name || !email || !position_id || !isValidEmail(email)) {
+        return res.status(400).json({ error: "Full name, valid email, and position are required." });
+    }
+
+    // Employee Limit Enforcement (duplicate logic from /invite-employee, could be refactored)
+    const maxEmployeesForPlan = PLAN_EMPLOYEE_LIMITS[currentPlanId];
+    if (maxEmployeesForPlan !== null) {
+        try {
+            const employeeCountResult = await query(
+                `SELECT COUNT(*) FROM Users WHERE company_id = $1 AND role IN ('employee', 'location_admin')`,
+                [companyId]
+            );
+            const currentEmployeeCount = parseInt(employeeCountResult[0].count, 10);
+
+            if (currentEmployeeCount >= maxEmployeesForPlan) {
+                return res.status(403).json({ error: `Subscription limit reached: Your current plan allows up to ${maxEmployeesForPlan} employees. Please upgrade your plan.` });
+            }
+        } catch (dbError) {
+            console.error("Database error checking employee count for onboarding:", dbError);
+            next(dbError);
+            return;
+        }
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Create a temporary password for the new hire (they will set their own on first login)
+        const tempPassword = Math.random().toString(36).slice(-8); // Simple random password
+        const password_hash = await bcrypt.hash(tempPassword, 10);
+
+        // Insert new employee
+        const userInsertResult = await client.query(
+            `INSERT INTO Users (company_id, full_name, email, password_hash, role, subscription_status, plan_id, position, employee_id)
+             VALUES ($1, $2, $3, $4, 'employee', 'active', 'free', $5, $6) RETURNING user_id`,
+            [companyId, full_name, email, password_hash, position_id, employee_id || null]
+        );
+        const newUserId = userInsertResult.rows[0].user_id;
+
+        // Find the most recent checklist for the given position within the company
+        const checklistResult = await client.query(
+            `SELECT checklist_id, tasks, structure_type FROM Checklists
+             WHERE company_id = $1 AND position = $2
+             ORDER BY created_date DESC LIMIT 1`,
+            [companyId, position_id]
+        );
+
+        let assignedTasks = [];
+        if (checklistResult.rows.length > 0) {
+            const templateTasks = checklistResult.rows[0].tasks; // This is expected to be a JSON array/object from DB
+            // Deep copy tasks and set them all to not completed initially
+            assignedTasks = JSON.parse(JSON.stringify(templateTasks)).map(group => {
+                if (group.tasks) { // If grouped tasks
+                    return { ...group, tasks: group.tasks.map(task => ({ ...task, completed: false })) };
+                }
+                return { ...group, completed: false }; // If single list tasks
+            });
+        }
+
+        // Insert into OnboardingSessions
+        const sessionInsertResult = await client.query(
+            `INSERT INTO OnboardingSessions (user_id, company_id, position, tasks)
+             VALUES ($1, $2, $3, $4) RETURNING session_id`,
+            [newUserId, companyId, position_id, JSON.stringify(assignedTasks)] // Store tasks as JSON string
+        );
+        const newSessionId = sessionInsertResult.rows[0].session_id;
+
+        await client.query('COMMIT');
+        res.status(201).json({ message: "Employee onboarded successfully!", userId: newUserId, sessionId: newSessionId, tempPassword: tempPassword });
+
+    } catch (dbErr) {
+        await client.query('ROLLBACK');
+        console.error("Database error during onboarding employee:", dbErr);
+        if (dbErr.code === '23505') {
+            if (dbErr.constraint === 'users_email_key') {
+                return res.status(409).json({ error: 'Email already registered for an employee in this company.' });
+            }
+        }
+        next(dbErr);
+    } finally {
+        client.release();
+    }
+});
+
+
+// Get Onboarding Sessions
+app.get('/onboarding-sessions', authenticateToken, async (req, res, next) => {
+    const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
+
+    let sql = `
+        SELECT
+            os.session_id,
+            os.user_id,
+            os.position,
+            os.tasks,
+            os.start_date,
+            u.full_name,
+            u.email,
+            u.employee_id
+        FROM OnboardingSessions os
+        JOIN Users u ON os.user_id = u.user_id
+        WHERE os.company_id = $1
+    `;
+    const params = [companyId];
+    let paramIndex = 2;
+
+    // Filter by location if location_admin
+    if (role === 'location_admin' && currentUserLocationId !== null) {
+        sql += ` AND u.location_id = $${paramIndex++}`;
+        params.push(currentUserLocationId);
+    } else if (role === 'employee') {
+        // Employees only see their own session
+        sql += ` AND os.user_id = $${paramIndex++}`;
+        params.push(currentUserId);
+    } else if (!['super_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view onboarding sessions.' });
+    }
+
+    try {
+        const sessions = await query(sql, params);
+        const formattedSessions = sessions.map(session => {
+            const tasks = session.tasks ? JSON.parse(session.tasks) : [];
+            let completedTasks = 0;
+            let totalTasks = 0;
+
+            if (Array.isArray(tasks)) { // Check if it's an array of tasks or task groups
+                tasks.forEach(item => {
+                    if (item.tasks && Array.isArray(item.tasks)) { // If grouped tasks
+                        totalTasks += item.tasks.length;
+                        completedTasks += item.tasks.filter(task => task.completed).length;
+                    } else { // If single list tasks
+                        totalTasks += 1;
+                        if (item.completed) completedTasks += 1;
+                    }
+                });
+            }
+
+            return {
+                session_id: session.session_id,
+                user_id: session.user_id,
+                full_name: session.full_name,
+                email: session.email,
+                position: session.position,
+                employee_id: session.employee_id,
+                start_date: session.start_date,
+                completedTasks: completedTasks,
+                totalTasks: totalTasks,
+                // Do NOT send raw tasks array unless explicitly needed by frontend securely
+            };
+        });
+        res.json(formattedSessions);
+    } catch (error) {
+        console.error("Error fetching onboarding sessions:", error);
+        next(error);
+    }
+});
+
+// Archive Onboarding Session
+app.put('/onboarding-sessions/:sessionId/archive', authenticateToken, async (req, res, next) => {
+    const { sessionId } = req.params;
+    const { companyId, role } = req.user;
+
+    // Authorization: Only super_admin can archive sessions
+    if (role !== 'super_admin') {
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can archive onboarding sessions.' });
+    }
+    if (!sessionId || isNaN(parseInt(sessionId))) {
+        return res.status(400).json({ error: 'Invalid session ID provided.' });
+    }
+
+    try {
+        const result = await runCommand(
+            `DELETE FROM OnboardingSessions WHERE session_id = $1 AND company_id = $2`, // Or update status to 'archived'
+            [sessionId, companyId]
+        );
+        if (result === 0) {
+            return res.status(404).json({ error: 'Onboarding session not found or not authorized to archive.' });
+        }
+        res.status(200).json({ message: 'Onboarding session archived successfully.' });
+    } catch (error) {
+        console.error("Error archiving onboarding session:", error);
+        next(error);
+    }
+});
+
+// Get Onboarding Tasks for a specific user (for new-hire-view.html)
+app.get('/onboarding-tasks/:userId', authenticateToken, async (req, res, next) => {
+    const { userId } = req.params;
+    const { companyId, userId: currentUserId, role } = req.user;
+
+    // Authorization: User can only see their own tasks, admins can see any in their company
+    if (role === 'employee' && parseInt(userId) !== currentUserId) {
+        return res.status(403).json({ error: 'Access Dismissed: Employees can only view their own onboarding tasks.' });
+    }
+    if (!userId || isNaN(parseInt(userId))) {
+        return res.status(400).json({ error: 'Invalid user ID provided.' });
+    }
+
+    try {
+        // Fetch the active onboarding session for this user within the company
+        const sessionResult = await query(
+            `SELECT os.tasks, os.position, c.structure_type
+             FROM OnboardingSessions os
+             JOIN Users u ON os.user_id = u.user_id
+             LEFT JOIN Checklists c ON os.position = c.position AND os.company_id = c.company_id -- Join to get checklist structure type
+             WHERE os.user_id = $1 AND os.company_id = $2
+             LIMIT 1`,
+            [userId, companyId]
+        );
+
+        if (sessionResult.length === 0) {
+            return res.status(404).json({ error: 'Onboarding session not found for this user.' });
+        }
+
+        const session = sessionResult[0];
+        const tasks = session.tasks ? JSON.parse(session.tasks) : [];
+
+        res.json({
+            user_id: userId,
+            position: session.position,
+            checklist: {
+                structure_type: session.structure_type || 'single_list', // Default if not found
+                tasks: tasks // Send the raw tasks array, frontend processes it
+            }
+        });
+
+    } catch (error) {
+        console.error("Error fetching onboarding tasks:", error);
+        next(error);
+    }
+});
+
+// Update Onboarding Task Status
+app.put('/onboarding-tasks/:taskId', authenticateToken, async (req, res, next) => {
+    const { taskId } = req.params; // This taskId refers to the index/path within the JSON structure
+    const { completed, type, groupIndex } = req.body; // `type` can be 'single' or 'grouped'
+    const { userId, companyId, role } = req.user;
+
+    if (typeof completed !== 'boolean' || !taskId) {
+        return res.status(400).json({ error: 'Invalid data provided for task update.' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Fetch the user's current onboarding session and tasks
+        // For employees, ensure they only update their own tasks
+        let sessionSql = `SELECT os.session_id, os.tasks FROM OnboardingSessions os WHERE os.user_id = $1 AND os.company_id = $2`;
+        let sessionParams = [userId, companyId];
+
+        // If an admin is trying to update, verify their permissions and the task belongs to their company
+        // For simplicity, currentUserId comes from the token, so we assume a direct user ID match for employee role.
+        // For admins, we just need to ensure the session belongs to their company.
+        if (role !== 'employee') {
+             sessionSql = `SELECT os.session_id, os.tasks
+                           FROM OnboardingSessions os
+                           JOIN Users u ON os.user_id = u.user_id
+                           WHERE os.session_id = (SELECT session_id FROM OnboardingSessions WHERE user_id = $1 AND company_id = $2 LIMIT 1)`;
+             sessionParams = [parseInt(taskId), companyId]; // Assuming taskId might be user_id in this case for admin updates
+             // NOTE: A more robust system would involve passing the actual session_id in the frontend PUT request
+             // and then joining on `os.session_id = $1` instead of `user_id`.
+             // For now, let's assume taskId maps to user_id for simplicity on admin side.
+             // This might need refinement based on how admins update specific tasks.
+        }
+
+        const sessionResult = await client.query(sessionSql, sessionParams);
+        if (sessionResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Onboarding session not found or not authorized to update.' });
+        }
+
+        const session = sessionResult.rows[0];
+        const currentTasks = session.tasks ? JSON.parse(session.tasks) : [];
+        let updatedTasks = JSON.parse(JSON.stringify(currentTasks)); // Deep copy
+
+        // Logic to find and update the specific task
+        let taskFound = false;
+        if (type === 'single') {
+            // Find the task by ID (assuming task.id is unique across all tasks in single list)
+            const taskIndex = updatedTasks.findIndex(t => t.id === parseInt(taskId, 10)); // Convert taskId to int
+            if (taskIndex !== -1) {
+                updatedTasks[taskIndex].completed = completed;
+                taskFound = true;
+            }
+        } else if (type === 'grouped') {
+            // Find the group by groupIndex and then the task by ID within that group
+            const parsedGroupIndex = parseInt(groupIndex, 10);
+            const parsedTaskId = parseInt(taskId, 10);
+
+            if (updatedTasks[parsedGroupIndex] && updatedTasks[parsedGroupIndex].tasks) {
+                const taskIndex = updatedTasks[parsedGroupIndex].tasks.findIndex(t => t.id === parsedTaskId);
+                if (taskIndex !== -1) {
+                    updatedTasks[parsedGroupIndex].tasks[taskIndex].completed = completed;
+                    taskFound = true;
+                }
+            }
+        }
+
+        if (!taskFound) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Task not found in the onboarding session.' });
+        }
+
+        // Update the tasks JSON in the database
+        await client.query(
+            `UPDATE OnboardingSessions SET tasks = $1 WHERE session_id = $2`,
+            [JSON.stringify(updatedTasks), session.session_id]
+        );
+
+        await client.query('COMMIT');
+        res.status(200).json({ message: 'Task status updated successfully!' });
+
+    } catch (dbErr) {
+        await client.query('ROLLBACK');
+        console.error("Database error updating onboarding task:", dbErr);
+        next(dbErr);
+    } finally {
+        client.release();
+    }
+});
+
+
+// Manage Checklists
+app.post('/checklists', authenticateToken, async (req, res, next) => {
+    const { position, title, structure_type, group_count, tasks } = req.body;
+    const { companyId, role } = req.user;
+    const created_date = new Date().toISOString();
+
+    if (!['super_admin'].includes(role)) { // Only super_admin can manage checklists
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can manage checklists.' });
+    }
+    if (!position || !title || !structure_type || !tasks) {
+        return res.status(400).json({ error: 'Position, title, structure type, and tasks are required.' });
+    }
+    if (!Array.isArray(tasks) || tasks.length === 0 || (structure_type !== 'single_list' && !tasks.every(group => group.tasks && Array.isArray(group.tasks)))) {
+        return res.status(400).json({ error: 'Invalid tasks format. Must be an array of tasks or task groups.' });
+    }
+
+    try {
+        const result = await runCommand(
+            `INSERT INTO Checklists (company_id, position, title, structure_type, group_count, tasks, created_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING checklist_id`,
+            [companyId, position, title, structure_type, group_count, JSON.stringify(tasks), created_date]
+        );
+        res.status(201).json({ message: 'Checklist created successfully!', checklistId: result.checklist_id });
+    } catch (error) {
+        console.error("Error creating checklist:", error);
+        next(error);
+    }
+});
+
+app.get('/checklists', authenticateToken, async (req, res, next) => {
+    const { companyId, role } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) { // Admins can view checklists
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view checklists.' });
+    }
+
+    try {
+        const checklists = await query(
+            `SELECT checklist_id AS id, position, title, structure_type, group_count, created_date
+             FROM Checklists WHERE company_id = $1 ORDER BY created_date DESC`,
+            [companyId]
+        );
+        res.json(checklists);
+    } catch (error) {
+        console.error("Error fetching checklists:", error);
+        next(error);
+    }
+});
+
+app.delete('/checklists/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role } = req.user;
+
+    if (!['super_admin'].includes(role)) { // Only super_admin can delete checklists
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can delete checklists.' });
+    }
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid checklist ID provided.' }); }
+
+    try {
+        const result = await runCommand('DELETE FROM Checklists WHERE checklist_id = $1 AND company_id = $2', [id, companyId]);
+        if (result === 0) {
+            return res.status(404).json({ error: 'Checklist not found or not authorized to delete.' });
+        }
+        res.status(204).send();
+    } catch (error) {
+        console.error("Error deleting checklist:", error);
+        next(error);
+    }
+});
+
+
 // --- Static Files and SPA Fallback (Moved to the very end) ---
 // Define Public Directory Path - this assumes server.js is in the root of the repository
 const PUBLIC_DIR = path.join(__dirname, '/');
@@ -1416,3 +1847,4 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
+
