@@ -205,7 +205,7 @@ function apiRequest(_x2, _x3) {
  * Handles all client-side logic for the login.html page.
  */
 function _apiRequest() {
-  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21(method, path) {
+  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(method, path) {
     var body,
       isFormData,
       onProgress,
@@ -215,22 +215,22 @@ function _apiRequest() {
       options,
       response,
       errorData,
-      _args21 = arguments,
-      _t21;
-    return _regenerator().w(function (_context21) {
-      while (1) switch (_context21.n) {
+      _args18 = arguments,
+      _t18;
+    return _regenerator().w(function (_context18) {
+      while (1) switch (_context18.n) {
         case 0:
-          body = _args21.length > 2 && _args21[2] !== undefined ? _args21[2] : null;
-          isFormData = _args21.length > 3 && _args21[3] !== undefined ? _args21[3] : false;
-          onProgress = _args21.length > 4 && _args21[4] !== undefined ? _args21[4] : null;
-          expectBlobResponse = _args21.length > 5 && _args21[5] !== undefined ? _args21[5] : false;
+          body = _args18.length > 2 && _args18[2] !== undefined ? _args18[2] : null;
+          isFormData = _args18.length > 3 && _args18[3] !== undefined ? _args18[3] : false;
+          onProgress = _args18.length > 4 && _args18[4] !== undefined ? _args18[4] : null;
+          expectBlobResponse = _args18.length > 5 && _args18[5] !== undefined ? _args18[5] : false;
           token = localStorage.getItem('authToken');
           endpoint = "".concat(API_BASE_URL).concat(path); // For FormData, use XMLHttpRequest for progress tracking
           if (!isFormData) {
-            _context21.n = 1;
+            _context18.n = 1;
             break;
           }
-          return _context21.a(2, new Promise(function (resolve, reject) {
+          return _context18.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
             if (token) {
@@ -293,12 +293,12 @@ function _apiRequest() {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
           }
-          _context21.n = 2;
+          _context18.n = 2;
           return fetch(endpoint, options);
         case 2:
-          response = _context21.v;
+          response = _context18.v;
           if (!(response.status === 401 || response.status === 403)) {
-            _context21.n = 3;
+            _context18.n = 3;
             break;
           }
           localStorage.removeItem('authToken');
@@ -307,37 +307,37 @@ function _apiRequest() {
           throw new Error('Authentication token missing or invalid.');
         case 3:
           if (response.ok) {
-            _context21.n = 7;
+            _context18.n = 7;
             break;
           }
-          _context21.p = 4;
-          _context21.n = 5;
+          _context18.p = 4;
+          _context18.n = 5;
           return response.json();
         case 5:
-          errorData = _context21.v;
+          errorData = _context18.v;
           throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
         case 6:
-          _context21.p = 6;
-          _t21 = _context21.v;
+          _context18.p = 6;
+          _t18 = _context18.v;
           throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
         case 7:
           if (!expectBlobResponse) {
-            _context21.n = 8;
+            _context18.n = 8;
             break;
           }
-          return _context21.a(2, response.blob());
+          return _context18.a(2, response.blob());
         case 8:
           if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
-            _context21.n = 9;
+            _context18.n = 9;
             break;
           }
-          return _context21.a(2, null);
+          return _context18.a(2, null);
         case 9:
-          return _context21.a(2, response.json());
+          return _context18.a(2, response.json());
         case 10:
-          return _context21.a(2);
+          return _context18.a(2);
       }
-    }, _callee21, null, [[4, 6]]);
+    }, _callee18, null, [[4, 6]]);
   }));
   return _apiRequest.apply(this, arguments);
 }
@@ -704,23 +704,23 @@ function handleAdminPage() {
    * Fetches and displays the list of users.
    */
   function _loadLocations() {
-    _loadLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0() {
-      var locations, locationOptionsHtml, _t0;
-      return _regenerator().w(function (_context0) {
-        while (1) switch (_context0.n) {
+    _loadLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7() {
+      var locations, locationOptionsHtml, _t7;
+      return _regenerator().w(function (_context7) {
+        while (1) switch (_context7.n) {
           case 0:
             if (locationListDiv) {
-              _context0.n = 1;
+              _context7.n = 1;
               break;
             }
-            return _context0.a(2);
+            return _context7.a(2);
           case 1:
             locationListDiv.innerHTML = "<p>Loading locations...</p>";
-            _context0.p = 2;
-            _context0.n = 3;
+            _context7.p = 2;
+            _context7.n = 3;
             return apiRequest("GET", "/locations");
           case 3:
-            locations = _context0.v;
+            locations = _context7.v;
             locationListDiv.innerHTML = "";
             if (locations.length === 0) {
               locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
@@ -760,17 +760,17 @@ function handleAdminPage() {
                 employeeLocationSelect.innerHTML = "<option value=\"\">Select a location</option>".concat(locationOptionsHtml);
               }
             }
-            _context0.n = 5;
+            _context7.n = 5;
             break;
           case 4:
-            _context0.p = 4;
-            _t0 = _context0.v;
-            console.error("Error loading locations:", _t0);
-            showModalMessage("Failed to load locations: ".concat(_t0.message), true);
+            _context7.p = 4;
+            _t7 = _context7.v;
+            console.error("Error loading locations:", _t7);
+            showModalMessage("Failed to load locations: ".concat(_t7.message), true);
           case 5:
-            return _context0.a(2);
+            return _context7.a(2);
         }
-      }, _callee0, null, [[2, 4]]);
+      }, _callee7, null, [[2, 4]]);
     }));
     return _loadLocations.apply(this, arguments);
   }
@@ -778,24 +778,24 @@ function handleAdminPage() {
     return _loadUsers.apply(this, arguments);
   } // Event listener for delete buttons (delegated to body for dynamically added elements)
   function _loadUsers() {
-    _loadUsers = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1() {
-      var users, _t1;
-      return _regenerator().w(function (_context1) {
-        while (1) switch (_context1.n) {
+    _loadUsers = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8() {
+      var users, _t8;
+      return _regenerator().w(function (_context8) {
+        while (1) switch (_context8.n) {
           case 0:
             if (userListDiv) {
-              _context1.n = 1;
+              _context8.n = 1;
               break;
             }
-            return _context1.a(2);
+            return _context8.a(2);
           case 1:
             // Exit if div not found
             userListDiv.innerHTML = "<p>Loading users...</p>";
-            _context1.p = 2;
-            _context1.n = 3;
+            _context8.p = 2;
+            _context8.n = 3;
             return apiRequest("GET", "/users");
           case 3:
-            users = _context1.v;
+            users = _context8.v;
             userListDiv.innerHTML = "";
             if (users.length === 0) {
               userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users invited yet.</p>';
@@ -811,17 +811,17 @@ function handleAdminPage() {
                 userListDiv.appendChild(userDiv);
               });
             }
-            _context1.n = 5;
+            _context8.n = 5;
             break;
           case 4:
-            _context1.p = 4;
-            _t1 = _context1.v;
-            console.error("Error loading users:", _t1);
-            userListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading users: ".concat(_t1.message, "</p>");
+            _context8.p = 4;
+            _t8 = _context8.v;
+            console.error("Error loading users:", _t8);
+            userListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading users: ".concat(_t8.message, "</p>");
           case 5:
-            return _context1.a(2);
+            return _context8.a(2);
         }
-      }, _callee1, null, [[2, 4]]);
+      }, _callee8, null, [[2, 4]]);
     }));
     return _loadUsers.apply(this, arguments);
   }
@@ -886,187 +886,7 @@ function handleAdminPage() {
     return function (_x7) {
       return _ref5.apply(this, arguments);
     };
-  }());
-
-  // Handle new location form submission
-  if (newLocationForm) {
-    // console.log("handleAdminPage: New location form found, attaching listener."); // Removed for production
-    newLocationForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref6 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(e) {
-        var nameInput, addressInput, location_name, location_address, _t7;
-        return _regenerator().w(function (_context7) {
-          while (1) switch (_context7.n) {
-            case 0:
-              e.preventDefault();
-              // console.log("handleAdminPage: New location form submitted."); // Removed for production
-              nameInput = document.getElementById("new-location-name");
-              addressInput = document.getElementById("new-location-address");
-              location_name = nameInput.value.trim();
-              location_address = addressInput.value.trim();
-              _context7.p = 1;
-              _context7.n = 2;
-              return apiRequest("POST", "/locations", {
-                location_name: location_name,
-                location_address: location_address
-              });
-            case 2:
-              nameInput.value = ""; // Clear form
-              addressInput.value = ""; // Clear form
-              showModalMessage("Location created successfully!", false);
-              // console.log("handleAdminPage: Location created, reloading lists."); // Removed for production
-              loadLocations(); // Reload locations to show new entry
-              _context7.n = 4;
-              break;
-            case 3:
-              _context7.p = 3;
-              _t7 = _context7.v;
-              console.error("Error creating location:", _t7);
-              showModalMessage("Error creating location: ".concat(_t7.message), true);
-            case 4:
-              return _context7.a(2);
-          }
-        }, _callee7, null, [[1, 3]]);
-      }));
-      return function (_x8) {
-        return _ref6.apply(this, arguments);
-      };
-    }());
-  }
-
-  // Handle invite admin form submission
-  if (inviteAdminForm) {
-    // console.log("handleAdminPage: Invite admin form found, attaching listener."); // Removed for production
-    inviteAdminForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8(e) {
-        var adminName, adminEmail, adminPassword, adminLocationSelectElement, adminLocationId, _t8;
-        return _regenerator().w(function (_context8) {
-          while (1) switch (_context8.n) {
-            case 0:
-              e.preventDefault();
-              // console.log("handleAdminPage: Invite admin form submitted."); // Removed for production
-              adminName = document.getElementById("admin-name") ? document.getElementById("admin-name").value.trim() : "";
-              adminEmail = document.getElementById("admin-email") ? document.getElementById("admin-email").value.trim() : "";
-              adminPassword = document.getElementById("admin-password") ? document.getElementById("admin-password").value : "";
-              adminLocationSelectElement = document.getElementById("admin-location-select");
-              adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : "";
-              if (!(!adminName || !adminEmail || !adminPassword || adminPassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail))) {
-                _context8.n = 1;
-                break;
-              }
-              showModalMessage("Please provide a full name, valid email, and a password (min 6 chars) for the new admin.", true);
-              return _context8.a(2);
-            case 1:
-              if (adminLocationId) {
-                _context8.n = 2;
-                break;
-              }
-              showModalMessage("Please select a location to assign the admin.", true);
-              return _context8.a(2);
-            case 2:
-              _context8.p = 2;
-              _context8.n = 3;
-              return apiRequest("POST", "/invite-admin", {
-                full_name: adminName,
-                email: adminEmail,
-                location_id: parseInt(adminLocationId),
-                // Ensure it's an integer
-                password: adminPassword
-              });
-            case 3:
-              // Clear form fields
-              if (document.getElementById("admin-name")) document.getElementById("admin-name").value = "";
-              if (document.getElementById("admin-email")) document.getElementById("admin-email").value = "";
-              if (document.getElementById("admin-password")) document.getElementById("admin-password").value = "";
-              if (adminLocationSelectElement) adminLocationSelectElement.value = ""; // Reset dropdown
-
-              showModalMessage("Admin invite sent to ".concat(adminEmail, " for selected location with the provided temporary password."), false);
-              // console.log("handleAdminPage: Admin invited, reloading users."); // Removed for production
-              loadUsers(); // Reload users to show new admin
-              _context8.n = 5;
-              break;
-            case 4:
-              _context8.p = 4;
-              _t8 = _context8.v;
-              showModalMessage("Error inviting admin: ".concat(_t8.message), true);
-            case 5:
-              return _context8.a(2);
-          }
-        }, _callee8, null, [[2, 4]]);
-      }));
-      return function (_x9) {
-        return _ref7.apply(this, arguments);
-      };
-    }());
-  }
-
-  // Handle invite employee form submission
-  if (inviteEmployeeForm) {
-    // console.log("handleAdminPage: Invite employee form found, attaching listener."); // Removed for production
-    inviteEmployeeForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref8 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(e) {
-        var employeeName, employeeEmail, employeePassword, employeePosition, employeeId, employeeLocationSelectElement, employeeLocationId, locationIdToSend, employeeIdToSend, _t9;
-        return _regenerator().w(function (_context9) {
-          while (1) switch (_context9.n) {
-            case 0:
-              e.preventDefault();
-              // console.log("handleAdminPage: Invite employee form submitted."); // Removed for production
-              employeeName = document.getElementById("employee-name") ? document.getElementById("employee-name").value.trim() : "";
-              employeeEmail = document.getElementById("employee-email") ? document.getElementById("employee-email").value.trim() : "";
-              employeePassword = document.getElementById("employee-password") ? document.getElementById("employee-password").value : "";
-              employeePosition = document.getElementById("employee-position") ? document.getElementById("employee-position").value.trim() : "";
-              employeeId = document.getElementById("employee-id") ? document.getElementById("employee-id").value.trim() : null; // Can be null or empty string
-              employeeLocationSelectElement = document.getElementById("employee-location-select");
-              employeeLocationId = employeeLocationSelectElement ? employeeLocationSelectElement.value : "";
-              if (!(!employeeName || !employeeEmail || !employeePassword || employeePassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail))) {
-                _context9.n = 1;
-                break;
-              }
-              showModalMessage("Full name, valid email, and a password (min 6 chars) are required for employee invitation.", true);
-              return _context9.a(2);
-            case 1:
-              // Convert location ID to number or null (if empty string)
-              locationIdToSend = employeeLocationId ? parseInt(employeeLocationId) : null; // Convert employee_id to number or string or null (if empty string)
-              employeeIdToSend = employeeId ? isNaN(parseInt(employeeId)) ? employeeId : parseInt(employeeId) : null;
-              _context9.p = 2;
-              _context9.n = 3;
-              return apiRequest("POST", "/invite-employee", {
-                full_name: employeeName,
-                email: employeeEmail,
-                password: employeePassword,
-                position: employeePosition || null,
-                // Send null if empty
-                employee_id: employeeIdToSend,
-                // Send null if empty, or parsed value
-                location_id: locationIdToSend // Send null if empty/unassigned
-              });
-            case 3:
-              // Clear form fields
-              if (document.getElementById("employee-name")) document.getElementById("employee-name").value = "";
-              if (document.getElementById("employee-email")) document.getElementById("employee-email").value = "";
-              if (document.getElementById("employee-password")) document.getElementById("employee-password").value = "";
-              if (document.getElementById("employee-position")) document.getElementById("employee-position").value = "";
-              if (document.getElementById("employee-id")) document.getElementById("employee-id").value = "";
-              if (employeeLocationSelectElement) employeeLocationSelectElement.value = ""; // Reset dropdown
-
-              showModalMessage("Employee invite sent to ".concat(employeeEmail, " with the provided temporary password."), false);
-              // console.log("handleAdminPage: Employee invited, reloading users."); // Removed for production
-              loadUsers(); // Reload users to show new employee
-              _context9.n = 5;
-              break;
-            case 4:
-              _context9.p = 4;
-              _t9 = _context9.v;
-              showModalMessage("Error inviting employee: ".concat(_t9.message), true);
-            case 5:
-              return _context9.a(2);
-          }
-        }, _callee9, null, [[2, 4]]);
-      }));
-      return function (_x0) {
-        return _ref8.apply(this, arguments);
-      };
-    }());
-  }
+  }()); // Corrected: This `)` closes the addEventListener call. The original was missing this.
 
   // Initial loads when the admin page loads
   loadLocations();
@@ -1126,23 +946,23 @@ function handleDashboardPage() {
    * Loads and displays active onboarding sessions.
    */
   function _loadPositions() {
-    _loadPositions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11() {
-      var response, _t11;
-      return _regenerator().w(function (_context11) {
-        while (1) switch (_context11.n) {
+    _loadPositions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0() {
+      var response, _t0;
+      return _regenerator().w(function (_context0) {
+        while (1) switch (_context0.n) {
           case 0:
             if (newHirePositionSelect) {
-              _context11.n = 1;
+              _context0.n = 1;
               break;
             }
-            return _context11.a(2);
+            return _context0.a(2);
           case 1:
             newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>';
-            _context11.p = 2;
-            _context11.n = 3;
+            _context0.p = 2;
+            _context0.n = 3;
             return apiRequest("GET", "/positions");
           case 3:
-            response = _context11.v;
+            response = _context0.v;
             // Placeholder API
             newHirePositionSelect.innerHTML = '<option value="">Select Position</option>';
             if (response && response.positions && response.positions.length > 0) {
@@ -1155,18 +975,18 @@ function handleDashboardPage() {
             } else {
               newHirePositionSelect.innerHTML = '<option value="">No positions available</option>';
             }
-            _context11.n = 5;
+            _context0.n = 5;
             break;
           case 4:
-            _context11.p = 4;
-            _t11 = _context11.v;
-            console.error("Error loading positions:", _t11);
+            _context0.p = 4;
+            _t0 = _context0.v;
+            console.error("Error loading positions:", _t0);
             newHirePositionSelect.innerHTML = '<option value="">Error loading positions</option>';
-            showModalMessage("Failed to load positions: ".concat(_t11.message), true);
+            showModalMessage("Failed to load positions: ".concat(_t0.message), true);
           case 5:
-            return _context11.a(2);
+            return _context0.a(2);
         }
-      }, _callee11, null, [[2, 4]]);
+      }, _callee0, null, [[2, 4]]);
     }));
     return _loadPositions.apply(this, arguments);
   }
@@ -1174,23 +994,23 @@ function handleDashboardPage() {
     return _loadOnboardingSessions.apply(this, arguments);
   } // Handle onboard new employee form submission
   function _loadOnboardingSessions() {
-    _loadOnboardingSessions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13() {
-      var sessions, _t13;
-      return _regenerator().w(function (_context13) {
-        while (1) switch (_context13.n) {
+    _loadOnboardingSessions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10() {
+      var sessions, _t10;
+      return _regenerator().w(function (_context10) {
+        while (1) switch (_context10.n) {
           case 0:
             if (sessionListDiv) {
-              _context13.n = 1;
+              _context10.n = 1;
               break;
             }
-            return _context13.a(2);
+            return _context10.a(2);
           case 1:
             sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading active onboardings...</p>';
-            _context13.p = 2;
-            _context13.n = 3;
+            _context10.p = 2;
+            _context10.n = 3;
             return apiRequest("GET", "/onboarding-sessions");
           case 3:
-            sessions = _context13.v;
+            sessions = _context10.v;
             // Placeholder API
             sessionListDiv.innerHTML = '';
             if (sessions && sessions.length > 0) {
@@ -1215,66 +1035,66 @@ function handleDashboardPage() {
               // Implement archive functionality
               sessionListDiv.querySelectorAll('.archive-onboarding-btn').forEach(function (button) {
                 button.addEventListener('click', /*#__PURE__*/function () {
-                  var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12(event) {
-                    var sessionId, confirmed, _t12;
-                    return _regenerator().w(function (_context12) {
-                      while (1) switch (_context12.n) {
+                  var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1(event) {
+                    var sessionId, confirmed, _t1;
+                    return _regenerator().w(function (_context1) {
+                      while (1) switch (_context1.n) {
                         case 0:
                           sessionId = event.target.dataset.sessionId;
-                          _context12.n = 1;
+                          _context1.n = 1;
                           return showConfirmModal('Are you sure you want to archive this onboarding session?');
                         case 1:
-                          confirmed = _context12.v;
+                          confirmed = _context1.v;
                           if (!confirmed) {
-                            _context12.n = 5;
+                            _context1.n = 5;
                             break;
                           }
-                          _context12.p = 2;
-                          _context12.n = 3;
+                          _context1.p = 2;
+                          _context1.n = 3;
                           return apiRequest("PUT", "/onboarding-sessions/".concat(sessionId, "/archive"));
                         case 3:
                           // Placeholder API
                           showModalMessage('Onboarding session archived successfully!', false);
                           loadOnboardingSessions(); // Reload list
-                          _context12.n = 5;
+                          _context1.n = 5;
                           break;
                         case 4:
-                          _context12.p = 4;
-                          _t12 = _context12.v;
-                          showModalMessage("Failed to archive session: ".concat(_t12.message), true);
+                          _context1.p = 4;
+                          _t1 = _context1.v;
+                          showModalMessage("Failed to archive session: ".concat(_t1.message), true);
                         case 5:
-                          return _context12.a(2);
+                          return _context1.a(2);
                       }
-                    }, _callee12, null, [[2, 4]]);
+                    }, _callee1, null, [[2, 4]]);
                   }));
-                  return function (_x10) {
-                    return _ref0.apply(this, arguments);
+                  return function (_x9) {
+                    return _ref7.apply(this, arguments);
                   };
                 }());
               });
             } else {
               sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">No active onboardings.</p>';
             }
-            _context13.n = 5;
+            _context10.n = 5;
             break;
           case 4:
-            _context13.p = 4;
-            _t13 = _context13.v;
-            console.error("Error loading onboarding sessions:", _t13);
-            sessionListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading onboarding sessions: ".concat(_t13.message, "</p>");
+            _context10.p = 4;
+            _t10 = _context10.v;
+            console.error("Error loading onboarding sessions:", _t10);
+            sessionListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading onboarding sessions: ".concat(_t10.message, "</p>");
           case 5:
-            return _context13.a(2);
+            return _context10.a(2);
         }
-      }, _callee13, null, [[2, 4]]);
+      }, _callee10, null, [[2, 4]]);
     }));
     return _loadOnboardingSessions.apply(this, arguments);
   }
   if (onboardUserForm) {
     onboardUserForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10(e) {
-        var newHireName, newHireEmail, newHirePosition, newHireId, response, _t10;
-        return _regenerator().w(function (_context10) {
-          while (1) switch (_context10.n) {
+      var _ref6 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(e) {
+        var newHireName, newHireEmail, newHirePosition, newHireId, response, _t9;
+        return _regenerator().w(function (_context9) {
+          while (1) switch (_context9.n) {
             case 0:
               e.preventDefault();
               newHireName = document.getElementById("new-hire-name").value.trim();
@@ -1282,21 +1102,21 @@ function handleDashboardPage() {
               newHirePosition = newHirePositionSelect ? newHirePositionSelect.value : "";
               newHireId = document.getElementById("new-hire-id").value.trim();
               if (!(!newHireName || !newHireEmail || !newHirePosition)) {
-                _context10.n = 1;
+                _context9.n = 1;
                 break;
               }
               showModalMessage("Please fill all required fields: Full Name, Email, and Position.", true);
-              return _context10.a(2);
+              return _context9.a(2);
             case 1:
               if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newHireEmail)) {
-                _context10.n = 2;
+                _context9.n = 2;
                 break;
               }
               showModalMessage("Please enter a valid email address.", true);
-              return _context10.a(2);
+              return _context9.a(2);
             case 2:
-              _context10.p = 2;
-              _context10.n = 3;
+              _context9.p = 2;
+              _context9.n = 3;
               return apiRequest("POST", "/onboard-employee", {
                 // Placeholder API
                 full_name: newHireName,
@@ -1306,25 +1126,25 @@ function handleDashboardPage() {
                 employee_id: newHireId || null // Optional employee ID
               });
             case 3:
-              response = _context10.v;
+              response = _context9.v;
               showModalMessage("Onboarding invite sent to ".concat(newHireEmail, " for position ").concat(newHirePosition, "."), false);
               // Clear form and hide modal
               onboardUserForm.reset();
               if (onboardUserModal) onboardUserModal.style.display = "none";
               loadOnboardingSessions(); // Reload sessions to show new entry
-              _context10.n = 5;
+              _context9.n = 5;
               break;
             case 4:
-              _context10.p = 4;
-              _t10 = _context10.v;
-              showModalMessage("Error onboarding employee: ".concat(_t10.message), true);
+              _context9.p = 4;
+              _t9 = _context9.v;
+              showModalMessage("Error onboarding employee: ".concat(_t9.message), true);
             case 5:
-              return _context10.a(2);
+              return _context9.a(2);
           }
-        }, _callee10, null, [[2, 4]]);
+        }, _callee9, null, [[2, 4]]);
       }));
-      return function (_x1) {
-        return _ref9.apply(this, arguments);
+      return function (_x8) {
+        return _ref6.apply(this, arguments);
       };
     }());
   }
@@ -1437,23 +1257,23 @@ function handleChecklistsPage() {
     return _loadChecklists.apply(this, arguments);
   } // Handle new checklist form submission
   function _loadChecklists() {
-    _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15() {
-      var checklists, _t15;
-      return _regenerator().w(function (_context15) {
-        while (1) switch (_context15.n) {
+    _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
+      var checklists, _t12;
+      return _regenerator().w(function (_context12) {
+        while (1) switch (_context12.n) {
           case 0:
             if (checklistListDiv) {
-              _context15.n = 1;
+              _context12.n = 1;
               break;
             }
-            return _context15.a(2);
+            return _context12.a(2);
           case 1:
             checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
-            _context15.p = 2;
-            _context15.n = 3;
+            _context12.p = 2;
+            _context12.n = 3;
             return apiRequest("GET", "/checklists");
           case 3:
-            checklists = _context15.v;
+            checklists = _context12.v;
             // Placeholder API
             checklistListDiv.innerHTML = '';
             if (checklists && checklists.length > 0) {
@@ -1478,26 +1298,26 @@ function handleChecklistsPage() {
             } else {
               checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
             }
-            _context15.n = 5;
+            _context12.n = 5;
             break;
           case 4:
-            _context15.p = 4;
-            _t15 = _context15.v;
-            console.error("Error loading checklists:", _t15);
-            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t15.message, "</p>");
+            _context12.p = 4;
+            _t12 = _context12.v;
+            console.error("Error loading checklists:", _t12);
+            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t12.message, "</p>");
           case 5:
-            return _context15.a(2);
+            return _context12.a(2);
         }
-      }, _callee15, null, [[2, 4]]);
+      }, _callee12, null, [[2, 4]]);
     }));
     return _loadChecklists.apply(this, arguments);
   }
   if (newChecklistForm) {
     newChecklistForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(e) {
-        var position, title, structure_type, group_count, tasks, response, _t14;
-        return _regenerator().w(function (_context14) {
-          while (1) switch (_context14.n) {
+      var _ref8 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11(e) {
+        var position, title, structure_type, group_count, tasks, response, _t11;
+        return _regenerator().w(function (_context11) {
+          while (1) switch (_context11.n) {
             case 0:
               e.preventDefault();
               position = document.getElementById("new-checklist-position").value.trim();
@@ -1535,14 +1355,14 @@ function handleChecklistsPage() {
               if (!(!position || !title || tasks.length === 0 || structure_type !== 'single_list' && tasks.every(function (group) {
                 return group.tasks.length === 0;
               }))) {
-                _context14.n = 1;
+                _context11.n = 1;
                 break;
               }
               showModalMessage("Please provide a position, title, and at least one task for the checklist.", true);
-              return _context14.a(2);
+              return _context11.a(2);
             case 1:
-              _context14.p = 1;
-              _context14.n = 2;
+              _context11.p = 1;
+              _context11.n = 2;
               return apiRequest("POST", "/checklists", {
                 // Placeholder API
                 position: position,
@@ -1552,24 +1372,24 @@ function handleChecklistsPage() {
                 tasks: tasks // This should be a JSON string in DB if using text field
               });
             case 2:
-              response = _context14.v;
+              response = _context11.v;
               showModalMessage("Task List \"".concat(title, "\" created successfully!"), false);
               newChecklistForm.reset();
               renderTaskInputs(); // Reset task inputs
               loadChecklists(); // Reload the list of checklists
-              _context14.n = 4;
+              _context11.n = 4;
               break;
             case 3:
-              _context14.p = 3;
-              _t14 = _context14.v;
-              showModalMessage("Error creating task list: ".concat(_t14.message), true);
+              _context11.p = 3;
+              _t11 = _context11.v;
+              showModalMessage("Error creating task list: ".concat(_t11.message), true);
             case 4:
-              return _context14.a(2);
+              return _context11.a(2);
           }
-        }, _callee14, null, [[1, 3]]);
+        }, _callee11, null, [[1, 3]]);
       }));
-      return function (_x11) {
-        return _ref1.apply(this, arguments);
+      return function (_x0) {
+        return _ref8.apply(this, arguments);
       };
     }());
   }
@@ -1623,38 +1443,38 @@ function handleNewHireViewPage() {
     return _loadOnboardingTasks.apply(this, arguments);
   } // Initial load
   function _loadOnboardingTasks() {
-    _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17() {
-      var profile, tasksData, checklist, allTasksCompleted, _t17;
-      return _regenerator().w(function (_context17) {
-        while (1) switch (_context17.n) {
+    _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14() {
+      var profile, tasksData, checklist, allTasksCompleted, _t14;
+      return _regenerator().w(function (_context14) {
+        while (1) switch (_context14.n) {
           case 0:
             if (taskListSection) {
-              _context17.n = 1;
+              _context14.n = 1;
               break;
             }
-            return _context17.a(2);
+            return _context14.a(2);
           case 1:
             taskListSection.innerHTML = '<p style="color: var(--text-medium);">Loading your tasks...</p>';
-            _context17.p = 2;
-            _context17.n = 3;
+            _context14.p = 2;
+            _context14.n = 3;
             return apiRequest("GET", "/profile");
           case 3:
-            profile = _context17.v;
+            profile = _context14.v;
             if (!(!profile || !profile.user_id)) {
-              _context17.n = 4;
+              _context14.n = 4;
               break;
             }
             taskListSection.innerHTML = '<p style="color: #e74c3c;">Could not load user profile.</p>';
-            return _context17.a(2);
+            return _context14.a(2);
           case 4:
             welcomeHeading.textContent = "Welcome, ".concat(profile.full_name, "!");
 
             // Assuming an API endpoint to fetch onboarding tasks for the current user
             // This API should fetch the assigned checklist and its tasks, including their completion status
-            _context17.n = 5;
+            _context14.n = 5;
             return apiRequest("GET", "/onboarding-tasks/".concat(profile.user_id));
           case 5:
-            tasksData = _context17.v;
+            tasksData = _context14.v;
             // Placeholder API
 
             taskListSection.innerHTML = ''; // Clear loading message
@@ -1696,17 +1516,17 @@ function handleNewHireViewPage() {
               // Add event listeners for checkboxes
               taskListSection.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
                 checkbox.addEventListener('change', /*#__PURE__*/function () {
-                  var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(event) {
-                    var taskId, isCompleted, taskType, groupIndex, currentAllTasksCompleted, _t16;
-                    return _regenerator().w(function (_context16) {
-                      while (1) switch (_context16.n) {
+                  var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13(event) {
+                    var taskId, isCompleted, taskType, groupIndex, currentAllTasksCompleted, _t13;
+                    return _regenerator().w(function (_context13) {
+                      while (1) switch (_context13.n) {
                         case 0:
                           taskId = event.target.dataset.taskId;
                           isCompleted = event.target.checked;
                           taskType = event.target.dataset.taskType; // 'single' or 'grouped'
                           groupIndex = event.target.dataset.groupIndex; // Only for grouped tasks
-                          _context16.p = 1;
-                          _context16.n = 2;
+                          _context13.p = 1;
+                          _context13.n = 2;
                           return apiRequest("PUT", "/onboarding-tasks/".concat(taskId), {
                             completed: isCompleted,
                             type: taskType,
@@ -1726,20 +1546,20 @@ function handleNewHireViewPage() {
                           if (currentAllTasksCompleted) {
                             triggerFireworks();
                           }
-                          _context16.n = 4;
+                          _context13.n = 4;
                           break;
                         case 3:
-                          _context16.p = 3;
-                          _t16 = _context16.v;
-                          showModalMessage("Failed to update task status: ".concat(_t16.message), true);
+                          _context13.p = 3;
+                          _t13 = _context13.v;
+                          showModalMessage("Failed to update task status: ".concat(_t13.message), true);
                           event.target.checked = !isCompleted; // Revert checkbox if API fails
                         case 4:
-                          return _context16.a(2);
+                          return _context13.a(2);
                       }
-                    }, _callee16, null, [[1, 3]]);
+                    }, _callee13, null, [[1, 3]]);
                   }));
-                  return function (_x12) {
-                    return _ref10.apply(this, arguments);
+                  return function (_x1) {
+                    return _ref9.apply(this, arguments);
                   };
                 }());
               });
@@ -1749,17 +1569,17 @@ function handleNewHireViewPage() {
             } else {
               taskListSection.innerHTML = '<p style="color: var(--text-medium);">No onboarding tasks assigned or found.</p>';
             }
-            _context17.n = 7;
+            _context14.n = 7;
             break;
           case 6:
-            _context17.p = 6;
-            _t17 = _context17.v;
-            console.error("Error loading onboarding tasks:", _t17);
-            taskListSection.innerHTML = "<p style=\"color: #e74c3c;\">Error loading tasks: ".concat(_t17.message, "</p>");
+            _context14.p = 6;
+            _t14 = _context14.v;
+            console.error("Error loading onboarding tasks:", _t14);
+            taskListSection.innerHTML = "<p style=\"color: #e74c3c;\">Error loading tasks: ".concat(_t14.message, "</p>");
           case 7:
-            return _context17.a(2);
+            return _context14.a(2);
         }
-      }, _callee17, null, [[2, 6]]);
+      }, _callee14, null, [[2, 6]]);
     }));
     return _loadOnboardingTasks.apply(this, arguments);
   }
@@ -1809,41 +1629,41 @@ function handlePricingPage() {
   var proPlanBtn = document.getElementById("pro-plan-btn");
   var enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
   if (freePlanBtn) {
-    freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18() {
-      var userRole, profile, confirmed, _t18;
-      return _regenerator().w(function (_context18) {
-        while (1) switch (_context18.n) {
+    freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15() {
+      var userRole, profile, confirmed, _t15;
+      return _regenerator().w(function (_context15) {
+        while (1) switch (_context15.n) {
           case 0:
             // Logic for Free plan (already active/no payment required)
             // If already on Free, maybe show a message. If upgrading from higher, downgrade.
             // For now, assume it's just a placeholder or no action needed if already on Free.
             userRole = localStorage.getItem("userRole");
             if (!userRole) {
-              _context18.n = 8;
+              _context15.n = 8;
               break;
             }
-            _context18.n = 1;
+            _context15.n = 1;
             return apiRequest("GET", "/profile");
           case 1:
-            profile = _context18.v;
+            profile = _context15.v;
             if (!(profile && profile.plan_id === 'free')) {
-              _context18.n = 2;
+              _context15.n = 2;
               break;
             }
             showModalMessage("You are already on the Free plan.", false);
-            _context18.n = 7;
+            _context15.n = 7;
             break;
           case 2:
-            _context18.n = 3;
+            _context15.n = 3;
             return showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
           case 3:
-            confirmed = _context18.v;
+            confirmed = _context15.v;
             if (!confirmed) {
-              _context18.n = 7;
+              _context15.n = 7;
               break;
             }
-            _context18.p = 4;
-            _context18.n = 5;
+            _context15.p = 4;
+            _context15.n = 5;
             return apiRequest("POST", "/cancel-subscription");
           case 5:
             // Or specific downgrade API
@@ -1852,14 +1672,14 @@ function handlePricingPage() {
             setTimeout(function () {
               window.location.href = 'suite-hub.html';
             }, 1500);
-            _context18.n = 7;
+            _context15.n = 7;
             break;
           case 6:
-            _context18.p = 6;
-            _t18 = _context18.v;
-            showModalMessage("Failed to downgrade: ".concat(_t18.message), true);
+            _context15.p = 6;
+            _t15 = _context15.v;
+            showModalMessage("Failed to downgrade: ".concat(_t15.message), true);
           case 7:
-            _context18.n = 9;
+            _context15.n = 9;
             break;
           case 8:
             // Not logged in, offer to sign up for free plan (which means regular registration)
@@ -1870,9 +1690,9 @@ function handlePricingPage() {
               window.location.href = 'register.html';
             }, 1500);
           case 9:
-            return _context18.a(2);
+            return _context15.a(2);
         }
-      }, _callee18, null, [[4, 6]]);
+      }, _callee15, null, [[4, 6]]);
     })));
   }
   if (proPlanBtn) {
@@ -1885,27 +1705,27 @@ function handlePricingPage() {
       return handlePlanSelection("enterprise");
     });
   }
-  function handlePlanSelection(_x13) {
+  function handlePlanSelection(_x10) {
     return _handlePlanSelection.apply(this, arguments);
   } // Handle cancel button in register/checkout modal
   function _handlePlanSelection() {
-    _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(planId) {
-      var token, session, _t20;
-      return _regenerator().w(function (_context20) {
-        while (1) switch (_context20.n) {
+    _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(planId) {
+      var token, session, _t17;
+      return _regenerator().w(function (_context17) {
+        while (1) switch (_context17.n) {
           case 0:
             token = localStorage.getItem("authToken");
             if (!token) {
-              _context20.n = 5;
+              _context17.n = 5;
               break;
             }
-            _context20.p = 1;
-            _context20.n = 2;
+            _context17.p = 1;
+            _context17.n = 2;
             return apiRequest("POST", "/create-checkout-session", {
               planId: planId
             });
           case 2:
-            session = _context20.v;
+            session = _context17.v;
             if (stripe && session.sessionId) {
               showModalMessage("Account created! Redirecting to payment...", false);
               stripe.redirectToCheckout({
@@ -1914,23 +1734,23 @@ function handlePricingPage() {
             } else {
               showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
             }
-            _context20.n = 4;
+            _context17.n = 4;
             break;
           case 3:
-            _context20.p = 3;
-            _t20 = _context20.v;
-            console.error("Error creating checkout session:", _t20);
-            showModalMessage("Failed to proceed with payment: ".concat(_t20.message), true);
+            _context17.p = 3;
+            _t17 = _context17.v;
+            console.error("Error creating checkout session:", _t17);
+            showModalMessage("Failed to proceed with payment: ".concat(_t17.message), true);
           case 4:
-            _context20.n = 6;
+            _context17.n = 6;
             break;
           case 5:
             // User is not logged in, show registration modal
             openRegisterCheckoutModal(planId);
           case 6:
-            return _context20.a(2);
+            return _context17.a(2);
         }
-      }, _callee20, null, [[1, 3]]);
+      }, _callee17, null, [[1, 3]]);
     }));
     return _handlePlanSelection.apply(this, arguments);
   }
@@ -1944,8 +1764,8 @@ function handlePricingPage() {
   }
   // Close modal if clicking outside
   if (registerCheckoutModalOverlay) {
-    registerCheckoutModalOverlay.addEventListener("click", function (event) {
-      if (event.target === registerCheckoutModalOverlay) {
+    regCheckoutModalOverlay.addEventListener("click", function (event) {
+      if (event.target === regCheckoutModalOverlay) {
         registerCheckoutModalOverlay.style.display = "none";
         currentSelectedPlan = null;
       }
@@ -1955,10 +1775,10 @@ function handlePricingPage() {
   // Handle registration from the pricing modal
   if (registerCheckoutForm) {
     registerCheckoutForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(e) {
-        var company_name, full_name, email, password, emailRegex, registrationData, loginData, session, _t19;
-        return _regenerator().w(function (_context19) {
-          while (1) switch (_context19.n) {
+      var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(e) {
+        var company_name, full_name, email, password, emailRegex, registrationData, loginData, session, _t16;
+        return _regenerator().w(function (_context16) {
+          while (1) switch (_context16.n) {
             case 0:
               e.preventDefault();
               company_name = regCoNameInput.value.trim();
@@ -1972,16 +1792,16 @@ function handlePricingPage() {
               // Client-side validation
               emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               if (!(!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email))) {
-                _context19.n = 1;
+                _context16.n = 1;
                 break;
               }
               regCheckoutErrorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
               regCheckoutErrorMessage.classList.add('visible');
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-              return _context19.a(2);
+              return _context16.a(2);
             case 1:
-              _context19.p = 1;
-              _context19.n = 2;
+              _context16.p = 1;
+              _context16.n = 2;
               return apiRequest("POST", "/register", {
                 company_name: company_name,
                 full_name: full_name,
@@ -1989,24 +1809,24 @@ function handlePricingPage() {
                 password: password
               });
             case 2:
-              registrationData = _context19.v;
-              _context19.n = 3;
+              registrationData = _context16.v;
+              _context16.n = 3;
               return apiRequest("POST", "/login", {
                 email: email,
                 password: password
               });
             case 3:
-              loginData = _context19.v;
+              loginData = _context16.v;
               localStorage.setItem("authToken", loginData.token);
               localStorage.setItem("userRole", loginData.role);
 
               // Then, initiate Stripe checkout with the selected plan
-              _context19.n = 4;
+              _context16.n = 4;
               return apiRequest("POST", "/create-checkout-session", {
                 planId: currentSelectedPlan
               });
             case 4:
-              session = _context19.v;
+              session = _context16.v;
               if (stripe && session.sessionId) {
                 showModalMessage("Account created! Redirecting to payment...", false);
                 stripe.redirectToCheckout({
@@ -2018,23 +1838,23 @@ function handlePricingPage() {
                   window.location.href = 'login.html';
                 }, 2000); // Redirect to login
               }
-              _context19.n = 6;
+              _context16.n = 6;
               break;
             case 5:
-              _context19.p = 5;
-              _t19 = _context19.v;
-              console.error("Register/Checkout error:", _t19);
-              regCheckoutErrorMessage.textContent = "Sign Up Failed: ".concat(_t19.message);
+              _context16.p = 5;
+              _t16 = _context16.v;
+              console.error("Register/Checkout error:", _t16);
+              regCheckoutErrorMessage.textContent = "Sign Up Failed: ".concat(_t16.message);
               regCheckoutErrorMessage.classList.add('visible');
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-              showModalMessage("Sign Up Failed: ".concat(_t19.message), true);
+              showModalMessage("Sign Up Failed: ".concat(_t16.message), true);
             case 6:
-              return _context19.a(2);
+              return _context16.a(2);
           }
-        }, _callee19, null, [[1, 5]]);
+        }, _callee16, null, [[1, 5]]);
       }));
-      return function (_x14) {
-        return _ref12.apply(this, arguments);
+      return function (_x11) {
+        return _ref1.apply(this, arguments);
       };
     }());
   }
@@ -2070,7 +1890,14 @@ document.addEventListener("DOMContentLoaded", function () {
   } else if (path.includes("pricing.html")) {
     handlePricingPage();
   } else if (path.includes("documents.html")) {
-    handleDocumentsPage();
+    // ADDED CHECK: Only call handleDocumentsPage if it's defined and is a function
+    if (typeof handleDocumentsPage === 'function') {
+      handleDocumentsPage();
+    } else {
+      console.error("Error: handleDocumentsPage function is not defined. JavaScript parsing issue or function missing.");
+      // Optionally show a user-facing message or fallback here
+      showModalMessage("Document page functionality could not load. Please try refreshing.", true);
+    }
   } else if (path.includes("hiring.html")) {
     handleHiringPage();
   } else if (path.includes("scheduling.html")) {

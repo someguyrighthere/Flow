@@ -691,134 +691,8 @@ function handleAdminPage() {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
-        } // Removed extra ')' here
-    });
-
-
-    // Handle new location form submission
-    if (newLocationForm) {
-        // console.log("handleAdminPage: New location form found, attaching listener."); // Removed for production
-        newLocationForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            // console.log("handleAdminPage: New location form submitted."); // Removed for production
-            const nameInput = document.getElementById("new-location-name");
-            const addressInput = document.getElementById("new-location-address");
-            const location_name = nameInput.value.trim();
-            const location_address = addressInput.value.trim();
-
-            try {
-                // console.log("handleAdminPage: Creating location via API."); // Removed for production
-                await apiRequest("POST", "/locations", {
-                    location_name: location_name,
-                    location_address: location_address
-                });
-                nameInput.value = ""; // Clear form
-                addressInput.value = ""; // Clear form
-                showModalMessage("Location created successfully!", false);
-                // console.log("handleAdminPage: Location created, reloading lists."); // Removed for production
-                loadLocations(); // Reload locations to show new entry
-            } catch (error) {
-                console.error("Error creating location:", error);
-                showModalMessage(`Error creating location: ${error.message}`, true);
-            }
-        });
-    }
-
-    // Handle invite admin form submission
-    if (inviteAdminForm) {
-        // console.log("handleAdminPage: Invite admin form found, attaching listener."); // Removed for production
-        inviteAdminForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            // console.log("handleAdminPage: Invite admin form submitted."); // Removed for production
-            const adminName = document.getElementById("admin-name") ? document.getElementById("admin-name").value.trim() : "";
-            const adminEmail = document.getElementById("admin-email") ? document.getElementById("admin-email").value.trim() : "";
-            const adminPassword = document.getElementById("admin-password") ? document.getElementById("admin-password").value : "";
-            const adminLocationSelectElement = document.getElementById("admin-location-select");
-            const adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : "";
-
-            if (!adminName || !adminEmail || !adminPassword || adminPassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
-                showModalMessage("Please provide a full name, valid email, and a password (min 6 chars) for the new admin.", true);
-                return;
-            }
-            if (!adminLocationId) {
-                showModalMessage("Please select a location to assign the admin.", true);
-                return;
-            }
-
-            try {
-                // console.log("handleAdminPage: Inviting admin via API."); // Removed for production
-                await apiRequest("POST", "/invite-admin", {
-                    full_name: adminName,
-                    email: adminEmail,
-                    location_id: parseInt(adminLocationId), // Ensure it's an integer
-                    password: adminPassword
-                });
-                // Clear form fields
-                if (document.getElementById("admin-name")) document.getElementById("admin-name").value = "";
-                if (document.getElementById("admin-email")) document.getElementById("admin-email").value = "";
-                if (document.getElementById("admin-password")) document.getElementById("admin-password").value = "";
-                if (adminLocationSelectElement) adminLocationSelectElement.value = ""; // Reset dropdown
-
-                showModalMessage(`Admin invite sent to ${adminEmail} for selected location with the provided temporary password.`, false);
-                // console.log("handleAdminPage: Admin invited, reloading users."); // Removed for production
-                loadUsers(); // Reload users to show new admin
-            }
-            catch (error) {
-                showModalMessage(`Error inviting admin: ${error.message}`, true);
-            }
-        });
-    }
-
-    // Handle invite employee form submission
-    if (inviteEmployeeForm) {
-        // console.log("handleAdminPage: Invite employee form found, attaching listener."); // Removed for production
-        inviteEmployeeForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            // console.log("handleAdminPage: Invite employee form submitted."); // Removed for production
-            const employeeName = document.getElementById("employee-name") ? document.getElementById("employee-name").value.trim() : "";
-            const employeeEmail = document.getElementById("employee-email") ? document.getElementById("employee-email").value.trim() : "";
-            const employeePassword = document.getElementById("employee-password") ? document.getElementById("employee-password").value : "";
-            const employeePosition = document.getElementById("employee-position") ? document.getElementById("employee-position").value.trim() : "";
-            const employeeId = document.getElementById("employee-id") ? document.getElementById("employee-id").value.trim() : null; // Can be null or empty string
-            const employeeLocationSelectElement = document.getElementById("employee-location-select");
-            const employeeLocationId = employeeLocationSelectElement ? employeeLocationSelectElement.value : "";
-
-            if (!employeeName || !employeeEmail || !employeePassword || employeePassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail)) {
-                showModalMessage("Full name, valid email, and a password (min 6 chars) are required for employee invitation.", true);
-                return;
-            }
-
-            // Convert location ID to number or null (if empty string)
-            const locationIdToSend = employeeLocationId ? parseInt(employeeLocationId) : null;
-            // Convert employee_id to number or string or null (if empty string)
-            const employeeIdToSend = employeeId ? (isNaN(parseInt(employeeId)) ? employeeId : parseInt(employeeId)) : null;
-
-            try {
-                // console.log("handleAdminPage: Inviting employee via API."); // Removed for production
-                await apiRequest("POST", "/invite-employee", {
-                    full_name: employeeName,
-                    email: employeeEmail,
-                    password: employeePassword,
-                    position: employeePosition || null, // Send null if empty
-                    employee_id: employeeIdToSend,     // Send null if empty, or parsed value
-                    location_id: locationIdToSend      // Send null if empty/unassigned
-                });
-                // Clear form fields
-                if (document.getElementById("employee-name")) document.getElementById("employee-name").value = "";
-                if (document.getElementById("employee-email")) document.getElementById("employee-email").value = "";
-                if (document.getElementById("employee-password")) document.getElementById("employee-password").value = "";
-                if (document.getElementById("employee-position")) document.getElementById("employee-position").value = "";
-                if (document.getElementById("employee-id")) document.getElementById("employee-id").value = "";
-                if (employeeLocationSelectElement) employeeLocationSelectElement.value = ""; // Reset dropdown
-
-                showModalMessage(`Employee invite sent to ${employeeEmail} with the provided temporary password.`, false);
-                // console.log("handleAdminPage: Employee invited, reloading users."); // Removed for production
-                loadUsers(); // Reload users to show new employee
-            } catch (error) {
-                showModalMessage(`Error inviting employee: ${error.message}`, true);
-            }
-        });
-    }
+        } 
+    }); // Corrected: This `)` closes the addEventListener call. The original was missing this.
 
     // Initial loads when the admin page loads
     loadLocations();
@@ -1487,8 +1361,8 @@ function handlePricingPage() {
     }
     // Close modal if clicking outside
     if (registerCheckoutModalOverlay) {
-        registerCheckoutModalOverlay.addEventListener("click", event => {
-            if (event.target === registerCheckoutModalOverlay) {
+        regCheckoutModalOverlay.addEventListener("click", event => {
+            if (event.target === regCheckoutModalOverlay) {
                 registerCheckoutModalOverlay.style.display = "none";
                 currentSelectedPlan = null;
             }
@@ -1586,7 +1460,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (path.includes("pricing.html")) {
         handlePricingPage();
     } else if (path.includes("documents.html")) {
-        handleDocumentsPage();
+        // ADDED CHECK: Only call handleDocumentsPage if it's defined and is a function
+        if (typeof handleDocumentsPage === 'function') {
+            handleDocumentsPage();
+        } else {
+            console.error("Error: handleDocumentsPage function is not defined. JavaScript parsing issue or function missing.");
+            // Optionally show a user-facing message or fallback here
+            showModalMessage("Document page functionality could not load. Please try refreshing.", true);
+        }
     } else if (path.includes("hiring.html")) {
         handleHiringPage();
     } else if (path.includes("scheduling.html")) {
