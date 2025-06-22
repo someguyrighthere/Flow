@@ -1,0 +1,2092 @@
+"use strict";
+
+function _regenerator() { /*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */ var e, t, r = "function" == typeof Symbol ? Symbol : {}, n = r.iterator || "@@iterator", o = r.toStringTag || "@@toStringTag"; function i(r, n, o, i) { var c = n && n.prototype instanceof Generator ? n : Generator, u = Object.create(c.prototype); return _regeneratorDefine2(u, "_invoke", function (r, n, o) { var i, c, u, f = 0, p = o || [], y = !1, G = { p: 0, n: 0, v: e, a: d, f: d.bind(e, 4), d: function d(t, r) { return i = t, c = 0, u = e, G.n = r, a; } }; function d(r, n) { for (c = r, u = n, t = 0; !y && f && !o && t < p.length; t++) { var o, i = p[t], d = G.p, l = i[2]; r > 3 ? (o = l === n) && (u = i[(c = i[4]) ? 5 : (c = 3, 3)], i[4] = i[5] = e) : i[0] <= d && ((o = r < 2 && d < i[1]) ? (c = 0, G.v = n, G.n = i[1]) : d < l && (o = r < 3 || i[0] > n || n > l) && (i[4] = r, i[5] = n, G.n = l, c = 0)); } if (o || r > 1) return a; throw y = !0, n; } return function (o, p, l) { if (f > 1) throw TypeError("Generator is already running"); for (y && 1 === p && d(p, l), c = p, u = l; (t = c < 2 ? e : u) || !y;) { i || (c ? c < 3 ? (c > 1 && (G.n = -1), d(c, u)) : G.n = u : G.v = u); try { if (f = 2, i) { if (c || (o = "next"), t = i[o]) { if (!(t = t.call(i, u))) throw TypeError("iterator result is not an object"); if (!t.done) return t; u = t.value, c < 2 && (c = 0); } else 1 === c && (t = i["return"]) && t.call(i), c < 2 && (u = TypeError("The iterator does not provide a '" + o + "' method"), c = 1); i = e; } else if ((t = (y = G.n < 0) ? u : r.call(n, G)) !== a) break; } catch (t) { i = e, c = 1, u = t; } finally { f = 1; } } return { value: t, done: y }; }; }(r, o, i), !0), u; } var a = {}; function Generator() {} function GeneratorFunction() {} function GeneratorFunctionPrototype() {} t = Object.getPrototypeOf; var c = [][n] ? t(t([][n]())) : (_regeneratorDefine2(t = {}, n, function () { return this; }), t), u = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(c); function f(e) { return Object.setPrototypeOf ? Object.setPrototypeOf(e, GeneratorFunctionPrototype) : (e.__proto__ = GeneratorFunctionPrototype, _regeneratorDefine2(e, o, "GeneratorFunction")), e.prototype = Object.create(u), e; } return GeneratorFunction.prototype = GeneratorFunctionPrototype, _regeneratorDefine2(u, "constructor", GeneratorFunctionPrototype), _regeneratorDefine2(GeneratorFunctionPrototype, "constructor", GeneratorFunction), GeneratorFunction.displayName = "GeneratorFunction", _regeneratorDefine2(GeneratorFunctionPrototype, o, "GeneratorFunction"), _regeneratorDefine2(u), _regeneratorDefine2(u, o, "Generator"), _regeneratorDefine2(u, n, function () { return this; }), _regeneratorDefine2(u, "toString", function () { return "[object Generator]"; }), (_regenerator = function _regenerator() { return { w: i, m: f }; })(); }
+function _regeneratorDefine2(e, r, n, t) { var i = Object.defineProperty; try { i({}, "", {}); } catch (e) { i = 0; } _regeneratorDefine2 = function _regeneratorDefine(e, r, n, t) { if (r) i ? i(e, r, { value: n, enumerable: !t, configurable: !t, writable: !t }) : e[r] = n;else { var o = function o(r, n) { _regeneratorDefine2(e, r, function (e) { return this._invoke(r, n, e); }); }; o("next", 0), o("throw", 1), o("return", 2); } }, _regeneratorDefine2(e, r, n, t); }
+function asyncGeneratorStep(n, t, e, r, o, a, c) { try { var i = n[a](c), u = i.value; } catch (n) { return void e(n); } i.done ? t(u) : Promise.resolve(u).then(r, o); }
+function _asyncToGenerator(n) { return function () { var t = this, e = arguments; return new Promise(function (r, o) { var a = n.apply(t, e); function _next(n) { asyncGeneratorStep(a, r, o, _next, _throw, "next", n); } function _throw(n) { asyncGeneratorStep(a, r, o, _next, _throw, "throw", n); } _next(void 0); }); }; }
+// app.js - Client-Side JavaScript for Flow Business Suite
+// This file handles all client-side logic, form submissions, and API requests.
+
+// IMPORTANT: Set this to your deployed backend API URL.
+// Your frontend is deployed at https://flow-gz1r.onrender.com/
+// Assuming your backend API is accessible at the same root with '/api' suffix (as per server.js routes configuration).
+var API_BASE_URL = 'https://flow-gz1r.onrender.com';
+
+// Initialize Stripe.js with your public key
+// This key should be retrieved from your backend or securely stored in your client-side config.
+// The Stripe object is defined by the Stripe.js script loaded in pricing.html.
+var stripe; // Declare as 'let' because it will be initialized conditionally
+
+// Add a check to ensure Stripe is defined before initializing
+if (typeof Stripe !== 'undefined') {
+  stripe = Stripe('pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td');
+} else {
+  // This warning will appear on pages where Stripe is not expected/needed
+  console.warn("Stripe.js not loaded. Stripe functionalities will not work on this page.");
+}
+
+/**
+ * Displays a custom modal message to the user.
+ * Ensure your HTML includes elements with ids: 'message-modal-overlay', 'modal-message-text', 'modal-close-button'
+ * @param {string} message - The message to display.
+ * @param {boolean} isError - True if it's an error message, false otherwise.
+ */
+function showModalMessage(message) {
+  var isError = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+  var modalOverlay = document.getElementById("message-modal-overlay");
+  var modalMessage = document.getElementById("modal-message-text");
+  var modalCloseButton = document.getElementById("modal-close-button");
+  if (modalOverlay && modalMessage && modalCloseButton) {
+    modalMessage.textContent = message;
+    modalMessage.style.color = isError ? "#ff8a80" : "var(--text-light)";
+    modalOverlay.style.display = "flex";
+    modalOverlay.style.zIndex = "1000";
+    modalCloseButton.onclick = function () {
+      modalOverlay.style.display = "none";
+    };
+    modalOverlay.onclick = function (event) {
+      if (event.target === modalOverlay) {
+        modalOverlay.style.display = "none";
+      }
+    };
+  } else {
+    console.error("Modal elements not found for showModalMessage. Message:", message);
+    if (isError) {
+      console.error("ERROR: ".concat(message));
+    } else {
+      console.log("MESSAGE: ".concat(message));
+    }
+  }
+}
+
+/**
+ * Displays a confirmation modal to the user.
+ * Ensure your HTML includes elements with ids: 'confirm-modal-overlay', 'confirm-modal-message', 'modal-confirm', 'modal-cancel'
+ * @param {string} message - The confirmation message to display.
+ * @param {string} confirmButtonText - Text for the confirm button.
+ * @returns {Promise<boolean>} - Resolves to true if confirmed, false if cancelled.
+ */
+function showConfirmModal(message) {
+  var confirmButtonText = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "Confirm";
+  return new Promise(function (resolve) {
+    var confirmModalOverlay = document.getElementById("confirm-modal-overlay");
+    var confirmModalMessage = document.getElementById("confirm-modal-message");
+    var modalConfirmButton = document.getElementById("modal-confirm");
+    var modalCancelButton = document.getElementById("modal-cancel");
+    if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
+      console.error("Confirmation modal elements not found. Falling back to native confirm.");
+      resolve(window.confirm(message)); // Fallback is generally not ideal in production for consistent UX
+      return;
+    }
+    confirmModalMessage.innerHTML = message; // Use innerHTML to allow for bolding etc.
+    modalConfirmButton.textContent = confirmButtonText;
+    confirmModalOverlay.style.display = "flex";
+    var _handleConfirm = function handleConfirm() {
+      confirmModalOverlay.style.display = "none";
+      modalConfirmButton.removeEventListener("click", _handleConfirm);
+      modalCancelButton.removeEventListener("click", _handleCancel);
+      resolve(true);
+    };
+    var _handleCancel = function handleCancel() {
+      confirmModalOverlay.style.display = "none";
+      modalConfirmButton.removeEventListener("click", _handleConfirm);
+      modalCancelButton.removeEventListener("click", _handleCancel);
+      resolve(false);
+    };
+    modalConfirmButton.addEventListener("click", _handleConfirm);
+    modalCancelButton.addEventListener("click", _handleCancel);
+    confirmModalOverlay.onclick = function (event) {
+      if (event.target === confirmModalOverlay) {
+        _handleCancel();
+      }
+    };
+  });
+}
+
+/**
+ * Sets up the functionality for the settings dropdown menu.
+ * This includes showing/hiding the dropdown and handling logout.
+ * The "Upgrade Plan" link is now assumed to be directly visible in HTML or handled by backend rendering.
+ */
+function setupSettingsDropdown() {
+  var settingsButton = document.getElementById("settings-button");
+  var settingsDropdown = document.getElementById("settings-dropdown");
+  var logoutButton = document.getElementById("logout-button");
+  // Removed specific upgradePlanLink ID and logic here, as it's now handled by the backend routing or general visibility
+  // The link should be shown/hidden based on server-side rendering or a different client-side check if needed.
+  // However, if your HTML *still* contains an element with ID 'upgrade-plan-link' that you want dynamically controlled:
+  var upgradePlanLink = document.getElementById("upgrade-plan-link");
+  if (settingsButton && settingsDropdown) {
+    settingsButton.addEventListener("click", /*#__PURE__*/function () {
+      var _ref = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee(event) {
+        var profile, _t;
+        return _regenerator().w(function (_context) {
+          while (1) switch (_context.n) {
+            case 0:
+              event.stopPropagation(); // Prevent the document click from immediately closing it
+              settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
+
+              // Conditional logic for "Upgrade Plan" visibility moved here if you want it client-side driven.
+              // If the link is dynamically shown/hidden by the backend based on user role/plan, this block can be removed.
+              if (!(settingsDropdown.style.display === "block" && upgradePlanLink)) {
+                _context.n = 6;
+                break;
+              }
+              if (!localStorage.getItem("authToken")) {
+                _context.n = 5;
+                break;
+              }
+              _context.p = 1;
+              _context.n = 2;
+              return apiRequest("GET", "/profile");
+            case 2:
+              profile = _context.v;
+              if (profile && profile.plan_id === 'free') {
+                // Check if user is on free plan
+                upgradePlanLink.style.display = 'block';
+              } else {
+                upgradePlanLink.style.display = 'none'; // Hide if not free or profile fetch fails
+              }
+              _context.n = 4;
+              break;
+            case 3:
+              _context.p = 3;
+              _t = _context.v;
+              console.error("Error fetching profile for upgrade link:", _t);
+              upgradePlanLink.style.display = 'none';
+            case 4:
+              _context.n = 6;
+              break;
+            case 5:
+              // Hide if not logged in
+              upgradePlanLink.style.display = 'none';
+            case 6:
+              return _context.a(2);
+          }
+        }, _callee, null, [[1, 3]]);
+      }));
+      return function (_x) {
+        return _ref.apply(this, arguments);
+      };
+    }());
+    // Close dropdown if user clicks outside
+    document.addEventListener("click", function (event) {
+      if (!settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
+        settingsDropdown.style.display = "none";
+      }
+    });
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", function () {
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userRole"); // Clear user role too
+      window.location.href = "login.html"; // Redirect to login page
+    });
+  }
+}
+
+/**
+ * Handles API requests to the backend.
+ * Includes authentication token in headers if available.
+ * Supports file uploads with progress tracking for FormData.
+ * @param {string} method - HTTP method (GET, POST, PUT, DELETE).
+ * @param {string} path - API endpoint path (e.g., '/login', '/profile').
+ * @param {object} body - Request body data (for POST, PUT).
+ * @param {boolean} isFormData - Set to true if sending FormData (e.g., file uploads).
+ * @param {function} onProgress - Callback function for upload progress (takes event as argument). Only used if isFormData is true.
+ * @param {boolean} expectBlobResponse - Set to true if the API is expected to return a file (Blob).
+ * @returns {Promise<object|Blob|null>} - JSON response data, Blob, or null if 204.
+ * @throws {Error} - If the API response is not OK.
+ */
+function apiRequest(_x2, _x3) {
+  return _apiRequest.apply(this, arguments);
+}
+/**
+ * Handles all client-side logic for the login.html page.
+ */
+function _apiRequest() {
+  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21(method, path) {
+    var body,
+      isFormData,
+      onProgress,
+      expectBlobResponse,
+      token,
+      endpoint,
+      options,
+      response,
+      errorData,
+      _args21 = arguments,
+      _t21;
+    return _regenerator().w(function (_context21) {
+      while (1) switch (_context21.n) {
+        case 0:
+          body = _args21.length > 2 && _args21[2] !== undefined ? _args21[2] : null;
+          isFormData = _args21.length > 3 && _args21[3] !== undefined ? _args21[3] : false;
+          onProgress = _args21.length > 4 && _args21[4] !== undefined ? _args21[4] : null;
+          expectBlobResponse = _args21.length > 5 && _args21[5] !== undefined ? _args21[5] : false;
+          token = localStorage.getItem('authToken');
+          endpoint = "".concat(API_BASE_URL).concat(path); // For FormData, use XMLHttpRequest for progress tracking
+          if (!isFormData) {
+            _context21.n = 1;
+            break;
+          }
+          return _context21.a(2, new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open(method, endpoint);
+            if (token) {
+              xhr.setRequestHeader('Authorization', "Bearer ".concat(token));
+            }
+
+            // Progress event for uploads
+            if (onProgress && xhr.upload) {
+              xhr.upload.addEventListener('progress', onProgress);
+            }
+            xhr.onload = function () {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                if (xhr.status === 204 || xhr.status === 200 && xhr.responseText.length === 0) {
+                  resolve({}); // Resolve with empty object for 204 or empty 200
+                } else {
+                  try {
+                    var responseData = JSON.parse(xhr.responseText);
+                    resolve(responseData);
+                  } catch (e) {
+                    console.warn("API response was not JSON, resolving with success status:", xhr.responseText);
+                    resolve({
+                      message: "Operation successful",
+                      rawResponse: xhr.responseText
+                    });
+                  }
+                }
+              } else if (xhr.status === 401 || xhr.status === 403) {
+                // Unauthorized or Forbidden - clear token and redirect to login
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('userRole');
+                window.location.href = 'login.html?sessionExpired=true';
+                reject(new Error('Authentication token missing or invalid.'));
+              } else {
+                // Handle non-2xx responses
+                try {
+                  var errorData = JSON.parse(xhr.responseText);
+                  reject(new Error(errorData.error || "HTTP error! Status: ".concat(xhr.status)));
+                } catch (e) {
+                  reject(new Error("HTTP error! Status: ".concat(xhr.status, " - ").concat(xhr.statusText || 'Unknown Error')));
+                }
+              }
+            };
+            xhr.onerror = function () {
+              reject(new Error('Network error or request failed. Please check your internet connection.'));
+            };
+            xhr.send(body);
+          }));
+        case 1:
+          // Use Fetch API for standard JSON or Blob requests
+          options = {
+            method: method,
+            headers: {} // Start with empty headers to add Content-Type conditionally
+          };
+          if (token) {
+            options.headers['Authorization'] = "Bearer ".concat(token);
+          }
+
+          // Set Content-Type for JSON bodies on POST/PUT
+          if (body && (method === 'POST' || method === 'PUT')) {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+          }
+          _context21.n = 2;
+          return fetch(endpoint, options);
+        case 2:
+          response = _context21.v;
+          if (!(response.status === 401 || response.status === 403)) {
+            _context21.n = 3;
+            break;
+          }
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userRole');
+          window.location.href = 'login.html?sessionExpired=true';
+          throw new Error('Authentication token missing or invalid.');
+        case 3:
+          if (response.ok) {
+            _context21.n = 7;
+            break;
+          }
+          _context21.p = 4;
+          _context21.n = 5;
+          return response.json();
+        case 5:
+          errorData = _context21.v;
+          throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
+        case 6:
+          _context21.p = 6;
+          _t21 = _context21.v;
+          throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
+        case 7:
+          if (!expectBlobResponse) {
+            _context21.n = 8;
+            break;
+          }
+          return _context21.a(2, response.blob());
+        case 8:
+          if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
+            _context21.n = 9;
+            break;
+          }
+          return _context21.a(2, null);
+        case 9:
+          return _context21.a(2, response.json());
+        case 10:
+          return _context21.a(2);
+      }
+    }, _callee21, null, [[4, 6]]);
+  }));
+  return _apiRequest.apply(this, arguments);
+}
+function handleLoginPage() {
+  // console.log("handleLoginPage: Initializing login page logic."); // DEBUG LOG
+  var loginForm = document.getElementById("login-form");
+  if (!loginForm) {
+    // console.log("handleLoginPage: loginForm element not found, exiting function."); // ADDED LOG
+    return; // Exit if form not found (e.g., on a different page)
+  }
+
+  // Display session expired message if redirected from an authenticated page
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('sessionExpired') && urlParams.get('sessionExpired') === 'true') {
+    var errorMessageDiv = document.getElementById("error-message");
+    if (errorMessageDiv) {
+      errorMessageDiv.textContent = 'Your session has expired or is invalid. Please log in again.';
+      errorMessageDiv.classList.add('visible');
+      errorMessageDiv.setAttribute('aria-hidden', 'false');
+    }
+    // Clear the URL parameter to avoid showing the message on refresh
+    urlParams["delete"]('sessionExpired');
+    window.history.replaceState({}, document.title, window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : ''));
+  }
+  loginForm.addEventListener("submit", /*#__PURE__*/function () {
+    var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(e) {
+      var emailInput, passwordInput, email, password, errorMessage, emailRegex, data, _t2;
+      return _regenerator().w(function (_context2) {
+        while (1) switch (_context2.n) {
+          case 0:
+            e.preventDefault(); // Prevent default form submission
+            // console.log("Login form submission initiated."); // ADDED LOG
+            emailInput = document.getElementById("email");
+            passwordInput = document.getElementById("password");
+            email = emailInput.value.trim();
+            password = passwordInput.value;
+            errorMessage = document.getElementById("error-message"); // Clear previous error messages
+            if (errorMessage) {
+              errorMessage.textContent = "";
+              errorMessage.classList.remove("visible");
+              errorMessage.setAttribute('aria-hidden', 'true');
+            }
+
+            // Basic client-side validation
+            // console.log("Checking email/password validity."); // ADDED LOG
+            if (!(!email || !password)) {
+              _context2.n = 1;
+              break;
+            }
+            // console.log("Login Validation: Email or password empty."); // DEBUG LOG
+            if (errorMessage) {
+              errorMessage.textContent = "Email and password are required.";
+              errorMessage.classList.add("visible");
+              errorMessage.setAttribute('aria-hidden', 'false');
+            }
+            return _context2.a(2);
+          case 1:
+            emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (emailRegex.test(email)) {
+              _context2.n = 2;
+              break;
+            }
+            // console.log("Login Validation: Invalid email format."); // DEBUG LOG
+            if (errorMessage) {
+              errorMessage.textContent = "Please enter a valid email address.";
+              errorMessage.classList.add("visible");
+              errorMessage.setAttribute('aria-hidden', 'false');
+            }
+            return _context2.a(2);
+          case 2:
+            if (!(password.length < 6)) {
+              _context2.n = 3;
+              break;
+            }
+            // console.log("Login Validation: Password too short."); // DEBUG LOG
+            if (errorMessage) {
+              errorMessage.textContent = "Password must be at least 6 characters long.";
+              errorMessage.classList.add("visible");
+              errorMessage.setAttribute('aria-hidden', 'false');
+            }
+            return _context2.a(2);
+          case 3:
+            _context2.p = 3;
+            _context2.n = 4;
+            return apiRequest("POST", "/login", {
+              email: email,
+              password: password
+            });
+          case 4:
+            data = _context2.v;
+            // console.log("API login request successful. Redirecting..."); // ADDED LOG
+            // Store authentication token and user role
+            localStorage.setItem("authToken", data.token);
+            localStorage.setItem("userRole", data.role); // Store user role
+
+            // Redirect based on user role
+            if (data.role === "super_admin" || data.role === "location_admin") {
+              window.location.href = "suite-hub.html"; // Admins go to app hub
+            } else {
+              window.location.href = "new-hire-view.html"; // Employees go to their onboarding view
+            }
+            _context2.n = 6;
+            break;
+          case 5:
+            _context2.p = 5;
+            _t2 = _context2.v;
+            console.error("Login API error:", _t2);
+            if (errorMessage) {
+              errorMessage.textContent = "Login Failed: ".concat(_t2.message);
+              errorMessage.classList.add("visible");
+              errorMessage.setAttribute('aria-hidden', 'false');
+            }
+            // Also show a modal message for more prominent feedback
+            showModalMessage("Login Failed: ".concat(_t2.message), true);
+          case 6:
+            return _context2.a(2);
+        }
+      }, _callee2, null, [[3, 5]]);
+    }));
+    return function (_x4) {
+      return _ref2.apply(this, arguments);
+    };
+  }());
+}
+
+/**
+ * Handles all client-side logic for the register.html page.
+ */
+function handleRegisterPage() {
+  var registerForm = document.getElementById("register-form");
+  if (!registerForm) {
+    return; // Exit if form not found
+  }
+  registerForm.addEventListener("submit", /*#__PURE__*/function () {
+    var _ref3 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(e) {
+      var companyNameInput, fullNameInput, emailInput, passwordInput, errorMessage, company_name, full_name, email, password, emailRegex, data, _t3;
+      return _regenerator().w(function (_context3) {
+        while (1) switch (_context3.n) {
+          case 0:
+            e.preventDefault();
+            companyNameInput = document.getElementById("company-name");
+            fullNameInput = document.getElementById("full-name");
+            emailInput = document.getElementById("email");
+            passwordInput = document.getElementById("password");
+            errorMessage = document.getElementById("error-message");
+            company_name = companyNameInput.value.trim();
+            full_name = fullNameInput.value.trim();
+            email = emailInput.value.trim();
+            password = password.value;
+            errorMessage.textContent = ""; // Clear any previous error
+            errorMessage.classList.remove("visible");
+            errorMessage.setAttribute('aria-hidden', 'true');
+
+            // Client-side validation
+            emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!(!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email))) {
+              _context3.n = 1;
+              break;
+            }
+            errorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
+            errorMessage.classList.add("visible");
+            return _context3.a(2);
+          case 1:
+            _context3.p = 1;
+            _context3.n = 2;
+            return apiRequest("POST", "/register", {
+              company_name: company_name,
+              full_name: full_name,
+              email: email,
+              password: password
+            });
+          case 2:
+            data = _context3.v;
+            showModalMessage("Account created successfully! Please log in.", false);
+
+            // Clear form fields after successful registration
+            companyNameInput.value = "";
+            fullNameInput.value = "";
+            emailInput.value = "";
+            passwordInput.value = "";
+
+            // Redirect to login page after a short delay
+            setTimeout(function () {
+              window.location.href = "login.html";
+            }, 2000); // 2-second delay
+            _context3.n = 4;
+            break;
+          case 3:
+            _context3.p = 3;
+            _t3 = _context3.v;
+            console.error("Registration API error:", _t3);
+            if (errorMessage) {
+              errorMessage.textContent = "Registration Failed: ".concat(_t3.message);
+              errorMessage.classList.add("visible");
+              errorMessage.setAttribute('aria-hidden', 'false');
+            }
+            showModalMessage("Registration Failed: ".concat(_t3.message), true);
+          case 4:
+            return _context3.a(2);
+        }
+      }, _callee3, null, [[1, 3]]);
+    }));
+    return function (_x5) {
+      return _ref3.apply(this, arguments);
+    };
+  }());
+}
+
+/**
+ * Handles logic for the suite-hub.html page, including payment status messages.
+ */
+function handleSuiteHubPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  // Check for payment status from Stripe redirect
+  var urlParams = new URLSearchParams(window.location.search);
+  var paymentStatus = urlParams.get("payment");
+  var sessionId = urlParams.get("session_id"); // Could be used for further verification if needed
+
+  if (paymentStatus === "success") {
+    showModalMessage("Payment successful! Your subscription has been updated.", false);
+    // Clear the URL parameters to prevent showing the message again on refresh
+    history.replaceState({}, document.title, window.location.pathname);
+  } else if (paymentStatus === "cancelled") {
+    showModalMessage("Payment cancelled. You can try again or choose another plan.", true);
+    history.replaceState({}, document.title, window.location.pathname);
+  }
+  // Add other suite-hub specific logic here if any.
+}
+
+/**
+ * Handles all client-side logic for the account.html page.
+ */
+function handleAccountPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+  var displayProfileName = document.getElementById("display-profile-name");
+  var displayProfileEmail = document.getElementById("display-profile-email");
+  var profileNameInput = document.getElementById("profile-name");
+  var profileEmailInput = document.getElementById("profile-email");
+  var updateProfileForm = document.getElementById("update-profile-form");
+  var currentPasswordInput = document.getElementById("current-password");
+  var newPasswordInput = document.getElementById("new-password");
+
+  // Function to load and display user profile information
+  function loadProfileInfo() {
+    return _loadProfileInfo.apply(this, arguments);
+  } // Handle profile update form submission
+  function _loadProfileInfo() {
+    _loadProfileInfo = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5() {
+      var profile, _t5;
+      return _regenerator().w(function (_context5) {
+        while (1) switch (_context5.n) {
+          case 0:
+            _context5.p = 0;
+            _context5.n = 1;
+            return apiRequest("GET", "/profile");
+          case 1:
+            profile = _context5.v;
+            if (displayProfileName) displayProfileName.textContent = profile.fullName || "N/A";
+            if (displayProfileEmail) displayProfileEmail.textContent = profile.email || "N/A";
+            if (profileNameInput) profileNameInput.value = profile.fullName || "";
+            if (profileEmailInput) profileEmailInput.value = profile.email || "";
+            _context5.n = 3;
+            break;
+          case 2:
+            _context5.p = 2;
+            _t5 = _context5.v;
+            console.error("Error loading profile info:", _t5);
+            showModalMessage("Failed to load profile: ".concat(_t5.message), true);
+          case 3:
+            return _context5.a(2);
+        }
+      }, _callee5, null, [[0, 2]]);
+    }));
+    return _loadProfileInfo.apply(this, arguments);
+  }
+  if (updateProfileForm) {
+    updateProfileForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref4 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4(e) {
+        var fullName, email, currentPassword, newPassword, updatePayload, result, _t4;
+        return _regenerator().w(function (_context4) {
+          while (1) switch (_context4.n) {
+            case 0:
+              e.preventDefault();
+              fullName = profileNameInput ? profileNameInput.value : "";
+              email = profileEmailInput ? profileEmailInput.value : "";
+              currentPassword = currentPasswordInput ? currentPasswordInput.value : "";
+              newPassword = newPasswordInput ? newPasswordInput.value : "";
+              updatePayload = {
+                fullName: fullName,
+                email: email
+              };
+              if (currentPassword && newPassword) {
+                updatePayload.currentPassword = currentPassword;
+                updatePayload.newPassword = newPassword;
+              }
+              _context4.p = 1;
+              _context4.n = 2;
+              return apiRequest("PUT", "/profile", updatePayload);
+            case 2:
+              result = _context4.v;
+              // If token is returned (e.g., email changed), update it in localStorage
+              if (result && result.token) {
+                localStorage.setItem("authToken", result.token);
+              }
+              showModalMessage(result.message || "Profile updated successfully!", false);
+              // Clear password fields
+              if (currentPasswordInput) currentPasswordInput.value = "";
+              if (newPasswordInput) newPasswordInput.value = "";
+              // Reload profile info to reflect changes
+              loadProfileInfo();
+              _context4.n = 4;
+              break;
+            case 3:
+              _context4.p = 3;
+              _t4 = _context4.v;
+              console.error("Error updating profile:", _t4);
+              showModalMessage("Failed to update profile: ".concat(_t4.message), true);
+            case 4:
+              return _context4.a(2);
+          }
+        }, _callee4, null, [[1, 3]]);
+      }));
+      return function (_x6) {
+        return _ref4.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Load profile info when the page loads
+  loadProfileInfo();
+}
+
+/**
+ * Handles all client-side logic for the admin.html page.
+ */
+function handleAdminPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+  var locationListDiv = document.getElementById("location-list");
+  var userListDiv = document.getElementById("user-list");
+  var newLocationForm = document.getElementById("new-location-form");
+  var inviteAdminForm = document.getElementById("invite-admin-form");
+  var inviteEmployeeForm = document.getElementById("invite-employee-form"); // Get employee form
+  var adminLocationSelect = document.getElementById("admin-location-select");
+  var employeeLocationSelect = document.getElementById("employee-location-select"); // Get employee location select
+
+  /**
+   * Fetches and displays the list of locations.
+   */
+  function loadLocations() {
+    return _loadLocations.apply(this, arguments);
+  }
+  /**
+   * Fetches and displays the list of users.
+   */
+  function _loadLocations() {
+    _loadLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0() {
+      var locations, locationOptionsHtml, _t0;
+      return _regenerator().w(function (_context0) {
+        while (1) switch (_context0.n) {
+          case 0:
+            if (locationListDiv) {
+              _context0.n = 1;
+              break;
+            }
+            return _context0.a(2);
+          case 1:
+            locationListDiv.innerHTML = "<p>Loading locations...</p>";
+            _context0.p = 2;
+            _context0.n = 3;
+            return apiRequest("GET", "/locations");
+          case 3:
+            locations = _context0.v;
+            locationListDiv.innerHTML = "";
+            if (locations.length === 0) {
+              locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
+              if (adminLocationSelect) {
+                adminLocationSelect.innerHTML = '<option value="">Select a location</option>';
+                adminLocationSelect.disabled = true;
+              }
+              if (employeeLocationSelect) {
+                // Also disable/reset for employee form
+                employeeLocationSelect.innerHTML = '<option value="">Select a location</option>';
+                employeeLocationSelect.disabled = true;
+              }
+            } else {
+              if (adminLocationSelect) adminLocationSelect.disabled = false;
+              if (employeeLocationSelect)
+                // Also enable for employee form
+                employeeLocationSelect.disabled = false;
+              locations.forEach(function (loc) {
+                var locDiv = document.createElement("div");
+                locDiv.className = "list-item";
+                locDiv.innerHTML = "<span>".concat(loc.location_name, " - ").concat(loc.location_address, "</span>\n                                        <button class=\"btn-delete\" data-type=\"location\" data-id=\"").concat(loc.location_id, "\">\n                                            <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                                        </button>");
+                locDiv.addEventListener("click", function (e) {
+                  if (!e.target.closest(".btn-delete")) {
+                    showModalMessage("Location: ".concat(loc.location_name, " (ID: ").concat(loc.location_id, ") - Address: ").concat(loc.location_address), false);
+                  }
+                });
+                locationListDiv.appendChild(locDiv);
+              });
+              // Populate both admin and employee location selects
+              locationOptionsHtml = locations.map(function (loc) {
+                return "<option value=\"".concat(loc.location_id, "\">").concat(loc.location_name, "</option>");
+              }).join('');
+              if (adminLocationSelect) {
+                adminLocationSelect.innerHTML = "<option value=\"\">Select a location</option>".concat(locationOptionsHtml);
+              }
+              if (employeeLocationSelect) {
+                employeeLocationSelect.innerHTML = "<option value=\"\">Select a location</option>".concat(locationOptionsHtml);
+              }
+            }
+            _context0.n = 5;
+            break;
+          case 4:
+            _context0.p = 4;
+            _t0 = _context0.v;
+            console.error("Error loading locations:", _t0);
+            showModalMessage("Failed to load locations: ".concat(_t0.message), true);
+          case 5:
+            return _context0.a(2);
+        }
+      }, _callee0, null, [[2, 4]]);
+    }));
+    return _loadLocations.apply(this, arguments);
+  }
+  function loadUsers() {
+    return _loadUsers.apply(this, arguments);
+  } // Event listener for delete buttons (delegated to body for dynamically added elements)
+  function _loadUsers() {
+    _loadUsers = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1() {
+      var users, _t1;
+      return _regenerator().w(function (_context1) {
+        while (1) switch (_context1.n) {
+          case 0:
+            if (userListDiv) {
+              _context1.n = 1;
+              break;
+            }
+            return _context1.a(2);
+          case 1:
+            // Exit if div not found
+            userListDiv.innerHTML = "<p>Loading users...</p>";
+            _context1.p = 2;
+            _context1.n = 3;
+            return apiRequest("GET", "/users");
+          case 3:
+            users = _context1.v;
+            userListDiv.innerHTML = "";
+            if (users.length === 0) {
+              userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users invited yet.</p>';
+            } else {
+              users.forEach(function (user) {
+                var userDiv = document.createElement("div");
+                userDiv.className = "list-item";
+                var userInfo = "".concat(user.full_name, " - Role: ").concat(user.role);
+                if (user.location_name) {
+                  userInfo += " @ ".concat(user.location_name);
+                }
+                userDiv.innerHTML = "<span>".concat(userInfo, "</span>\n                                         <button class=\"btn-delete\" data-type=\"user\" data-id=\"").concat(user.user_id, "\">\n                                             <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                                         </button>");
+                userListDiv.appendChild(userDiv);
+              });
+            }
+            _context1.n = 5;
+            break;
+          case 4:
+            _context1.p = 4;
+            _t1 = _context1.v;
+            console.error("Error loading users:", _t1);
+            userListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading users: ".concat(_t1.message, "</p>");
+          case 5:
+            return _context1.a(2);
+        }
+      }, _callee1, null, [[2, 4]]);
+    }));
+    return _loadUsers.apply(this, arguments);
+  }
+  document.body.addEventListener("click", /*#__PURE__*/function () {
+    var _ref5 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(e) {
+      var targetButton, id, type, confirmationMessage, confirmed, _t6;
+      return _regenerator().w(function (_context6) {
+        while (1) switch (_context6.n) {
+          case 0:
+            targetButton = e.target.closest(".btn-delete");
+            if (!targetButton) {
+              _context6.n = 8;
+              break;
+            }
+            // console.log("handleAdminPage: Delete button clicked."); // Removed for production
+            id = targetButton.dataset.id;
+            type = targetButton.dataset.type; // 'location' or 'user'
+            confirmationMessage = "Are you sure you want to delete this ".concat(type, "? This action cannot be undone.");
+            _context6.n = 1;
+            return showConfirmModal(confirmationMessage, "Delete");
+          case 1:
+            confirmed = _context6.v;
+            if (!confirmed) {
+              _context6.n = 8;
+              break;
+            }
+            _context6.p = 2;
+            if (!(type === "location")) {
+              _context6.n = 4;
+              break;
+            }
+            _context6.n = 3;
+            return apiRequest("DELETE", "/locations/".concat(id));
+          case 3:
+            showModalMessage("Location deleted successfully!", false);
+            loadLocations(); // Reload locations list
+            loadUsers(); // Reload users list as some might be linked to this location
+            _context6.n = 6;
+            break;
+          case 4:
+            if (!(type === "user")) {
+              _context6.n = 6;
+              break;
+            }
+            _context6.n = 5;
+            return apiRequest("DELETE", "/users/".concat(id));
+          case 5:
+            showModalMessage("User deleted successfully!", false);
+            loadUsers(); // Reload users list
+          case 6:
+            _context6.n = 8;
+            break;
+          case 7:
+            _context6.p = 7;
+            _t6 = _context6.v;
+            showModalMessage("Error deleting ".concat(type, ": ").concat(_t6.message), true);
+          case 8:
+            ;
+          case 9:
+            return _context6.a(2);
+        }
+      }, _callee6, null, [[2, 7]]);
+    }));
+    return function (_x7) {
+      return _ref5.apply(this, arguments);
+    };
+  }());
+
+  // Handle new location form submission
+  if (newLocationForm) {
+    // console.log("handleAdminPage: New location form found, attaching listener."); // Removed for production
+    newLocationForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref6 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(e) {
+        var nameInput, addressInput, location_name, location_address, _t7;
+        return _regenerator().w(function (_context7) {
+          while (1) switch (_context7.n) {
+            case 0:
+              e.preventDefault();
+              // console.log("handleAdminPage: New location form submitted."); // Removed for production
+              nameInput = document.getElementById("new-location-name");
+              addressInput = document.getElementById("new-location-address");
+              location_name = nameInput.value.trim();
+              location_address = addressInput.value.trim();
+              _context7.p = 1;
+              _context7.n = 2;
+              return apiRequest("POST", "/locations", {
+                location_name: location_name,
+                location_address: location_address
+              });
+            case 2:
+              nameInput.value = ""; // Clear form
+              addressInput.value = ""; // Clear form
+              showModalMessage("Location created successfully!", false);
+              // console.log("handleAdminPage: Location created, reloading lists."); // Removed for production
+              loadLocations(); // Reload locations to show new entry
+              _context7.n = 4;
+              break;
+            case 3:
+              _context7.p = 3;
+              _t7 = _context7.v;
+              console.error("Error creating location:", _t7);
+              showModalMessage("Error creating location: ".concat(_t7.message), true);
+            case 4:
+              return _context7.a(2);
+          }
+        }, _callee7, null, [[1, 3]]);
+      }));
+      return function (_x8) {
+        return _ref6.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Handle invite admin form submission
+  if (inviteAdminForm) {
+    // console.log("handleAdminPage: Invite admin form found, attaching listener."); // Removed for production
+    inviteAdminForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8(e) {
+        var adminName, adminEmail, adminPassword, adminLocationSelectElement, adminLocationId, _t8;
+        return _regenerator().w(function (_context8) {
+          while (1) switch (_context8.n) {
+            case 0:
+              e.preventDefault();
+              // console.log("handleAdminPage: Invite admin form submitted."); // Removed for production
+              adminName = document.getElementById("admin-name") ? document.getElementById("admin-name").value.trim() : "";
+              adminEmail = document.getElementById("admin-email") ? document.getElementById("admin-email").value.trim() : "";
+              adminPassword = document.getElementById("admin-password") ? document.getElementById("admin-password").value : "";
+              adminLocationSelectElement = document.getElementById("admin-location-select");
+              adminLocationId = adminLocationSelectElement ? adminLocationSelectElement.value : "";
+              if (!(!adminName || !adminEmail || !adminPassword || adminPassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail))) {
+                _context8.n = 1;
+                break;
+              }
+              showModalMessage("Please provide a full name, valid email, and a password (min 6 chars) for the new admin.", true);
+              return _context8.a(2);
+            case 1:
+              if (adminLocationId) {
+                _context8.n = 2;
+                break;
+              }
+              showModalMessage("Please select a location to assign the admin.", true);
+              return _context8.a(2);
+            case 2:
+              _context8.p = 2;
+              _context8.n = 3;
+              return apiRequest("POST", "/invite-admin", {
+                full_name: adminName,
+                email: adminEmail,
+                location_id: parseInt(adminLocationId),
+                // Ensure it's an integer
+                password: adminPassword
+              });
+            case 3:
+              // Clear form fields
+              if (document.getElementById("admin-name")) document.getElementById("admin-name").value = "";
+              if (document.getElementById("admin-email")) document.getElementById("admin-email").value = "";
+              if (document.getElementById("admin-password")) document.getElementById("admin-password").value = "";
+              if (adminLocationSelectElement) adminLocationSelectElement.value = ""; // Reset dropdown
+
+              showModalMessage("Admin invite sent to ".concat(adminEmail, " for selected location with the provided temporary password."), false);
+              // console.log("handleAdminPage: Admin invited, reloading users."); // Removed for production
+              loadUsers(); // Reload users to show new admin
+              _context8.n = 5;
+              break;
+            case 4:
+              _context8.p = 4;
+              _t8 = _context8.v;
+              showModalMessage("Error inviting admin: ".concat(_t8.message), true);
+            case 5:
+              return _context8.a(2);
+          }
+        }, _callee8, null, [[2, 4]]);
+      }));
+      return function (_x9) {
+        return _ref7.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Handle invite employee form submission
+  if (inviteEmployeeForm) {
+    // console.log("handleAdminPage: Invite employee form found, attaching listener."); // Removed for production
+    inviteEmployeeForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref8 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(e) {
+        var employeeName, employeeEmail, employeePassword, employeePosition, employeeId, employeeLocationSelectElement, employeeLocationId, locationIdToSend, employeeIdToSend, _t9;
+        return _regenerator().w(function (_context9) {
+          while (1) switch (_context9.n) {
+            case 0:
+              e.preventDefault();
+              // console.log("handleAdminPage: Invite employee form submitted."); // Removed for production
+              employeeName = document.getElementById("employee-name") ? document.getElementById("employee-name").value.trim() : "";
+              employeeEmail = document.getElementById("employee-email") ? document.getElementById("employee-email").value.trim() : "";
+              employeePassword = document.getElementById("employee-password") ? document.getElementById("employee-password").value : "";
+              employeePosition = document.getElementById("employee-position") ? document.getElementById("employee-position").value.trim() : "";
+              employeeId = document.getElementById("employee-id") ? document.getElementById("employee-id").value.trim() : null; // Can be null or empty string
+              employeeLocationSelectElement = document.getElementById("employee-location-select");
+              employeeLocationId = employeeLocationSelectElement ? employeeLocationSelectElement.value : "";
+              if (!(!employeeName || !employeeEmail || !employeePassword || employeePassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail))) {
+                _context9.n = 1;
+                break;
+              }
+              showModalMessage("Full name, valid email, and a password (min 6 chars) are required for employee invitation.", true);
+              return _context9.a(2);
+            case 1:
+              // Convert location ID to number or null (if empty string)
+              locationIdToSend = employeeLocationId ? parseInt(employeeLocationId) : null; // Convert employee_id to number or string or null (if empty string)
+              employeeIdToSend = employeeId ? isNaN(parseInt(employeeId)) ? employeeId : parseInt(employeeId) : null;
+              _context9.p = 2;
+              _context9.n = 3;
+              return apiRequest("POST", "/invite-employee", {
+                full_name: employeeName,
+                email: employeeEmail,
+                password: employeePassword,
+                position: employeePosition || null,
+                // Send null if empty
+                employee_id: employeeIdToSend,
+                // Send null if empty, or parsed value
+                location_id: locationIdToSend // Send null if empty/unassigned
+              });
+            case 3:
+              // Clear form fields
+              if (document.getElementById("employee-name")) document.getElementById("employee-name").value = "";
+              if (document.getElementById("employee-email")) document.getElementById("employee-email").value = "";
+              if (document.getElementById("employee-password")) document.getElementById("employee-password").value = "";
+              if (document.getElementById("employee-position")) document.getElementById("employee-position").value = "";
+              if (document.getElementById("employee-id")) document.getElementById("employee-id").value = "";
+              if (employeeLocationSelectElement) employeeLocationSelectElement.value = ""; // Reset dropdown
+
+              showModalMessage("Employee invite sent to ".concat(employeeEmail, " with the provided temporary password."), false);
+              // console.log("handleAdminPage: Employee invited, reloading users."); // Removed for production
+              loadUsers(); // Reload users to show new employee
+              _context9.n = 5;
+              break;
+            case 4:
+              _context9.p = 4;
+              _t9 = _context9.v;
+              showModalMessage("Error inviting employee: ".concat(_t9.message), true);
+            case 5:
+              return _context9.a(2);
+          }
+        }, _callee9, null, [[2, 4]]);
+      }));
+      return function (_x0) {
+        return _ref8.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Initial loads when the admin page loads
+  loadLocations();
+  loadUsers();
+}
+
+/**
+ * Handles logic for the dashboard.html page (Onboarding Dashboard).
+ */
+function handleDashboardPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+  var onboardUserModal = document.getElementById("onboard-user-modal");
+  var showOnboardModalBtn = document.getElementById("show-onboard-modal-btn");
+  var modalCancelOnboardBtn = document.getElementById("modal-cancel-onboard");
+  var onboardUserForm = document.getElementById("onboard-user-form");
+  var newHirePositionSelect = document.getElementById("new-hire-position");
+  var sessionListDiv = document.getElementById("session-list");
+
+  // Show modal when "Onboard New Employee" button is clicked
+  if (showOnboardModalBtn) {
+    showOnboardModalBtn.addEventListener("click", function () {
+      if (onboardUserModal) {
+        onboardUserModal.style.display = "flex";
+      }
+    });
+  }
+
+  // Hide modal when cancel button is clicked
+  if (modalCancelOnboardBtn) {
+    modalCancelOnboardBtn.addEventListener("click", function () {
+      if (onboardUserModal) {
+        onboardUserModal.style.display = "none";
+      }
+    });
+  }
+
+  // Close modal if clicking outside
+  if (onboardUserModal) {
+    onboardUserModal.addEventListener("click", function (event) {
+      if (event.target === onboardUserModal) {
+        onboardUserModal.style.display = "none";
+      }
+    });
+  }
+
+  /**
+   * Loads available positions and populates the select dropdown.
+   */
+  function loadPositions() {
+    return _loadPositions.apply(this, arguments);
+  }
+  /**
+   * Loads and displays active onboarding sessions.
+   */
+  function _loadPositions() {
+    _loadPositions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11() {
+      var response, _t11;
+      return _regenerator().w(function (_context11) {
+        while (1) switch (_context11.n) {
+          case 0:
+            if (newHirePositionSelect) {
+              _context11.n = 1;
+              break;
+            }
+            return _context11.a(2);
+          case 1:
+            newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>';
+            _context11.p = 2;
+            _context11.n = 3;
+            return apiRequest("GET", "/positions");
+          case 3:
+            response = _context11.v;
+            // Placeholder API
+            newHirePositionSelect.innerHTML = '<option value="">Select Position</option>';
+            if (response && response.positions && response.positions.length > 0) {
+              response.positions.forEach(function (pos) {
+                var option = document.createElement("option");
+                option.value = pos.id; // Or pos.name, depending on what you want to store
+                option.textContent = pos.name;
+                newHirePositionSelect.appendChild(option);
+              });
+            } else {
+              newHirePositionSelect.innerHTML = '<option value="">No positions available</option>';
+            }
+            _context11.n = 5;
+            break;
+          case 4:
+            _context11.p = 4;
+            _t11 = _context11.v;
+            console.error("Error loading positions:", _t11);
+            newHirePositionSelect.innerHTML = '<option value="">Error loading positions</option>';
+            showModalMessage("Failed to load positions: ".concat(_t11.message), true);
+          case 5:
+            return _context11.a(2);
+        }
+      }, _callee11, null, [[2, 4]]);
+    }));
+    return _loadPositions.apply(this, arguments);
+  }
+  function loadOnboardingSessions() {
+    return _loadOnboardingSessions.apply(this, arguments);
+  } // Handle onboard new employee form submission
+  function _loadOnboardingSessions() {
+    _loadOnboardingSessions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13() {
+      var sessions, _t13;
+      return _regenerator().w(function (_context13) {
+        while (1) switch (_context13.n) {
+          case 0:
+            if (sessionListDiv) {
+              _context13.n = 1;
+              break;
+            }
+            return _context13.a(2);
+          case 1:
+            sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading active onboardings...</p>';
+            _context13.p = 2;
+            _context13.n = 3;
+            return apiRequest("GET", "/onboarding-sessions");
+          case 3:
+            sessions = _context13.v;
+            // Placeholder API
+            sessionListDiv.innerHTML = '';
+            if (sessions && sessions.length > 0) {
+              sessions.forEach(function (session) {
+                var sessionItem = document.createElement("div");
+                sessionItem.className = "onboarding-item";
+                var completionStatus = session.completedTasks === session.totalTasks ? 'Completed' : "".concat(session.completedTasks, "/").concat(session.totalTasks, " Tasks Completed");
+                var statusColor = session.completedTasks === session.totalTasks ? 'var(--primary-accent)' : 'var(--text-medium)';
+                sessionItem.innerHTML = "\n                        <div class=\"onboarding-item-info\">\n                            <p style=\"color: var(--text-light); font-weight: 600;\">".concat(session.full_name, " (").concat(session.position || 'N/A', ")</p>\n                            <p style=\"color: var(--text-medium);\">Email: ").concat(session.email, "</p>\n                            <p style=\"color: ").concat(statusColor, ";\">Status: ").concat(completionStatus, "</p>\n                        </div>\n                        <div class=\"onboarding-item-actions\">\n                            <button class=\"btn btn-secondary btn-sm view-details-btn\" data-user-id=\"").concat(session.user_id, "\">View Progress</button>\n                            ").concat(session.completedTasks === session.totalTasks ? "<button class=\"btn btn-primary btn-sm archive-onboarding-btn\" data-session-id=\"".concat(session.session_id, "\">Archive</button>") : '', "\n                        </div>\n                    ");
+                sessionListDiv.appendChild(sessionItem);
+              });
+
+              // Add event listeners for new buttons (delegated)
+              sessionListDiv.querySelectorAll('.view-details-btn').forEach(function (button) {
+                button.addEventListener('click', function (event) {
+                  var userId = event.target.dataset.userId;
+                  // Redirect to a detailed view for this employee's onboarding
+                  window.location.href = "new-hire-view.html?userId=".concat(userId); // Example redirect
+                });
+              });
+
+              // Implement archive functionality
+              sessionListDiv.querySelectorAll('.archive-onboarding-btn').forEach(function (button) {
+                button.addEventListener('click', /*#__PURE__*/function () {
+                  var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12(event) {
+                    var sessionId, confirmed, _t12;
+                    return _regenerator().w(function (_context12) {
+                      while (1) switch (_context12.n) {
+                        case 0:
+                          sessionId = event.target.dataset.sessionId;
+                          _context12.n = 1;
+                          return showConfirmModal('Are you sure you want to archive this onboarding session?');
+                        case 1:
+                          confirmed = _context12.v;
+                          if (!confirmed) {
+                            _context12.n = 5;
+                            break;
+                          }
+                          _context12.p = 2;
+                          _context12.n = 3;
+                          return apiRequest("PUT", "/onboarding-sessions/".concat(sessionId, "/archive"));
+                        case 3:
+                          // Placeholder API
+                          showModalMessage('Onboarding session archived successfully!', false);
+                          loadOnboardingSessions(); // Reload list
+                          _context12.n = 5;
+                          break;
+                        case 4:
+                          _context12.p = 4;
+                          _t12 = _context12.v;
+                          showModalMessage("Failed to archive session: ".concat(_t12.message), true);
+                        case 5:
+                          return _context12.a(2);
+                      }
+                    }, _callee12, null, [[2, 4]]);
+                  }));
+                  return function (_x10) {
+                    return _ref0.apply(this, arguments);
+                  };
+                }());
+              });
+            } else {
+              sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">No active onboardings.</p>';
+            }
+            _context13.n = 5;
+            break;
+          case 4:
+            _context13.p = 4;
+            _t13 = _context13.v;
+            console.error("Error loading onboarding sessions:", _t13);
+            sessionListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading onboarding sessions: ".concat(_t13.message, "</p>");
+          case 5:
+            return _context13.a(2);
+        }
+      }, _callee13, null, [[2, 4]]);
+    }));
+    return _loadOnboardingSessions.apply(this, arguments);
+  }
+  if (onboardUserForm) {
+    onboardUserForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10(e) {
+        var newHireName, newHireEmail, newHirePosition, newHireId, response, _t10;
+        return _regenerator().w(function (_context10) {
+          while (1) switch (_context10.n) {
+            case 0:
+              e.preventDefault();
+              newHireName = document.getElementById("new-hire-name").value.trim();
+              newHireEmail = document.getElementById("new-hire-email").value.trim();
+              newHirePosition = newHirePositionSelect ? newHirePositionSelect.value : "";
+              newHireId = document.getElementById("new-hire-id").value.trim();
+              if (!(!newHireName || !newHireEmail || !newHirePosition)) {
+                _context10.n = 1;
+                break;
+              }
+              showModalMessage("Please fill all required fields: Full Name, Email, and Position.", true);
+              return _context10.a(2);
+            case 1:
+              if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newHireEmail)) {
+                _context10.n = 2;
+                break;
+              }
+              showModalMessage("Please enter a valid email address.", true);
+              return _context10.a(2);
+            case 2:
+              _context10.p = 2;
+              _context10.n = 3;
+              return apiRequest("POST", "/onboard-employee", {
+                // Placeholder API
+                full_name: newHireName,
+                email: newHireEmail,
+                position_id: newHirePosition,
+                // Use position ID from dropdown
+                employee_id: newHireId || null // Optional employee ID
+              });
+            case 3:
+              response = _context10.v;
+              showModalMessage("Onboarding invite sent to ".concat(newHireEmail, " for position ").concat(newHirePosition, "."), false);
+              // Clear form and hide modal
+              onboardUserForm.reset();
+              if (onboardUserModal) onboardUserModal.style.display = "none";
+              loadOnboardingSessions(); // Reload sessions to show new entry
+              _context10.n = 5;
+              break;
+            case 4:
+              _context10.p = 4;
+              _t10 = _context10.v;
+              showModalMessage("Error onboarding employee: ".concat(_t10.message), true);
+            case 5:
+              return _context10.a(2);
+          }
+        }, _callee10, null, [[2, 4]]);
+      }));
+      return function (_x1) {
+        return _ref9.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Initial loads when dashboard page loads
+  loadPositions();
+  loadOnboardingSessions();
+}
+
+/**
+ * Handles logic for checklists.html page.
+ */
+function handleChecklistsPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+  var checklistListDiv = document.getElementById("checklist-list");
+  var newChecklistForm = document.getElementById("new-checklist-form");
+  var structureTypeSelect = document.getElementById("structure-type-select");
+  var timeGroupCountContainer = document.getElementById("time-group-count-container");
+  var timeGroupCountInput = document.getElementById("time-group-count");
+  var timeGroupCountLabel = document.getElementById("time-group-count-label");
+  var tasksInputArea = document.getElementById("tasks-input-area");
+  var taskCounter = 0; // To ensure unique task IDs
+
+  // Function to add a single task input field
+  function addSingleTaskInput(container) {
+    var taskId = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+    var taskText = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : '';
+    var div = document.createElement('div');
+    div.className = 'form-group task-input-group';
+    div.innerHTML = "\n            <label for=\"task-".concat(taskId || taskCounter, "\">Task Description</label>\n            <input type=\"text\" id=\"task-").concat(taskId || taskCounter, "\" class=\"task-description-input\" value=\"").concat(taskText, "\" placeholder=\"e.g., Complete HR paperwork\" required>\n            <button type=\"button\" class=\"btn btn-secondary remove-task-btn\" style=\"margin-top: 5px;\">Remove</button>\n        ");
+    container.appendChild(div);
+
+    // Add event listener for remove button
+    div.querySelector('.remove-task-btn').addEventListener('click', function () {
+      div.remove();
+    });
+    taskCounter++;
+  }
+
+  // Function to dynamically render task input fields based on structure type
+  function renderTaskInputs() {
+    tasksInputArea.innerHTML = ''; // Clear previous inputs
+    var structureType = structureTypeSelect.value;
+    var groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
+    if (structureType === 'single_list') {
+      addSingleTaskInput(tasksInputArea);
+      var addTaskBtn = document.createElement('button');
+      addTaskBtn.type = 'button';
+      addTaskBtn.className = 'btn btn-secondary';
+      addTaskBtn.textContent = 'Add Another Task +';
+      addTaskBtn.style.marginTop = '10px';
+      addTaskBtn.addEventListener('click', function () {
+        return addSingleTaskInput(tasksInputArea);
+      });
+      tasksInputArea.appendChild(addTaskBtn);
+    } else {
+      for (var i = 0; i < groupCount; i++) {
+        var groupTitle = structureType === 'daily' ? "Day ".concat(i + 1) : "Week ".concat(i + 1);
+        var groupContainer = document.createElement('div');
+        groupContainer.className = 'card time-group-container';
+        groupContainer.innerHTML = "\n                    <h4 style=\"color: var(--text-light); margin-top: 0;\">".concat(groupTitle, "</h4>\n                    <div class=\"tasks-in-group\" data-group-index=\"").concat(i, "\"></div>\n                    <button type=\"button\" class=\"btn btn-secondary add-task-to-group-btn\" style=\"margin-top: 10px;\" data-group-index=\"").concat(i, "\">Add Task to ").concat(groupTitle, " +</button>\n                ");
+        tasksInputArea.appendChild(groupContainer);
+
+        // Add initial task input to the group
+        var tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
+        addSingleTaskInput(tasksInGroupDiv); // Add one task by default
+
+        // Event listener for adding tasks to this specific group
+        groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', function (event) {
+          var targetGroupIndex = event.target.dataset.groupIndex;
+          var targetGroupDiv = tasksInputArea.querySelector(".tasks-in-group[data-group-index=\"".concat(targetGroupIndex, "\"]"));
+          if (targetGroupDiv) {
+            addSingleTaskInput(targetGroupDiv);
+          }
+        });
+      }
+    }
+  }
+
+  // Event listener for structure type change
+  if (structureTypeSelect) {
+    structureTypeSelect.addEventListener('change', function () {
+      var type = structureTypeSelect.value;
+      if (type === 'daily' || type === 'weekly') {
+        timeGroupCountContainer.style.display = 'block';
+        timeGroupCountLabel.textContent = "Number of ".concat(type === 'daily' ? 'Days' : 'Weeks');
+      } else {
+        timeGroupCountContainer.style.display = 'none';
+      }
+      renderTaskInputs(); // Re-render tasks based on new structure
+    });
+  }
+
+  // Event listener for time group count change
+  if (timeGroupCountInput) {
+    timeGroupCountInput.addEventListener('input', renderTaskInputs);
+  }
+
+  // Initial render of task inputs
+  renderTaskInputs();
+
+  /**
+   * Loads and displays existing task lists.
+   */
+  function loadChecklists() {
+    return _loadChecklists.apply(this, arguments);
+  } // Handle new checklist form submission
+  function _loadChecklists() {
+    _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15() {
+      var checklists, _t15;
+      return _regenerator().w(function (_context15) {
+        while (1) switch (_context15.n) {
+          case 0:
+            if (checklistListDiv) {
+              _context15.n = 1;
+              break;
+            }
+            return _context15.a(2);
+          case 1:
+            checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
+            _context15.p = 2;
+            _context15.n = 3;
+            return apiRequest("GET", "/checklists");
+          case 3:
+            checklists = _context15.v;
+            // Placeholder API
+            checklistListDiv.innerHTML = '';
+            if (checklists && checklists.length > 0) {
+              checklists.forEach(function (checklist) {
+                var checklistItem = document.createElement("div");
+                checklistItem.className = "checklist-item";
+                checklistItem.innerHTML = "\n                        <div class=\"checklist-item-title\">\n                            <span style=\"color: var(--primary-accent);\">".concat(checklist.position, "</span>\n                            <span>- ").concat(checklist.title, "</span>\n                            <span style=\"font-size: 0.8em; color: var(--text-medium);\">(").concat(checklist.structure_type, ")</span>\n                        </div>\n                        <div class=\"checklist-item-actions\">\n                            <button class=\"btn btn-secondary btn-sm view-checklist-btn\" data-checklist-id=\"").concat(checklist.id, "\">View/Edit</button>\n                            <button class=\"btn-delete\" data-type=\"checklist\" data-id=\"").concat(checklist.id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
+                checklistListDiv.appendChild(checklistItem);
+              });
+
+              // Add event listeners for delete buttons (delegated from admin page)
+              // This assumes your document.body.addEventListener for .btn-delete handles 'checklist' type
+              // You might need a separate handler or expand the existing one.
+              // For 'view/edit', you'd typically navigate to another page or open a modal.
+              checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(function (button) {
+                button.addEventListener('click', function (event) {
+                  var checklistId = event.target.dataset.checklistId;
+                  showModalMessage("Viewing/Editing Checklist ID: ".concat(checklistId, " (Functionality to be implemented)"), false);
+                  // Implement actual view/edit logic here, e.g., load checklist data into a form
+                });
+              });
+            } else {
+              checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
+            }
+            _context15.n = 5;
+            break;
+          case 4:
+            _context15.p = 4;
+            _t15 = _context15.v;
+            console.error("Error loading checklists:", _t15);
+            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t15.message, "</p>");
+          case 5:
+            return _context15.a(2);
+        }
+      }, _callee15, null, [[2, 4]]);
+    }));
+    return _loadChecklists.apply(this, arguments);
+  }
+  if (newChecklistForm) {
+    newChecklistForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(e) {
+        var position, title, structure_type, group_count, tasks, response, _t14;
+        return _regenerator().w(function (_context14) {
+          while (1) switch (_context14.n) {
+            case 0:
+              e.preventDefault();
+              position = document.getElementById("new-checklist-position").value.trim();
+              title = document.getElementById("new-checklist-title").value.trim();
+              structure_type = structureTypeSelect.value;
+              group_count = structure_type === 'daily' || structure_type === 'weekly' ? parseInt(timeGroupCountInput.value, 10) : 0;
+              tasks = [];
+              if (structure_type === 'single_list') {
+                document.querySelectorAll('#tasks-input-area .task-description-input').forEach(function (input) {
+                  if (input.value.trim()) {
+                    tasks.push({
+                      description: input.value.trim(),
+                      completed: false
+                    });
+                  }
+                });
+              } else {
+                // Grouped tasks
+                document.querySelectorAll('#tasks-input-area .tasks-in-group').forEach(function (groupDiv, index) {
+                  var groupTasks = [];
+                  groupDiv.querySelectorAll('.task-description-input').forEach(function (input) {
+                    if (input.value.trim()) {
+                      groupTasks.push({
+                        description: input.value.trim(),
+                        completed: false
+                      });
+                    }
+                  });
+                  tasks.push({
+                    groupTitle: structure_type === 'daily' ? "Day ".concat(index + 1) : "Week ".concat(index + 1),
+                    tasks: groupTasks
+                  });
+                });
+              }
+              if (!(!position || !title || tasks.length === 0 || structure_type !== 'single_list' && tasks.every(function (group) {
+                return group.tasks.length === 0;
+              }))) {
+                _context14.n = 1;
+                break;
+              }
+              showModalMessage("Please provide a position, title, and at least one task for the checklist.", true);
+              return _context14.a(2);
+            case 1:
+              _context14.p = 1;
+              _context14.n = 2;
+              return apiRequest("POST", "/checklists", {
+                // Placeholder API
+                position: position,
+                title: title,
+                structure_type: structure_type,
+                group_count: group_count,
+                tasks: tasks // This should be a JSON string in DB if using text field
+              });
+            case 2:
+              response = _context14.v;
+              showModalMessage("Task List \"".concat(title, "\" created successfully!"), false);
+              newChecklistForm.reset();
+              renderTaskInputs(); // Reset task inputs
+              loadChecklists(); // Reload the list of checklists
+              _context14.n = 4;
+              break;
+            case 3:
+              _context14.p = 3;
+              _t14 = _context14.v;
+              showModalMessage("Error creating task list: ".concat(_t14.message), true);
+            case 4:
+              return _context14.a(2);
+          }
+        }, _callee14, null, [[1, 3]]);
+      }));
+      return function (_x11) {
+        return _ref1.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Initial load
+  loadChecklists();
+}
+
+/**
+ * Handles logic for new-hire-view.html (Employee Onboarding View).
+ */
+function handleNewHireViewPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+  var welcomeHeading = document.getElementById("welcome-heading");
+  var taskListSection = document.getElementById("task-list-section");
+  var logoutButton = document.getElementById("logout-button");
+  var completionCelebration = document.getElementById("completion-celebration");
+
+  // Initialize logout
+  if (logoutButton) {
+    logoutButton.addEventListener("click", function () {
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userRole");
+      window.location.href = "login.html";
+    });
+  }
+
+  // Simple fireworks effect (client-side only for visual flair)
+  function triggerFireworks() {
+    // Implement a simple CSS animation or canvas-based fireworks
+    // For a true fireworks effect, you'd integrate a library like particles.js or build a canvas animation.
+    // This is a placeholder for the visual celebration.
+    console.log("Triggering fireworks celebration!");
+    if (completionCelebration) {
+      completionCelebration.style.display = 'flex';
+      // Optionally, hide after a few seconds
+      setTimeout(function () {
+        completionCelebration.style.display = 'none';
+      }, 5000);
+    }
+  }
+
+  /**
+   * Loads and displays the new hire's onboarding tasks.
+   */
+  function loadOnboardingTasks() {
+    return _loadOnboardingTasks.apply(this, arguments);
+  } // Initial load
+  function _loadOnboardingTasks() {
+    _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17() {
+      var profile, tasksData, checklist, allTasksCompleted, _t17;
+      return _regenerator().w(function (_context17) {
+        while (1) switch (_context17.n) {
+          case 0:
+            if (taskListSection) {
+              _context17.n = 1;
+              break;
+            }
+            return _context17.a(2);
+          case 1:
+            taskListSection.innerHTML = '<p style="color: var(--text-medium);">Loading your tasks...</p>';
+            _context17.p = 2;
+            _context17.n = 3;
+            return apiRequest("GET", "/profile");
+          case 3:
+            profile = _context17.v;
+            if (!(!profile || !profile.user_id)) {
+              _context17.n = 4;
+              break;
+            }
+            taskListSection.innerHTML = '<p style="color: #e74c3c;">Could not load user profile.</p>';
+            return _context17.a(2);
+          case 4:
+            welcomeHeading.textContent = "Welcome, ".concat(profile.full_name, "!");
+
+            // Assuming an API endpoint to fetch onboarding tasks for the current user
+            // This API should fetch the assigned checklist and its tasks, including their completion status
+            _context17.n = 5;
+            return apiRequest("GET", "/onboarding-tasks/".concat(profile.user_id));
+          case 5:
+            tasksData = _context17.v;
+            // Placeholder API
+
+            taskListSection.innerHTML = ''; // Clear loading message
+
+            if (tasksData && tasksData.checklist && tasksData.checklist.tasks) {
+              checklist = tasksData.checklist;
+              allTasksCompleted = true; // Flag to check if all tasks are done
+              if (checklist.structure_type === 'single_list') {
+                tasksData.tasks.forEach(function (task) {
+                  // tasksData.tasks holds flat list of tasks
+                  var taskItem = document.createElement("div");
+                  taskItem.className = "task-item ".concat(task.completed ? 'completed' : '');
+                  taskItem.innerHTML = "\n                            <input type=\"checkbox\" id=\"task-".concat(task.id, "\" ").concat(task.completed ? 'checked' : '', " data-task-id=\"").concat(task.id, "\" data-task-type=\"single\">\n                            <label for=\"task-").concat(task.id, "\">").concat(task.description, "</label>\n                        ");
+                  taskListSection.appendChild(taskItem);
+                  if (!task.completed) allTasksCompleted = false;
+                });
+              } else {
+                // Grouped by Day/Week
+                tasksData.tasks.forEach(function (group, groupIndex) {
+                  // tasksData.tasks holds groups
+                  var taskGroupDetails = document.createElement('details');
+                  taskGroupDetails.className = 'task-group';
+                  taskGroupDetails.open = true; // Open by default
+
+                  var summary = document.createElement('summary');
+                  summary.textContent = group.groupTitle;
+                  taskGroupDetails.appendChild(summary);
+                  group.tasks.forEach(function (task) {
+                    var taskItem = document.createElement("div");
+                    taskItem.className = "task-item ".concat(task.completed ? 'completed' : '');
+                    taskItem.innerHTML = "\n                                <input type=\"checkbox\" id=\"task-".concat(task.id, "\" ").concat(task.completed ? 'checked' : '', " data-task-id=\"").concat(task.id, "\" data-task-type=\"grouped\" data-group-index=\"").concat(groupIndex, "\">\n                                <label for=\"task-").concat(task.id, "\">").concat(task.description, "</label>\n                            ");
+                    taskGroupDetails.appendChild(taskItem);
+                    if (!task.completed) allTasksCompleted = false;
+                  });
+                  taskListSection.appendChild(taskGroupDetails);
+                });
+              }
+
+              // Add event listeners for checkboxes
+              taskListSection.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+                checkbox.addEventListener('change', /*#__PURE__*/function () {
+                  var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(event) {
+                    var taskId, isCompleted, taskType, groupIndex, currentAllTasksCompleted, _t16;
+                    return _regenerator().w(function (_context16) {
+                      while (1) switch (_context16.n) {
+                        case 0:
+                          taskId = event.target.dataset.taskId;
+                          isCompleted = event.target.checked;
+                          taskType = event.target.dataset.taskType; // 'single' or 'grouped'
+                          groupIndex = event.target.dataset.groupIndex; // Only for grouped tasks
+                          _context16.p = 1;
+                          _context16.n = 2;
+                          return apiRequest("PUT", "/onboarding-tasks/".concat(taskId), {
+                            completed: isCompleted,
+                            type: taskType,
+                            groupIndex: groupIndex
+                          });
+                        case 2:
+                          // Placeholder API for updating task status
+                          event.target.closest('.task-item').classList.toggle('completed', isCompleted);
+                          showModalMessage('Task status updated successfully!', false);
+                          // Re-evaluate if all tasks are completed after status change
+                          currentAllTasksCompleted = true;
+                          taskListSection.querySelectorAll('.task-item').forEach(function (item) {
+                            if (!item.classList.contains('completed')) {
+                              currentAllTasksCompleted = false;
+                            }
+                          });
+                          if (currentAllTasksCompleted) {
+                            triggerFireworks();
+                          }
+                          _context16.n = 4;
+                          break;
+                        case 3:
+                          _context16.p = 3;
+                          _t16 = _context16.v;
+                          showModalMessage("Failed to update task status: ".concat(_t16.message), true);
+                          event.target.checked = !isCompleted; // Revert checkbox if API fails
+                        case 4:
+                          return _context16.a(2);
+                      }
+                    }, _callee16, null, [[1, 3]]);
+                  }));
+                  return function (_x12) {
+                    return _ref10.apply(this, arguments);
+                  };
+                }());
+              });
+              if (allTasksCompleted) {
+                triggerFireworks(); // Trigger celebration if all tasks are already completed on load
+              }
+            } else {
+              taskListSection.innerHTML = '<p style="color: var(--text-medium);">No onboarding tasks assigned or found.</p>';
+            }
+            _context17.n = 7;
+            break;
+          case 6:
+            _context17.p = 6;
+            _t17 = _context17.v;
+            console.error("Error loading onboarding tasks:", _t17);
+            taskListSection.innerHTML = "<p style=\"color: #e74c3c;\">Error loading tasks: ".concat(_t17.message, "</p>");
+          case 7:
+            return _context17.a(2);
+        }
+      }, _callee17, null, [[2, 6]]);
+    }));
+    return _loadOnboardingTasks.apply(this, arguments);
+  }
+  loadOnboardingTasks();
+}
+
+/**
+ * Handles logic for pricing.html page.
+ */
+function handlePricingPage() {
+  // Check for payment modal from registration flow
+  var urlParams = new URLSearchParams(window.location.search);
+  var showRegisterCheckout = urlParams.get("registerCheckout");
+  var selectedPlanId = urlParams.get("plan");
+  var registerCheckoutModalOverlay = document.getElementById("register-checkout-modal-overlay");
+  var registerCheckoutModalTitle = document.getElementById("register-checkout-modal-title");
+  var registerCheckoutForm = document.getElementById("register-checkout-form");
+  var regCoNameInput = document.getElementById("reg-co-name");
+  var regFullNameInput = document.getElementById("reg-full-name");
+  var regEmailInput = document.getElementById("reg-email");
+  var regPasswordInput = document.getElementById("reg-password");
+  var regCheckoutCancelBtn = document.getElementById("reg-checkout-cancel-btn");
+  var regCheckoutErrorMessage = document.getElementById("register-checkout-error-message");
+  var currentSelectedPlan = null; // To store the plan chosen before registration
+
+  // Function to open the register/checkout modal
+  function openRegisterCheckoutModal(planId) {
+    if (registerCheckoutModalOverlay && registerCheckoutModalTitle && registerCheckoutForm) {
+      currentSelectedPlan = planId;
+      registerCheckoutModalTitle.textContent = "Sign Up & Subscribe to ".concat(planId.charAt(0).toUpperCase() + planId.slice(1), " Plan");
+      registerCheckoutModalOverlay.style.display = 'flex';
+      regCheckoutErrorMessage.textContent = '';
+      regCheckoutErrorMessage.classList.remove('visible');
+      regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  // Automatically open register/checkout modal if redirected with params
+  if (showRegisterCheckout === 'true' && selectedPlanId) {
+    openRegisterCheckoutModal(selectedPlanId);
+    // Clean up URL to prevent re-opening on refresh
+    history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  // Event listeners for "Choose Plan" buttons
+  var freePlanBtn = document.getElementById("free-plan-btn");
+  var proPlanBtn = document.getElementById("pro-plan-btn");
+  var enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
+  if (freePlanBtn) {
+    freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18() {
+      var userRole, profile, confirmed, _t18;
+      return _regenerator().w(function (_context18) {
+        while (1) switch (_context18.n) {
+          case 0:
+            // Logic for Free plan (already active/no payment required)
+            // If already on Free, maybe show a message. If upgrading from higher, downgrade.
+            // For now, assume it's just a placeholder or no action needed if already on Free.
+            userRole = localStorage.getItem("userRole");
+            if (!userRole) {
+              _context18.n = 8;
+              break;
+            }
+            _context18.n = 1;
+            return apiRequest("GET", "/profile");
+          case 1:
+            profile = _context18.v;
+            if (!(profile && profile.plan_id === 'free')) {
+              _context18.n = 2;
+              break;
+            }
+            showModalMessage("You are already on the Free plan.", false);
+            _context18.n = 7;
+            break;
+          case 2:
+            _context18.n = 3;
+            return showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
+          case 3:
+            confirmed = _context18.v;
+            if (!confirmed) {
+              _context18.n = 7;
+              break;
+            }
+            _context18.p = 4;
+            _context18.n = 5;
+            return apiRequest("POST", "/cancel-subscription");
+          case 5:
+            // Or specific downgrade API
+            showModalMessage("Successfully downgraded to Free plan. Your subscription will be updated.", false);
+            // Redirect or refresh to reflect changes
+            setTimeout(function () {
+              window.location.href = 'suite-hub.html';
+            }, 1500);
+            _context18.n = 7;
+            break;
+          case 6:
+            _context18.p = 6;
+            _t18 = _context18.v;
+            showModalMessage("Failed to downgrade: ".concat(_t18.message), true);
+          case 7:
+            _context18.n = 9;
+            break;
+          case 8:
+            // Not logged in, offer to sign up for free plan (which means regular registration)
+            // Redirect to register page without payment context, or open register modal directly
+            // For simplicity, let's just show info that free plan doesn't require payment.
+            showModalMessage("The Free plan is available upon regular sign-up.", false);
+            setTimeout(function () {
+              window.location.href = 'register.html';
+            }, 1500);
+          case 9:
+            return _context18.a(2);
+        }
+      }, _callee18, null, [[4, 6]]);
+    })));
+  }
+  if (proPlanBtn) {
+    proPlanBtn.addEventListener("click", function () {
+      return handlePlanSelection("pro");
+    });
+  }
+  if (enterprisePlanBtn) {
+    enterprisePlanBtn.addEventListener("click", function () {
+      return handlePlanSelection("enterprise");
+    });
+  }
+  function handlePlanSelection(_x13) {
+    return _handlePlanSelection.apply(this, arguments);
+  } // Handle cancel button in register/checkout modal
+  function _handlePlanSelection() {
+    _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(planId) {
+      var token, session, _t20;
+      return _regenerator().w(function (_context20) {
+        while (1) switch (_context20.n) {
+          case 0:
+            token = localStorage.getItem("authToken");
+            if (!token) {
+              _context20.n = 5;
+              break;
+            }
+            _context20.p = 1;
+            _context20.n = 2;
+            return apiRequest("POST", "/create-checkout-session", {
+              planId: planId
+            });
+          case 2:
+            session = _context20.v;
+            if (stripe && session.sessionId) {
+              showModalMessage("Account created! Redirecting to payment...", false);
+              stripe.redirectToCheckout({
+                sessionId: session.sessionId
+              });
+            } else {
+              showModalMessage("Failed to initiate checkout. Stripe or session ID missing.", true);
+            }
+            _context20.n = 4;
+            break;
+          case 3:
+            _context20.p = 3;
+            _t20 = _context20.v;
+            console.error("Error creating checkout session:", _t20);
+            showModalMessage("Failed to proceed with payment: ".concat(_t20.message), true);
+          case 4:
+            _context20.n = 6;
+            break;
+          case 5:
+            // User is not logged in, show registration modal
+            openRegisterCheckoutModal(planId);
+          case 6:
+            return _context20.a(2);
+        }
+      }, _callee20, null, [[1, 3]]);
+    }));
+    return _handlePlanSelection.apply(this, arguments);
+  }
+  if (regCheckoutCancelBtn) {
+    regCheckoutCancelBtn.addEventListener("click", function () {
+      if (registerCheckoutModalOverlay) {
+        registerCheckoutModalOverlay.style.display = 'none';
+        currentSelectedPlan = null; // Clear selected plan
+      }
+    });
+  }
+  // Close modal if clicking outside
+  if (registerCheckoutModalOverlay) {
+    registerCheckoutModalOverlay.addEventListener("click", function (event) {
+      if (event.target === registerCheckoutModalOverlay) {
+        registerCheckoutModalOverlay.style.display = "none";
+        currentSelectedPlan = null;
+      }
+    });
+  }
+
+  // Handle registration from the pricing modal
+  if (registerCheckoutForm) {
+    registerCheckoutForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(e) {
+        var company_name, full_name, email, password, emailRegex, registrationData, loginData, session, _t19;
+        return _regenerator().w(function (_context19) {
+          while (1) switch (_context19.n) {
+            case 0:
+              e.preventDefault();
+              company_name = regCoNameInput.value.trim();
+              full_name = regFullNameInput.value.trim();
+              email = regEmailInput.value.trim();
+              password = regPasswordInput.value;
+              regCheckoutErrorMessage.textContent = "";
+              regCheckoutErrorMessage.classList.remove('visible');
+              regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
+
+              // Client-side validation
+              emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+              if (!(!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email))) {
+                _context19.n = 1;
+                break;
+              }
+              regCheckoutErrorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
+              regCheckoutErrorMessage.classList.add('visible');
+              regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
+              return _context19.a(2);
+            case 1:
+              _context19.p = 1;
+              _context19.n = 2;
+              return apiRequest("POST", "/register", {
+                company_name: company_name,
+                full_name: full_name,
+                email: email,
+                password: password
+              });
+            case 2:
+              registrationData = _context19.v;
+              _context19.n = 3;
+              return apiRequest("POST", "/login", {
+                email: email,
+                password: password
+              });
+            case 3:
+              loginData = _context19.v;
+              localStorage.setItem("authToken", loginData.token);
+              localStorage.setItem("userRole", loginData.role);
+
+              // Then, initiate Stripe checkout with the selected plan
+              _context19.n = 4;
+              return apiRequest("POST", "/create-checkout-session", {
+                planId: currentSelectedPlan
+              });
+            case 4:
+              session = _context19.v;
+              if (stripe && session.sessionId) {
+                showModalMessage("Account created! Redirecting to payment...", false);
+                stripe.redirectToCheckout({
+                  sessionId: session.sessionId
+                });
+              } else {
+                showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
+                setTimeout(function () {
+                  window.location.href = 'login.html';
+                }, 2000); // Redirect to login
+              }
+              _context19.n = 6;
+              break;
+            case 5:
+              _context19.p = 5;
+              _t19 = _context19.v;
+              console.error("Register/Checkout error:", _t19);
+              regCheckoutErrorMessage.textContent = "Sign Up Failed: ".concat(_t19.message);
+              regCheckoutErrorMessage.classList.add('visible');
+              regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
+              showModalMessage("Sign Up Failed: ".concat(_t19.message), true);
+            case 6:
+              return _context19.a(2);
+          }
+        }, _callee19, null, [[1, 5]]);
+      }));
+      return function (_x14) {
+        return _ref12.apply(this, arguments);
+      };
+    }());
+  }
+}
+
+// --- Main Application Logic (DOMContentLoaded Listener) ---
+// This ensures that the DOM is fully loaded before trying to attach event listeners or manipulate elements.
+document.addEventListener("DOMContentLoaded", function () {
+  // Call setupSettingsDropdown on all pages that use it
+  setupSettingsDropdown();
+
+  // Route calls to specific page handlers based on body ID or filename
+  // Using window.location.pathname to determine the current page
+  var path = window.location.pathname;
+  if (path.includes("login.html")) {
+    handleLoginPage();
+  } else if (path.includes("register.html")) {
+    handleRegisterPage();
+  } else if (path.includes("suite-hub.html")) {
+    handleSuiteHubPage();
+  } else if (path.includes("account.html")) {
+    handleAccountPage();
+  } else if (path.includes("admin.html")) {
+    handleAdminPage();
+  } else if (path.includes("dashboard.html")) {
+    // Onboarding Dashboard
+    handleDashboardPage();
+  } else if (path.includes("checklists.html")) {
+    handleChecklistsPage();
+  } else if (path.includes("new-hire-view.html")) {
+    // Employee's Onboarding View
+    handleNewHireViewPage();
+  } else if (path.includes("pricing.html")) {
+    handlePricingPage();
+  } else if (path.includes("documents.html")) {
+    handleDocumentsPage();
+  } else if (path.includes("hiring.html")) {
+    handleHiringPage();
+  } else if (path.includes("scheduling.html")) {
+    // You'll need to load moment.js in scheduling.html for this to work
+    // <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    // Make sure it's loaded before app.min.js
+    if (typeof moment === 'undefined') {
+      console.error("Moment.js is not loaded. Scheduling page functionality will be limited.");
+      showModalMessage("Scheduling requires Moment.js library. Please ensure it's loaded in scheduling.html.", true);
+    } else {
+      handleSchedulingPage();
+    }
+  }
+  // Add more else if conditions for other pages as needed
+});

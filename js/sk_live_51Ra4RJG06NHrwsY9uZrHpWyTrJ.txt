@@ -15,3 +15,7 @@ STRIPE_WEBHOOK_SECRET   whsec_0bE3OaH7uIlHTYF6cNCkAeMQtk11Qli0
 https://github.com/someguyrighthere/Flow
 
 npm start
+
+
+
+postgresql://flow_app_db_2gp3_user:DyqUcjkkln50s4OzJzkDagFGgdCcUc3W@dpg-d1algfadbo4c73ckc9b0-a.ohio-postgres.render.com/flow_app_db_2gp3

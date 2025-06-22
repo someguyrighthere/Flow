@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "test": "mocha --require @babel/register --timeout 5000 --extension cjs",
-    "build:js": "uglifyjs ./js/app.js -o ./js/app.min.js",
+    "build:js": "babel js/app.js --out-file js/app.build.js --presets=@babel/preset-env && uglifyjs ./js/app.build.js -o ./js/app.min.js",
     "build:css": "cleancss -o ./css/style.min.css ./css/style.css && cleancss -o ./css/theme.min.css ./css/theme.css",
     "build": "npm run build:js && npm run build:css",
     "start": "node server.js"
@@ -13,18 +13,19 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@babel/cli": "^7.27.2",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
-    "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "sqlite3": "^5.1.7",
-    "express-rate-limit": "^7.3.1",
-    "morgan": "^1.10.0",
     "dotenv": "^16.4.5",
-    "stripe": "^16.2.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.3.1",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
     "pg": "^8.11.5",
-    "multer": "^1.4.5-lts.1"
+    "sqlite3": "^5.1.7",
+    "stripe": "^16.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.24.5",
