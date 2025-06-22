@@ -639,22 +639,22 @@ function handleAdminPage() {
                         await apiRequest("DELETE", `/users/${id}`);
                         showModalMessage("User deleted successfully!", false);
                         loadUsers();
-                    } else if (type === "document") { // Added handling for documents
+                    } else if (type === "document") {
                         await apiRequest("DELETE", `/documents/${id}`);
                         showModalMessage("Document deleted successfully!", false);
-                        handleDocumentsPage(); // Reload documents if on documents page
-                    } else if (type === "checklist") { // Added handling for checklists
+                        handleDocumentsPage();
+                    } else if (type === "checklist") {
                         await apiRequest("DELETE", `/checklists/${id}`);
                         showModalMessage("Task list deleted successfully!", false);
                         handleChecklistsPage(); // Reload checklists if on checklists page
-                    } else if (type === "job-posting") { // Added handling for job postings
+                    } else if (type === "job-posting") {
                         await apiRequest("DELETE", `/job-postings/${id}`);
                         showModalMessage("Job posting deleted successfully!", false);
-                        handleHiringPage(); // Reload hiring page if on hiring page
-                    } else if (type === "schedule") { // Added handling for schedules
+                        handleHiringPage();
+                    } else if (type === "schedule") {
                         await apiRequest("DELETE", `/schedules/${id}`);
                         showModalMessage("Schedule deleted successfully!", false);
-                        handleSchedulingPage(); // Reload schedules if on scheduling page
+                        handleSchedulingPage();
                     }
                 } catch (error) {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
@@ -949,6 +949,7 @@ function handleChecklistsPage() {
                             </button>
                         </div>
                     `;
+                    // FIX: Append to the correct parent div
                     checklistListDiv.appendChild(checklistItem);
                 });
 
@@ -1325,7 +1326,6 @@ function handlePricingPage() {
  * Handles all client-side logic for the hiring.html page.
  */
 function handleHiringPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
@@ -1856,7 +1856,7 @@ function handleSchedulingPage() {
  * Handles all client-side logic for the documents.html page.
  */
 function handleDocumentsPage() {
-    // In a real app, ensure user is logged in before calling this handler
+    // In a real app, remove this mock and ensure user is logged in before calling this handler
     // The mock authentication below should be REMOVED for your live site.
     if (!localStorage.getItem("authToken")) {
         localStorage.setItem("authToken", "mock-auth-token"); // REMOVE FOR LIVE SITE
@@ -1961,14 +1961,12 @@ function handleDocumentsPage() {
 
             try {
                 showUploadProgress(0, 'Starting upload...');
-                // This now makes a real API call for file upload
                 const result = await apiRequest(
                     "POST",
                     "/documents/upload",
                     formData,
                     true, // isFormData: true
                     event => {
-                        // onProgress callback
                         if (event.lengthComputable) {
                             const percentComplete = Math.round((event.loaded * 100) / event.total);
                             showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
@@ -1989,19 +1987,15 @@ function handleDocumentsPage() {
     }
 
     // Event listener for delete buttons on documents page (using delegation)
-    // This listener is on `documentListDiv` for documents to avoid conflicts
-    // with the `document.body` listener for other types.
     if (documentListDiv) {
         documentListDiv.addEventListener("click", async e => {
             const targetButton = e.target.closest(".btn-delete");
-            // Ensure it's a delete button and specifically for a document
             if (targetButton && targetButton.dataset.type === "document") {
                 const idToDelete = parseInt(targetButton.dataset.id, 10);
                 const confirmed = await showConfirmModal(`Are you sure you want to delete this document? This action cannot be undone.`, "Delete");
 
                 if (confirmed) {
                     try {
-                        // This now makes a real API call to delete the document
                         await apiRequest("DELETE", `/documents/${idToDelete}`);
                         showModalMessage("Document deleted successfully!", false);
                         loadDocuments(); // Reload the list of documents to reflect the change
@@ -2040,13 +2034,13 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (path.includes("dashboard.html")) { // Onboarding Dashboard
         handleDashboardPage();
     } else if (path.includes("checklists.html")) {
-        handleChecklistsPage();
+        handleChecklistsPage(); // Call the checklists page handler directly
     } else if (path.includes("new-hire-view.html")) { // Employee's Onboarding View
         handleNewHireViewPage();
     } else if (path.includes("pricing.html")) {
         handlePricingPage();
     } else if (path.includes("documents.html")) {
-        handleDocumentsPage(); // Call the documents page handler directly
+        handleDocumentsPage();
     } else if (path.includes("hiring.html")) {
         handleHiringPage();
     } else if (path.includes("scheduling.html")) {

@@ -826,7 +826,7 @@ function handleAdminPage() {
             return apiRequest("DELETE", "/documents/".concat(id));
           case 7:
             showModalMessage("Document deleted successfully!", false);
-            handleDocumentsPage(); // Reload documents if on documents page
+            handleDocumentsPage();
             _context6.n = 14;
             break;
           case 8:
@@ -850,7 +850,7 @@ function handleAdminPage() {
             return apiRequest("DELETE", "/job-postings/".concat(id));
           case 11:
             showModalMessage("Job posting deleted successfully!", false);
-            handleHiringPage(); // Reload hiring page if on hiring page
+            handleHiringPage();
             _context6.n = 14;
             break;
           case 12:
@@ -862,7 +862,7 @@ function handleAdminPage() {
             return apiRequest("DELETE", "/schedules/".concat(id));
           case 13:
             showModalMessage("Schedule deleted successfully!", false);
-            handleSchedulingPage(); // Reload schedules if on scheduling page
+            handleSchedulingPage();
           case 14:
             _context6.n = 16;
             break;
@@ -1224,6 +1224,7 @@ function handleChecklistsPage() {
                 var checklistItem = document.createElement("div");
                 checklistItem.className = "checklist-item";
                 checklistItem.innerHTML = "\n                        <div class=\"checklist-item-title\">\n                            <span style=\"color: var(--primary-accent);\">".concat(checklist.position, "</span>\n                            <span>- ").concat(checklist.title, "</span>\n                            <span style=\"font-size: 0.8em; color: var(--text-medium);\">(").concat(checklist.structure_type, ")</span>\n                        </div>\n                        <div class=\"checklist-item-actions\">\n                            <button class=\"btn btn-secondary btn-sm view-checklist-btn\" data-checklist-id=\"").concat(checklist.id, "\">View/Edit</button>\n                            <button class=\"btn-delete\" data-type=\"checklist\" data-id=\"").concat(checklist.id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
+                // FIX: Append to the correct parent div
                 checklistListDiv.appendChild(checklistItem);
               });
               checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(function (button) {
@@ -1746,7 +1747,6 @@ function handlePricingPage() {
  * Handles all client-side logic for the hiring.html page.
  */
 function handleHiringPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
@@ -2438,7 +2438,7 @@ function handleSchedulingPage() {
  * Handles all client-side logic for the documents.html page.
  */
 function handleDocumentsPage() {
-  // In a real app, ensure user is logged in before calling this handler
+  // In a real app, remove this mock and ensure user is logged in before calling this handler
   // The mock authentication below should be REMOVED for your live site.
   if (!localStorage.getItem("authToken")) {
     localStorage.setItem("authToken", "mock-auth-token"); // REMOVE FOR LIVE SITE
@@ -2554,12 +2554,10 @@ function handleDocumentsPage() {
               formData.append('description', description);
               _context28.p = 2;
               showUploadProgress(0, 'Starting upload...');
-              // This now makes a real API call for file upload
               _context28.n = 3;
               return apiRequest("POST", "/documents/upload", formData, true,
               // isFormData: true
               function (event) {
-                // onProgress callback
                 if (event.lengthComputable) {
                   var percentComplete = Math.round(event.loaded * 100 / event.total);
                   showUploadProgress(percentComplete, "Uploading: ".concat(percentComplete, "%"));
@@ -2591,8 +2589,6 @@ function handleDocumentsPage() {
   }
 
   // Event listener for delete buttons on documents page (using delegation)
-  // This listener is on `documentListDiv` for documents to avoid conflicts
-  // with the `document.body` listener for other types.
   if (documentListDiv) {
     documentListDiv.addEventListener("click", /*#__PURE__*/function () {
       var _ref15 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29(e) {
@@ -2600,7 +2596,7 @@ function handleDocumentsPage() {
         return _regenerator().w(function (_context29) {
           while (1) switch (_context29.n) {
             case 0:
-              targetButton = e.target.closest(".btn-delete"); // Ensure it's a delete button and specifically for a document
+              targetButton = e.target.closest(".btn-delete");
               if (!(targetButton && targetButton.dataset.type === "document")) {
                 _context29.n = 5;
                 break;
@@ -2663,14 +2659,14 @@ document.addEventListener("DOMContentLoaded", function () {
     // Onboarding Dashboard
     handleDashboardPage();
   } else if (path.includes("checklists.html")) {
-    handleChecklistsPage();
+    handleChecklistsPage(); // Call the checklists page handler directly
   } else if (path.includes("new-hire-view.html")) {
     // Employee's Onboarding View
     handleNewHireViewPage();
   } else if (path.includes("pricing.html")) {
     handlePricingPage();
   } else if (path.includes("documents.html")) {
-    handleDocumentsPage(); // Call the documents page handler directly
+    handleDocumentsPage();
   } else if (path.includes("hiring.html")) {
     handleHiringPage();
   } else if (path.includes("scheduling.html")) {
