@@ -881,10 +881,6 @@ function handleDashboardPage() {
         if (!newHirePositionSelect) return;
         newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>';
         try {
-            // Assuming an API endpoint to fetch distinct positions from JobPostings
-            // Or from a dedicated 'positions' table if one exists.
-            // For now, let's mock it or assume an API endpoint like /positions
-            // If positions are tied to locations, this might need more complex logic.
             const response = await apiRequest("GET", "/positions"); // Placeholder API
             newHirePositionSelect.innerHTML = '<option value="">Select Position</option>';
             if (response && response.positions && response.positions.length > 0) {
@@ -911,9 +907,6 @@ function handleDashboardPage() {
         if (!sessionListDiv) return;
         sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading active onboardings...</p>';
         try {
-            // Assuming an API endpoint to fetch active onboarding sessions
-            // This might involve fetching users with role 'employee' who have a linked task list,
-            // and checking completion status if stored on user or a separate onboarding record.
             const sessions = await apiRequest("GET", "/onboarding-sessions"); // Placeholder API
             sessionListDiv.innerHTML = '';
             if (sessions && sessions.length > 0) {
@@ -1443,7 +1436,8 @@ function handlePricingPage() {
                             showModalMessage("Successfully downgraded to Free plan. Your subscription will be updated.", false);
                             // Redirect or refresh to reflect changes
                             setTimeout(() => { window.location.href = 'suite-hub.html'; }, 1500);
-                        } catch (error) {
+                        }
+                        catch (error) {
                             showModalMessage(`Failed to downgrade: ${error.message}`, true);
                         }
                     }
@@ -1579,6 +1573,11 @@ function handleDocumentsPage() {
 
     const uploadDocumentForm = document.getElementById("upload-document-form");
     const documentListDiv = document.getElementById("document-list");
+    // Get references to the new progress bar elements
+    const uploadProgressBarContainer = document.getElementById("upload-progress-container");
+    const uploadProgressBarFill = document.getElementById("upload-progress-fill");
+    const uploadProgressBarText = document.getElementById("upload-progress-text");
+
 
     /**
      * Loads and displays existing documents.
@@ -1623,14 +1622,9 @@ function handleDocumentsPage() {
     if (uploadDocumentForm) {
         uploadDocumentForm.addEventListener("submit", async e => {
             e.preventDefault();
-            // console.log("Upload form submitted."); // Removed for production
             const title = document.getElementById("document-title").value.trim();
             const fileInput = document.getElementById("document-file");
             const description = document.getElementById("document-description").value.trim();
-
-            // console.log("Title:", title); // Removed for production
-            // console.log("FileInput element:", fileInput); // Removed for production
-            // console.log("Description:", description); // Removed for production
 
             // Crucial: Check if fileInput exists before accessing .files
             if (!fileInput) {
@@ -1640,11 +1634,18 @@ function handleDocumentsPage() {
             }
             
             const file = fileInput.files[0];
-            // console.log("File selected:", file); // Removed for production
 
             if (!title || !file) {
                 showModalMessage("Document title and a file are required.", true);
                 return;
+            }
+
+            // Show and reset progress bar
+            if (uploadProgressBarContainer) uploadProgressBarContainer.style.display = 'block';
+            if (uploadProgressBarFill) uploadProgressBarFill.style.width = '0%';
+            if (uploadProgressBarText) {
+                uploadProgressBarText.textContent = '0%';
+                uploadProgressBarText.style.display = 'block';
             }
 
             const formData = new FormData();
@@ -1657,16 +1658,22 @@ function handleDocumentsPage() {
                     // This onProgress callback is for the XMLHttpRequest used by apiRequest when isFormData is true
                     if (event.lengthComputable) {
                         const percentComplete = (event.loaded / event.total) * 100;
-                        // console.log(`Upload Progress: ${percentComplete.toFixed(0)}%`); // Removed for production
-                        // No UI progress bar elements, so no need to update
+                        if (uploadProgressBarFill) uploadProgressBarFill.style.width = `${percentComplete}%`;
+                        if (uploadProgressBarText) uploadProgressBarText.textContent = `${percentComplete.toFixed(0)}%`;
                     }
                 });
                 showModalMessage("Document uploaded successfully!", false);
                 uploadDocumentForm.reset();
+                // Hide progress bar and text after completion
+                if (uploadProgressBarContainer) uploadProgressBarContainer.style.display = 'none';
+                if (uploadProgressBarText) uploadProgressBarText.style.display = 'none';
                 loadDocuments(); // Reload documents list
             } catch (error) {
                 showModalMessage(`Error uploading document: ${error.message}`, true);
                 console.error("Upload error details:", error);
+                // Hide progress bar and text on error
+                if (uploadProgressBarContainer) uploadProgressBarContainer.style.display = 'none';
+                if (uploadProgressBarText) uploadProgressBarText.style.display = 'none';
             }
         });
     }
@@ -2028,8 +2035,8 @@ function handleHiringPage() {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
-        }
-    });
+        });
+    }
 
 
     // Initial loads
