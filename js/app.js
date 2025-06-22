@@ -1579,11 +1579,6 @@ function handleDocumentsPage() {
 
     const uploadDocumentForm = document.getElementById("upload-document-form");
     const documentListDiv = document.getElementById("document-list");
-    // Removed progress bar elements as per change to URL linking
-    // const uploadProgressBarContainer = document.getElementById("upload-progress-container");
-    // const uploadProgressBarFill = document.getElementById("upload-progress-fill");
-    // const uploadProgressBarText = document.getElementById("upload-progress-text");
-    // const uploadStatusText = document.getElementById("upload-status-text");
 
     /**
      * Loads and displays existing documents.
@@ -1605,7 +1600,7 @@ function handleDocumentsPage() {
                         <p style="font-size: 0.8em; color: var(--text-medium);">Uploaded: ${new Date(doc.upload_date).toLocaleDateString()}</p>
                         <p style="font-size: 0.8em; color: var(--text-medium);">File: ${doc.file_name}</p>
                         <div class="actions">
-                            <button class="btn-view" data-document-url="${doc.file_path}" data-file-name="${doc.file_name}">View</button>
+                            <button class="btn btn-secondary btn-sm btn-download" data-document-id="${doc.document_id}">Download</button>
                             <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                             </button>
@@ -1614,16 +1609,29 @@ function handleDocumentsPage() {
                     documentListDiv.appendChild(documentItem);
                 });
 
-                // Add event listeners for view buttons
-                documentListDiv.querySelectorAll('.btn-view').forEach(button => {
-                    button.addEventListener('click', (event) => {
-                        const documentUrl = event.target.dataset.documentUrl;
-                        window.open(documentUrl, '_blank'); // Open URL in a new tab
+                // Add event listeners for download buttons
+                documentListDiv.querySelectorAll('.btn-download').forEach(button => {
+                    button.addEventListener('click', async (event) => {
+                        const documentId = event.target.dataset.documentId;
+                        try {
+                            const blob = await apiRequest("GET", `/documents/download/${documentId}`, null, false, null, true); // Expect blob response
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.style.display = 'none';
+                            a.href = url;
+                            a.download = event.target.closest('.document-item').querySelector('p:nth-of-type(3)').textContent.replace('File: ', ''); // Get filename from displayed text
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            showModalMessage('Document download initiated!', false);
+                        } catch (error) {
+                            showModalMessage(`Error downloading document: ${error.message}`, true);
+                        }
                     });
                 });
 
             } else {
-                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents linked yet.</p>';
+                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
             }
         } catch (error) {
             console.error("Error loading documents:", error);
@@ -1631,45 +1639,63 @@ function handleDocumentsPage() {
         }
     }
 
-    // Handle document linking form submission (changed from upload to link)
+    // Handle document upload form submission
     if (uploadDocumentForm) {
         uploadDocumentForm.addEventListener("submit", async e => {
             e.preventDefault();
+            console.log("Upload form submitted."); // New log
             const title = document.getElementById("document-title").value.trim();
-            const url = document.getElementById("document-url").value.trim(); // Get URL
+            const fileInput = document.getElementById("document-file");
             const description = document.getElementById("document-description").value.trim();
 
-            if (!title || !url) {
-                showModalMessage("Document title and URL are required.", true);
+            console.log("Title:", title); // New log
+            console.log("FileInput element:", fileInput); // New log
+            console.log("Description:", description); // New log
+
+            // Crucial: Check if fileInput exists before accessing .files
+            if (!fileInput) {
+                console.error("Error: document-file input element not found!");
+                showModalMessage("Internal error: File input element not found. Please check HTML structure.", true);
+                return; // Stop execution if element is missing
+            }
+            
+            const file = fileInput.files[0];
+            console.log("File selected:", file); // New log
+
+            if (!title || !file) {
+                showModalMessage("Document title and a file are required.", true);
                 return;
             }
 
-            // Client-side validation for URL format
-            try {
-                new URL(url); // Attempt to create a URL object to validate
-            } catch (e) {
-                showModalMessage("Please enter a valid URL for the document or video.", true);
-                return;
-            }
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('document_file', file); // Append the actual file object
 
             try {
-                // For URL linking, we send title, description, and the URL itself.
-                // The backend would store the URL, not a file upload.
-                await apiRequest("POST", "/documents/link", { // New or modified API endpoint
-                    title: title,
-                    url: url,
-                    description: description || null
+                await apiRequest("POST", "/documents/upload", formData, true, (event) => {
+                    // This onProgress callback is for the XMLHttpRequest used by apiRequest when isFormData is true
+                    if (event.lengthComputable) {
+                        const percentComplete = (event.loaded / event.total) * 100;
+                        console.log(`Upload Progress: ${percentComplete.toFixed(0)}%`);
+                        // if (uploadProgressBarFill) uploadProgressBarFill.style.width = `${percentComplete}%`;
+                        // if (uploadProgressBarText) uploadProgressBarText.textContent = `${percentComplete.toFixed(0)}%`;
+                        // if (uploadStatusText) uploadStatusText.textContent = `Uploading: ${percentComplete.toFixed(0)}%`;
+                    }
                 });
-                showModalMessage("Document/Video linked successfully!", false);
+                showModalMessage("Document uploaded successfully!", false);
                 uploadDocumentForm.reset();
+                // if (uploadProgressBarContainer) uploadProgressBarContainer.style.display = 'none';
+                // if (uploadStatusText) uploadStatusText.textContent = '';
                 loadDocuments(); // Reload documents list
             } catch (error) {
-                showModalMessage(`Error linking document: ${error.message}`, true);
+                showModalMessage(`Error uploading document: ${error.message}`, true);
+                console.error("Upload error details:", error);
             }
         });
     }
 
-    // Event listener for delete buttons (delegated from admin page)
+    // Event listener for delete buttons (delegated to body from admin page)
     // This assumes your document.body.addEventListener for .btn-delete handles 'document' type
     // If not, you'd add a specific listener here for document-list items.
     document.body.addEventListener("click", async e => {
@@ -2131,7 +2157,7 @@ function handleSchedulingPage() {
     async function renderCalendar(weekStartMoment) {
         if (!calendarGrid || !currentWeekDisplay) return;
 
-        currentWeekDisplay.textContent = weekStartMoment.format("MMM D, YYYY") + " - " + moment(weekStartMoment).add(6, 'days').format("MMM D, YYYY");
+        currentWeekDisplay.textContent = weekStartMoment.format("MMM D,YYYY") + " - " + moment(weekStartMoment).add(6, 'days').format("MMM D,YYYY");
 
         // Clear existing day headers and cells (except the time column)
         const existingDays = calendarGrid.querySelectorAll('.calendar-day-header:not(:first-child), .calendar-day-cell');
@@ -2381,4 +2407,3 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     // Add more else if conditions for other pages as needed
 });
-
