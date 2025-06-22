@@ -407,7 +407,7 @@ function handleRegisterPage() {
         const company_name = companyNameInput.value.trim();
         const full_name = fullNameInput.value.trim();
         const email = emailInput.value.trim();
-        const password = passwordInput.value;
+        const password = password.value;
 
         errorMessage.textContent = ""; // Clear any previous error
         errorMessage.classList.remove("visible");
@@ -787,7 +787,6 @@ function handleAdminPage() {
             const employeeLocationSelectElement = document.getElementById("employee-location-select");
             const employeeLocationId = employeeLocationSelectElement ? employeeLocationSelectElement.value : "";
 
-            // Client-side validation for employee invite
             if (!employeeName || !employeeEmail || !employeePassword || employeePassword.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail)) {
                 showModalMessage("Full name, valid email, and a password (min 6 chars) are required for employee invitation.", true);
                 return;
@@ -1695,8 +1694,9 @@ function handleDocumentsPage() {
                     showModalMessage(`Error deleting document: ${error.message}`, true);
                 }
             }
-        }
-    });
+        });
+    } // <--- This line is the culprit
+// The syntax error is due to this extra closing brace that isn't matched.
 
     // Initial load
     loadDocuments();
@@ -2035,9 +2035,9 @@ function handleHiringPage() {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
-        });
-    }
-
+        }
+    });
+}
 
     // Initial loads
     populateLocationDropdowns();
