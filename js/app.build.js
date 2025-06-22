@@ -772,7 +772,7 @@ function handleAdminPage() {
   }
   document.body.addEventListener("click", /*#__PURE__*/function () {
     var _ref5 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(e) {
-      var targetButton, id, type, confirmationMessage, confirmed, _t6;
+      var targetButton, id, type, confirmationMessage, _confirmed, _t6;
       return _regenerator().w(function (_context6) {
         while (1) switch (_context6.n) {
           case 0:
@@ -787,8 +787,8 @@ function handleAdminPage() {
             _context6.n = 1;
             return showConfirmModal(confirmationMessage, "Delete");
           case 1:
-            confirmed = _context6.v;
-            if (!confirmed) {
+            _confirmed = _context6.v;
+            if (!_confirmed) {
               _context6.n = 16;
               break;
             }
@@ -1227,56 +1227,61 @@ function handleChecklistsPage() {
                 checklistListDiv.appendChild(checklistItem);
               });
 
-              // Attach specific listeners for view/edit and delete on these dynamically added buttons
-              checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(function (button) {
-                button.addEventListener('click', function (event) {
-                  event.stopPropagation(); // Prevent parent .checklist-item from being clicked
-                  var checklistId = event.target.dataset.checklistId;
-                  showModalMessage("Viewing/Editing Checklist ID: ".concat(checklistId, " (Functionality to be implemented)"), false);
-                  // Future: Implement actual modal or page navigation for editing
-                });
-              });
-
-              // Attach DELETE listener specifically for checklists within this page
-              checklistListDiv.querySelectorAll('.btn-delete[data-type="checklist"]').forEach(function (button) {
-                button.addEventListener('click', /*#__PURE__*/function () {
-                  var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12(event) {
-                    var checklistId, confirmed, _t12;
-                    return _regenerator().w(function (_context12) {
-                      while (1) switch (_context12.n) {
-                        case 0:
-                          event.stopPropagation(); // Prevent parent .checklist-item from being clicked
-                          checklistId = event.target.dataset.id;
+              // Attach click listeners using event delegation on the checklistListDiv
+              checklistListDiv.addEventListener('click', /*#__PURE__*/function () {
+                var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12(event) {
+                  var viewButton, deleteButton, checklistId, _checklistId, _confirmed2, _t12;
+                  return _regenerator().w(function (_context12) {
+                    while (1) switch (_context12.n) {
+                      case 0:
+                        viewButton = event.target.closest('.view-checklist-btn');
+                        deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
+                        if (!viewButton) {
                           _context12.n = 1;
-                          return showConfirmModal("Are you sure you want to delete this task list? This action cannot be undone.", "Delete");
-                        case 1:
-                          confirmed = _context12.v;
-                          if (!confirmed) {
-                            _context12.n = 5;
-                            break;
-                          }
-                          _context12.p = 2;
-                          _context12.n = 3;
-                          return apiRequest("DELETE", "/checklists/".concat(checklistId));
-                        case 3:
-                          showModalMessage("Task list deleted successfully!", false);
-                          loadChecklists(); // Reload the list after deletion
-                          _context12.n = 5;
                           break;
-                        case 4:
-                          _context12.p = 4;
-                          _t12 = _context12.v;
-                          showModalMessage("Failed to delete task list: ".concat(_t12.message), true);
-                        case 5:
-                          return _context12.a(2);
-                      }
-                    }, _callee12, null, [[2, 4]]);
-                  }));
-                  return function (_x1) {
-                    return _ref9.apply(this, arguments);
-                  };
-                }());
-              });
+                        }
+                        event.stopPropagation(); // Prevent clicks on view button from bubbling up
+                        checklistId = viewButton.dataset.checklistId;
+                        showModalMessage("Viewing/Editing Checklist ID: ".concat(checklistId, " (Functionality to be implemented)"), false);
+                        // Future: Implement actual modal or page navigation for editing
+                        _context12.n = 6;
+                        break;
+                      case 1:
+                        if (!deleteButton) {
+                          _context12.n = 6;
+                          break;
+                        }
+                        event.stopPropagation(); // Prevent clicks on delete button from bubbling up
+                        _checklistId = deleteButton.dataset.id;
+                        _context12.n = 2;
+                        return showConfirmModal("Are you sure you want to delete this task list? This action cannot be undone.", "Delete");
+                      case 2:
+                        _confirmed2 = _context12.v;
+                        if (!_confirmed2) {
+                          _context12.n = 6;
+                          break;
+                        }
+                        _context12.p = 3;
+                        _context12.n = 4;
+                        return apiRequest("DELETE", "/checklists/".concat(_checklistId));
+                      case 4:
+                        showModalMessage("Task list deleted successfully!", false);
+                        loadChecklists(); // Reload the list after deletion
+                        _context12.n = 6;
+                        break;
+                      case 5:
+                        _context12.p = 5;
+                        _t12 = _context12.v;
+                        showModalMessage("Failed to delete task list: ".concat(_t12.message), true);
+                      case 6:
+                        return _context12.a(2);
+                    }
+                  }, _callee12, null, [[3, 5]]);
+                }));
+                return function (_x1) {
+                  return _ref9.apply(this, arguments);
+                };
+              }());
             } else {
               checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
             }
@@ -1573,7 +1578,7 @@ function handlePricingPage() {
   var enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
   if (freePlanBtn) {
     freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16() {
-      var userRole, profile, confirmed, _t16;
+      var userRole, profile, _confirmed3, _t16;
       return _regenerator().w(function (_context16) {
         while (1) switch (_context16.n) {
           case 0:
@@ -1597,8 +1602,8 @@ function handlePricingPage() {
             _context16.n = 3;
             return showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
           case 3:
-            confirmed = _context16.v;
-            if (!confirmed) {
+            _confirmed3 = _context16.v;
+            if (!_confirmed3) {
               _context16.n = 7;
               break;
             }
@@ -2347,7 +2352,7 @@ function handleSchedulingPage() {
                         return showConfirmModal("\n                            <h4>Shift Details:</h4>\n                            <p><strong>Employee:</strong> ".concat(shift.employee_name, "</p>\n                            <p><strong>Location:</strong> ").concat(shift.location_name, "</p>\n                            <p><strong>Time:</strong> ").concat(shiftStart.format('MMM DD, h:mm A'), " - ").concat(shiftEnd.format('MMM DD, h:mm A'), "</p>\n                            <p><strong>Notes:</strong> ").concat(shift.notes || 'None', "</p>\n                            <p style=\"margin-top: 15px;\">Are you sure you want to delete this shift?</p>\n                        "), "Delete Shift");
                       case 1:
                         confirmDelete = _context27.v;
-                        if (!confirmDelete) {
+                        if (!confirmed) {
                           _context27.n = 5;
                           break;
                         }
@@ -2633,7 +2638,7 @@ function handleDocumentsPage() {
   if (documentListDiv) {
     documentListDiv.addEventListener("click", /*#__PURE__*/function () {
       var _ref16 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30(e) {
-        var targetButton, idToDelete, confirmed, _t29;
+        var targetButton, idToDelete, _confirmed4, _t29;
         return _regenerator().w(function (_context30) {
           while (1) switch (_context30.n) {
             case 0:
@@ -2646,8 +2651,8 @@ function handleDocumentsPage() {
               _context30.n = 1;
               return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
             case 1:
-              confirmed = _context30.v;
-              if (!confirmed) {
+              _confirmed4 = _context30.v;
+              if (!_confirmed4) {
                 _context30.n = 5;
                 break;
               }

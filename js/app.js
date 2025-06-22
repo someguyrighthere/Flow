@@ -952,21 +952,19 @@ function handleChecklistsPage() {
                     checklistListDiv.appendChild(checklistItem);
                 });
 
-                // Attach specific listeners for view/edit and delete on these dynamically added buttons
-                checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(button => {
-                    button.addEventListener('click', (event) => {
-                        event.stopPropagation(); // Prevent parent .checklist-item from being clicked
-                        const checklistId = event.target.dataset.checklistId;
+                // Attach click listeners using event delegation on the checklistListDiv
+                checklistListDiv.addEventListener('click', async (event) => {
+                    const viewButton = event.target.closest('.view-checklist-btn');
+                    const deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
+
+                    if (viewButton) {
+                        event.stopPropagation(); // Prevent clicks on view button from bubbling up
+                        const checklistId = viewButton.dataset.checklistId;
                         showModalMessage(`Viewing/Editing Checklist ID: ${checklistId} (Functionality to be implemented)`, false);
                         // Future: Implement actual modal or page navigation for editing
-                    });
-                });
-
-                // Attach DELETE listener specifically for checklists within this page
-                checklistListDiv.querySelectorAll('.btn-delete[data-type="checklist"]').forEach(button => {
-                    button.addEventListener('click', async (event) => {
-                        event.stopPropagation(); // Prevent parent .checklist-item from being clicked
-                        const checklistId = event.target.dataset.id;
+                    } else if (deleteButton) {
+                        event.stopPropagation(); // Prevent clicks on delete button from bubbling up
+                        const checklistId = deleteButton.dataset.id;
                         const confirmed = await showConfirmModal(`Are you sure you want to delete this task list? This action cannot be undone.`, "Delete");
                         if (confirmed) {
                             try {
@@ -977,7 +975,7 @@ function handleChecklistsPage() {
                                 showModalMessage(`Failed to delete task list: ${error.message}`, true);
                             }
                         }
-                    });
+                    }
                 });
 
             } else {
@@ -1778,7 +1776,7 @@ function handleSchedulingPage() {
                             <p style="margin-top: 15px;">Are you sure you want to delete this shift?</p>
                         `, "Delete Shift");
 
-                        if (confirmDelete) {
+                        if (confirmed) {
                             try {
                                 await apiRequest("DELETE", `/schedules/${shift.schedule_id}`);
                                 showModalMessage("Shift deleted successfully!", false);
