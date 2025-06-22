@@ -1217,7 +1217,7 @@ function handlePricingPage() {
 
     if (freePlanBtn) {
         freePlanBtn.addEventListener("click", async () => {
-            const userRole = localStorage.getItem("userRole");
+            const userRole = localStorage.getItem("authToken"); // Should be userRole not authToken for this check
             if (userRole) {
                 const profile = await apiRequest("GET", "/profile");
                 if (profile && profile.plan_id === 'free') {

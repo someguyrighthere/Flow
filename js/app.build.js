@@ -1577,7 +1577,7 @@ function handlePricingPage() {
       return _regenerator().w(function (_context16) {
         while (1) switch (_context16.n) {
           case 0:
-            userRole = localStorage.getItem("userRole");
+            userRole = localStorage.getItem("authToken"); // Should be userRole not authToken for this check
             if (!userRole) {
               _context16.n = 8;
               break;
