@@ -949,14 +949,34 @@ function handleChecklistsPage() {
                             </button>
                         </div>
                     `;
-                    // FIX: Append to the correct parent div
                     checklistListDiv.appendChild(checklistItem);
                 });
 
+                // Attach specific listeners for view/edit and delete on these dynamically added buttons
                 checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(button => {
                     button.addEventListener('click', (event) => {
+                        event.stopPropagation(); // Prevent parent .checklist-item from being clicked
                         const checklistId = event.target.dataset.checklistId;
                         showModalMessage(`Viewing/Editing Checklist ID: ${checklistId} (Functionality to be implemented)`, false);
+                        // Future: Implement actual modal or page navigation for editing
+                    });
+                });
+
+                // Attach DELETE listener specifically for checklists within this page
+                checklistListDiv.querySelectorAll('.btn-delete[data-type="checklist"]').forEach(button => {
+                    button.addEventListener('click', async (event) => {
+                        event.stopPropagation(); // Prevent parent .checklist-item from being clicked
+                        const checklistId = event.target.dataset.id;
+                        const confirmed = await showConfirmModal(`Are you sure you want to delete this task list? This action cannot be undone.`, "Delete");
+                        if (confirmed) {
+                            try {
+                                await apiRequest("DELETE", `/checklists/${checklistId}`);
+                                showModalMessage("Task list deleted successfully!", false);
+                                loadChecklists(); // Reload the list after deletion
+                            } catch (error) {
+                                showModalMessage(`Failed to delete task list: ${error.message}`, true);
+                            }
+                        }
                     });
                 });
 
@@ -1244,9 +1264,7 @@ function handlePricingPage() {
                 console.error("Error creating checkout session:", error);
                 showModalMessage(`Failed to proceed with payment: ${error.message}`, true);
             }
-        } else {
-            openRegisterCheckoutModal(planId);
-        }
+        };
     }
 
     if (regCheckoutCancelBtn) {
@@ -1907,7 +1925,6 @@ function handleDocumentsPage() {
         documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
 
         try {
-            // This now makes a real API call to your backend
             const documents = await apiRequest("GET", "/documents");
 
             documentListDiv.innerHTML = '';

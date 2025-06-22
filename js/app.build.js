@@ -198,7 +198,7 @@ function apiRequest(_x2, _x3) {
  * Handles all client-side logic for the login.html page.
  */
 function _apiRequest() {
-  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31(method, path) {
+  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee32(method, path) {
     var body,
       isFormData,
       onProgress,
@@ -208,22 +208,22 @@ function _apiRequest() {
       options,
       response,
       errorData,
-      _args31 = arguments,
-      _t30;
-    return _regenerator().w(function (_context31) {
-      while (1) switch (_context31.n) {
+      _args32 = arguments,
+      _t31;
+    return _regenerator().w(function (_context32) {
+      while (1) switch (_context32.n) {
         case 0:
-          body = _args31.length > 2 && _args31[2] !== undefined ? _args31[2] : null;
-          isFormData = _args31.length > 3 && _args31[3] !== undefined ? _args31[3] : false;
-          onProgress = _args31.length > 4 && _args31[4] !== undefined ? _args31[4] : null;
-          expectBlobResponse = _args31.length > 5 && _args31[5] !== undefined ? _args31[5] : false;
+          body = _args32.length > 2 && _args32[2] !== undefined ? _args32[2] : null;
+          isFormData = _args32.length > 3 && _args32[3] !== undefined ? _args32[3] : false;
+          onProgress = _args32.length > 4 && _args32[4] !== undefined ? _args32[4] : null;
+          expectBlobResponse = _args32.length > 5 && _args32[5] !== undefined ? _args32[5] : false;
           token = localStorage.getItem('authToken');
           endpoint = "".concat(API_BASE_URL).concat(path); // For FormData, use XMLHttpRequest for progress tracking
           if (!isFormData) {
-            _context31.n = 1;
+            _context32.n = 1;
             break;
           }
-          return _context31.a(2, new Promise(function (resolve, reject) {
+          return _context32.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
             if (token) {
@@ -287,12 +287,12 @@ function _apiRequest() {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
           }
-          _context31.n = 2;
+          _context32.n = 2;
           return fetch(endpoint, options);
         case 2:
-          response = _context31.v;
+          response = _context32.v;
           if (!(response.status === 401 || response.status === 403)) {
-            _context31.n = 3;
+            _context32.n = 3;
             break;
           }
           localStorage.removeItem('authToken');
@@ -302,37 +302,37 @@ function _apiRequest() {
           throw new Error('Authentication token missing or invalid.');
         case 3:
           if (response.ok) {
-            _context31.n = 7;
+            _context32.n = 7;
             break;
           }
-          _context31.p = 4;
-          _context31.n = 5;
+          _context32.p = 4;
+          _context32.n = 5;
           return response.json();
         case 5:
-          errorData = _context31.v;
+          errorData = _context32.v;
           throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
         case 6:
-          _context31.p = 6;
-          _t30 = _context31.v;
+          _context32.p = 6;
+          _t31 = _context32.v;
           throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
         case 7:
           if (!expectBlobResponse) {
-            _context31.n = 8;
+            _context32.n = 8;
             break;
           }
-          return _context31.a(2, response.blob());
+          return _context32.a(2, response.blob());
         case 8:
           if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
-            _context31.n = 9;
+            _context32.n = 9;
             break;
           }
-          return _context31.a(2, null);
+          return _context32.a(2, null);
         case 9:
-          return _context31.a(2, response.json());
+          return _context32.a(2, response.json());
         case 10:
-          return _context31.a(2);
+          return _context32.a(2);
       }
-    }, _callee31, null, [[4, 6]]);
+    }, _callee32, null, [[4, 6]]);
   }));
   return _apiRequest.apply(this, arguments);
 }
@@ -1201,52 +1201,96 @@ function handleChecklistsPage() {
     return _loadChecklists.apply(this, arguments);
   }
   function _loadChecklists() {
-    _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
-      var checklists, _t12;
-      return _regenerator().w(function (_context12) {
-        while (1) switch (_context12.n) {
+    _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13() {
+      var checklists, _t13;
+      return _regenerator().w(function (_context13) {
+        while (1) switch (_context13.n) {
           case 0:
             if (checklistListDiv) {
-              _context12.n = 1;
+              _context13.n = 1;
               break;
             }
-            return _context12.a(2);
+            return _context13.a(2);
           case 1:
             checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
-            _context12.p = 2;
-            _context12.n = 3;
+            _context13.p = 2;
+            _context13.n = 3;
             return apiRequest("GET", "/checklists");
           case 3:
-            checklists = _context12.v;
+            checklists = _context13.v;
             checklistListDiv.innerHTML = '';
             if (checklists && checklists.length > 0) {
               checklists.forEach(function (checklist) {
                 var checklistItem = document.createElement("div");
                 checklistItem.className = "checklist-item";
                 checklistItem.innerHTML = "\n                        <div class=\"checklist-item-title\">\n                            <span style=\"color: var(--primary-accent);\">".concat(checklist.position, "</span>\n                            <span>- ").concat(checklist.title, "</span>\n                            <span style=\"font-size: 0.8em; color: var(--text-medium);\">(").concat(checklist.structure_type, ")</span>\n                        </div>\n                        <div class=\"checklist-item-actions\">\n                            <button class=\"btn btn-secondary btn-sm view-checklist-btn\" data-checklist-id=\"").concat(checklist.id, "\">View/Edit</button>\n                            <button class=\"btn-delete\" data-type=\"checklist\" data-id=\"").concat(checklist.id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
-                // FIX: Append to the correct parent div
                 checklistListDiv.appendChild(checklistItem);
               });
+
+              // Attach specific listeners for view/edit and delete on these dynamically added buttons
               checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(function (button) {
                 button.addEventListener('click', function (event) {
+                  event.stopPropagation(); // Prevent parent .checklist-item from being clicked
                   var checklistId = event.target.dataset.checklistId;
                   showModalMessage("Viewing/Editing Checklist ID: ".concat(checklistId, " (Functionality to be implemented)"), false);
+                  // Future: Implement actual modal or page navigation for editing
                 });
+              });
+
+              // Attach DELETE listener specifically for checklists within this page
+              checklistListDiv.querySelectorAll('.btn-delete[data-type="checklist"]').forEach(function (button) {
+                button.addEventListener('click', /*#__PURE__*/function () {
+                  var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12(event) {
+                    var checklistId, confirmed, _t12;
+                    return _regenerator().w(function (_context12) {
+                      while (1) switch (_context12.n) {
+                        case 0:
+                          event.stopPropagation(); // Prevent parent .checklist-item from being clicked
+                          checklistId = event.target.dataset.id;
+                          _context12.n = 1;
+                          return showConfirmModal("Are you sure you want to delete this task list? This action cannot be undone.", "Delete");
+                        case 1:
+                          confirmed = _context12.v;
+                          if (!confirmed) {
+                            _context12.n = 5;
+                            break;
+                          }
+                          _context12.p = 2;
+                          _context12.n = 3;
+                          return apiRequest("DELETE", "/checklists/".concat(checklistId));
+                        case 3:
+                          showModalMessage("Task list deleted successfully!", false);
+                          loadChecklists(); // Reload the list after deletion
+                          _context12.n = 5;
+                          break;
+                        case 4:
+                          _context12.p = 4;
+                          _t12 = _context12.v;
+                          showModalMessage("Failed to delete task list: ".concat(_t12.message), true);
+                        case 5:
+                          return _context12.a(2);
+                      }
+                    }, _callee12, null, [[2, 4]]);
+                  }));
+                  return function (_x1) {
+                    return _ref9.apply(this, arguments);
+                  };
+                }());
               });
             } else {
               checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
             }
-            _context12.n = 5;
+            _context13.n = 5;
             break;
           case 4:
-            _context12.p = 4;
-            _t12 = _context12.v;
-            console.error("Error loading checklists:", _t12);
-            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t12.message, "</p>");
+            _context13.p = 4;
+            _t13 = _context13.v;
+            console.error("Error loading checklists:", _t13);
+            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t13.message, "</p>");
           case 5:
-            return _context12.a(2);
+            return _context13.a(2);
         }
-      }, _callee12, null, [[2, 4]]);
+      }, _callee13, null, [[2, 4]]);
     }));
     return _loadChecklists.apply(this, arguments);
   }
@@ -1364,35 +1408,35 @@ function handleNewHireViewPage() {
     return _loadOnboardingTasks.apply(this, arguments);
   }
   function _loadOnboardingTasks() {
-    _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14() {
-      var profile, tasksData, checklist, allTasksCompleted, _t14;
-      return _regenerator().w(function (_context14) {
-        while (1) switch (_context14.n) {
+    _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15() {
+      var profile, tasksData, checklist, allTasksCompleted, _t15;
+      return _regenerator().w(function (_context15) {
+        while (1) switch (_context15.n) {
           case 0:
             if (taskListSection) {
-              _context14.n = 1;
+              _context15.n = 1;
               break;
             }
-            return _context14.a(2);
+            return _context15.a(2);
           case 1:
             taskListSection.innerHTML = '<p style="color: var(--text-medium);">Loading your tasks...</p>';
-            _context14.p = 2;
-            _context14.n = 3;
+            _context15.p = 2;
+            _context15.n = 3;
             return apiRequest("GET", "/profile");
           case 3:
-            profile = _context14.v;
+            profile = _context15.v;
             if (!(!profile || !profile.user_id)) {
-              _context14.n = 4;
+              _context15.n = 4;
               break;
             }
             taskListSection.innerHTML = '<p style="color: #e74c3c;">Could not load user profile.</p>';
-            return _context14.a(2);
+            return _context15.a(2);
           case 4:
             welcomeHeading.textContent = "Welcome, ".concat(profile.full_name, "!");
-            _context14.n = 5;
+            _context15.n = 5;
             return apiRequest("GET", "/onboarding-tasks/".concat(profile.user_id));
           case 5:
-            tasksData = _context14.v;
+            tasksData = _context15.v;
             taskListSection.innerHTML = '';
             if (tasksData && tasksData.checklist && tasksData.checklist.tasks) {
               checklist = tasksData.checklist;
@@ -1425,17 +1469,17 @@ function handleNewHireViewPage() {
               }
               taskListSection.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
                 checkbox.addEventListener('change', /*#__PURE__*/function () {
-                  var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13(event) {
-                    var taskId, isCompleted, taskType, groupIndex, currentAllTasksCompleted, _t13;
-                    return _regenerator().w(function (_context13) {
-                      while (1) switch (_context13.n) {
+                  var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(event) {
+                    var taskId, isCompleted, taskType, groupIndex, currentAllTasksCompleted, _t14;
+                    return _regenerator().w(function (_context14) {
+                      while (1) switch (_context14.n) {
                         case 0:
                           taskId = event.target.dataset.taskId;
                           isCompleted = event.target.checked;
                           taskType = event.target.dataset.taskType;
                           groupIndex = event.target.dataset.groupIndex;
-                          _context13.p = 1;
-                          _context13.n = 2;
+                          _context14.p = 1;
+                          _context14.n = 2;
                           return apiRequest("PUT", "/onboarding-tasks/".concat(taskId), {
                             completed: isCompleted,
                             type: taskType,
@@ -1453,20 +1497,20 @@ function handleNewHireViewPage() {
                           if (currentAllTasksCompleted) {
                             triggerFireworks();
                           }
-                          _context13.n = 4;
+                          _context14.n = 4;
                           break;
                         case 3:
-                          _context13.p = 3;
-                          _t13 = _context13.v;
-                          showModalMessage("Failed to update task status: ".concat(_t13.message), true);
+                          _context14.p = 3;
+                          _t14 = _context14.v;
+                          showModalMessage("Failed to update task status: ".concat(_t14.message), true);
                           event.target.checked = !isCompleted;
                         case 4:
-                          return _context13.a(2);
+                          return _context14.a(2);
                       }
-                    }, _callee13, null, [[1, 3]]);
+                    }, _callee14, null, [[1, 3]]);
                   }));
-                  return function (_x1) {
-                    return _ref9.apply(this, arguments);
+                  return function (_x10) {
+                    return _ref0.apply(this, arguments);
                   };
                 }());
               });
@@ -1476,17 +1520,17 @@ function handleNewHireViewPage() {
             } else {
               taskListSection.innerHTML = '<p style="color: var(--text-medium);">No onboarding tasks assigned or found.</p>';
             }
-            _context14.n = 7;
+            _context15.n = 7;
             break;
           case 6:
-            _context14.p = 6;
-            _t14 = _context14.v;
-            console.error("Error loading onboarding tasks:", _t14);
-            taskListSection.innerHTML = "<p style=\"color: #e74c3c;\">Error loading tasks: ".concat(_t14.message, "</p>");
+            _context15.p = 6;
+            _t15 = _context15.v;
+            console.error("Error loading onboarding tasks:", _t15);
+            taskListSection.innerHTML = "<p style=\"color: #e74c3c;\">Error loading tasks: ".concat(_t15.message, "</p>");
           case 7:
-            return _context14.a(2);
+            return _context15.a(2);
         }
-      }, _callee14, null, [[2, 6]]);
+      }, _callee15, null, [[2, 6]]);
     }));
     return _loadOnboardingTasks.apply(this, arguments);
   }
@@ -1528,52 +1572,52 @@ function handlePricingPage() {
   var proPlanBtn = document.getElementById("pro-plan-btn");
   var enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
   if (freePlanBtn) {
-    freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15() {
-      var userRole, profile, confirmed, _t15;
-      return _regenerator().w(function (_context15) {
-        while (1) switch (_context15.n) {
+    freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16() {
+      var userRole, profile, confirmed, _t16;
+      return _regenerator().w(function (_context16) {
+        while (1) switch (_context16.n) {
           case 0:
             userRole = localStorage.getItem("userRole");
             if (!userRole) {
-              _context15.n = 8;
+              _context16.n = 8;
               break;
             }
-            _context15.n = 1;
+            _context16.n = 1;
             return apiRequest("GET", "/profile");
           case 1:
-            profile = _context15.v;
+            profile = _context16.v;
             if (!(profile && profile.plan_id === 'free')) {
-              _context15.n = 2;
+              _context16.n = 2;
               break;
             }
             showModalMessage("You are already on the Free plan.", false);
-            _context15.n = 7;
+            _context16.n = 7;
             break;
           case 2:
-            _context15.n = 3;
+            _context16.n = 3;
             return showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
           case 3:
-            confirmed = _context15.v;
+            confirmed = _context16.v;
             if (!confirmed) {
-              _context15.n = 7;
+              _context16.n = 7;
               break;
             }
-            _context15.p = 4;
-            _context15.n = 5;
+            _context16.p = 4;
+            _context16.n = 5;
             return apiRequest("POST", "/cancel-subscription");
           case 5:
             showModalMessage("Successfully downgraded to Free plan. Your subscription will be updated.", false);
             setTimeout(function () {
               window.location.href = 'suite-hub.html';
             }, 1500);
-            _context15.n = 7;
+            _context16.n = 7;
             break;
           case 6:
-            _context15.p = 6;
-            _t15 = _context15.v;
-            showModalMessage("Failed to downgrade: ".concat(_t15.message), true);
+            _context16.p = 6;
+            _t16 = _context16.v;
+            showModalMessage("Failed to downgrade: ".concat(_t16.message), true);
           case 7:
-            _context15.n = 9;
+            _context16.n = 9;
             break;
           case 8:
             showModalMessage("The Free plan is available upon regular sign-up.", false);
@@ -1581,9 +1625,9 @@ function handlePricingPage() {
               window.location.href = 'register.html';
             }, 1500);
           case 9:
-            return _context15.a(2);
+            return _context16.a(2);
         }
-      }, _callee15, null, [[4, 6]]);
+      }, _callee16, null, [[4, 6]]);
     })));
   }
   if (proPlanBtn) {
@@ -1596,27 +1640,27 @@ function handlePricingPage() {
       return handlePlanSelection("enterprise");
     });
   }
-  function handlePlanSelection(_x10) {
+  function handlePlanSelection(_x11) {
     return _handlePlanSelection.apply(this, arguments);
   }
   function _handlePlanSelection() {
-    _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(planId) {
-      var token, session, _t17;
-      return _regenerator().w(function (_context17) {
-        while (1) switch (_context17.n) {
+    _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(planId) {
+      var token, session, _t18;
+      return _regenerator().w(function (_context18) {
+        while (1) switch (_context18.n) {
           case 0:
             token = localStorage.getItem("authToken");
             if (!token) {
-              _context17.n = 5;
+              _context18.n = 4;
               break;
             }
-            _context17.p = 1;
-            _context17.n = 2;
+            _context18.p = 1;
+            _context18.n = 2;
             return apiRequest("POST", "/create-checkout-session", {
               planId: planId
             });
           case 2:
-            session = _context17.v;
+            session = _context18.v;
             if (stripe && session.sessionId) {
               showModalMessage("Account created! Redirecting to payment...", false);
               stripe.redirectToCheckout({
@@ -1625,22 +1669,19 @@ function handlePricingPage() {
             } else {
               showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
             }
-            _context17.n = 4;
+            _context18.n = 4;
             break;
           case 3:
-            _context17.p = 3;
-            _t17 = _context17.v;
-            console.error("Error creating checkout session:", _t17);
-            showModalMessage("Failed to proceed with payment: ".concat(_t17.message), true);
+            _context18.p = 3;
+            _t18 = _context18.v;
+            console.error("Error creating checkout session:", _t18);
+            showModalMessage("Failed to proceed with payment: ".concat(_t18.message), true);
           case 4:
-            _context17.n = 6;
-            break;
+            ;
           case 5:
-            openRegisterCheckoutModal(planId);
-          case 6:
-            return _context17.a(2);
+            return _context18.a(2);
         }
-      }, _callee17, null, [[1, 3]]);
+      }, _callee18, null, [[1, 3]]);
     }));
     return _handlePlanSelection.apply(this, arguments);
   }
@@ -1662,10 +1703,10 @@ function handlePricingPage() {
   }
   if (registerCheckoutForm) {
     registerCheckoutForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(e) {
-        var company_name, full_name, email, password, emailRegex, registrationData, loginData, session, _t16;
-        return _regenerator().w(function (_context16) {
-          while (1) switch (_context16.n) {
+      var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(e) {
+        var company_name, full_name, email, password, emailRegex, registrationData, loginData, session, _t17;
+        return _regenerator().w(function (_context17) {
+          while (1) switch (_context17.n) {
             case 0:
               e.preventDefault();
               company_name = regCoNameInput.value.trim();
@@ -1677,16 +1718,16 @@ function handlePricingPage() {
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
               emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               if (!(!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email))) {
-                _context16.n = 1;
+                _context17.n = 1;
                 break;
               }
               regCheckoutErrorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
               regCheckoutErrorMessage.classList.add('visible');
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-              return _context16.a(2);
+              return _context17.a(2);
             case 1:
-              _context16.p = 1;
-              _context16.n = 2;
+              _context17.p = 1;
+              _context17.n = 2;
               return apiRequest("POST", "/register", {
                 company_name: company_name,
                 full_name: full_name,
@@ -1694,22 +1735,22 @@ function handlePricingPage() {
                 password: password
               });
             case 2:
-              registrationData = _context16.v;
-              _context16.n = 3;
+              registrationData = _context17.v;
+              _context17.n = 3;
               return apiRequest("POST", "/login", {
                 email: email,
                 password: password
               });
             case 3:
-              loginData = _context16.v;
+              loginData = _context17.v;
               localStorage.setItem("authToken", loginData.token);
               localStorage.setItem("userRole", loginData.role);
-              _context16.n = 4;
+              _context17.n = 4;
               return apiRequest("POST", "/create-checkout-session", {
                 planId: currentSelectedPlan
               });
             case 4:
-              session = _context16.v;
+              session = _context17.v;
               if (stripe && session.sessionId) {
                 showModalMessage("Account created! Redirecting to payment...", false);
                 stripe.redirectToCheckout({
@@ -1721,23 +1762,23 @@ function handlePricingPage() {
                   window.location.href = 'login.html';
                 }, 2000);
               }
-              _context16.n = 6;
+              _context17.n = 6;
               break;
             case 5:
-              _context16.p = 5;
-              _t16 = _context16.v;
-              console.error("Register/Checkout error:", _t16);
-              regCheckoutErrorMessage.textContent = "Sign Up Failed: ".concat(_t16.message);
+              _context17.p = 5;
+              _t17 = _context17.v;
+              console.error("Register/Checkout error:", _t17);
+              regCheckoutErrorMessage.textContent = "Sign Up Failed: ".concat(_t17.message);
               regCheckoutErrorMessage.classList.add('visible');
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-              showModalMessage("Sign Up Failed: ".concat(_t16.message), true);
+              showModalMessage("Sign Up Failed: ".concat(_t17.message), true);
             case 6:
-              return _context16.a(2);
+              return _context17.a(2);
           }
-        }, _callee16, null, [[1, 5]]);
+        }, _callee17, null, [[1, 5]]);
       }));
-      return function (_x11) {
-        return _ref1.apply(this, arguments);
+      return function (_x12) {
+        return _ref10.apply(this, arguments);
       };
     }());
   }
@@ -1770,23 +1811,23 @@ function handleHiringPage() {
     return _loadJobPostingLocations.apply(this, arguments);
   }
   function _loadJobPostingLocations() {
-    _loadJobPostingLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20() {
-      var locations, _t19;
-      return _regenerator().w(function (_context20) {
-        while (1) switch (_context20.n) {
+    _loadJobPostingLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21() {
+      var locations, _t20;
+      return _regenerator().w(function (_context21) {
+        while (1) switch (_context21.n) {
           case 0:
             if (jobPostingLocationSelect) {
-              _context20.n = 1;
+              _context21.n = 1;
               break;
             }
-            return _context20.a(2);
+            return _context21.a(2);
           case 1:
             jobPostingLocationSelect.innerHTML = '<option value="">Loading locations...</option>';
-            _context20.p = 2;
-            _context20.n = 3;
+            _context21.p = 2;
+            _context21.n = 3;
             return apiRequest("GET", "/locations");
           case 3:
-            locations = _context20.v;
+            locations = _context21.v;
             jobPostingLocationSelect.innerHTML = '<option value="">Company Wide (All Locations)</option>'; // Default option
             if (locations && locations.length > 0) {
               locations.forEach(function (loc) {
@@ -1799,19 +1840,19 @@ function handleHiringPage() {
               jobPostingLocationSelect.innerHTML = '<option value="">No locations available</option>';
             }
             filterApplicantLocationSelect.innerHTML = jobPostingLocationSelect.innerHTML; // Copy options to filter dropdown
-            _context20.n = 5;
+            _context21.n = 5;
             break;
           case 4:
-            _context20.p = 4;
-            _t19 = _context20.v;
-            console.error("Error loading job posting locations:", _t19);
+            _context21.p = 4;
+            _t20 = _context21.v;
+            console.error("Error loading job posting locations:", _t20);
             jobPostingLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
             filterApplicantLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            showModalMessage("Failed to load locations for job postings: ".concat(_t19.message), true);
+            showModalMessage("Failed to load locations for job postings: ".concat(_t20.message), true);
           case 5:
-            return _context20.a(2);
+            return _context21.a(2);
         }
-      }, _callee20, null, [[2, 4]]);
+      }, _callee21, null, [[2, 4]]);
     }));
     return _loadJobPostingLocations.apply(this, arguments);
   }
@@ -1819,29 +1860,29 @@ function handleHiringPage() {
     return _loadJobPostings.apply(this, arguments);
   }
   function _loadJobPostings() {
-    _loadJobPostings = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21() {
-      var queryParams, jobPostings, _t20;
-      return _regenerator().w(function (_context21) {
-        while (1) switch (_context21.n) {
+    _loadJobPostings = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee22() {
+      var queryParams, jobPostings, _t21;
+      return _regenerator().w(function (_context22) {
+        while (1) switch (_context22.n) {
           case 0:
             if (jobPostingListDiv) {
-              _context21.n = 1;
+              _context22.n = 1;
               break;
             }
-            return _context21.a(2);
+            return _context22.a(2);
           case 1:
             jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>';
-            _context21.p = 2;
+            _context22.p = 2;
             queryParams = new URLSearchParams();
             if (filterApplicantJobPostingSelect.value) {// This filter is for applicants, not job postings directly
               // Not filtering loadJobPostings directly by ID from applicant filter
             }
             // For now, only show 'Open' jobs on the main list unless otherwise specified
             queryParams.append('status', 'Open'); // Fetch only open jobs by default for this list
-            _context21.n = 3;
+            _context22.n = 3;
             return apiRequest("GET", "/job-postings?".concat(queryParams.toString()));
           case 3:
-            jobPostings = _context21.v;
+            jobPostings = _context22.v;
             jobPostingListDiv.innerHTML = '';
             filterApplicantJobPostingSelect.innerHTML = '<option value="">All Job Postings</option>'; // Reset applicant filter
 
@@ -1861,17 +1902,17 @@ function handleHiringPage() {
             } else {
               jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">No job postings found.</p>';
             }
-            _context21.n = 5;
+            _context22.n = 5;
             break;
           case 4:
-            _context21.p = 4;
-            _t20 = _context21.v;
-            console.error("Error loading job postings:", _t20);
-            jobPostingListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading job postings: ".concat(_t20.message, "</p>");
+            _context22.p = 4;
+            _t21 = _context22.v;
+            console.error("Error loading job postings:", _t21);
+            jobPostingListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading job postings: ".concat(_t21.message, "</p>");
           case 5:
-            return _context21.a(2);
+            return _context22.a(2);
         }
-      }, _callee21, null, [[2, 4]]);
+      }, _callee22, null, [[2, 4]]);
     }));
     return _loadJobPostings.apply(this, arguments);
   }
@@ -1879,32 +1920,32 @@ function handleHiringPage() {
     return _loadApplicants.apply(this, arguments);
   }
   function _loadApplicants() {
-    _loadApplicants = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee22() {
+    _loadApplicants = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23() {
       var filters,
         queryParams,
         applicants,
-        _args22 = arguments,
-        _t21;
-      return _regenerator().w(function (_context22) {
-        while (1) switch (_context22.n) {
+        _args23 = arguments,
+        _t22;
+      return _regenerator().w(function (_context23) {
+        while (1) switch (_context23.n) {
           case 0:
-            filters = _args22.length > 0 && _args22[0] !== undefined ? _args22[0] : {};
+            filters = _args23.length > 0 && _args23[0] !== undefined ? _args23[0] : {};
             if (applicantListDiv) {
-              _context22.n = 1;
+              _context23.n = 1;
               break;
             }
-            return _context22.a(2);
+            return _context23.a(2);
           case 1:
             applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
-            _context22.p = 2;
+            _context23.p = 2;
             queryParams = new URLSearchParams();
             if (filters.job_posting_id) queryParams.append('job_posting_id', filters.job_posting_id);
             if (filters.status) queryParams.append('status', filters.status);
             if (filters.location_id) queryParams.append('location_id', filters.location_id);
-            _context22.n = 3;
+            _context23.n = 3;
             return apiRequest("GET", "/applicants?".concat(queryParams.toString()));
           case 3:
-            applicants = _context22.v;
+            applicants = _context23.v;
             applicantListDiv.innerHTML = '';
             if (applicants && applicants.length > 0) {
               applicants.forEach(function (applicant) {
@@ -1916,26 +1957,26 @@ function handleHiringPage() {
             } else {
               applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">No applicants found with current filters.</p>';
             }
-            _context22.n = 5;
+            _context23.n = 5;
             break;
           case 4:
-            _context22.p = 4;
-            _t21 = _context22.v;
-            console.error("Error loading applicants:", _t21);
-            applicantListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading applicants: ".concat(_t21.message, "</p>");
+            _context23.p = 4;
+            _t22 = _context23.v;
+            console.error("Error loading applicants:", _t22);
+            applicantListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading applicants: ".concat(_t22.message, "</p>");
           case 5:
-            return _context22.a(2);
+            return _context23.a(2);
         }
-      }, _callee22, null, [[2, 4]]);
+      }, _callee23, null, [[2, 4]]);
     }));
     return _loadApplicants.apply(this, arguments);
   }
   if (createJobPostingForm) {
     createJobPostingForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(e) {
-        var title, description, requirements, locationId, response, _t18;
-        return _regenerator().w(function (_context18) {
-          while (1) switch (_context18.n) {
+      var _ref11 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(e) {
+        var title, description, requirements, locationId, response, _t19;
+        return _regenerator().w(function (_context19) {
+          while (1) switch (_context19.n) {
             case 0:
               e.preventDefault();
               title = document.getElementById("job-title-input").value.trim();
@@ -1943,14 +1984,14 @@ function handleHiringPage() {
               requirements = document.getElementById("job-requirements-input").value.trim();
               locationId = jobPostingLocationSelect.value ? parseInt(jobPostingLocationSelect.value, 10) : null;
               if (!(!title || !description)) {
-                _context18.n = 1;
+                _context19.n = 1;
                 break;
               }
               showModalMessage("Job Title and Description are required.", true);
-              return _context18.a(2);
+              return _context19.a(2);
             case 1:
-              _context18.p = 1;
-              _context18.n = 2;
+              _context19.p = 1;
+              _context19.n = 2;
               return apiRequest("POST", "/job-postings", {
                 title: title,
                 description: description,
@@ -1958,23 +1999,23 @@ function handleHiringPage() {
                 location_id: locationId
               });
             case 2:
-              response = _context18.v;
+              response = _context19.v;
               showModalMessage("Job \"".concat(title, "\" posted successfully!"), false);
               createJobPostingForm.reset();
               loadJobPostings();
-              _context18.n = 4;
+              _context19.n = 4;
               break;
             case 3:
-              _context18.p = 3;
-              _t18 = _context18.v;
-              showModalMessage("Error posting job: ".concat(_t18.message), true);
+              _context19.p = 3;
+              _t19 = _context19.v;
+              showModalMessage("Error posting job: ".concat(_t19.message), true);
             case 4:
-              return _context18.a(2);
+              return _context19.a(2);
           }
-        }, _callee18, null, [[1, 3]]);
+        }, _callee19, null, [[1, 3]]);
       }));
-      return function (_x12) {
-        return _ref10.apply(this, arguments);
+      return function (_x13) {
+        return _ref11.apply(this, arguments);
       };
     }());
   }
@@ -2009,10 +2050,10 @@ function handleHiringPage() {
     });
   }
   document.body.addEventListener("click", /*#__PURE__*/function () {
-    var _ref11 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(e) {
+    var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(e) {
       var shareButton, jobId, jobTitle, directLink, embedCode, copyLink, copyEmbed, editApplicantButton, applicantId;
-      return _regenerator().w(function (_context19) {
-        while (1) switch (_context19.n) {
+      return _regenerator().w(function (_context20) {
+        while (1) switch (_context20.n) {
           case 0:
             shareButton = e.target.closest(".share-btn");
             if (shareButton) {
@@ -2051,12 +2092,12 @@ function handleHiringPage() {
               // Here you'd typically open a modal or navigate to an edit page for the applicant
             }
           case 1:
-            return _context19.a(2);
+            return _context20.a(2);
         }
-      }, _callee19);
+      }, _callee20);
     }));
-    return function (_x13) {
-      return _ref11.apply(this, arguments);
+    return function (_x14) {
+      return _ref12.apply(this, arguments);
     };
   }());
 
@@ -2115,24 +2156,24 @@ function handleSchedulingPage() {
     return _loadEmployeesForScheduling.apply(this, arguments);
   }
   function _loadEmployeesForScheduling() {
-    _loadEmployeesForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee24() {
-      var employees, _t23;
-      return _regenerator().w(function (_context24) {
-        while (1) switch (_context24.n) {
+    _loadEmployeesForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee25() {
+      var employees, _t24;
+      return _regenerator().w(function (_context25) {
+        while (1) switch (_context25.n) {
           case 0:
             if (employeeSelect) {
-              _context24.n = 1;
+              _context25.n = 1;
               break;
             }
-            return _context24.a(2);
+            return _context25.a(2);
           case 1:
             employeeSelect.innerHTML = '<option value="">Loading employees...</option>';
             filterEmployeeSelect.innerHTML = '<option value="">All Employees</option>'; // Always have "All Employees" option
-            _context24.p = 2;
-            _context24.n = 3;
+            _context25.p = 2;
+            _context25.n = 3;
             return apiRequest("GET", "/users?filterRole=employee");
           case 3:
-            employees = _context24.v;
+            employees = _context25.v;
             // Assuming an API to get employees
             if (employees && employees.length > 0) {
               employeeSelect.innerHTML = '<option value="">Select Employee</option>';
@@ -2148,19 +2189,19 @@ function handleSchedulingPage() {
               employeeSelect.innerHTML = '<option value="">No employees available</option>';
               filterEmployeeSelect.innerHTML = '<option value="">No employees available</option>';
             }
-            _context24.n = 5;
+            _context25.n = 5;
             break;
           case 4:
-            _context24.p = 4;
-            _t23 = _context24.v;
-            console.error("Error loading employees for scheduling:", _t23);
+            _context25.p = 4;
+            _t24 = _context25.v;
+            console.error("Error loading employees for scheduling:", _t24);
             employeeSelect.innerHTML = '<option value="">Error loading employees</option>';
             filterEmployeeSelect.innerHTML = '<option value="">Error loading employees</option>';
-            showModalMessage("Failed to load employees: ".concat(_t23.message), true);
+            showModalMessage("Failed to load employees: ".concat(_t24.message), true);
           case 5:
-            return _context24.a(2);
+            return _context25.a(2);
         }
-      }, _callee24, null, [[2, 4]]);
+      }, _callee25, null, [[2, 4]]);
     }));
     return _loadEmployeesForScheduling.apply(this, arguments);
   }
@@ -2168,24 +2209,24 @@ function handleSchedulingPage() {
     return _loadLocationsForScheduling.apply(this, arguments);
   }
   function _loadLocationsForScheduling() {
-    _loadLocationsForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee25() {
-      var locations, _t24;
-      return _regenerator().w(function (_context25) {
-        while (1) switch (_context25.n) {
+    _loadLocationsForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee26() {
+      var locations, _t25;
+      return _regenerator().w(function (_context26) {
+        while (1) switch (_context26.n) {
           case 0:
             if (locationSelect) {
-              _context25.n = 1;
+              _context26.n = 1;
               break;
             }
-            return _context25.a(2);
+            return _context26.a(2);
           case 1:
             locationSelect.innerHTML = '<option value="">Loading locations...</option>';
             filterLocationSelect.innerHTML = '<option value="">All Locations</option>'; // Always have "All Locations" option
-            _context25.p = 2;
-            _context25.n = 3;
+            _context26.p = 2;
+            _context26.n = 3;
             return apiRequest("GET", "/locations");
           case 3:
-            locations = _context25.v;
+            locations = _context26.v;
             if (locations && locations.length > 0) {
               locationSelect.innerHTML = '<option value="">Select Location</option>';
               locations.forEach(function (loc) {
@@ -2200,19 +2241,19 @@ function handleSchedulingPage() {
               locationSelect.innerHTML = '<option value="">No locations available</option>';
               filterLocationSelect.innerHTML = '<option value="">No locations available</option>';
             }
-            _context25.n = 5;
+            _context26.n = 5;
             break;
           case 4:
-            _context25.p = 4;
-            _t24 = _context25.v;
-            console.error("Error loading locations for scheduling:", _t24);
+            _context26.p = 4;
+            _t25 = _context26.v;
+            console.error("Error loading locations for scheduling:", _t25);
             locationSelect.innerHTML = '<option value="">Error loading locations</option>';
             filterLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            showModalMessage("Failed to load locations: ".concat(_t24.message), true);
+            showModalMessage("Failed to load locations: ".concat(_t25.message), true);
           case 5:
-            return _context25.a(2);
+            return _context26.a(2);
         }
-      }, _callee25, null, [[2, 4]]);
+      }, _callee26, null, [[2, 4]]);
     }));
     return _loadLocationsForScheduling.apply(this, arguments);
   }
@@ -2220,16 +2261,16 @@ function handleSchedulingPage() {
     return _renderCalendar.apply(this, arguments);
   }
   function _renderCalendar() {
-    _renderCalendar = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee27() {
-      var existingDayElements, dates, i, startOfWeek, endOfWeek, filters, shifts, _t26;
-      return _regenerator().w(function (_context27) {
-        while (1) switch (_context27.n) {
+    _renderCalendar = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28() {
+      var existingDayElements, dates, i, startOfWeek, endOfWeek, filters, shifts, _t27;
+      return _regenerator().w(function (_context28) {
+        while (1) switch (_context28.n) {
           case 0:
             if (calendarGrid) {
-              _context27.n = 1;
+              _context28.n = 1;
               break;
             }
-            return _context27.a(2);
+            return _context28.a(2);
           case 1:
             // Clear existing day headers and cells (except the fixed time column)
             existingDayElements = calendarGrid.querySelectorAll('.calendar-day-header:not([style*="grid-column: 1"]), .calendar-day-cell');
@@ -2271,11 +2312,11 @@ function handleSchedulingPage() {
               employee_id: filterEmployeeSelect.value || null,
               location_id: filterLocationSelect.value || null
             };
-            _context27.p = 2;
-            _context27.n = 3;
+            _context28.p = 2;
+            _context28.n = 3;
             return apiRequest("GET", "/schedules?".concat(new URLSearchParams(filters).toString()));
           case 3:
-            shifts = _context27.v;
+            shifts = _context28.v;
             shifts.forEach(function (shift) {
               var shiftStart = moment(shift.start_time);
               var shiftEnd = moment(shift.end_time);
@@ -2297,50 +2338,50 @@ function handleSchedulingPage() {
                 shiftDiv.style.top = "".concat(topPosition, "px");
                 shiftDiv.style.height = "".concat(height, "px");
                 shiftDiv.textContent = "".concat(shift.employee_name, " @ ").concat(shift.location_name, " (").concat(shiftStart.format('h:mm A'), " - ").concat(shiftEnd.format('h:mm A'), ")");
-                shiftDiv.addEventListener('click', /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee26() {
-                  var confirmDelete, _t25;
-                  return _regenerator().w(function (_context26) {
-                    while (1) switch (_context26.n) {
+                shiftDiv.addEventListener('click', /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee27() {
+                  var confirmDelete, _t26;
+                  return _regenerator().w(function (_context27) {
+                    while (1) switch (_context27.n) {
                       case 0:
-                        _context26.n = 1;
+                        _context27.n = 1;
                         return showConfirmModal("\n                            <h4>Shift Details:</h4>\n                            <p><strong>Employee:</strong> ".concat(shift.employee_name, "</p>\n                            <p><strong>Location:</strong> ").concat(shift.location_name, "</p>\n                            <p><strong>Time:</strong> ").concat(shiftStart.format('MMM DD, h:mm A'), " - ").concat(shiftEnd.format('MMM DD, h:mm A'), "</p>\n                            <p><strong>Notes:</strong> ").concat(shift.notes || 'None', "</p>\n                            <p style=\"margin-top: 15px;\">Are you sure you want to delete this shift?</p>\n                        "), "Delete Shift");
                       case 1:
-                        confirmDelete = _context26.v;
+                        confirmDelete = _context27.v;
                         if (!confirmDelete) {
-                          _context26.n = 5;
+                          _context27.n = 5;
                           break;
                         }
-                        _context26.p = 2;
-                        _context26.n = 3;
+                        _context27.p = 2;
+                        _context27.n = 3;
                         return apiRequest("DELETE", "/schedules/".concat(shift.schedule_id));
                       case 3:
                         showModalMessage("Shift deleted successfully!", false);
                         renderCalendar(); // Re-render calendar
-                        _context26.n = 5;
+                        _context27.n = 5;
                         break;
                       case 4:
-                        _context26.p = 4;
-                        _t25 = _context26.v;
-                        showModalMessage("Failed to delete shift: ".concat(_t25.message), true);
+                        _context27.p = 4;
+                        _t26 = _context27.v;
+                        showModalMessage("Failed to delete shift: ".concat(_t26.message), true);
                       case 5:
-                        return _context26.a(2);
+                        return _context27.a(2);
                     }
-                  }, _callee26, null, [[2, 4]]);
+                  }, _callee27, null, [[2, 4]]);
                 })));
                 targetCell.appendChild(shiftDiv);
               }
             });
-            _context27.n = 5;
+            _context28.n = 5;
             break;
           case 4:
-            _context27.p = 4;
-            _t26 = _context27.v;
-            console.error("Error loading schedules:", _t26);
-            calendarGrid.querySelector('p').textContent = "Error loading schedules: ".concat(_t26.message);
+            _context28.p = 4;
+            _t27 = _context28.v;
+            console.error("Error loading schedules:", _t27);
+            calendarGrid.querySelector('p').textContent = "Error loading schedules: ".concat(_t27.message);
           case 5:
-            return _context27.a(2);
+            return _context28.a(2);
         }
-      }, _callee27, null, [[2, 4]]);
+      }, _callee28, null, [[2, 4]]);
     }));
     return _renderCalendar.apply(this, arguments);
   }
@@ -2358,10 +2399,10 @@ function handleSchedulingPage() {
   }
   if (createShiftForm) {
     createShiftForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23(e) {
-        var employeeId, locationId, startTime, endTime, notes, _t22;
-        return _regenerator().w(function (_context23) {
-          while (1) switch (_context23.n) {
+      var _ref13 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee24(e) {
+        var employeeId, locationId, startTime, endTime, notes, _t23;
+        return _regenerator().w(function (_context24) {
+          while (1) switch (_context24.n) {
             case 0:
               e.preventDefault();
               employeeId = employeeSelect.value ? parseInt(employeeSelect.value, 10) : null;
@@ -2370,21 +2411,21 @@ function handleSchedulingPage() {
               endTime = endTimeInput.value;
               notes = notesInput.value.trim();
               if (!(!employeeId || !locationId || !startTime || !endTime)) {
-                _context23.n = 1;
+                _context24.n = 1;
                 break;
               }
               showModalMessage("Please select an employee, location, and valid start/end times.", true);
-              return _context23.a(2);
+              return _context24.a(2);
             case 1:
               if (!(new Date(startTime) >= new Date(endTime))) {
-                _context23.n = 2;
+                _context24.n = 2;
                 break;
               }
               showModalMessage("Start time must be before end time.", true);
-              return _context23.a(2);
+              return _context24.a(2);
             case 2:
-              _context23.p = 2;
-              _context23.n = 3;
+              _context24.p = 2;
+              _context24.n = 3;
               return apiRequest("POST", "/schedules", {
                 employee_id: employeeId,
                 location_id: locationId,
@@ -2396,19 +2437,19 @@ function handleSchedulingPage() {
               showModalMessage("Shift created successfully!", false);
               createShiftForm.reset();
               renderCalendar();
-              _context23.n = 5;
+              _context24.n = 5;
               break;
             case 4:
-              _context23.p = 4;
-              _t22 = _context23.v;
-              showModalMessage("Error creating shift: ".concat(_t22.message), true);
+              _context24.p = 4;
+              _t23 = _context24.v;
+              showModalMessage("Error creating shift: ".concat(_t23.message), true);
             case 5:
-              return _context23.a(2);
+              return _context24.a(2);
           }
-        }, _callee23, null, [[2, 4]]);
+        }, _callee24, null, [[2, 4]]);
       }));
-      return function (_x14) {
-        return _ref12.apply(this, arguments);
+      return function (_x15) {
+        return _ref13.apply(this, arguments);
       };
     }());
   }
@@ -2487,23 +2528,23 @@ function handleDocumentsPage() {
     return _loadDocuments.apply(this, arguments);
   } // Handle document upload form submission
   function _loadDocuments() {
-    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30() {
-      var documents, _t29;
-      return _regenerator().w(function (_context30) {
-        while (1) switch (_context30.n) {
+    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31() {
+      var documents, _t30;
+      return _regenerator().w(function (_context31) {
+        while (1) switch (_context31.n) {
           case 0:
             if (documentListDiv) {
-              _context30.n = 1;
+              _context31.n = 1;
               break;
             }
-            return _context30.a(2);
+            return _context31.a(2);
           case 1:
             documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
-            _context30.p = 2;
-            _context30.n = 3;
+            _context31.p = 2;
+            _context31.n = 3;
             return apiRequest("GET", "/documents");
           case 3:
-            documents = _context30.v;
+            documents = _context31.v;
             documentListDiv.innerHTML = '';
             if (documents.length === 0) {
               documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
@@ -2516,45 +2557,45 @@ function handleDocumentsPage() {
                 documentListDiv.appendChild(docItem);
               });
             }
-            _context30.n = 5;
+            _context31.n = 5;
             break;
           case 4:
-            _context30.p = 4;
-            _t29 = _context30.v;
-            console.error("Error loading documents:", _t29);
-            documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(_t29.message, "</p>");
+            _context31.p = 4;
+            _t30 = _context31.v;
+            console.error("Error loading documents:", _t30);
+            documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(_t30.message, "</p>");
           case 5:
-            return _context30.a(2);
+            return _context31.a(2);
         }
-      }, _callee30, null, [[2, 4]]);
+      }, _callee31, null, [[2, 4]]);
     }));
     return _loadDocuments.apply(this, arguments);
   }
   if (uploadDocumentForm) {
     uploadDocumentForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref14 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28(e) {
-        var title, file, description, formData, result, _t27;
-        return _regenerator().w(function (_context28) {
-          while (1) switch (_context28.n) {
+      var _ref15 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29(e) {
+        var title, file, description, formData, result, _t28;
+        return _regenerator().w(function (_context29) {
+          while (1) switch (_context29.n) {
             case 0:
               e.preventDefault();
               title = documentTitleInput.value.trim();
               file = documentFileInput.files[0];
               description = documentDescriptionInput.value.trim();
               if (!(!title || !file)) {
-                _context28.n = 1;
+                _context29.n = 1;
                 break;
               }
               showModalMessage("Please provide a document title and select a file.", true);
-              return _context28.a(2);
+              return _context29.a(2);
             case 1:
               formData = new FormData();
               formData.append('title', title);
               formData.append('document_file', file);
               formData.append('description', description);
-              _context28.p = 2;
+              _context29.p = 2;
               showUploadProgress(0, 'Starting upload...');
-              _context28.n = 3;
+              _context29.n = 3;
               return apiRequest("POST", "/documents/upload", formData, true,
               // isFormData: true
               function (event) {
@@ -2564,64 +2605,19 @@ function handleDocumentsPage() {
                 }
               });
             case 3:
-              result = _context28.v;
+              result = _context29.v;
               showModalMessage("Document uploaded successfully!", false);
               uploadDocumentForm.reset();
               hideUploadProgress();
               loadDocuments(); // Reload the list of documents from the backend
-              _context28.n = 5;
-              break;
-            case 4:
-              _context28.p = 4;
-              _t27 = _context28.v;
-              console.error("Document upload error:", _t27);
-              showModalMessage("Failed to upload document: ".concat(_t27.message), true);
-              hideUploadProgress();
-            case 5:
-              return _context28.a(2);
-          }
-        }, _callee28, null, [[2, 4]]);
-      }));
-      return function (_x15) {
-        return _ref14.apply(this, arguments);
-      };
-    }());
-  }
-
-  // Event listener for delete buttons on documents page (using delegation)
-  if (documentListDiv) {
-    documentListDiv.addEventListener("click", /*#__PURE__*/function () {
-      var _ref15 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29(e) {
-        var targetButton, idToDelete, confirmed, _t28;
-        return _regenerator().w(function (_context29) {
-          while (1) switch (_context29.n) {
-            case 0:
-              targetButton = e.target.closest(".btn-delete");
-              if (!(targetButton && targetButton.dataset.type === "document")) {
-                _context29.n = 5;
-                break;
-              }
-              idToDelete = parseInt(targetButton.dataset.id, 10);
-              _context29.n = 1;
-              return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
-            case 1:
-              confirmed = _context29.v;
-              if (!confirmed) {
-                _context29.n = 5;
-                break;
-              }
-              _context29.p = 2;
-              _context29.n = 3;
-              return apiRequest("DELETE", "/documents/".concat(idToDelete));
-            case 3:
-              showModalMessage("Document deleted successfully!", false);
-              loadDocuments(); // Reload the list of documents to reflect the change
               _context29.n = 5;
               break;
             case 4:
               _context29.p = 4;
               _t28 = _context29.v;
-              showModalMessage("Error deleting document: ".concat(_t28.message), true);
+              console.error("Document upload error:", _t28);
+              showModalMessage("Failed to upload document: ".concat(_t28.message), true);
+              hideUploadProgress();
             case 5:
               return _context29.a(2);
           }
@@ -2629,6 +2625,51 @@ function handleDocumentsPage() {
       }));
       return function (_x16) {
         return _ref15.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Event listener for delete buttons on documents page (using delegation)
+  if (documentListDiv) {
+    documentListDiv.addEventListener("click", /*#__PURE__*/function () {
+      var _ref16 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30(e) {
+        var targetButton, idToDelete, confirmed, _t29;
+        return _regenerator().w(function (_context30) {
+          while (1) switch (_context30.n) {
+            case 0:
+              targetButton = e.target.closest(".btn-delete");
+              if (!(targetButton && targetButton.dataset.type === "document")) {
+                _context30.n = 5;
+                break;
+              }
+              idToDelete = parseInt(targetButton.dataset.id, 10);
+              _context30.n = 1;
+              return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
+            case 1:
+              confirmed = _context30.v;
+              if (!confirmed) {
+                _context30.n = 5;
+                break;
+              }
+              _context30.p = 2;
+              _context30.n = 3;
+              return apiRequest("DELETE", "/documents/".concat(idToDelete));
+            case 3:
+              showModalMessage("Document deleted successfully!", false);
+              loadDocuments(); // Reload the list of documents to reflect the change
+              _context30.n = 5;
+              break;
+            case 4:
+              _context30.p = 4;
+              _t29 = _context30.v;
+              showModalMessage("Error deleting document: ".concat(_t29.message), true);
+            case 5:
+              return _context30.a(2);
+          }
+        }, _callee30, null, [[2, 4]]);
+      }));
+      return function (_x17) {
+        return _ref16.apply(this, arguments);
       };
     }());
   }
