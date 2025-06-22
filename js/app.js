@@ -1856,12 +1856,12 @@ function handleSchedulingPage() {
  * Handles all client-side logic for the documents.html page.
  */
 function handleDocumentsPage() {
-    // Mock authentication for self-contained demo
-    // In a real app, remove this mock and ensure user is logged in before calling this handler
+    // In a real app, ensure user is logged in before calling this handler
+    // The mock authentication below should be REMOVED for your live site.
     if (!localStorage.getItem("authToken")) {
-        localStorage.setItem("authToken", "mock-auth-token"); // Set a mock token
-        localStorage.setItem("userRole", "super_admin"); // Set a mock role
-        // console.warn("Mock authentication applied for demo purposes.");
+        localStorage.setItem("authToken", "mock-auth-token"); // REMOVE FOR LIVE SITE
+        localStorage.setItem("userRole", "super_admin"); // REMOVE FOR LIVE SITE
+        // console.warn("Mock authentication applied for demo purposes. REMOVE FOR LIVE SITE.");
     }
 
     const uploadDocumentForm = document.getElementById("upload-document-form");
@@ -1900,26 +1900,22 @@ function handleDocumentsPage() {
     }
 
     /**
-     * Fetches and displays the list of uploaded documents.
-     * This function is mocked for this self-contained example.
-     * In a real app, it would make an actual API call.
+     * Fetches and displays the list of uploaded documents from the backend.
      */
     async function loadDocuments() {
         if (!documentListDiv) return;
         documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
 
-        // Mock API call for documents
         try {
-            // In a real scenario, this would be: const documents = await apiRequest("GET", "/documents");
-            // For this self-contained example, we'll use a dummy fetch or local storage
-            const dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
+            // This now makes a real API call to your backend
+            const documents = await apiRequest("GET", "/documents");
 
             documentListDiv.innerHTML = '';
 
-            if (dummyDocuments.length === 0) {
+            if (documents.length === 0) {
                 documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
             } else {
-                dummyDocuments.forEach(doc => {
+                documents.forEach(doc => {
                     const docItem = document.createElement("div");
                     docItem.className = "document-item";
                     const uploadDate = new Date(doc.upload_date).toLocaleDateString();
@@ -1929,7 +1925,7 @@ function handleDocumentsPage() {
                         <p>Description: ${doc.description || 'N/A'}</p>
                         <p>Uploaded: ${uploadDate}</p>
                         <div class="actions">
-                            <a href="${doc.file_path || '#'}" class="btn btn-secondary btn-sm" target="_blank" download>Download</a>
+                            <a href="${API_BASE_URL}/documents/download/${doc.document_id}" class="btn btn-secondary btn-sm" target="_blank" download>Download</a>
                             <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                             </button>
@@ -1965,39 +1961,25 @@ function handleDocumentsPage() {
 
             try {
                 showUploadProgress(0, 'Starting upload...');
-                // Simulate upload progress
-                let loaded = 0;
-                const total = file.size;
-                const interval = setInterval(() => {
-                    loaded += total / 10; // Simulate 10 chunks
-                    const percentComplete = Math.min(100, Math.round((loaded * 100) / total));
-                    showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
-                    if (loaded >= total) {
-                        clearInterval(interval);
-                        // Simulate API response delay
-                        setTimeout(async () => {
-                            // Add to dummy storage
-                            const dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
-                            const newDocId = dummyDocuments.length > 0 ? Math.max(...dummyDocuments.map(d => d.document_id)) + 1 : 1;
-                            const newDocument = {
-                                document_id: newDocId,
-                                title: title,
-                                description: description,
-                                file_name: file.name,
-                                file_path: URL.createObjectURL(file), // Create a temporary URL for demo download
-                                upload_date: new Date().toISOString()
-                            };
-                            dummyDocuments.push(newDocument);
-                            localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
-
-                            showModalMessage("Document uploaded successfully!", false);
-                            uploadDocumentForm.reset();
-                            hideUploadProgress();
-                            loadDocuments();
-                        }, 500); // Small delay for "success" message
+                // This now makes a real API call for file upload
+                const result = await apiRequest(
+                    "POST",
+                    "/documents/upload",
+                    formData,
+                    true, // isFormData: true
+                    event => {
+                        // onProgress callback
+                        if (event.lengthComputable) {
+                            const percentComplete = Math.round((event.loaded * 100) / event.total);
+                            showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
+                        }
                     }
-                }, 100); // Update every 100ms
+                );
 
+                showModalMessage("Document uploaded successfully!", false);
+                uploadDocumentForm.reset();
+                hideUploadProgress();
+                loadDocuments(); // Reload the list of documents from the backend
             } catch (error) {
                 console.error("Document upload error:", error);
                 showModalMessage(`Failed to upload document: ${error.message}`, true);
@@ -2006,8 +1988,9 @@ function handleDocumentsPage() {
         });
     }
 
-    // Event listener for delete buttons on documents page
-    // Using delegation on documentListDiv for dynamically added elements
+    // Event listener for delete buttons on documents page (using delegation)
+    // This listener is on `documentListDiv` for documents to avoid conflicts
+    // with the `document.body` listener for other types.
     if (documentListDiv) {
         documentListDiv.addEventListener("click", async e => {
             const targetButton = e.target.closest(".btn-delete");
@@ -2018,11 +2001,8 @@ function handleDocumentsPage() {
 
                 if (confirmed) {
                     try {
-                        // Mock the deletion: remove from localStorage
-                        let dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
-                        dummyDocuments = dummyDocuments.filter(doc => doc.document_id !== idToDelete);
-                        localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
-
+                        // This now makes a real API call to delete the document
+                        await apiRequest("DELETE", `/documents/${idToDelete}`);
                         showModalMessage("Document deleted successfully!", false);
                         loadDocuments(); // Reload the list of documents to reflect the change
                     } catch (error) {

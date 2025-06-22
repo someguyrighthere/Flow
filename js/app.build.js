@@ -1,11 +1,5 @@
 "use strict";
 
-function _toConsumableArray(r) { return _arrayWithoutHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableSpread(); }
-function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
-function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
-function _iterableToArray(r) { if ("undefined" != typeof Symbol && null != r[Symbol.iterator] || null != r["@@iterator"]) return Array.from(r); }
-function _arrayWithoutHoles(r) { if (Array.isArray(r)) return _arrayLikeToArray(r); }
-function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
 function _regenerator() { /*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */ var e, t, r = "function" == typeof Symbol ? Symbol : {}, n = r.iterator || "@@iterator", o = r.toStringTag || "@@toStringTag"; function i(r, n, o, i) { var c = n && n.prototype instanceof Generator ? n : Generator, u = Object.create(c.prototype); return _regeneratorDefine2(u, "_invoke", function (r, n, o) { var i, c, u, f = 0, p = o || [], y = !1, G = { p: 0, n: 0, v: e, a: d, f: d.bind(e, 4), d: function d(t, r) { return i = t, c = 0, u = e, G.n = r, a; } }; function d(r, n) { for (c = r, u = n, t = 0; !y && f && !o && t < p.length; t++) { var o, i = p[t], d = G.p, l = i[2]; r > 3 ? (o = l === n) && (u = i[(c = i[4]) ? 5 : (c = 3, 3)], i[4] = i[5] = e) : i[0] <= d && ((o = r < 2 && d < i[1]) ? (c = 0, G.v = n, G.n = i[1]) : d < l && (o = r < 3 || i[0] > n || n > l) && (i[4] = r, i[5] = n, G.n = l, c = 0)); } if (o || r > 1) return a; throw y = !0, n; } return function (o, p, l) { if (f > 1) throw TypeError("Generator is already running"); for (y && 1 === p && d(p, l), c = p, u = l; (t = c < 2 ? e : u) || !y;) { i || (c ? c < 3 ? (c > 1 && (G.n = -1), d(c, u)) : G.n = u : G.v = u); try { if (f = 2, i) { if (c || (o = "next"), t = i[o]) { if (!(t = t.call(i, u))) throw TypeError("iterator result is not an object"); if (!t.done) return t; u = t.value, c < 2 && (c = 0); } else 1 === c && (t = i["return"]) && t.call(i), c < 2 && (u = TypeError("The iterator does not provide a '" + o + "' method"), c = 1); i = e; } else if ((t = (y = G.n < 0) ? u : r.call(n, G)) !== a) break; } catch (t) { i = e, c = 1, u = t; } finally { f = 1; } } return { value: t, done: y }; }; }(r, o, i), !0), u; } var a = {}; function Generator() {} function GeneratorFunction() {} function GeneratorFunctionPrototype() {} t = Object.getPrototypeOf; var c = [][n] ? t(t([][n]())) : (_regeneratorDefine2(t = {}, n, function () { return this; }), t), u = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(c); function f(e) { return Object.setPrototypeOf ? Object.setPrototypeOf(e, GeneratorFunctionPrototype) : (e.__proto__ = GeneratorFunctionPrototype, _regeneratorDefine2(e, o, "GeneratorFunction")), e.prototype = Object.create(u), e; } return GeneratorFunction.prototype = GeneratorFunctionPrototype, _regeneratorDefine2(u, "constructor", GeneratorFunctionPrototype), _regeneratorDefine2(GeneratorFunctionPrototype, "constructor", GeneratorFunction), GeneratorFunction.displayName = "GeneratorFunction", _regeneratorDefine2(GeneratorFunctionPrototype, o, "GeneratorFunction"), _regeneratorDefine2(u), _regeneratorDefine2(u, o, "Generator"), _regeneratorDefine2(u, n, function () { return this; }), _regeneratorDefine2(u, "toString", function () { return "[object Generator]"; }), (_regenerator = function _regenerator() { return { w: i, m: f }; })(); }
 function _regeneratorDefine2(e, r, n, t) { var i = Object.defineProperty; try { i({}, "", {}); } catch (e) { i = 0; } _regeneratorDefine2 = function _regeneratorDefine(e, r, n, t) { if (r) i ? i(e, r, { value: n, enumerable: !t, configurable: !t, writable: !t }) : e[r] = n;else { var o = function o(r, n) { _regeneratorDefine2(e, r, function (e) { return this._invoke(r, n, e); }); }; o("next", 0), o("throw", 1), o("return", 2); } }, _regeneratorDefine2(e, r, n, t); }
 function asyncGeneratorStep(n, t, e, r, o, a, c) { try { var i = n[a](c), u = i.value; } catch (n) { return void e(n); } i.done ? t(u) : Promise.resolve(u).then(r, o); }
@@ -204,7 +198,7 @@ function apiRequest(_x2, _x3) {
  * Handles all client-side logic for the login.html page.
  */
 function _apiRequest() {
-  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee32(method, path) {
+  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31(method, path) {
     var body,
       isFormData,
       onProgress,
@@ -214,22 +208,22 @@ function _apiRequest() {
       options,
       response,
       errorData,
-      _args32 = arguments,
-      _t27;
-    return _regenerator().w(function (_context32) {
-      while (1) switch (_context32.n) {
+      _args31 = arguments,
+      _t30;
+    return _regenerator().w(function (_context31) {
+      while (1) switch (_context31.n) {
         case 0:
-          body = _args32.length > 2 && _args32[2] !== undefined ? _args32[2] : null;
-          isFormData = _args32.length > 3 && _args32[3] !== undefined ? _args32[3] : false;
-          onProgress = _args32.length > 4 && _args32[4] !== undefined ? _args32[4] : null;
-          expectBlobResponse = _args32.length > 5 && _args32[5] !== undefined ? _args32[5] : false;
+          body = _args31.length > 2 && _args31[2] !== undefined ? _args31[2] : null;
+          isFormData = _args31.length > 3 && _args31[3] !== undefined ? _args31[3] : false;
+          onProgress = _args31.length > 4 && _args31[4] !== undefined ? _args31[4] : null;
+          expectBlobResponse = _args31.length > 5 && _args31[5] !== undefined ? _args31[5] : false;
           token = localStorage.getItem('authToken');
           endpoint = "".concat(API_BASE_URL).concat(path); // For FormData, use XMLHttpRequest for progress tracking
           if (!isFormData) {
-            _context32.n = 1;
+            _context31.n = 1;
             break;
           }
-          return _context32.a(2, new Promise(function (resolve, reject) {
+          return _context31.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
             if (token) {
@@ -293,12 +287,12 @@ function _apiRequest() {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
           }
-          _context32.n = 2;
+          _context31.n = 2;
           return fetch(endpoint, options);
         case 2:
-          response = _context32.v;
+          response = _context31.v;
           if (!(response.status === 401 || response.status === 403)) {
-            _context32.n = 3;
+            _context31.n = 3;
             break;
           }
           localStorage.removeItem('authToken');
@@ -308,37 +302,37 @@ function _apiRequest() {
           throw new Error('Authentication token missing or invalid.');
         case 3:
           if (response.ok) {
-            _context32.n = 7;
+            _context31.n = 7;
             break;
           }
-          _context32.p = 4;
-          _context32.n = 5;
+          _context31.p = 4;
+          _context31.n = 5;
           return response.json();
         case 5:
-          errorData = _context32.v;
+          errorData = _context31.v;
           throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
         case 6:
-          _context32.p = 6;
-          _t27 = _context32.v;
+          _context31.p = 6;
+          _t30 = _context31.v;
           throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
         case 7:
           if (!expectBlobResponse) {
-            _context32.n = 8;
+            _context31.n = 8;
             break;
           }
-          return _context32.a(2, response.blob());
+          return _context31.a(2, response.blob());
         case 8:
           if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
-            _context32.n = 9;
+            _context31.n = 9;
             break;
           }
-          return _context32.a(2, null);
+          return _context31.a(2, null);
         case 9:
-          return _context32.a(2, response.json());
+          return _context31.a(2, response.json());
         case 10:
-          return _context32.a(2);
+          return _context31.a(2);
       }
-    }, _callee32, null, [[4, 6]]);
+    }, _callee31, null, [[4, 6]]);
   }));
   return _apiRequest.apply(this, arguments);
 }
@@ -2444,12 +2438,12 @@ function handleSchedulingPage() {
  * Handles all client-side logic for the documents.html page.
  */
 function handleDocumentsPage() {
-  // Mock authentication for self-contained demo
-  // In a real app, remove this mock and ensure user is logged in before calling this handler
+  // In a real app, ensure user is logged in before calling this handler
+  // The mock authentication below should be REMOVED for your live site.
   if (!localStorage.getItem("authToken")) {
-    localStorage.setItem("authToken", "mock-auth-token"); // Set a mock token
-    localStorage.setItem("userRole", "super_admin"); // Set a mock role
-    // console.warn("Mock authentication applied for demo purposes.");
+    localStorage.setItem("authToken", "mock-auth-token"); // REMOVE FOR LIVE SITE
+    localStorage.setItem("userRole", "super_admin"); // REMOVE FOR LIVE SITE
+    // console.warn("Mock authentication applied for demo purposes. REMOVE FOR LIVE SITE.");
   }
   var uploadDocumentForm = document.getElementById("upload-document-form");
   var documentTitleInput = document.getElementById("document-title");
@@ -2487,130 +2481,108 @@ function handleDocumentsPage() {
   }
 
   /**
-   * Fetches and displays the list of uploaded documents.
-   * This function is mocked for this self-contained example.
-   * In a real app, it would make an actual API call.
+   * Fetches and displays the list of uploaded documents from the backend.
    */
   function loadDocuments() {
     return _loadDocuments.apply(this, arguments);
   } // Handle document upload form submission
   function _loadDocuments() {
-    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31() {
-      var dummyDocuments;
-      return _regenerator().w(function (_context31) {
-        while (1) switch (_context31.n) {
+    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30() {
+      var documents, _t29;
+      return _regenerator().w(function (_context30) {
+        while (1) switch (_context30.n) {
           case 0:
             if (documentListDiv) {
-              _context31.n = 1;
+              _context30.n = 1;
               break;
             }
-            return _context31.a(2);
+            return _context30.a(2);
           case 1:
             documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
-
-            // Mock API call for documents
-            try {
-              // In a real scenario, this would be: const documents = await apiRequest("GET", "/documents");
-              // For this self-contained example, we'll use a dummy fetch or local storage
-              dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
-              documentListDiv.innerHTML = '';
-              if (dummyDocuments.length === 0) {
-                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
-              } else {
-                dummyDocuments.forEach(function (doc) {
-                  var docItem = document.createElement("div");
-                  docItem.className = "document-item";
-                  var uploadDate = new Date(doc.upload_date).toLocaleDateString();
-                  docItem.innerHTML = "\n                        <h4>".concat(doc.title, "</h4>\n                        <p>File: ").concat(doc.file_name, "</p>\n                        <p>Description: ").concat(doc.description || 'N/A', "</p>\n                        <p>Uploaded: ").concat(uploadDate, "</p>\n                        <div class=\"actions\">\n                            <a href=\"").concat(doc.file_path || '#', "\" class=\"btn btn-secondary btn-sm\" target=\"_blank\" download>Download</a>\n                            <button class=\"btn-delete\" data-type=\"document\" data-id=\"").concat(doc.document_id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
-                  documentListDiv.appendChild(docItem);
-                });
-              }
-            } catch (error) {
-              console.error("Error loading documents:", error);
-              documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(error.message, "</p>");
+            _context30.p = 2;
+            _context30.n = 3;
+            return apiRequest("GET", "/documents");
+          case 3:
+            documents = _context30.v;
+            documentListDiv.innerHTML = '';
+            if (documents.length === 0) {
+              documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
+            } else {
+              documents.forEach(function (doc) {
+                var docItem = document.createElement("div");
+                docItem.className = "document-item";
+                var uploadDate = new Date(doc.upload_date).toLocaleDateString();
+                docItem.innerHTML = "\n                        <h4>".concat(doc.title, "</h4>\n                        <p>File: ").concat(doc.file_name, "</p>\n                        <p>Description: ").concat(doc.description || 'N/A', "</p>\n                        <p>Uploaded: ").concat(uploadDate, "</p>\n                        <div class=\"actions\">\n                            <a href=\"").concat(API_BASE_URL, "/documents/download/").concat(doc.document_id, "\" class=\"btn btn-secondary btn-sm\" target=\"_blank\" download>Download</a>\n                            <button class=\"btn-delete\" data-type=\"document\" data-id=\"").concat(doc.document_id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
+                documentListDiv.appendChild(docItem);
+              });
             }
-          case 2:
-            return _context31.a(2);
+            _context30.n = 5;
+            break;
+          case 4:
+            _context30.p = 4;
+            _t29 = _context30.v;
+            console.error("Error loading documents:", _t29);
+            documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(_t29.message, "</p>");
+          case 5:
+            return _context30.a(2);
         }
-      }, _callee31);
+      }, _callee30, null, [[2, 4]]);
     }));
     return _loadDocuments.apply(this, arguments);
   }
   if (uploadDocumentForm) {
     uploadDocumentForm.addEventListener("submit", /*#__PURE__*/function () {
-      var _ref14 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29(e) {
-        var title, file, description, formData, loaded, total, interval;
-        return _regenerator().w(function (_context29) {
-          while (1) switch (_context29.n) {
+      var _ref14 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28(e) {
+        var title, file, description, formData, result, _t27;
+        return _regenerator().w(function (_context28) {
+          while (1) switch (_context28.n) {
             case 0:
               e.preventDefault();
               title = documentTitleInput.value.trim();
               file = documentFileInput.files[0];
               description = documentDescriptionInput.value.trim();
               if (!(!title || !file)) {
-                _context29.n = 1;
+                _context28.n = 1;
                 break;
               }
               showModalMessage("Please provide a document title and select a file.", true);
-              return _context29.a(2);
+              return _context28.a(2);
             case 1:
               formData = new FormData();
               formData.append('title', title);
               formData.append('document_file', file);
               formData.append('description', description);
-              try {
-                showUploadProgress(0, 'Starting upload...');
-                // Simulate upload progress
-                loaded = 0;
-                total = file.size;
-                interval = setInterval(function () {
-                  loaded += total / 10; // Simulate 10 chunks
-                  var percentComplete = Math.min(100, Math.round(loaded * 100 / total));
+              _context28.p = 2;
+              showUploadProgress(0, 'Starting upload...');
+              // This now makes a real API call for file upload
+              _context28.n = 3;
+              return apiRequest("POST", "/documents/upload", formData, true,
+              // isFormData: true
+              function (event) {
+                // onProgress callback
+                if (event.lengthComputable) {
+                  var percentComplete = Math.round(event.loaded * 100 / event.total);
                   showUploadProgress(percentComplete, "Uploading: ".concat(percentComplete, "%"));
-                  if (loaded >= total) {
-                    clearInterval(interval);
-                    // Simulate API response delay
-                    setTimeout(/*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28() {
-                      var dummyDocuments, newDocId, newDocument;
-                      return _regenerator().w(function (_context28) {
-                        while (1) switch (_context28.n) {
-                          case 0:
-                            // Add to dummy storage
-                            dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
-                            newDocId = dummyDocuments.length > 0 ? Math.max.apply(Math, _toConsumableArray(dummyDocuments.map(function (d) {
-                              return d.document_id;
-                            }))) + 1 : 1;
-                            newDocument = {
-                              document_id: newDocId,
-                              title: title,
-                              description: description,
-                              file_name: file.name,
-                              file_path: URL.createObjectURL(file),
-                              // Create a temporary URL for demo download
-                              upload_date: new Date().toISOString()
-                            };
-                            dummyDocuments.push(newDocument);
-                            localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
-                            showModalMessage("Document uploaded successfully!", false);
-                            uploadDocumentForm.reset();
-                            hideUploadProgress();
-                            loadDocuments();
-                          case 1:
-                            return _context28.a(2);
-                        }
-                      }, _callee28);
-                    })), 500); // Small delay for "success" message
-                  }
-                }, 100); // Update every 100ms
-              } catch (error) {
-                console.error("Document upload error:", error);
-                showModalMessage("Failed to upload document: ".concat(error.message), true);
-                hideUploadProgress();
-              }
-            case 2:
-              return _context29.a(2);
+                }
+              });
+            case 3:
+              result = _context28.v;
+              showModalMessage("Document uploaded successfully!", false);
+              uploadDocumentForm.reset();
+              hideUploadProgress();
+              loadDocuments(); // Reload the list of documents from the backend
+              _context28.n = 5;
+              break;
+            case 4:
+              _context28.p = 4;
+              _t27 = _context28.v;
+              console.error("Document upload error:", _t27);
+              showModalMessage("Failed to upload document: ".concat(_t27.message), true);
+              hideUploadProgress();
+            case 5:
+              return _context28.a(2);
           }
-        }, _callee29);
+        }, _callee28, null, [[2, 4]]);
       }));
       return function (_x15) {
         return _ref14.apply(this, arguments);
@@ -2618,46 +2590,49 @@ function handleDocumentsPage() {
     }());
   }
 
-  // Event listener for delete buttons on documents page
-  // Using delegation on documentListDiv for dynamically added elements
+  // Event listener for delete buttons on documents page (using delegation)
+  // This listener is on `documentListDiv` for documents to avoid conflicts
+  // with the `document.body` listener for other types.
   if (documentListDiv) {
     documentListDiv.addEventListener("click", /*#__PURE__*/function () {
-      var _ref16 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30(e) {
-        var targetButton, idToDelete, confirmed, dummyDocuments;
-        return _regenerator().w(function (_context30) {
-          while (1) switch (_context30.n) {
+      var _ref15 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29(e) {
+        var targetButton, idToDelete, confirmed, _t28;
+        return _regenerator().w(function (_context29) {
+          while (1) switch (_context29.n) {
             case 0:
               targetButton = e.target.closest(".btn-delete"); // Ensure it's a delete button and specifically for a document
               if (!(targetButton && targetButton.dataset.type === "document")) {
-                _context30.n = 2;
+                _context29.n = 5;
                 break;
               }
               idToDelete = parseInt(targetButton.dataset.id, 10);
-              _context30.n = 1;
+              _context29.n = 1;
               return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
             case 1:
-              confirmed = _context30.v;
-              if (confirmed) {
-                try {
-                  // Mock the deletion: remove from localStorage
-                  dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
-                  dummyDocuments = dummyDocuments.filter(function (doc) {
-                    return doc.document_id !== idToDelete;
-                  });
-                  localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
-                  showModalMessage("Document deleted successfully!", false);
-                  loadDocuments(); // Reload the list of documents to reflect the change
-                } catch (error) {
-                  showModalMessage("Error deleting document: ".concat(error.message), true);
-                }
+              confirmed = _context29.v;
+              if (!confirmed) {
+                _context29.n = 5;
+                break;
               }
-            case 2:
-              return _context30.a(2);
+              _context29.p = 2;
+              _context29.n = 3;
+              return apiRequest("DELETE", "/documents/".concat(idToDelete));
+            case 3:
+              showModalMessage("Document deleted successfully!", false);
+              loadDocuments(); // Reload the list of documents to reflect the change
+              _context29.n = 5;
+              break;
+            case 4:
+              _context29.p = 4;
+              _t28 = _context29.v;
+              showModalMessage("Error deleting document: ".concat(_t28.message), true);
+            case 5:
+              return _context29.a(2);
           }
-        }, _callee30);
+        }, _callee29, null, [[2, 4]]);
       }));
       return function (_x16) {
-        return _ref16.apply(this, arguments);
+        return _ref15.apply(this, arguments);
       };
     }());
   }
