@@ -284,10 +284,10 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
  * Handles all client-side logic for the login.html page.
  */
 function handleLoginPage() {
-    console.log("handleLoginPage: Initializing login page logic."); // DEBUG LOG
+    // console.log("handleLoginPage: Initializing login page logic."); // DEBUG LOG
     const loginForm = document.getElementById("login-form");
     if (!loginForm) {
-        console.log("handleLoginPage: loginForm element not found, exiting function."); // ADDED LOG
+        // console.log("handleLoginPage: loginForm element not found, exiting function."); // ADDED LOG
         return; // Exit if form not found (e.g., on a different page)
     }
 
@@ -308,7 +308,7 @@ function handleLoginPage() {
 
     loginForm.addEventListener("submit", async e => {
         e.preventDefault(); // Prevent default form submission
-        console.log("Login form submission initiated."); // ADDED LOG
+        // console.log("Login form submission initiated."); // ADDED LOG
         const emailInput = document.getElementById("email");
         const passwordInput = document.getElementById("password");
         const email = emailInput.value.trim();
@@ -323,9 +323,9 @@ function handleLoginPage() {
         }
 
         // Basic client-side validation
-        console.log("Checking email/password validity."); // ADDED LOG
+        // console.log("Checking email/password validity."); // ADDED LOG
         if (!email || !password) {
-            console.log("Login Validation: Email or password empty."); // DEBUG LOG
+            // console.log("Login Validation: Email or password empty."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Email and password are required.";
                 errorMessage.classList.add("visible");
@@ -336,7 +336,7 @@ function handleLoginPage() {
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            console.log("Login Validation: Invalid email format."); // DEBUG LOG
+            // console.log("Login Validation: Invalid email format."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Please enter a valid email address.";
                 errorMessage.classList.add("visible");
@@ -346,7 +346,7 @@ function handleLoginPage() {
         }
 
         if (password.length < 6) {
-            console.log("Login Validation: Password too short."); // DEBUG LOG
+            // console.log("Login Validation: Password too short."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Password must be at least 6 characters long.";
                 errorMessage.classList.add("visible");
@@ -356,14 +356,14 @@ function handleLoginPage() {
         }
 
         try {
-            console.log(`Attempting API login request for email: ${email}`); // ADDED LOG (includes email for better context)
+            // console.log(`Attempting API login request for email: ${email}`); // ADDED LOG (includes email for better context)
             // Send login request to backend
             const data = await apiRequest("POST", "/login", {
                 email: email,
                 password: password
             });
 
-            console.log("API login request successful. Redirecting..."); // ADDED LOG
+            // console.log("API login request successful. Redirecting..."); // ADDED LOG
             // Store authentication token and user role
             localStorage.setItem("authToken", data.token);
             localStorage.setItem("userRole", data.role); // Store user role
@@ -671,7 +671,7 @@ function handleAdminPage() {
     document.body.addEventListener("click", async e => {
         const targetButton = e.target.closest(".btn-delete");
         if (targetButton) {
-            console.log("handleAdminPage: Delete button clicked.");
+            // console.log("handleAdminPage: Delete button clicked."); // Removed for production
             const id = targetButton.dataset.id;
             const type = targetButton.dataset.type; // 'location' or 'user'
             const confirmationMessage = `Are you sure you want to delete this ${type}? This action cannot be undone.`;
@@ -679,7 +679,7 @@ function handleAdminPage() {
 
             if (confirmed) {
                 try {
-                    console.log(`handleAdminPage: Deleting ${type} with ID: ${id}.`);
+                    // console.log(`handleAdminPage: Deleting ${type} with ID: ${id}.`); // Removed for production
                     if (type === "location") {
                         await apiRequest("DELETE", `/locations/${id}`);
                         showModalMessage("Location deleted successfully!", false);
@@ -690,7 +690,7 @@ function handleAdminPage() {
                         showModalMessage("User deleted successfully!", false);
                         loadUsers(); // Reload users list
                     }
-                    console.log(`handleAdminPage: ${type} deleted successfully.`);
+                    // console.log(`handleAdminPage: ${type} deleted successfully.`); // Removed for production
                 } catch (error) {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
@@ -701,17 +701,17 @@ function handleAdminPage() {
 
     // Handle new location form submission
     if (newLocationForm) {
-        console.log("handleAdminPage: New location form found, attaching listener.");
+        // console.log("handleAdminPage: New location form found, attaching listener."); // Removed for production
         newLocationForm.addEventListener("submit", async e => {
             e.preventDefault();
-            console.log("handleAdminPage: New location form submitted.");
+            // console.log("handleAdminPage: New location form submitted."); // Removed for production
             const nameInput = document.getElementById("new-location-name");
             const addressInput = document.getElementById("new-location-address");
             const location_name = nameInput.value.trim();
             const location_address = addressInput.value.trim();
 
             try {
-                console.log("handleAdminPage: Creating location via API.");
+                // console.log("handleAdminPage: Creating location via API."); // Removed for production
                 await apiRequest("POST", "/locations", {
                     location_name: location_name,
                     location_address: location_address
@@ -719,7 +719,7 @@ function handleAdminPage() {
                 nameInput.value = ""; // Clear form
                 addressInput.value = ""; // Clear form
                 showModalMessage("Location created successfully!", false);
-                console.log("handleAdminPage: Location created, reloading lists.");
+                // console.log("handleAdminPage: Location created, reloading lists."); // Removed for production
                 loadLocations(); // Reload locations to show new entry
             } catch (error) {
                 console.error("Error creating location:", error);
@@ -730,10 +730,10 @@ function handleAdminPage() {
 
     // Handle invite admin form submission
     if (inviteAdminForm) {
-        console.log("handleAdminPage: Invite admin form found, attaching listener.");
+        // console.log("handleAdminPage: Invite admin form found, attaching listener."); // Removed for production
         inviteAdminForm.addEventListener("submit", async e => {
             e.preventDefault();
-            console.log("handleAdminPage: Invite admin form submitted.");
+            // console.log("handleAdminPage: Invite admin form submitted."); // Removed for production
             const adminName = document.getElementById("admin-name") ? document.getElementById("admin-name").value.trim() : "";
             const adminEmail = document.getElementById("admin-email") ? document.getElementById("admin-email").value.trim() : "";
             const adminPassword = document.getElementById("admin-password") ? document.getElementById("admin-password").value : "";
@@ -750,7 +750,7 @@ function handleAdminPage() {
             }
 
             try {
-                console.log("handleAdminPage: Inviting admin via API.");
+                // console.log("handleAdminPage: Inviting admin via API."); // Removed for production
                 await apiRequest("POST", "/invite-admin", {
                     full_name: adminName,
                     email: adminEmail,
@@ -764,7 +764,7 @@ function handleAdminPage() {
                 if (adminLocationSelectElement) adminLocationSelectElement.value = ""; // Reset dropdown
 
                 showModalMessage(`Admin invite sent to ${adminEmail} for selected location with the provided temporary password.`, false);
-                console.log("handleAdminPage: Admin invited, reloading users.");
+                // console.log("handleAdminPage: Admin invited, reloading users."); // Removed for production
                 loadUsers(); // Reload users to show new admin
             }
             catch (error) {
@@ -775,10 +775,10 @@ function handleAdminPage() {
 
     // Handle invite employee form submission
     if (inviteEmployeeForm) {
-        console.log("handleAdminPage: Invite employee form found, attaching listener.");
+        // console.log("handleAdminPage: Invite employee form found, attaching listener."); // Removed for production
         inviteEmployeeForm.addEventListener("submit", async e => {
             e.preventDefault();
-            console.log("handleAdminPage: Invite employee form submitted.");
+            // console.log("handleAdminPage: Invite employee form submitted."); // Removed for production
             const employeeName = document.getElementById("employee-name") ? document.getElementById("employee-name").value.trim() : "";
             const employeeEmail = document.getElementById("employee-email") ? document.getElementById("employee-email").value.trim() : "";
             const employeePassword = document.getElementById("employee-password") ? document.getElementById("employee-password").value : "";
@@ -799,7 +799,7 @@ function handleAdminPage() {
             const employeeIdToSend = employeeId ? (isNaN(parseInt(employeeId)) ? employeeId : parseInt(employeeId)) : null;
 
             try {
-                console.log("handleAdminPage: Inviting employee via API.");
+                // console.log("handleAdminPage: Inviting employee via API."); // Removed for production
                 await apiRequest("POST", "/invite-employee", {
                     full_name: employeeName,
                     email: employeeEmail,
@@ -817,7 +817,7 @@ function handleAdminPage() {
                 if (employeeLocationSelectElement) employeeLocationSelectElement.value = ""; // Reset dropdown
 
                 showModalMessage(`Employee invite sent to ${employeeEmail} with the provided temporary password.`, false);
-                console.log("handleAdminPage: Employee invited, reloading users.");
+                // console.log("handleAdminPage: Employee invited, reloading users."); // Removed for production
                 loadUsers(); // Reload users to show new employee
             } catch (error) {
                 showModalMessage(`Error inviting employee: ${error.message}`, true);
@@ -1600,7 +1600,6 @@ function handleDocumentsPage() {
                         <p style="font-size: 0.8em; color: var(--text-medium);">Uploaded: ${new Date(doc.upload_date).toLocaleDateString()}</p>
                         <p style="font-size: 0.8em; color: var(--text-medium);">File: ${doc.file_name}</p>
                         <div class="actions">
-                            <button class="btn btn-secondary btn-sm btn-download" data-document-id="${doc.document_id}">Download</button>
                             <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                             </button>
@@ -1609,26 +1608,7 @@ function handleDocumentsPage() {
                     documentListDiv.appendChild(documentItem);
                 });
 
-                // Add event listeners for download buttons
-                documentListDiv.querySelectorAll('.btn-download').forEach(button => {
-                    button.addEventListener('click', async (event) => {
-                        const documentId = event.target.dataset.documentId;
-                        try {
-                            const blob = await apiRequest("GET", `/documents/download/${documentId}`, null, false, null, true); // Expect blob response
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.style.display = 'none';
-                            a.href = url;
-                            a.download = event.target.closest('.document-item').querySelector('p:nth-of-type(3)').textContent.replace('File: ', ''); // Get filename from displayed text
-                            document.body.appendChild(a);
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                            showModalMessage('Document download initiated!', false);
-                        } catch (error) {
-                            showModalMessage(`Error downloading document: ${error.message}`, true);
-                        }
-                    });
-                });
+                // No download button means no download event listener needed here.
 
             } else {
                 documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
@@ -1643,14 +1623,14 @@ function handleDocumentsPage() {
     if (uploadDocumentForm) {
         uploadDocumentForm.addEventListener("submit", async e => {
             e.preventDefault();
-            console.log("Upload form submitted."); // New log
+            // console.log("Upload form submitted."); // Removed for production
             const title = document.getElementById("document-title").value.trim();
             const fileInput = document.getElementById("document-file");
             const description = document.getElementById("document-description").value.trim();
 
-            console.log("Title:", title); // New log
-            console.log("FileInput element:", fileInput); // New log
-            console.log("Description:", description); // New log
+            // console.log("Title:", title); // Removed for production
+            // console.log("FileInput element:", fileInput); // Removed for production
+            // console.log("Description:", description); // Removed for production
 
             // Crucial: Check if fileInput exists before accessing .files
             if (!fileInput) {
@@ -1660,7 +1640,7 @@ function handleDocumentsPage() {
             }
             
             const file = fileInput.files[0];
-            console.log("File selected:", file); // New log
+            // console.log("File selected:", file); // Removed for production
 
             if (!title || !file) {
                 showModalMessage("Document title and a file are required.", true);
@@ -1677,16 +1657,12 @@ function handleDocumentsPage() {
                     // This onProgress callback is for the XMLHttpRequest used by apiRequest when isFormData is true
                     if (event.lengthComputable) {
                         const percentComplete = (event.loaded / event.total) * 100;
-                        console.log(`Upload Progress: ${percentComplete.toFixed(0)}%`);
-                        // if (uploadProgressBarFill) uploadProgressBarFill.style.width = `${percentComplete}%`;
-                        // if (uploadProgressBarText) uploadProgressBarText.textContent = `${percentComplete.toFixed(0)}%`;
-                        // if (uploadStatusText) uploadStatusText.textContent = `Uploading: ${percentComplete.toFixed(0)}%`;
+                        // console.log(`Upload Progress: ${percentComplete.toFixed(0)}%`); // Removed for production
+                        // No UI progress bar elements, so no need to update
                     }
                 });
                 showModalMessage("Document uploaded successfully!", false);
                 uploadDocumentForm.reset();
-                // if (uploadProgressBarContainer) uploadProgressBarContainer.style.display = 'none';
-                // if (uploadStatusText) uploadStatusText.textContent = '';
                 loadDocuments(); // Reload documents list
             } catch (error) {
                 showModalMessage(`Error uploading document: ${error.message}`, true);
