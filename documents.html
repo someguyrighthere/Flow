@@ -39,36 +39,14 @@
         .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
         .form-group input[type="text"],
         .form-group input[type="email"],
-        .form-group input[type="file"],
+        .form-group input[type="url"], /* NEW: Added type="url" */
         .form-group textarea,
         .form-group select {
             width: 100%; padding: 12px; border-radius: 6px;
             border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
             color: var(--text-light); box-sizing: border-box;
         }
-        /* Adjusted file input styling to blend better or align with theme */
-        .form-group input[type="file"] {
-            background-color: rgba(0, 0, 0, 0.3); /* Slightly darker background */
-            border: 1px solid rgba(255, 255, 255, 0.3); /* Solid border to match other inputs */
-            padding: 12px;
-            color: var(--text-light); /* Ensure text color is consistent */
-            cursor: pointer;
-        }
-        /* Further styling for the "Choose File" button part of the input, if necessary */
-        .form-group input[type="file"]::file-selector-button {
-            background-color: var(--primary-accent); /* Apply primary accent to the button */
-            color: white;
-            padding: 8px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            margin-right: 10px; /* Space between button and filename */
-        }
-        .form-group input[type="file"]::file-selector-button:hover {
-            background-color: #A95DBC; /* Slightly darker hover color */
-        }
-
+        /* No specific file input styling needed anymore, as it's replaced by URL input */
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
 
         .document-grid {
@@ -110,12 +88,13 @@
         .document-item .btn-delete:hover {
             opacity: 1; color: #e74c3c;
         }
-        .document-item .btn-download {
+        /* Changed from btn-download to btn-view */
+        .document-item .btn-view { /* NEW CLASS NAME */
             background: none; border: none; color: var(--text-light);
             cursor: pointer; opacity: 0.7; transition: opacity 0.3s ease;
             text-decoration: underline;
         }
-        .document-item .btn-download:hover {
+        .document-item .btn-view:hover { /* NEW CLASS NAME */
             opacity: 1;
             color: var(--primary-accent);
         }
@@ -178,7 +157,7 @@
             border: 1px solid var(--border-color);
         }
 
-        /* NEW: Styles for the loading bar */
+        /* Loading bar UI elements (will remain, but might be less used if not uploading files) */
         #upload-progress-container {
             display: none; /* Hidden by default */
             margin-top: 20px;
@@ -218,8 +197,7 @@
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
-                    <!-- Changed link to no ID and no inline style to be always visible, per your successful fix -->
-                    <a href="pricing.html">Upgrade Plan</a>
+                    <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a> <!-- Added ID back for dynamic visibility if needed -->
                     <a href="admin.html">Admin Settings</a>
                     <button id="logout-button">Logout</button>
                 </div>
@@ -234,38 +212,37 @@
             <h2 style="color: var(--text-light);">Document Management</h2>
 
             <div class="card">
-                <h3>Upload New Document</h3>
+                <h3>Link New Document/Video</h3> <!-- Changed title -->
                 <form id="upload-document-form">
                     <div class="form-group">
                         <label for="document-title">Document Title</label>
                         <input type="text" id="document-title" placeholder="e.g., Q3 Sales Report" required>
                     </div>
                     <div class="form-group">
-                        <label for="document-file">Select File</label>
-                        <input type="file" id="document-file" required>
+                        <label for="document-url">Document/Video URL</label> <!-- Changed label and ID -->
+                        <input type="url" id="document-url" placeholder="https://example.com/training.mp4" required> <!-- Changed type and ID -->
                     </div>
                     <div class="form-group">
                         <label for="document-description">Description (Optional)</label>
                         <textarea id="document-description" rows="3" placeholder="Brief description of the document..."></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary">Upload Document</button>
+                    <button type="submit" class="btn btn-primary">Link Document</button> <!-- Changed button text -->
 
-                    <!-- NEW: Loading bar UI elements -->
-                    <div id="upload-progress-container">
-                        <p id="upload-status-text">Uploading...</p>
+                    <!-- Loading bar UI elements - kept for future use if file upload via cloud storage is re-introduced, but won't be active with URL linking -->
+                    <div id="upload-progress-container" style="display: none;"> 
+                        <p id="upload-status-text">Processing link...</p>
                         <div id="upload-progress-bar">
                             <div id="upload-progress-fill" style="width: 0%;"></div>
                         </div>
                         <p id="upload-progress-text">0%</p>
                     </div>
-                    <!-- END NEW -->
                 </form>
             </div>
 
             <div class="card">
-                <h3>Your Uploaded Documents</h3>
+                <h3>Your Linked Documents</h3> <!-- Changed title -->
                 <div id="document-list" class="document-grid">
-                    <p style="color: var(--text-medium);">No documents uploaded yet.</p>
+                    <p style="color: var(--text-medium);">No documents linked yet.</p>
                 </div>
             </div>
         </section>
