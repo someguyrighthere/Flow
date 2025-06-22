@@ -504,10 +504,6 @@ function handleAccountPage() {
             const profile = await apiRequest("GET", "/profile");
             if (displayProfileName)
                 displayProfileName.textContent = profile.fullName || "N/A";
-            if (displayProfileEmail)
-                displayProfileEmail.textContent = profile.email || "N/A";
-            if (profileNameInput)
-                profileNameInput.value = profile.fullName || "";
             if (profileEmailInput)
                 profileEmailInput.value = profile.email || "";
         } catch (error) {
@@ -695,7 +691,7 @@ function handleAdminPage() {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
-        }
+        } // Removed extra ')' here
     });
 
 
@@ -1491,7 +1487,7 @@ function handlePricingPage() {
     }
     // Close modal if clicking outside
     if (registerCheckoutModalOverlay) {
-        regCheckoutModalOverlay.addEventListener("click", event => {
+        registerCheckoutModalOverlay.addEventListener("click", event => {
             if (event.target === registerCheckoutModalOverlay) {
                 registerCheckoutModalOverlay.style.display = "none";
                 currentSelectedPlan = null;
