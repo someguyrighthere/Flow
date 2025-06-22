@@ -270,7 +270,6 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
             return response.blob(); // Return the raw binary data as a Blob
         }
 
-        // Handle 204 No Content or empty 200 responses
         if (response.status === 204 || (response.status === 200 && response.headers.get("content-length") === "0")) {
             return null;
         }
