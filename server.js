@@ -64,6 +64,13 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`);
 
+            // Companies table
+            db.run(`CREATE TABLE IF NOT EXISTS companies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`);
+
             // Locations table
             db.run(`CREATE TABLE IF NOT EXISTS locations (
                 location_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1086,7 +1093,7 @@ app.get('*', (req, res) => {
 
 
 // Start the server
-app.listen(PORT, () => {
+// IMPORTANT: Listen on '0.0.0.0' and use process.env.PORT for Render deployments.
+app.listen(PORT, '0.0.0.0', () => { // Added '0.0.0.0'
     console.log(`Server running on port ${PORT}`);
 });
-
