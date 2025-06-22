@@ -1,5 +1,11 @@
 "use strict";
 
+function _toConsumableArray(r) { return _arrayWithoutHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableSpread(); }
+function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
+function _iterableToArray(r) { if ("undefined" != typeof Symbol && null != r[Symbol.iterator] || null != r["@@iterator"]) return Array.from(r); }
+function _arrayWithoutHoles(r) { if (Array.isArray(r)) return _arrayLikeToArray(r); }
+function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
 function _regenerator() { /*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */ var e, t, r = "function" == typeof Symbol ? Symbol : {}, n = r.iterator || "@@iterator", o = r.toStringTag || "@@toStringTag"; function i(r, n, o, i) { var c = n && n.prototype instanceof Generator ? n : Generator, u = Object.create(c.prototype); return _regeneratorDefine2(u, "_invoke", function (r, n, o) { var i, c, u, f = 0, p = o || [], y = !1, G = { p: 0, n: 0, v: e, a: d, f: d.bind(e, 4), d: function d(t, r) { return i = t, c = 0, u = e, G.n = r, a; } }; function d(r, n) { for (c = r, u = n, t = 0; !y && f && !o && t < p.length; t++) { var o, i = p[t], d = G.p, l = i[2]; r > 3 ? (o = l === n) && (u = i[(c = i[4]) ? 5 : (c = 3, 3)], i[4] = i[5] = e) : i[0] <= d && ((o = r < 2 && d < i[1]) ? (c = 0, G.v = n, G.n = i[1]) : d < l && (o = r < 3 || i[0] > n || n > l) && (i[4] = r, i[5] = n, G.n = l, c = 0)); } if (o || r > 1) return a; throw y = !0, n; } return function (o, p, l) { if (f > 1) throw TypeError("Generator is already running"); for (y && 1 === p && d(p, l), c = p, u = l; (t = c < 2 ? e : u) || !y;) { i || (c ? c < 3 ? (c > 1 && (G.n = -1), d(c, u)) : G.n = u : G.v = u); try { if (f = 2, i) { if (c || (o = "next"), t = i[o]) { if (!(t = t.call(i, u))) throw TypeError("iterator result is not an object"); if (!t.done) return t; u = t.value, c < 2 && (c = 0); } else 1 === c && (t = i["return"]) && t.call(i), c < 2 && (u = TypeError("The iterator does not provide a '" + o + "' method"), c = 1); i = e; } else if ((t = (y = G.n < 0) ? u : r.call(n, G)) !== a) break; } catch (t) { i = e, c = 1, u = t; } finally { f = 1; } } return { value: t, done: y }; }; }(r, o, i), !0), u; } var a = {}; function Generator() {} function GeneratorFunction() {} function GeneratorFunctionPrototype() {} t = Object.getPrototypeOf; var c = [][n] ? t(t([][n]())) : (_regeneratorDefine2(t = {}, n, function () { return this; }), t), u = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(c); function f(e) { return Object.setPrototypeOf ? Object.setPrototypeOf(e, GeneratorFunctionPrototype) : (e.__proto__ = GeneratorFunctionPrototype, _regeneratorDefine2(e, o, "GeneratorFunction")), e.prototype = Object.create(u), e; } return GeneratorFunction.prototype = GeneratorFunctionPrototype, _regeneratorDefine2(u, "constructor", GeneratorFunctionPrototype), _regeneratorDefine2(GeneratorFunctionPrototype, "constructor", GeneratorFunction), GeneratorFunction.displayName = "GeneratorFunction", _regeneratorDefine2(GeneratorFunctionPrototype, o, "GeneratorFunction"), _regeneratorDefine2(u), _regeneratorDefine2(u, o, "Generator"), _regeneratorDefine2(u, n, function () { return this; }), _regeneratorDefine2(u, "toString", function () { return "[object Generator]"; }), (_regenerator = function _regenerator() { return { w: i, m: f }; })(); }
 function _regeneratorDefine2(e, r, n, t) { var i = Object.defineProperty; try { i({}, "", {}); } catch (e) { i = 0; } _regeneratorDefine2 = function _regeneratorDefine(e, r, n, t) { if (r) i ? i(e, r, { value: n, enumerable: !t, configurable: !t, writable: !t }) : e[r] = n;else { var o = function o(r, n) { _regeneratorDefine2(e, r, function (e) { return this._invoke(r, n, e); }); }; o("next", 0), o("throw", 1), o("return", 2); } }, _regeneratorDefine2(e, r, n, t); }
 function asyncGeneratorStep(n, t, e, r, o, a, c) { try { var i = n[a](c), u = i.value; } catch (n) { return void e(n); } i.done ? t(u) : Promise.resolve(u).then(r, o); }
@@ -106,15 +112,11 @@ function showConfirmModal(message) {
 /**
  * Sets up the functionality for the settings dropdown menu.
  * This includes showing/hiding the dropdown and handling logout.
- * The "Upgrade Plan" link is now assumed to be directly visible in HTML or handled by backend rendering.
  */
 function setupSettingsDropdown() {
   var settingsButton = document.getElementById("settings-button");
   var settingsDropdown = document.getElementById("settings-dropdown");
   var logoutButton = document.getElementById("logout-button");
-  // Removed specific upgradePlanLink ID and logic here, as it's now handled by the backend routing or general visibility
-  // The link should be shown/hidden based on server-side rendering or a different client-side check if needed.
-  // However, if your HTML *still* contains an element with ID 'upgrade-plan-link' that you want dynamically controlled:
   var upgradePlanLink = document.getElementById("upgrade-plan-link");
   if (settingsButton && settingsDropdown) {
     settingsButton.addEventListener("click", /*#__PURE__*/function () {
@@ -126,8 +128,7 @@ function setupSettingsDropdown() {
               event.stopPropagation(); // Prevent the document click from immediately closing it
               settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
 
-              // Conditional logic for "Upgrade Plan" visibility moved here if you want it client-side driven.
-              // If the link is dynamically shown/hidden by the backend based on user role/plan, this block can be removed.
+              // Conditional logic for "Upgrade Plan" visibility
               if (!(settingsDropdown.style.display === "block" && upgradePlanLink)) {
                 _context.n = 6;
                 break;
@@ -142,10 +143,9 @@ function setupSettingsDropdown() {
             case 2:
               profile = _context.v;
               if (profile && profile.plan_id === 'free') {
-                // Check if user is on free plan
                 upgradePlanLink.style.display = 'block';
               } else {
-                upgradePlanLink.style.display = 'none'; // Hide if not free or profile fetch fails
+                upgradePlanLink.style.display = 'none';
               }
               _context.n = 4;
               break;
@@ -158,7 +158,6 @@ function setupSettingsDropdown() {
               _context.n = 6;
               break;
             case 5:
-              // Hide if not logged in
               upgradePlanLink.style.display = 'none';
             case 6:
               return _context.a(2);
@@ -205,7 +204,7 @@ function apiRequest(_x2, _x3) {
  * Handles all client-side logic for the login.html page.
  */
 function _apiRequest() {
-  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(method, path) {
+  _apiRequest = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31(method, path) {
     var body,
       isFormData,
       onProgress,
@@ -215,22 +214,22 @@ function _apiRequest() {
       options,
       response,
       errorData,
-      _args18 = arguments,
-      _t18;
-    return _regenerator().w(function (_context18) {
-      while (1) switch (_context18.n) {
+      _args31 = arguments,
+      _t27;
+    return _regenerator().w(function (_context31) {
+      while (1) switch (_context31.n) {
         case 0:
-          body = _args18.length > 2 && _args18[2] !== undefined ? _args18[2] : null;
-          isFormData = _args18.length > 3 && _args18[3] !== undefined ? _args18[3] : false;
-          onProgress = _args18.length > 4 && _args18[4] !== undefined ? _args18[4] : null;
-          expectBlobResponse = _args18.length > 5 && _args18[5] !== undefined ? _args18[5] : false;
+          body = _args31.length > 2 && _args31[2] !== undefined ? _args31[2] : null;
+          isFormData = _args31.length > 3 && _args31[3] !== undefined ? _args31[3] : false;
+          onProgress = _args31.length > 4 && _args31[4] !== undefined ? _args31[4] : null;
+          expectBlobResponse = _args31.length > 5 && _args31[5] !== undefined ? _args31[5] : false;
           token = localStorage.getItem('authToken');
           endpoint = "".concat(API_BASE_URL).concat(path); // For FormData, use XMLHttpRequest for progress tracking
           if (!isFormData) {
-            _context18.n = 1;
+            _context31.n = 1;
             break;
           }
-          return _context18.a(2, new Promise(function (resolve, reject) {
+          return _context31.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
             if (token) {
@@ -261,7 +260,8 @@ function _apiRequest() {
                 // Unauthorized or Forbidden - clear token and redirect to login
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('userRole');
-                window.location.href = 'login.html?sessionExpired=true';
+                // window.location.href = 'login.html?sessionExpired=true'; // Cannot redirect in sandbox
+                showModalMessage('Authentication token missing or invalid. Please refresh and log in.', true);
                 reject(new Error('Authentication token missing or invalid.'));
               } else {
                 // Handle non-2xx responses
@@ -293,63 +293,60 @@ function _apiRequest() {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
           }
-          _context18.n = 2;
+          _context31.n = 2;
           return fetch(endpoint, options);
         case 2:
-          response = _context18.v;
+          response = _context31.v;
           if (!(response.status === 401 || response.status === 403)) {
-            _context18.n = 3;
+            _context31.n = 3;
             break;
           }
           localStorage.removeItem('authToken');
           localStorage.removeItem('userRole');
-          window.location.href = 'login.html?sessionExpired=true';
+          // window.location.href = 'login.html?sessionExpired=true'; // Cannot redirect in sandbox
+          showModalMessage('Authentication token missing or invalid. Please refresh and log in.', true);
           throw new Error('Authentication token missing or invalid.');
         case 3:
           if (response.ok) {
-            _context18.n = 7;
+            _context31.n = 7;
             break;
           }
-          _context18.p = 4;
-          _context18.n = 5;
+          _context31.p = 4;
+          _context31.n = 5;
           return response.json();
         case 5:
-          errorData = _context18.v;
+          errorData = _context31.v;
           throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
         case 6:
-          _context18.p = 6;
-          _t18 = _context18.v;
+          _context31.p = 6;
+          _t27 = _context31.v;
           throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
         case 7:
           if (!expectBlobResponse) {
-            _context18.n = 8;
+            _context31.n = 8;
             break;
           }
-          return _context18.a(2, response.blob());
+          return _context31.a(2, response.blob());
         case 8:
           if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
-            _context18.n = 9;
+            _context31.n = 9;
             break;
           }
-          return _context18.a(2, null);
+          return _context31.a(2, null);
         case 9:
-          return _context18.a(2, response.json());
+          return _context31.a(2, response.json());
         case 10:
-          return _context18.a(2);
+          return _context31.a(2);
       }
-    }, _callee18, null, [[4, 6]]);
+    }, _callee31, null, [[4, 6]]);
   }));
   return _apiRequest.apply(this, arguments);
 }
 function handleLoginPage() {
-  // console.log("handleLoginPage: Initializing login page logic."); // DEBUG LOG
   var loginForm = document.getElementById("login-form");
   if (!loginForm) {
-    // console.log("handleLoginPage: loginForm element not found, exiting function."); // ADDED LOG
-    return; // Exit if form not found (e.g., on a different page)
+    return;
   }
-
-  // Display session expired message if redirected from an authenticated page
   var urlParams = new URLSearchParams(window.location.search);
   if (urlParams.has('sessionExpired') && urlParams.get('sessionExpired') === 'true') {
     var errorMessageDiv = document.getElementById("error-message");
@@ -358,7 +355,6 @@ function handleLoginPage() {
       errorMessageDiv.classList.add('visible');
       errorMessageDiv.setAttribute('aria-hidden', 'false');
     }
-    // Clear the URL parameter to avoid showing the message on refresh
     urlParams["delete"]('sessionExpired');
     window.history.replaceState({}, document.title, window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : ''));
   }
@@ -368,26 +364,21 @@ function handleLoginPage() {
       return _regenerator().w(function (_context2) {
         while (1) switch (_context2.n) {
           case 0:
-            e.preventDefault(); // Prevent default form submission
-            // console.log("Login form submission initiated."); // ADDED LOG
+            e.preventDefault();
             emailInput = document.getElementById("email");
             passwordInput = document.getElementById("password");
             email = emailInput.value.trim();
             password = passwordInput.value;
-            errorMessage = document.getElementById("error-message"); // Clear previous error messages
+            errorMessage = document.getElementById("error-message");
             if (errorMessage) {
               errorMessage.textContent = "";
               errorMessage.classList.remove("visible");
               errorMessage.setAttribute('aria-hidden', 'true');
             }
-
-            // Basic client-side validation
-            // console.log("Checking email/password validity."); // ADDED LOG
             if (!(!email || !password)) {
               _context2.n = 1;
               break;
             }
-            // console.log("Login Validation: Email or password empty."); // DEBUG LOG
             if (errorMessage) {
               errorMessage.textContent = "Email and password are required.";
               errorMessage.classList.add("visible");
@@ -400,7 +391,6 @@ function handleLoginPage() {
               _context2.n = 2;
               break;
             }
-            // console.log("Login Validation: Invalid email format."); // DEBUG LOG
             if (errorMessage) {
               errorMessage.textContent = "Please enter a valid email address.";
               errorMessage.classList.add("visible");
@@ -412,7 +402,6 @@ function handleLoginPage() {
               _context2.n = 3;
               break;
             }
-            // console.log("Login Validation: Password too short."); // DEBUG LOG
             if (errorMessage) {
               errorMessage.textContent = "Password must be at least 6 characters long.";
               errorMessage.classList.add("visible");
@@ -428,16 +417,12 @@ function handleLoginPage() {
             });
           case 4:
             data = _context2.v;
-            // console.log("API login request successful. Redirecting..."); // ADDED LOG
-            // Store authentication token and user role
             localStorage.setItem("authToken", data.token);
-            localStorage.setItem("userRole", data.role); // Store user role
-
-            // Redirect based on user role
+            localStorage.setItem("userRole", data.role);
             if (data.role === "super_admin" || data.role === "location_admin") {
-              window.location.href = "suite-hub.html"; // Admins go to app hub
+              window.location.href = "suite-hub.html";
             } else {
-              window.location.href = "new-hire-view.html"; // Employees go to their onboarding view
+              window.location.href = "new-hire-view.html";
             }
             _context2.n = 6;
             break;
@@ -450,7 +435,6 @@ function handleLoginPage() {
               errorMessage.classList.add("visible");
               errorMessage.setAttribute('aria-hidden', 'false');
             }
-            // Also show a modal message for more prominent feedback
             showModalMessage("Login Failed: ".concat(_t2.message), true);
           case 6:
             return _context2.a(2);
@@ -469,7 +453,7 @@ function handleLoginPage() {
 function handleRegisterPage() {
   var registerForm = document.getElementById("register-form");
   if (!registerForm) {
-    return; // Exit if form not found
+    return;
   }
   registerForm.addEventListener("submit", /*#__PURE__*/function () {
     var _ref3 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(e) {
@@ -487,11 +471,9 @@ function handleRegisterPage() {
             full_name = fullNameInput.value.trim();
             email = emailInput.value.trim();
             password = passwordInput.value;
-            errorMessage.textContent = ""; // Clear any previous error
+            errorMessage.textContent = "";
             errorMessage.classList.remove("visible");
             errorMessage.setAttribute('aria-hidden', 'true');
-
-            // Client-side validation
             emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!(!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email))) {
               _context3.n = 1;
@@ -512,17 +494,13 @@ function handleRegisterPage() {
           case 2:
             data = _context3.v;
             showModalMessage("Account created successfully! Please log in.", false);
-
-            // Clear form fields after successful registration
             companyNameInput.value = "";
             fullNameInput.value = "";
             emailInput.value = "";
             passwordInput.value = "";
-
-            // Redirect to login page after a short delay
             setTimeout(function () {
               window.location.href = "login.html";
-            }, 2000); // 2-second delay
+            }, 2000);
             _context3.n = 4;
             break;
           case 3:
@@ -550,33 +528,26 @@ function handleRegisterPage() {
  * Handles logic for the suite-hub.html page, including payment status messages.
  */
 function handleSuiteHubPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
   }
-
-  // Check for payment status from Stripe redirect
   var urlParams = new URLSearchParams(window.location.search);
   var paymentStatus = urlParams.get("payment");
-  var sessionId = urlParams.get("session_id"); // Could be used for further verification if needed
-
+  var sessionId = urlParams.get("session_id");
   if (paymentStatus === "success") {
     showModalMessage("Payment successful! Your subscription has been updated.", false);
-    // Clear the URL parameters to prevent showing the message again on refresh
     history.replaceState({}, document.title, window.location.pathname);
   } else if (paymentStatus === "cancelled") {
     showModalMessage("Payment cancelled. You can try again or choose another plan.", true);
     history.replaceState({}, document.title, window.location.pathname);
   }
-  // Add other suite-hub specific logic here if any.
 }
 
 /**
  * Handles all client-side logic for the account.html page.
  */
 function handleAccountPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
@@ -588,11 +559,9 @@ function handleAccountPage() {
   var updateProfileForm = document.getElementById("update-profile-form");
   var currentPasswordInput = document.getElementById("current-password");
   var newPasswordInput = document.getElementById("new-password");
-
-  // Function to load and display user profile information
   function loadProfileInfo() {
     return _loadProfileInfo.apply(this, arguments);
-  } // Handle profile update form submission
+  }
   function _loadProfileInfo() {
     _loadProfileInfo = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5() {
       var profile, _t5;
@@ -645,15 +614,12 @@ function handleAccountPage() {
               return apiRequest("PUT", "/profile", updatePayload);
             case 2:
               result = _context4.v;
-              // If token is returned (e.g., email changed), update it in localStorage
               if (result && result.token) {
                 localStorage.setItem("authToken", result.token);
               }
               showModalMessage(result.message || "Profile updated successfully!", false);
-              // Clear password fields
               if (currentPasswordInput) currentPasswordInput.value = "";
               if (newPasswordInput) newPasswordInput.value = "";
-              // Reload profile info to reflect changes
               loadProfileInfo();
               _context4.n = 4;
               break;
@@ -672,8 +638,6 @@ function handleAccountPage() {
       };
     }());
   }
-
-  // Load profile info when the page loads
   loadProfileInfo();
 }
 
@@ -681,7 +645,6 @@ function handleAccountPage() {
  * Handles all client-side logic for the admin.html page.
  */
 function handleAdminPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
@@ -690,19 +653,12 @@ function handleAdminPage() {
   var userListDiv = document.getElementById("user-list");
   var newLocationForm = document.getElementById("new-location-form");
   var inviteAdminForm = document.getElementById("invite-admin-form");
-  var inviteEmployeeForm = document.getElementById("invite-employee-form"); // Get employee form
+  var inviteEmployeeForm = document.getElementById("invite-employee-form");
   var adminLocationSelect = document.getElementById("admin-location-select");
-  var employeeLocationSelect = document.getElementById("employee-location-select"); // Get employee location select
-
-  /**
-   * Fetches and displays the list of locations.
-   */
+  var employeeLocationSelect = document.getElementById("employee-location-select");
   function loadLocations() {
     return _loadLocations.apply(this, arguments);
   }
-  /**
-   * Fetches and displays the list of users.
-   */
   function _loadLocations() {
     _loadLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7() {
       var locations, locationOptionsHtml, _t7;
@@ -729,15 +685,12 @@ function handleAdminPage() {
                 adminLocationSelect.disabled = true;
               }
               if (employeeLocationSelect) {
-                // Also disable/reset for employee form
                 employeeLocationSelect.innerHTML = '<option value="">Select a location</option>';
                 employeeLocationSelect.disabled = true;
               }
             } else {
               if (adminLocationSelect) adminLocationSelect.disabled = false;
-              if (employeeLocationSelect)
-                // Also enable for employee form
-                employeeLocationSelect.disabled = false;
+              if (employeeLocationSelect) employeeLocationSelect.disabled = false;
               locations.forEach(function (loc) {
                 var locDiv = document.createElement("div");
                 locDiv.className = "list-item";
@@ -749,7 +702,6 @@ function handleAdminPage() {
                 });
                 locationListDiv.appendChild(locDiv);
               });
-              // Populate both admin and employee location selects
               locationOptionsHtml = locations.map(function (loc) {
                 return "<option value=\"".concat(loc.location_id, "\">").concat(loc.location_name, "</option>");
               }).join('');
@@ -776,7 +728,7 @@ function handleAdminPage() {
   }
   function loadUsers() {
     return _loadUsers.apply(this, arguments);
-  } // Event listener for delete buttons (delegated to body for dynamically added elements)
+  }
   function _loadUsers() {
     _loadUsers = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8() {
       var users, _t8;
@@ -789,7 +741,6 @@ function handleAdminPage() {
             }
             return _context8.a(2);
           case 1:
-            // Exit if div not found
             userListDiv.innerHTML = "<p>Loading users...</p>";
             _context8.p = 2;
             _context8.n = 3;
@@ -833,19 +784,18 @@ function handleAdminPage() {
           case 0:
             targetButton = e.target.closest(".btn-delete");
             if (!targetButton) {
-              _context6.n = 8;
+              _context6.n = 16;
               break;
             }
-            // console.log("handleAdminPage: Delete button clicked."); // Removed for production
             id = targetButton.dataset.id;
-            type = targetButton.dataset.type; // 'location' or 'user'
+            type = targetButton.dataset.type;
             confirmationMessage = "Are you sure you want to delete this ".concat(type, "? This action cannot be undone.");
             _context6.n = 1;
             return showConfirmModal(confirmationMessage, "Delete");
           case 1:
             confirmed = _context6.v;
             if (!confirmed) {
-              _context6.n = 8;
+              _context6.n = 16;
               break;
             }
             _context6.p = 2;
@@ -857,9 +807,9 @@ function handleAdminPage() {
             return apiRequest("DELETE", "/locations/".concat(id));
           case 3:
             showModalMessage("Location deleted successfully!", false);
-            loadLocations(); // Reload locations list
-            loadUsers(); // Reload users list as some might be linked to this location
-            _context6.n = 6;
+            loadLocations();
+            loadUsers();
+            _context6.n = 14;
             break;
           case 4:
             if (!(type === "user")) {
@@ -870,23 +820,71 @@ function handleAdminPage() {
             return apiRequest("DELETE", "/users/".concat(id));
           case 5:
             showModalMessage("User deleted successfully!", false);
-            loadUsers(); // Reload users list
-          case 6:
-            _context6.n = 8;
+            loadUsers();
+            _context6.n = 14;
             break;
+          case 6:
+            if (!(type === "document")) {
+              _context6.n = 8;
+              break;
+            }
+            _context6.n = 7;
+            return apiRequest("DELETE", "/documents/".concat(id));
           case 7:
-            _context6.p = 7;
+            showModalMessage("Document deleted successfully!", false);
+            handleDocumentsPage(); // Reload documents if on documents page
+            _context6.n = 14;
+            break;
+          case 8:
+            if (!(type === "checklist")) {
+              _context6.n = 10;
+              break;
+            }
+            _context6.n = 9;
+            return apiRequest("DELETE", "/checklists/".concat(id));
+          case 9:
+            showModalMessage("Task list deleted successfully!", false);
+            handleChecklistsPage(); // Reload checklists if on checklists page
+            _context6.n = 14;
+            break;
+          case 10:
+            if (!(type === "job-posting")) {
+              _context6.n = 12;
+              break;
+            }
+            _context6.n = 11;
+            return apiRequest("DELETE", "/job-postings/".concat(id));
+          case 11:
+            showModalMessage("Job posting deleted successfully!", false);
+            handleHiringPage(); // Reload hiring page if on hiring page
+            _context6.n = 14;
+            break;
+          case 12:
+            if (!(type === "schedule")) {
+              _context6.n = 14;
+              break;
+            }
+            _context6.n = 13;
+            return apiRequest("DELETE", "/schedules/".concat(id));
+          case 13:
+            showModalMessage("Schedule deleted successfully!", false);
+            handleSchedulingPage(); // Reload schedules if on scheduling page
+          case 14:
+            _context6.n = 16;
+            break;
+          case 15:
+            _context6.p = 15;
             _t6 = _context6.v;
             showModalMessage("Error deleting ".concat(type, ": ").concat(_t6.message), true);
-          case 8:
+          case 16:
             return _context6.a(2);
         }
-      }, _callee6, null, [[2, 7]]);
+      }, _callee6, null, [[2, 15]]);
     }));
     return function (_x7) {
       return _ref5.apply(this, arguments);
     };
-  }()); // This curly brace was the extra one. It closed `handleAdminPage()` too early.
+  }());
 
   // Initial loads when the admin page loads
   loadLocations();
@@ -897,7 +895,6 @@ function handleAdminPage() {
  * Handles logic for the dashboard.html page (Onboarding Dashboard).
  */
 function handleDashboardPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
@@ -908,8 +905,6 @@ function handleDashboardPage() {
   var onboardUserForm = document.getElementById("onboard-user-form");
   var newHirePositionSelect = document.getElementById("new-hire-position");
   var sessionListDiv = document.getElementById("session-list");
-
-  // Show modal when "Onboard New Employee" button is clicked
   if (showOnboardModalBtn) {
     showOnboardModalBtn.addEventListener("click", function () {
       if (onboardUserModal) {
@@ -917,8 +912,6 @@ function handleDashboardPage() {
       }
     });
   }
-
-  // Hide modal when cancel button is clicked
   if (modalCancelOnboardBtn) {
     modalCancelOnboardBtn.addEventListener("click", function () {
       if (onboardUserModal) {
@@ -926,8 +919,6 @@ function handleDashboardPage() {
       }
     });
   }
-
-  // Close modal if clicking outside
   if (onboardUserModal) {
     onboardUserModal.addEventListener("click", function (event) {
       if (event.target === onboardUserModal) {
@@ -935,16 +926,9 @@ function handleDashboardPage() {
       }
     });
   }
-
-  /**
-   * Loads available positions and populates the select dropdown.
-   */
   function loadPositions() {
     return _loadPositions.apply(this, arguments);
   }
-  /**
-   * Loads and displays active onboarding sessions.
-   */
   function _loadPositions() {
     _loadPositions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0() {
       var response, _t0;
@@ -963,12 +947,11 @@ function handleDashboardPage() {
             return apiRequest("GET", "/positions");
           case 3:
             response = _context0.v;
-            // Placeholder API
             newHirePositionSelect.innerHTML = '<option value="">Select Position</option>';
             if (response && response.positions && response.positions.length > 0) {
               response.positions.forEach(function (pos) {
                 var option = document.createElement("option");
-                option.value = pos.id; // Or pos.name, depending on what you want to store
+                option.value = pos.id;
                 option.textContent = pos.name;
                 newHirePositionSelect.appendChild(option);
               });
@@ -992,7 +975,7 @@ function handleDashboardPage() {
   }
   function loadOnboardingSessions() {
     return _loadOnboardingSessions.apply(this, arguments);
-  } // Handle onboard new employee form submission
+  }
   function _loadOnboardingSessions() {
     _loadOnboardingSessions = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10() {
       var sessions, _t10;
@@ -1011,7 +994,6 @@ function handleDashboardPage() {
             return apiRequest("GET", "/onboarding-sessions");
           case 3:
             sessions = _context10.v;
-            // Placeholder API
             sessionListDiv.innerHTML = '';
             if (sessions && sessions.length > 0) {
               sessions.forEach(function (session) {
@@ -1022,17 +1004,12 @@ function handleDashboardPage() {
                 sessionItem.innerHTML = "\n                        <div class=\"onboarding-item-info\">\n                            <p style=\"color: var(--text-light); font-weight: 600;\">".concat(session.full_name, " (").concat(session.position || 'N/A', ")</p>\n                            <p style=\"color: var(--text-medium);\">Email: ").concat(session.email, "</p>\n                            <p style=\"color: ").concat(statusColor, ";\">Status: ").concat(completionStatus, "</p>\n                        </div>\n                        <div class=\"onboarding-item-actions\">\n                            <button class=\"btn btn-secondary btn-sm view-details-btn\" data-user-id=\"").concat(session.user_id, "\">View Progress</button>\n                            ").concat(session.completedTasks === session.totalTasks ? "<button class=\"btn btn-primary btn-sm archive-onboarding-btn\" data-session-id=\"".concat(session.session_id, "\">Archive</button>") : '', "\n                        </div>\n                    ");
                 sessionListDiv.appendChild(sessionItem);
               });
-
-              // Add event listeners for new buttons (delegated)
               sessionListDiv.querySelectorAll('.view-details-btn').forEach(function (button) {
                 button.addEventListener('click', function (event) {
                   var userId = event.target.dataset.userId;
-                  // Redirect to a detailed view for this employee's onboarding
-                  window.location.href = "new-hire-view.html?userId=".concat(userId); // Example redirect
+                  window.location.href = "new-hire-view.html?userId=".concat(userId);
                 });
               });
-
-              // Implement archive functionality
               sessionListDiv.querySelectorAll('.archive-onboarding-btn').forEach(function (button) {
                 button.addEventListener('click', /*#__PURE__*/function () {
                   var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1(event) {
@@ -1053,9 +1030,8 @@ function handleDashboardPage() {
                           _context1.n = 3;
                           return apiRequest("PUT", "/onboarding-sessions/".concat(sessionId, "/archive"));
                         case 3:
-                          // Placeholder API
                           showModalMessage('Onboarding session archived successfully!', false);
-                          loadOnboardingSessions(); // Reload list
+                          loadOnboardingSessions();
                           _context1.n = 5;
                           break;
                         case 4:
@@ -1118,20 +1094,17 @@ function handleDashboardPage() {
               _context9.p = 2;
               _context9.n = 3;
               return apiRequest("POST", "/onboard-employee", {
-                // Placeholder API
                 full_name: newHireName,
                 email: newHireEmail,
                 position_id: newHirePosition,
-                // Use position ID from dropdown
-                employee_id: newHireId || null // Optional employee ID
+                employee_id: newHireId || null
               });
             case 3:
               response = _context9.v;
               showModalMessage("Onboarding invite sent to ".concat(newHireEmail, " for position ").concat(newHirePosition, "."), false);
-              // Clear form and hide modal
               onboardUserForm.reset();
               if (onboardUserModal) onboardUserModal.style.display = "none";
-              loadOnboardingSessions(); // Reload sessions to show new entry
+              loadOnboardingSessions();
               _context9.n = 5;
               break;
             case 4:
@@ -1148,8 +1121,6 @@ function handleDashboardPage() {
       };
     }());
   }
-
-  // Initial loads when dashboard page loads
   loadPositions();
   loadOnboardingSessions();
 }
@@ -1158,7 +1129,6 @@ function handleDashboardPage() {
  * Handles logic for checklists.html page.
  */
 function handleChecklistsPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
@@ -1170,9 +1140,7 @@ function handleChecklistsPage() {
   var timeGroupCountInput = document.getElementById("time-group-count");
   var timeGroupCountLabel = document.getElementById("time-group-count-label");
   var tasksInputArea = document.getElementById("tasks-input-area");
-  var taskCounter = 0; // To ensure unique task IDs
-
-  // Function to add a single task input field
+  var taskCounter = 0;
   function addSingleTaskInput(container) {
     var taskId = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
     var taskText = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : '';
@@ -1180,17 +1148,13 @@ function handleChecklistsPage() {
     div.className = 'form-group task-input-group';
     div.innerHTML = "\n            <label for=\"task-".concat(taskId || taskCounter, "\">Task Description</label>\n            <input type=\"text\" id=\"task-").concat(taskId || taskCounter, "\" class=\"task-description-input\" value=\"").concat(taskText, "\" placeholder=\"e.g., Complete HR paperwork\" required>\n            <button type=\"button\" class=\"btn btn-secondary remove-task-btn\" style=\"margin-top: 5px;\">Remove</button>\n        ");
     container.appendChild(div);
-
-    // Add event listener for remove button
     div.querySelector('.remove-task-btn').addEventListener('click', function () {
       div.remove();
     });
     taskCounter++;
   }
-
-  // Function to dynamically render task input fields based on structure type
   function renderTaskInputs() {
-    tasksInputArea.innerHTML = ''; // Clear previous inputs
+    tasksInputArea.innerHTML = '';
     var structureType = structureTypeSelect.value;
     var groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
     if (structureType === 'single_list') {
@@ -1211,12 +1175,8 @@ function handleChecklistsPage() {
         groupContainer.className = 'card time-group-container';
         groupContainer.innerHTML = "\n                    <h4 style=\"color: var(--text-light); margin-top: 0;'>".concat(groupTitle, "</h4>\n                    <div class=\"tasks-in-group\" data-group-index=\"").concat(i, "\"></div>\n                    <button type=\"button\" class=\"btn btn-secondary add-task-to-group-btn\" style=\"margin-top: 10px;\" data-group-index=\"").concat(i, "\">Add Task to ").concat(groupTitle, " +</button>\n                ");
         tasksInputArea.appendChild(groupContainer);
-
-        // Add initial task input to the group
         var tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
-        addSingleTaskInput(tasksInGroupDiv); // Add one task by default
-
-        // Event listener for adding tasks to this specific group
+        addSingleTaskInput(tasksInGroupDiv);
         groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', function (event) {
           var targetGroupIndex = event.target.dataset.groupIndex;
           var targetGroupDiv = tasksInputArea.querySelector(".tasks-in-group[data-group-index=\"".concat(targetGroupIndex, "\"]"));
@@ -1227,8 +1187,6 @@ function handleChecklistsPage() {
       }
     }
   }
-
-  // Event listener for structure type change
   if (structureTypeSelect) {
     structureTypeSelect.addEventListener('change', function () {
       var type = structureTypeSelect.value;
@@ -1238,24 +1196,16 @@ function handleChecklistsPage() {
       } else {
         timeGroupCountContainer.style.display = 'none';
       }
-      renderTaskInputs(); // Re-render tasks based on new structure
+      renderTaskInputs();
     });
   }
-
-  // Event listener for time group count change
   if (timeGroupCountInput) {
     timeGroupCountInput.addEventListener('input', renderTaskInputs);
   }
-
-  // Initial render of task inputs
   renderTaskInputs();
-
-  /**
-   * Loads and displays existing task lists.
-   */
   function loadChecklists() {
     return _loadChecklists.apply(this, arguments);
-  } // Handle new checklist form submission
+  }
   function _loadChecklists() {
     _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
       var checklists, _t12;
@@ -1274,7 +1224,6 @@ function handleChecklistsPage() {
             return apiRequest("GET", "/checklists");
           case 3:
             checklists = _context12.v;
-            // Placeholder API
             checklistListDiv.innerHTML = '';
             if (checklists && checklists.length > 0) {
               checklists.forEach(function (checklist) {
@@ -1283,16 +1232,10 @@ function handleChecklistsPage() {
                 checklistItem.innerHTML = "\n                        <div class=\"checklist-item-title\">\n                            <span style=\"color: var(--primary-accent);\">".concat(checklist.position, "</span>\n                            <span>- ").concat(checklist.title, "</span>\n                            <span style=\"font-size: 0.8em; color: var(--text-medium);\">(").concat(checklist.structure_type, ")</span>\n                        </div>\n                        <div class=\"checklist-item-actions\">\n                            <button class=\"btn btn-secondary btn-sm view-checklist-btn\" data-checklist-id=\"").concat(checklist.id, "\">View/Edit</button>\n                            <button class=\"btn-delete\" data-type=\"checklist\" data-id=\"").concat(checklist.id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
                 checklistListDiv.appendChild(checklistItem);
               });
-
-              // Add event listeners for delete buttons (delegated from admin page)
-              // This assumes your document.body.addEventListener for .btn-delete handles 'checklist' type
-              // You might need a separate handler or expand the existing one.
-              // For 'view/edit', you'd typically navigate to another page or open a modal.
               checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(function (button) {
                 button.addEventListener('click', function (event) {
                   var checklistId = event.target.dataset.checklistId;
                   showModalMessage("Viewing/Editing Checklist ID: ".concat(checklistId, " (Functionality to be implemented)"), false);
-                  // Implement actual view/edit logic here, e.g., load checklist data into a form
                 });
               });
             } else {
@@ -1335,7 +1278,6 @@ function handleChecklistsPage() {
                   }
                 });
               } else {
-                // Grouped tasks
                 document.querySelectorAll('#tasks-input-area .tasks-in-group').forEach(function (groupDiv, index) {
                   var groupTasks = [];
                   groupDiv.querySelectorAll('.task-description-input').forEach(function (input) {
@@ -1364,19 +1306,18 @@ function handleChecklistsPage() {
               _context11.p = 1;
               _context11.n = 2;
               return apiRequest("POST", "/checklists", {
-                // Placeholder API
                 position: position,
                 title: title,
                 structure_type: structure_type,
                 group_count: group_count,
-                tasks: tasks // This should be a JSON string in DB if using text field
+                tasks: tasks
               });
             case 2:
               response = _context11.v;
               showModalMessage("Task List \"".concat(title, "\" created successfully!"), false);
               newChecklistForm.reset();
-              renderTaskInputs(); // Reset task inputs
-              loadChecklists(); // Reload the list of checklists
+              renderTaskInputs();
+              loadChecklists();
               _context11.n = 4;
               break;
             case 3:
@@ -1393,8 +1334,6 @@ function handleChecklistsPage() {
       };
     }());
   }
-
-  // Initial load
   loadChecklists();
 }
 
@@ -1402,7 +1341,6 @@ function handleChecklistsPage() {
  * Handles logic for new-hire-view.html (Employee Onboarding View).
  */
 function handleNewHireViewPage() {
-  // Redirect to login if not authenticated
   if (!localStorage.getItem("authToken")) {
     window.location.href = "login.html";
     return;
@@ -1411,8 +1349,6 @@ function handleNewHireViewPage() {
   var taskListSection = document.getElementById("task-list-section");
   var logoutButton = document.getElementById("logout-button");
   var completionCelebration = document.getElementById("completion-celebration");
-
-  // Initialize logout
   if (logoutButton) {
     logoutButton.addEventListener("click", function () {
       localStorage.removeItem("authToken");
@@ -1420,28 +1356,18 @@ function handleNewHireViewPage() {
       window.location.href = "login.html";
     });
   }
-
-  // Simple fireworks effect (client-side only for visual flair)
   function triggerFireworks() {
-    // Implement a simple CSS animation or canvas-based fireworks
-    // For a true fireworks effect, you'd integrate a library like particles.js or build a canvas animation.
-    // This is a placeholder for the visual celebration.
     console.log("Triggering fireworks celebration!");
     if (completionCelebration) {
       completionCelebration.style.display = 'flex';
-      // Optionally, hide after a few seconds
       setTimeout(function () {
         completionCelebration.style.display = 'none';
       }, 5000);
     }
   }
-
-  /**
-   * Loads and displays the new hire's onboarding tasks.
-   */
   function loadOnboardingTasks() {
     return _loadOnboardingTasks.apply(this, arguments);
-  } // Initial load
+  }
   function _loadOnboardingTasks() {
     _loadOnboardingTasks = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14() {
       var profile, tasksData, checklist, allTasksCompleted, _t14;
@@ -1468,23 +1394,16 @@ function handleNewHireViewPage() {
             return _context14.a(2);
           case 4:
             welcomeHeading.textContent = "Welcome, ".concat(profile.full_name, "!");
-
-            // Assuming an API endpoint to fetch onboarding tasks for the current user
-            // This API should fetch the assigned checklist and its tasks, including their completion status
             _context14.n = 5;
             return apiRequest("GET", "/onboarding-tasks/".concat(profile.user_id));
           case 5:
             tasksData = _context14.v;
-            // Placeholder API
-
-            taskListSection.innerHTML = ''; // Clear loading message
-
+            taskListSection.innerHTML = '';
             if (tasksData && tasksData.checklist && tasksData.checklist.tasks) {
               checklist = tasksData.checklist;
-              allTasksCompleted = true; // Flag to check if all tasks are done
+              allTasksCompleted = true;
               if (checklist.structure_type === 'single_list') {
                 tasksData.tasks.forEach(function (task) {
-                  // tasksData.tasks holds flat list of tasks
                   var taskItem = document.createElement("div");
                   taskItem.className = "task-item ".concat(task.completed ? 'completed' : '');
                   taskItem.innerHTML = "\n                            <input type=\"checkbox\" id=\"task-".concat(task.id, "\" ").concat(task.completed ? 'checked' : '', " data-task-id=\"").concat(task.id, "\" data-task-type=\"single\">\n                            <label for=\"task-").concat(task.id, "\">").concat(task.description, "</label>\n                        ");
@@ -1492,13 +1411,10 @@ function handleNewHireViewPage() {
                   if (!task.completed) allTasksCompleted = false;
                 });
               } else {
-                // Grouped by Day/Week
                 tasksData.tasks.forEach(function (group, groupIndex) {
-                  // tasksData.tasks holds groups
                   var taskGroupDetails = document.createElement('details');
                   taskGroupDetails.className = 'task-group';
-                  taskGroupDetails.open = true; // Open by default
-
+                  taskGroupDetails.open = true;
                   var summary = document.createElement('summary');
                   summary.textContent = group.groupTitle;
                   taskGroupDetails.appendChild(summary);
@@ -1512,8 +1428,6 @@ function handleNewHireViewPage() {
                   taskListSection.appendChild(taskGroupDetails);
                 });
               }
-
-              // Add event listeners for checkboxes
               taskListSection.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
                 checkbox.addEventListener('change', /*#__PURE__*/function () {
                   var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13(event) {
@@ -1523,8 +1437,8 @@ function handleNewHireViewPage() {
                         case 0:
                           taskId = event.target.dataset.taskId;
                           isCompleted = event.target.checked;
-                          taskType = event.target.dataset.taskType; // 'single' or 'grouped'
-                          groupIndex = event.target.dataset.groupIndex; // Only for grouped tasks
+                          taskType = event.target.dataset.taskType;
+                          groupIndex = event.target.dataset.groupIndex;
                           _context13.p = 1;
                           _context13.n = 2;
                           return apiRequest("PUT", "/onboarding-tasks/".concat(taskId), {
@@ -1533,10 +1447,8 @@ function handleNewHireViewPage() {
                             groupIndex: groupIndex
                           });
                         case 2:
-                          // Placeholder API for updating task status
                           event.target.closest('.task-item').classList.toggle('completed', isCompleted);
                           showModalMessage('Task status updated successfully!', false);
-                          // Re-evaluate if all tasks are completed after status change
                           currentAllTasksCompleted = true;
                           taskListSection.querySelectorAll('.task-item').forEach(function (item) {
                             if (!item.classList.contains('completed')) {
@@ -1552,7 +1464,7 @@ function handleNewHireViewPage() {
                           _context13.p = 3;
                           _t13 = _context13.v;
                           showModalMessage("Failed to update task status: ".concat(_t13.message), true);
-                          event.target.checked = !isCompleted; // Revert checkbox if API fails
+                          event.target.checked = !isCompleted;
                         case 4:
                           return _context13.a(2);
                       }
@@ -1564,7 +1476,7 @@ function handleNewHireViewPage() {
                 }());
               });
               if (allTasksCompleted) {
-                triggerFireworks(); // Trigger celebration if all tasks are already completed on load
+                triggerFireworks();
               }
             } else {
               taskListSection.innerHTML = '<p style="color: var(--text-medium);">No onboarding tasks assigned or found.</p>';
@@ -1590,7 +1502,6 @@ function handleNewHireViewPage() {
  * Handles logic for pricing.html page.
  */
 function handlePricingPage() {
-  // Check for payment modal from registration flow
   var urlParams = new URLSearchParams(window.location.search);
   var showRegisterCheckout = urlParams.get("registerCheckout");
   var selectedPlanId = urlParams.get("plan");
@@ -1603,9 +1514,7 @@ function handlePricingPage() {
   var regPasswordInput = document.getElementById("reg-password");
   var regCheckoutCancelBtn = document.getElementById("reg-checkout-cancel-btn");
   var regCheckoutErrorMessage = document.getElementById("register-checkout-error-message");
-  var currentSelectedPlan = null; // To store the plan chosen before registration
-
-  // Function to open the register/checkout modal
+  var currentSelectedPlan = null;
   function openRegisterCheckoutModal(planId) {
     if (registerCheckoutModalOverlay && registerCheckoutModalTitle && registerCheckoutForm) {
       currentSelectedPlan = planId;
@@ -1616,15 +1525,10 @@ function handlePricingPage() {
       regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
     }
   }
-
-  // Automatically open register/checkout modal if redirected with params
   if (showRegisterCheckout === 'true' && selectedPlanId) {
     openRegisterCheckoutModal(selectedPlanId);
-    // Clean up URL to prevent re-opening on refresh
     history.replaceState({}, document.title, window.location.pathname);
   }
-
-  // Event listeners for "Choose Plan" buttons
   var freePlanBtn = document.getElementById("free-plan-btn");
   var proPlanBtn = document.getElementById("pro-plan-btn");
   var enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
@@ -1634,9 +1538,6 @@ function handlePricingPage() {
       return _regenerator().w(function (_context15) {
         while (1) switch (_context15.n) {
           case 0:
-            // Logic for Free plan (already active/no payment required)
-            // If already on Free, maybe show a message. If upgrading from higher, downgrade.
-            // For now, assume it's just a placeholder or no action needed if already on Free.
             userRole = localStorage.getItem("userRole");
             if (!userRole) {
               _context15.n = 8;
@@ -1666,9 +1567,7 @@ function handlePricingPage() {
             _context15.n = 5;
             return apiRequest("POST", "/cancel-subscription");
           case 5:
-            // Or specific downgrade API
             showModalMessage("Successfully downgraded to Free plan. Your subscription will be updated.", false);
-            // Redirect or refresh to reflect changes
             setTimeout(function () {
               window.location.href = 'suite-hub.html';
             }, 1500);
@@ -1682,9 +1581,6 @@ function handlePricingPage() {
             _context15.n = 9;
             break;
           case 8:
-            // Not logged in, offer to sign up for free plan (which means regular registration)
-            // Redirect to register page without payment context, or open register modal directly
-            // For simplicity, let's just show info that free plan doesn't require payment.
             showModalMessage("The Free plan is available upon regular sign-up.", false);
             setTimeout(function () {
               window.location.href = 'register.html';
@@ -1707,7 +1603,7 @@ function handlePricingPage() {
   }
   function handlePlanSelection(_x10) {
     return _handlePlanSelection.apply(this, arguments);
-  } // Handle cancel button in register/checkout modal
+  }
   function _handlePlanSelection() {
     _handlePlanSelection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(planId) {
       var token, session, _t17;
@@ -1745,7 +1641,6 @@ function handlePricingPage() {
             _context17.n = 6;
             break;
           case 5:
-            // User is not logged in, show registration modal
             openRegisterCheckoutModal(planId);
           case 6:
             return _context17.a(2);
@@ -1758,21 +1653,18 @@ function handlePricingPage() {
     regCheckoutCancelBtn.addEventListener("click", function () {
       if (registerCheckoutModalOverlay) {
         registerCheckoutModalOverlay.style.display = 'none';
-        currentSelectedPlan = null; // Clear selected plan
-      }
-    });
-  }
-  // Close modal if clicking outside
-  if (regCheckoutModalOverlay) {
-    regCheckoutModalOverlay.addEventListener("click", function (event) {
-      if (event.target === regCheckoutModalOverlay) {
-        regCheckoutModalOverlay.style.display = "none";
         currentSelectedPlan = null;
       }
     });
   }
-
-  // Handle registration from the pricing modal
+  if (regCheckoutModalOverlay) {
+    regCheckoutModalOverlay.addEventListener("click", function (event) {
+      if (event.target === regCheckoutModalOverlay) {
+        registerCheckoutModalOverlay.style.display = "none";
+        currentSelectedPlan = null;
+      }
+    });
+  }
   if (registerCheckoutForm) {
     registerCheckoutForm.addEventListener("submit", /*#__PURE__*/function () {
       var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(e) {
@@ -1788,8 +1680,6 @@ function handlePricingPage() {
               regCheckoutErrorMessage.textContent = "";
               regCheckoutErrorMessage.classList.remove('visible');
               regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
-
-              // Client-side validation
               emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               if (!(!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email))) {
                 _context16.n = 1;
@@ -1819,8 +1709,6 @@ function handlePricingPage() {
               loginData = _context16.v;
               localStorage.setItem("authToken", loginData.token);
               localStorage.setItem("userRole", loginData.role);
-
-              // Then, initiate Stripe checkout with the selected plan
               _context16.n = 4;
               return apiRequest("POST", "/create-checkout-session", {
                 planId: currentSelectedPlan
@@ -1836,7 +1724,7 @@ function handlePricingPage() {
                 showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
                 setTimeout(function () {
                   window.location.href = 'login.html';
-                }, 2000); // Redirect to login
+                }, 2000);
               }
               _context16.n = 6;
               break;
@@ -1860,8 +1748,894 @@ function handlePricingPage() {
   }
 }
 
-// --- Main Application Logic (DOMContentLoaded Listener) ---
-// This ensures that the DOM is fully loaded before trying to attach event listeners or manipulate elements.
+/**
+ * Handles all client-side logic for the hiring.html page.
+ */
+function handleHiringPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+  var createJobPostingForm = document.getElementById("create-job-posting-form");
+  var jobPostingListDiv = document.getElementById("job-posting-list");
+  var applicantListDiv = document.getElementById("applicant-list");
+  var jobPostingLocationSelect = document.getElementById("job-posting-location-select");
+  var filterApplicantJobPostingSelect = document.getElementById("filter-applicant-job-posting-select");
+  var filterApplicantStatusSelect = document.getElementById("filter-applicant-status");
+  var filterApplicantLocationSelect = document.getElementById("filter-applicant-location-select");
+  var applyApplicantFiltersBtn = document.getElementById("apply-applicant-filters-btn");
+  var clearApplicantFiltersBtn = document.getElementById("clear-applicant-filters-btn");
+  var shareLinkModalOverlay = document.getElementById("share-link-modal-overlay");
+  var shareJobLinkInput = document.getElementById("share-job-link-input");
+  var shareJobEmbedCodeInput = document.getElementById("share-job-embed-code-input");
+  var copyLinkBtn = document.getElementById("copy-link-btn");
+  var copyEmbedBtn = document.getElementById("copy-embed-btn");
+  var shareLinkModalCloseButton = document.getElementById("share-link-modal-close-button");
+  function loadJobPostingLocations() {
+    return _loadJobPostingLocations.apply(this, arguments);
+  }
+  function _loadJobPostingLocations() {
+    _loadJobPostingLocations = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20() {
+      var locations, _t19;
+      return _regenerator().w(function (_context20) {
+        while (1) switch (_context20.n) {
+          case 0:
+            if (jobPostingLocationSelect) {
+              _context20.n = 1;
+              break;
+            }
+            return _context20.a(2);
+          case 1:
+            jobPostingLocationSelect.innerHTML = '<option value="">Loading locations...</option>';
+            _context20.p = 2;
+            _context20.n = 3;
+            return apiRequest("GET", "/locations");
+          case 3:
+            locations = _context20.v;
+            jobPostingLocationSelect.innerHTML = '<option value="">Company Wide (All Locations)</option>'; // Default option
+            if (locations && locations.length > 0) {
+              locations.forEach(function (loc) {
+                var option = document.createElement("option");
+                option.value = loc.location_id;
+                option.textContent = loc.location_name;
+                jobPostingLocationSelect.appendChild(option);
+              });
+            } else {
+              jobPostingLocationSelect.innerHTML = '<option value="">No locations available</option>';
+            }
+            filterApplicantLocationSelect.innerHTML = jobPostingLocationSelect.innerHTML; // Copy options to filter dropdown
+            _context20.n = 5;
+            break;
+          case 4:
+            _context20.p = 4;
+            _t19 = _context20.v;
+            console.error("Error loading job posting locations:", _t19);
+            jobPostingLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            filterApplicantLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            showModalMessage("Failed to load locations for job postings: ".concat(_t19.message), true);
+          case 5:
+            return _context20.a(2);
+        }
+      }, _callee20, null, [[2, 4]]);
+    }));
+    return _loadJobPostingLocations.apply(this, arguments);
+  }
+  function loadJobPostings() {
+    return _loadJobPostings.apply(this, arguments);
+  }
+  function _loadJobPostings() {
+    _loadJobPostings = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21() {
+      var queryParams, jobPostings, _t20;
+      return _regenerator().w(function (_context21) {
+        while (1) switch (_context21.n) {
+          case 0:
+            if (jobPostingListDiv) {
+              _context21.n = 1;
+              break;
+            }
+            return _context21.a(2);
+          case 1:
+            jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>';
+            _context21.p = 2;
+            queryParams = new URLSearchParams();
+            if (filterApplicantJobPostingSelect.value) {// This filter is for applicants, not job postings directly
+              // Not filtering loadJobPostings directly by ID from applicant filter
+            }
+            // For now, only show 'Open' jobs on the main list unless otherwise specified
+            queryParams.append('status', 'Open'); // Fetch only open jobs by default for this list
+            _context21.n = 3;
+            return apiRequest("GET", "/job-postings?".concat(queryParams.toString()));
+          case 3:
+            jobPostings = _context21.v;
+            jobPostingListDiv.innerHTML = '';
+            filterApplicantJobPostingSelect.innerHTML = '<option value="">All Job Postings</option>'; // Reset applicant filter
+
+            if (jobPostings && jobPostings.length > 0) {
+              jobPostings.forEach(function (job) {
+                var jobItem = document.createElement("div");
+                jobItem.className = "job-posting-item";
+                jobItem.innerHTML = "\n                        <h4>".concat(job.title, "</h4>\n                        <p>Location: ").concat(job.location_id ? job.location_name : 'Company Wide', "</p>\n                        <p>Status: ").concat(job.status, "</p>\n                        <p>Posted: ").concat(new Date(job.created_date).toLocaleDateString(), "</p>\n                        <div class=\"actions\">\n                            <button class=\"btn btn-secondary btn-sm edit-job-btn\" data-job-id=\"").concat(job.job_posting_id, "\">Edit</button>\n                            <button class=\"btn btn-secondary btn-sm share-btn\" data-job-id=\"").concat(job.job_posting_id, "\" data-job-title=\"").concat(job.title, "\">Share</button>\n                            <button class=\"btn-delete\" data-type=\"job-posting\" data-id=\"").concat(job.job_posting_id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
+                jobPostingListDiv.appendChild(jobItem);
+
+                // Populate job posting filter dropdown for applicants
+                var option = document.createElement("option");
+                option.value = job.job_posting_id;
+                option.textContent = job.title;
+                filterApplicantJobPostingSelect.appendChild(option);
+              });
+            } else {
+              jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">No job postings found.</p>';
+            }
+            _context21.n = 5;
+            break;
+          case 4:
+            _context21.p = 4;
+            _t20 = _context21.v;
+            console.error("Error loading job postings:", _t20);
+            jobPostingListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading job postings: ".concat(_t20.message, "</p>");
+          case 5:
+            return _context21.a(2);
+        }
+      }, _callee21, null, [[2, 4]]);
+    }));
+    return _loadJobPostings.apply(this, arguments);
+  }
+  function loadApplicants() {
+    return _loadApplicants.apply(this, arguments);
+  }
+  function _loadApplicants() {
+    _loadApplicants = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee22() {
+      var filters,
+        queryParams,
+        applicants,
+        _args22 = arguments,
+        _t21;
+      return _regenerator().w(function (_context22) {
+        while (1) switch (_context22.n) {
+          case 0:
+            filters = _args22.length > 0 && _args22[0] !== undefined ? _args22[0] : {};
+            if (applicantListDiv) {
+              _context22.n = 1;
+              break;
+            }
+            return _context22.a(2);
+          case 1:
+            applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
+            _context22.p = 2;
+            queryParams = new URLSearchParams();
+            if (filters.job_posting_id) queryParams.append('job_posting_id', filters.job_posting_id);
+            if (filters.status) queryParams.append('status', filters.status);
+            if (filters.location_id) queryParams.append('location_id', filters.location_id);
+            _context22.n = 3;
+            return apiRequest("GET", "/applicants?".concat(queryParams.toString()));
+          case 3:
+            applicants = _context22.v;
+            applicantListDiv.innerHTML = '';
+            if (applicants && applicants.length > 0) {
+              applicants.forEach(function (applicant) {
+                var applicantItem = document.createElement("div");
+                applicantItem.className = "applicant-item";
+                applicantItem.innerHTML = "\n                        <h4>".concat(applicant.full_name, "</h4>\n                        <p>Job: ").concat(applicant.job_title || 'N/A', "</p>\n                        <p>Email: ").concat(applicant.email, "</p>\n                        <p>Phone: ").concat(applicant.phone_number || 'N/A', "</p>\n                        <p>Status: ").concat(applicant.status, "</p>\n                        <p>Applied: ").concat(new Date(applicant.application_date).toLocaleDateString(), "</p>\n                        <div class=\"actions\">\n                            <button class=\"btn btn-secondary btn-sm edit-applicant-btn\" data-applicant-id=\"").concat(applicant.applicant_id, "\">Update Status</button>\n                            <button class=\"btn-delete\" data-type=\"applicant\" data-id=\"").concat(applicant.applicant_id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
+                applicantListDiv.appendChild(applicantItem);
+              });
+            } else {
+              applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">No applicants found with current filters.</p>';
+            }
+            _context22.n = 5;
+            break;
+          case 4:
+            _context22.p = 4;
+            _t21 = _context22.v;
+            console.error("Error loading applicants:", _t21);
+            applicantListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading applicants: ".concat(_t21.message, "</p>");
+          case 5:
+            return _context22.a(2);
+        }
+      }, _callee22, null, [[2, 4]]);
+    }));
+    return _loadApplicants.apply(this, arguments);
+  }
+  if (createJobPostingForm) {
+    createJobPostingForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(e) {
+        var title, description, requirements, locationId, response, _t18;
+        return _regenerator().w(function (_context18) {
+          while (1) switch (_context18.n) {
+            case 0:
+              e.preventDefault();
+              title = document.getElementById("job-title-input").value.trim();
+              description = document.getElementById("job-description-input").value.trim();
+              requirements = document.getElementById("job-requirements-input").value.trim();
+              locationId = jobPostingLocationSelect.value ? parseInt(jobPostingLocationSelect.value, 10) : null;
+              if (!(!title || !description)) {
+                _context18.n = 1;
+                break;
+              }
+              showModalMessage("Job Title and Description are required.", true);
+              return _context18.a(2);
+            case 1:
+              _context18.p = 1;
+              _context18.n = 2;
+              return apiRequest("POST", "/job-postings", {
+                title: title,
+                description: description,
+                requirements: requirements,
+                location_id: locationId
+              });
+            case 2:
+              response = _context18.v;
+              showModalMessage("Job \"".concat(title, "\" posted successfully!"), false);
+              createJobPostingForm.reset();
+              loadJobPostings();
+              _context18.n = 4;
+              break;
+            case 3:
+              _context18.p = 3;
+              _t18 = _context18.v;
+              showModalMessage("Error posting job: ".concat(_t18.message), true);
+            case 4:
+              return _context18.a(2);
+          }
+        }, _callee18, null, [[1, 3]]);
+      }));
+      return function (_x12) {
+        return _ref10.apply(this, arguments);
+      };
+    }());
+  }
+  if (applyApplicantFiltersBtn) {
+    applyApplicantFiltersBtn.addEventListener("click", function () {
+      var filters = {
+        job_posting_id: filterApplicantJobPostingSelect.value || null,
+        status: filterApplicantStatusSelect.value || null,
+        location_id: filterApplicantLocationSelect.value ? parseInt(filterApplicantLocationSelect.value, 10) : null
+      };
+      loadApplicants(filters);
+    });
+  }
+  if (clearApplicantFiltersBtn) {
+    clearApplicantFiltersBtn.addEventListener("click", function () {
+      filterApplicantJobPostingSelect.value = "";
+      filterApplicantStatusSelect.value = "";
+      filterApplicantLocationSelect.value = "";
+      loadApplicants({}); // Load all applicants
+    });
+  }
+
+  // Share Job Posting Modal Logic
+  if (shareLinkModalCloseButton) {
+    shareLinkModalCloseButton.addEventListener("click", function () {
+      shareLinkModalOverlay.style.display = 'none';
+    });
+    shareLinkModalOverlay.addEventListener("click", function (event) {
+      if (event.target === shareLinkModalOverlay) {
+        shareLinkModalOverlay.style.display = 'none';
+      }
+    });
+  }
+  document.body.addEventListener("click", /*#__PURE__*/function () {
+    var _ref11 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(e) {
+      var shareButton, jobId, jobTitle, directLink, embedCode, copyLink, copyEmbed, editApplicantButton, applicantId;
+      return _regenerator().w(function (_context19) {
+        while (1) switch (_context19.n) {
+          case 0:
+            shareButton = e.target.closest(".share-btn");
+            if (shareButton) {
+              jobId = shareButton.dataset.jobId;
+              jobTitle = shareButton.dataset.jobTitle; // Get job title for dynamic link text
+              directLink = "".concat(API_BASE_URL, "/apply/").concat(jobId); // Example direct link
+              embedCode = "<iframe src=\"".concat(API_BASE_URL, "/embed/job/").concat(jobId, "\" width=\"600\" height=\"400\" frameborder=\"0\" title=\"").concat(jobTitle, " Application\"></iframe>"); // Example embed code
+              if (shareJobLinkInput) shareJobLinkInput.value = directLink;
+              if (shareJobEmbedCodeInput) shareJobEmbedCodeInput.value = embedCode;
+              if (shareLinkModalOverlay) shareLinkModalOverlay.style.display = 'flex';
+            }
+            copyLink = e.target.closest("#copy-link-btn");
+            if (copyLink && shareJobLinkInput) {
+              document.execCommand('copy'); // Fallback for navigator.clipboard.writeText
+              navigator.clipboard.writeText(shareJobLinkInput.value).then(function () {
+                showModalMessage("Link copied to clipboard!", false);
+              })["catch"](function (err) {
+                console.error('Failed to copy link: ', err);
+                showModalMessage("Failed to copy link. Please copy manually.", true);
+              });
+            }
+            copyEmbed = e.target.closest("#copy-embed-btn");
+            if (copyEmbed && shareJobEmbedCodeInput) {
+              document.execCommand('copy'); // Fallback
+              navigator.clipboard.writeText(shareJobEmbedCodeInput.value).then(function () {
+                showModalMessage("Embed code copied to clipboard!", false);
+              })["catch"](function (err) {
+                console.error('Failed to copy embed code: ', err);
+                showModalMessage("Failed to copy embed code. Please copy manually.", true);
+              });
+            }
+            editApplicantButton = e.target.closest(".edit-applicant-btn");
+            if (editApplicantButton) {
+              applicantId = editApplicantButton.dataset.applicantId;
+              showModalMessage("Editing Applicant ID: ".concat(applicantId, " (Functionality to be implemented)"), false);
+              // Here you'd typically open a modal or navigate to an edit page for the applicant
+            }
+          case 1:
+            return _context19.a(2);
+        }
+      }, _callee19);
+    }));
+    return function (_x13) {
+      return _ref11.apply(this, arguments);
+    };
+  }());
+
+  // Initial loads
+  loadJobPostingLocations();
+  loadJobPostings();
+  loadApplicants({}); // Load all applicants initially
+}
+
+/**
+ * Handles all client-side logic for the scheduling.html page.
+ */
+function handleSchedulingPage() {
+  // Redirect to login if not authenticated
+  if (!localStorage.getItem("authToken")) {
+    window.location.href = "login.html";
+    return;
+  }
+  var filterEmployeeSelect = document.getElementById("filter-employee-select");
+  var filterLocationSelect = document.getElementById("filter-location-select");
+  var filterStartDateInput = document.getElementById("filter-start-date");
+  var filterEndDateInput = document.getElementById("filter-end-date");
+  var applyFiltersBtn = document.getElementById("apply-filters-btn");
+  var clearFiltersBtn = document.getElementById("clear-filters-btn");
+  var createShiftForm = document.getElementById("create-shift-form");
+  var employeeSelect = document.getElementById("employee-select");
+  var locationSelect = document.getElementById("location-select");
+  var startTimeInput = document.getElementById("start-time-input");
+  var endTimeInput = document.getElementById("end-time-input");
+  var notesInput = document.getElementById("notes-input");
+  var prevWeekBtn = document.getElementById("prev-week-btn");
+  var nextWeekBtn = document.getElementById("next-week-btn");
+  var currentWeekDisplay = document.getElementById("current-week-display");
+  var calendarGrid = document.getElementById("calendar-grid");
+  var timeColumn = document.getElementById("time-column");
+  var currentWeekStart = moment().startOf('isoWeek'); // Use moment.js for week manipulation
+
+  function renderTimeColumn() {
+    timeColumn.innerHTML = '';
+    // Add an empty cell for the top-left corner (above time, left of days)
+    var topLeftCorner = document.createElement('div');
+    topLeftCorner.className = 'calendar-day-header'; // Re-use header style
+    topLeftCorner.style.gridColumn = '1';
+    topLeftCorner.style.gridRow = '1';
+    topLeftCorner.textContent = ''; // Empty for spacing
+    calendarGrid.prepend(topLeftCorner); // Add before any other content
+
+    for (var i = 0; i < 24; i++) {
+      var time = moment().hour(i).minute(0);
+      var timeSlot = document.createElement('div');
+      timeSlot.className = 'calendar-time-slot';
+      timeSlot.textContent = time.format('h A');
+      timeColumn.appendChild(timeSlot);
+    }
+  }
+  function loadEmployeesForScheduling() {
+    return _loadEmployeesForScheduling.apply(this, arguments);
+  }
+  function _loadEmployeesForScheduling() {
+    _loadEmployeesForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee24() {
+      var employees, _t23;
+      return _regenerator().w(function (_context24) {
+        while (1) switch (_context24.n) {
+          case 0:
+            if (employeeSelect) {
+              _context24.n = 1;
+              break;
+            }
+            return _context24.a(2);
+          case 1:
+            employeeSelect.innerHTML = '<option value="">Loading employees...</option>';
+            filterEmployeeSelect.innerHTML = '<option value="">All Employees</option>'; // Always have "All Employees" option
+            _context24.p = 2;
+            _context24.n = 3;
+            return apiRequest("GET", "/users?filterRole=employee");
+          case 3:
+            employees = _context24.v;
+            // Assuming an API to get employees
+            if (employees && employees.length > 0) {
+              employeeSelect.innerHTML = '<option value="">Select Employee</option>';
+              employees.forEach(function (emp) {
+                var option = document.createElement("option");
+                option.value = emp.user_id;
+                option.textContent = emp.full_name;
+                employeeSelect.appendChild(option);
+                // Add to filter dropdown as well
+                filterEmployeeSelect.appendChild(option.cloneNode(true));
+              });
+            } else {
+              employeeSelect.innerHTML = '<option value="">No employees available</option>';
+              filterEmployeeSelect.innerHTML = '<option value="">No employees available</option>';
+            }
+            _context24.n = 5;
+            break;
+          case 4:
+            _context24.p = 4;
+            _t23 = _context24.v;
+            console.error("Error loading employees for scheduling:", _t23);
+            employeeSelect.innerHTML = '<option value="">Error loading employees</option>';
+            filterEmployeeSelect.innerHTML = '<option value="">Error loading employees</option>';
+            showModalMessage("Failed to load employees: ".concat(_t23.message), true);
+          case 5:
+            return _context24.a(2);
+        }
+      }, _callee24, null, [[2, 4]]);
+    }));
+    return _loadEmployeesForScheduling.apply(this, arguments);
+  }
+  function loadLocationsForScheduling() {
+    return _loadLocationsForScheduling.apply(this, arguments);
+  }
+  function _loadLocationsForScheduling() {
+    _loadLocationsForScheduling = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee25() {
+      var locations, _t24;
+      return _regenerator().w(function (_context25) {
+        while (1) switch (_context25.n) {
+          case 0:
+            if (locationSelect) {
+              _context25.n = 1;
+              break;
+            }
+            return _context25.a(2);
+          case 1:
+            locationSelect.innerHTML = '<option value="">Loading locations...</option>';
+            filterLocationSelect.innerHTML = '<option value="">All Locations</option>'; // Always have "All Locations" option
+            _context25.p = 2;
+            _context25.n = 3;
+            return apiRequest("GET", "/locations");
+          case 3:
+            locations = _context25.v;
+            if (locations && locations.length > 0) {
+              locationSelect.innerHTML = '<option value="">Select Location</option>';
+              locations.forEach(function (loc) {
+                var option = document.createElement("option");
+                option.value = loc.location_id;
+                option.textContent = loc.location_name;
+                locationSelect.appendChild(option);
+                // Add to filter dropdown as well
+                filterLocationSelect.appendChild(option.cloneNode(true));
+              });
+            } else {
+              locationSelect.innerHTML = '<option value="">No locations available</option>';
+              filterLocationSelect.innerHTML = '<option value="">No locations available</option>';
+            }
+            _context25.n = 5;
+            break;
+          case 4:
+            _context25.p = 4;
+            _t24 = _context25.v;
+            console.error("Error loading locations for scheduling:", _t24);
+            locationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            filterLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            showModalMessage("Failed to load locations: ".concat(_t24.message), true);
+          case 5:
+            return _context25.a(2);
+        }
+      }, _callee25, null, [[2, 4]]);
+    }));
+    return _loadLocationsForScheduling.apply(this, arguments);
+  }
+  function renderCalendar() {
+    return _renderCalendar.apply(this, arguments);
+  }
+  function _renderCalendar() {
+    _renderCalendar = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee27() {
+      var existingDayElements, dates, i, startOfWeek, endOfWeek, filters, shifts, _t26;
+      return _regenerator().w(function (_context27) {
+        while (1) switch (_context27.n) {
+          case 0:
+            if (calendarGrid) {
+              _context27.n = 1;
+              break;
+            }
+            return _context27.a(2);
+          case 1:
+            // Clear existing day headers and cells (except the fixed time column)
+            existingDayElements = calendarGrid.querySelectorAll('.calendar-day-header:not([style*="grid-column: 1"]), .calendar-day-cell');
+            existingDayElements.forEach(function (el) {
+              return el.remove();
+            });
+            currentWeekDisplay.textContent = "".concat(currentWeekStart.format('MMM DD'), " - ").concat(moment(currentWeekStart).endOf('isoWeek').format('MMM DD, YYYY'));
+            dates = [];
+            for (i = 0; i < 7; i++) {
+              dates.push(moment(currentWeekStart).add(i, 'days'));
+            }
+
+            // Add Day Headers
+            dates.forEach(function (date, index) {
+              var dayHeader = document.createElement('div');
+              dayHeader.className = 'calendar-day-header';
+              dayHeader.style.gridColumn = "".concat(index + 2); // +2 because column 1 is for time
+              dayHeader.style.gridRow = '1';
+              dayHeader.innerHTML = "".concat(date.format('ddd'), "<br>").concat(date.format('MMM D'));
+              calendarGrid.appendChild(dayHeader);
+            });
+
+            // Add Day Cells
+            dates.forEach(function (date, index) {
+              var dayCell = document.createElement('div');
+              dayCell.className = 'calendar-day-cell';
+              dayCell.style.gridColumn = "".concat(index + 2); // +2 because column 1 is for time
+              dayCell.style.gridRow = "2 / span 24"; // Span 24 hours
+              dayCell.dataset.date = date.format('YYYY-MM-DD'); // Store date for later use
+              calendarGrid.appendChild(dayCell);
+            });
+
+            // Fetch and display shifts for the current week
+            startOfWeek = currentWeekStart.startOf('isoWeek').format('YYYY-MM-DDTHH:mm:ssZ');
+            endOfWeek = moment(currentWeekStart).endOf('isoWeek').format('YYYY-MM-DDTHH:mm:ssZ');
+            filters = {
+              start_date: startOfWeek,
+              end_date: endOfWeek,
+              employee_id: filterEmployeeSelect.value || null,
+              location_id: filterLocationSelect.value || null
+            };
+            _context27.p = 2;
+            _context27.n = 3;
+            return apiRequest("GET", "/schedules?".concat(new URLSearchParams(filters).toString()));
+          case 3:
+            shifts = _context27.v;
+            shifts.forEach(function (shift) {
+              var shiftStart = moment(shift.start_time);
+              var shiftEnd = moment(shift.end_time);
+              var shiftDate = shiftStart.format('YYYY-MM-DD');
+              var targetCell = calendarGrid.querySelector(".calendar-day-cell[data-date=\"".concat(shiftDate, "\"]"));
+              if (targetCell) {
+                var shiftDiv = document.createElement('div');
+                shiftDiv.className = "calendar-shift ".concat(moment().isAfter(shiftEnd) ? 'overdue' : ''); // Add 'overdue' class if shift has passed
+
+                // Calculate top and height for positioning
+                var startHour = shiftStart.hour();
+                var startMinute = shiftStart.minute();
+                var endHour = shiftEnd.hour();
+                var endMinute = shiftEnd.minute();
+                var topPosition = startHour * 30 + startMinute / 60 * 30; // 30px per hour
+                var durationHours = shiftEnd.diff(shiftStart, 'minutes') / 60;
+                var height = durationHours * 30; // 30px per hour
+
+                shiftDiv.style.top = "".concat(topPosition, "px");
+                shiftDiv.style.height = "".concat(height, "px");
+                shiftDiv.textContent = "".concat(shift.employee_name, " @ ").concat(shift.location_name, " (").concat(shiftStart.format('h:mm A'), " - ").concat(shiftEnd.format('h:mm A'), ")");
+                shiftDiv.addEventListener('click', /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee26() {
+                  var confirmDelete, _t25;
+                  return _regenerator().w(function (_context26) {
+                    while (1) switch (_context26.n) {
+                      case 0:
+                        _context26.n = 1;
+                        return showConfirmModal("\n                            <h4>Shift Details:</h4>\n                            <p><strong>Employee:</strong> ".concat(shift.employee_name, "</p>\n                            <p><strong>Location:</strong> ").concat(shift.location_name, "</p>\n                            <p><strong>Time:</strong> ").concat(shiftStart.format('MMM DD, h:mm A'), " - ").concat(shiftEnd.format('MMM DD, h:mm A'), "</p>\n                            <p><strong>Notes:</strong> ").concat(shift.notes || 'None', "</p>\n                            <p style=\"margin-top: 15px;\">Are you sure you want to delete this shift?</p>\n                        "), "Delete Shift");
+                      case 1:
+                        confirmDelete = _context26.v;
+                        if (!confirmDelete) {
+                          _context26.n = 5;
+                          break;
+                        }
+                        _context26.p = 2;
+                        _context26.n = 3;
+                        return apiRequest("DELETE", "/schedules/".concat(shift.schedule_id));
+                      case 3:
+                        showModalMessage("Shift deleted successfully!", false);
+                        renderCalendar(); // Re-render calendar
+                        _context26.n = 5;
+                        break;
+                      case 4:
+                        _context26.p = 4;
+                        _t25 = _context26.v;
+                        showModalMessage("Failed to delete shift: ".concat(_t25.message), true);
+                      case 5:
+                        return _context26.a(2);
+                    }
+                  }, _callee26, null, [[2, 4]]);
+                })));
+                targetCell.appendChild(shiftDiv);
+              }
+            });
+            _context27.n = 5;
+            break;
+          case 4:
+            _context27.p = 4;
+            _t26 = _context27.v;
+            console.error("Error loading schedules:", _t26);
+            calendarGrid.querySelector('p').textContent = "Error loading schedules: ".concat(_t26.message);
+          case 5:
+            return _context27.a(2);
+        }
+      }, _callee27, null, [[2, 4]]);
+    }));
+    return _renderCalendar.apply(this, arguments);
+  }
+  if (prevWeekBtn) {
+    prevWeekBtn.addEventListener("click", function () {
+      currentWeekStart.subtract(1, 'isoWeek');
+      renderCalendar();
+    });
+  }
+  if (nextWeekBtn) {
+    nextWeekBtn.addEventListener("click", function () {
+      currentWeekStart.add(1, 'isoWeek');
+      renderCalendar();
+    });
+  }
+  if (createShiftForm) {
+    createShiftForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23(e) {
+        var employeeId, locationId, startTime, endTime, notes, _t22;
+        return _regenerator().w(function (_context23) {
+          while (1) switch (_context23.n) {
+            case 0:
+              e.preventDefault();
+              employeeId = employeeSelect.value ? parseInt(employeeSelect.value, 10) : null;
+              locationId = locationSelect.value ? parseInt(locationSelect.value, 10) : null;
+              startTime = startTimeInput.value;
+              endTime = endTimeInput.value;
+              notes = notesInput.value.trim();
+              if (!(!employeeId || !locationId || !startTime || !endTime)) {
+                _context23.n = 1;
+                break;
+              }
+              showModalMessage("Please select an employee, location, and valid start/end times.", true);
+              return _context23.a(2);
+            case 1:
+              if (!(new Date(startTime) >= new Date(endTime))) {
+                _context23.n = 2;
+                break;
+              }
+              showModalMessage("Start time must be before end time.", true);
+              return _context23.a(2);
+            case 2:
+              _context23.p = 2;
+              _context23.n = 3;
+              return apiRequest("POST", "/schedules", {
+                employee_id: employeeId,
+                location_id: locationId,
+                start_time: startTime,
+                end_time: endTime,
+                notes: notes || null
+              });
+            case 3:
+              showModalMessage("Shift created successfully!", false);
+              createShiftForm.reset();
+              renderCalendar();
+              _context23.n = 5;
+              break;
+            case 4:
+              _context23.p = 4;
+              _t22 = _context23.v;
+              showModalMessage("Error creating shift: ".concat(_t22.message), true);
+            case 5:
+              return _context23.a(2);
+          }
+        }, _callee23, null, [[2, 4]]);
+      }));
+      return function (_x14) {
+        return _ref12.apply(this, arguments);
+      };
+    }());
+  }
+  if (applyFiltersBtn) {
+    applyFiltersBtn.addEventListener("click", function () {
+      renderCalendar(); // Re-render calendar with new filters
+    });
+  }
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener("click", function () {
+      filterEmployeeSelect.value = "";
+      filterLocationSelect.value = "";
+      filterStartDateInput.value = "";
+      filterEndDateInput.value = "";
+      renderCalendar(); // Re-render calendar with cleared filters
+    });
+  }
+
+  // Initial load
+  renderTimeColumn();
+  loadEmployeesForScheduling();
+  loadLocationsForScheduling();
+  renderCalendar();
+}
+
+/**
+ * Handles all client-side logic for the documents.html page.
+ */
+function handleDocumentsPage() {
+  // Mock authentication for self-contained demo
+  // In a real app, remove this mock and ensure user is logged in before calling this handler
+  if (!localStorage.getItem("authToken")) {
+    localStorage.setItem("authToken", "mock-auth-token"); // Set a mock token
+    localStorage.setItem("userRole", "super_admin"); // Set a mock role
+    // console.warn("Mock authentication applied for demo purposes.");
+  }
+  var uploadDocumentForm = document.getElementById("upload-document-form");
+  var documentTitleInput = document.getElementById("document-title");
+  var documentFileInput = document.getElementById("document-file");
+  var documentDescriptionInput = document.getElementById("document-description");
+  var documentListDiv = document.getElementById("document-list");
+  var uploadProgressContainer = document.getElementById("upload-progress-container");
+  var uploadProgressFill = document.getElementById("upload-progress-fill");
+  var uploadProgressText = document.getElementById("upload-progress-text");
+
+  /**
+   * Shows the upload progress bar and updates its display.
+   * @param {number} percentage - The upload progress percentage (0-100).
+   * @param {string} text - Optional text to display, e.g., "Uploading..."
+   */
+  function showUploadProgress(percentage) {
+    var text = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "".concat(percentage, "%");
+    if (uploadProgressContainer && uploadProgressFill && uploadProgressText) {
+      uploadProgressContainer.style.display = 'block';
+      uploadProgressText.style.display = 'block';
+      uploadProgressFill.style.width = "".concat(percentage, "%");
+      uploadProgressText.textContent = text;
+    }
+  }
+
+  /**
+   * Hides the upload progress bar.
+   */
+  function hideUploadProgress() {
+    if (uploadProgressContainer && uploadProgressText) {
+      uploadProgressContainer.style.display = 'none';
+      uploadProgressText.style.display = 'none';
+      uploadProgressFill.style.width = '0%';
+    }
+  }
+
+  /**
+   * Fetches and displays the list of uploaded documents.
+   * This function is mocked for this self-contained example.
+   * In a real app, it would make an actual API call.
+   */
+  function loadDocuments() {
+    return _loadDocuments.apply(this, arguments);
+  } // Handle document upload form submission
+  function _loadDocuments() {
+    _loadDocuments = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30() {
+      var dummyDocuments;
+      return _regenerator().w(function (_context30) {
+        while (1) switch (_context30.n) {
+          case 0:
+            if (documentListDiv) {
+              _context30.n = 1;
+              break;
+            }
+            return _context30.a(2);
+          case 1:
+            documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
+
+            // Mock API call for documents
+            try {
+              // In a real scenario, this would be: const documents = await apiRequest("GET", "/documents");
+              // For this self-contained example, we'll use a dummy fetch or local storage
+              dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
+              documentListDiv.innerHTML = '';
+              if (dummyDocuments.length === 0) {
+                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
+              } else {
+                dummyDocuments.forEach(function (doc) {
+                  var docItem = document.createElement("div");
+                  docItem.className = "document-item";
+                  var uploadDate = new Date(doc.upload_date).toLocaleDateString();
+                  docItem.innerHTML = "\n                        <h4>".concat(doc.title, "</h4>\n                        <p>File: ").concat(doc.file_name, "</p>\n                        <p>Description: ").concat(doc.description || 'N/A', "</p>\n                        <p>Uploaded: ").concat(uploadDate, "</p>\n                        <div class=\"actions\">\n                            <a href=\"").concat(doc.file_path || '#', "\" class=\"btn btn-secondary btn-sm\" target=\"_blank\" download>Download</a>\n                            <button class=\"btn-delete\" data-type=\"document\" data-id=\"").concat(doc.document_id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
+                  documentListDiv.appendChild(docItem);
+                });
+              }
+            } catch (error) {
+              console.error("Error loading documents:", error);
+              documentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading documents: ".concat(error.message, "</p>");
+            }
+          case 2:
+            return _context30.a(2);
+        }
+      }, _callee30);
+    }));
+    return _loadDocuments.apply(this, arguments);
+  }
+  if (uploadDocumentForm) {
+    uploadDocumentForm.addEventListener("submit", /*#__PURE__*/function () {
+      var _ref14 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29(e) {
+        var title, file, description, formData, loaded, total, interval;
+        return _regenerator().w(function (_context29) {
+          while (1) switch (_context29.n) {
+            case 0:
+              e.preventDefault();
+              title = documentTitleInput.value.trim();
+              file = documentFileInput.files[0];
+              description = documentDescriptionInput.value.trim();
+              if (!(!title || !file)) {
+                _context29.n = 1;
+                break;
+              }
+              showModalMessage("Please provide a document title and select a file.", true);
+              return _context29.a(2);
+            case 1:
+              formData = new FormData();
+              formData.append('title', title);
+              formData.append('document_file', file);
+              formData.append('description', description);
+              try {
+                showUploadProgress(0, 'Starting upload...');
+                // In a real application, you would use:
+                // const result = await apiRequest("POST", "/documents/upload", formData, true, event => { ... });
+                // For this self-contained demo, we'll simulate the upload and add to local storage.
+
+                // Simulate upload progress
+                loaded = 0;
+                total = file.size;
+                interval = setInterval(function () {
+                  loaded += total / 10; // Simulate 10 chunks
+                  var percentComplete = Math.min(100, Math.round(loaded * 100 / total));
+                  showUploadProgress(percentComplete, "Uploading: ".concat(percentComplete, "%"));
+                  if (loaded >= total) {
+                    clearInterval(interval);
+                    // Simulate API response delay
+                    setTimeout(/*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28() {
+                      var dummyDocuments, newDocId, newDocument;
+                      return _regenerator().w(function (_context28) {
+                        while (1) switch (_context28.n) {
+                          case 0:
+                            // Add to dummy storage
+                            dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
+                            newDocId = dummyDocuments.length > 0 ? Math.max.apply(Math, _toConsumableArray(dummyDocuments.map(function (d) {
+                              return d.document_id;
+                            }))) + 1 : 1;
+                            newDocument = {
+                              document_id: newDocId,
+                              title: title,
+                              description: description,
+                              file_name: file.name,
+                              file_path: URL.createObjectURL(file),
+                              // Create a temporary URL for demo download
+                              upload_date: new Date().toISOString()
+                            };
+                            dummyDocuments.push(newDocument);
+                            localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
+                            showModalMessage("Document uploaded successfully!", false);
+                            uploadDocumentForm.reset();
+                            hideUploadProgress();
+                            loadDocuments();
+                          case 1:
+                            return _context28.a(2);
+                        }
+                      }, _callee28);
+                    })), 500); // Small delay for "success" message
+                  }
+                }, 100); // Update every 100ms
+              } catch (error) {
+                console.error("Document upload error:", error);
+                showModalMessage("Failed to upload document: ".concat(error.message), true);
+                hideUploadProgress();
+              }
+            case 2:
+              return _context29.a(2);
+          }
+        }, _callee29);
+      }));
+      return function (_x15) {
+        return _ref14.apply(this, arguments);
+      };
+    }());
+  }
+
+  // Event listener for delete buttons (using delegation)
+  // This listener is now handled by the global `document.body.addEventListener("click", ...)` in `handleAdminPage`.
+  // We just need to ensure `handleAdminPage` is called on load or the event listener is moved to a shared location.
+  // For this app, `handleAdminPage` is called in the main `DOMContentLoaded` listener,
+  // so we will just need to make sure delete action from `handleAdminPage`
+  // correctly calls `handleDocumentsPage()` to refresh documents list.
+  // This is updated in the `handleAdminPage` delete listener above.
+
+  // Initial load of documents when the page loads
+  loadDocuments();
+}
+
+// Global DOMContentLoaded listener to call page-specific handlers
 document.addEventListener("DOMContentLoaded", function () {
   // Call setupSettingsDropdown on all pages that use it
   setupSettingsDropdown();
@@ -1890,13 +2664,7 @@ document.addEventListener("DOMContentLoaded", function () {
   } else if (path.includes("pricing.html")) {
     handlePricingPage();
   } else if (path.includes("documents.html")) {
-    // This is the call that's failing if handleDocumentsPage is undefined
-    if (typeof handleDocumentsPage === 'function') {
-      handleDocumentsPage();
-    } else {
-      console.error("Error: handleDocumentsPage function is not defined. JavaScript parsing issue or function missing.");
-      showModalMessage("Document page functionality could not load. Please try refreshing.", true);
-    }
+    handleDocumentsPage(); // Call the documents page handler directly
   } else if (path.includes("hiring.html")) {
     handleHiringPage();
   } else if (path.includes("scheduling.html")) {

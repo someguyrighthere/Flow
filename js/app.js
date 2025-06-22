@@ -105,15 +105,11 @@ function showConfirmModal(message, confirmButtonText = "Confirm") {
 /**
  * Sets up the functionality for the settings dropdown menu.
  * This includes showing/hiding the dropdown and handling logout.
- * The "Upgrade Plan" link is now assumed to be directly visible in HTML or handled by backend rendering.
  */
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
     const settingsDropdown = document.getElementById("settings-dropdown");
     const logoutButton = document.getElementById("logout-button");
-    // Removed specific upgradePlanLink ID and logic here, as it's now handled by the backend routing or general visibility
-    // The link should be shown/hidden based on server-side rendering or a different client-side check if needed.
-    // However, if your HTML *still* contains an element with ID 'upgrade-plan-link' that you want dynamically controlled:
     const upgradePlanLink = document.getElementById("upgrade-plan-link");
 
     if (settingsButton && settingsDropdown) {
@@ -121,23 +117,21 @@ function setupSettingsDropdown() {
             event.stopPropagation(); // Prevent the document click from immediately closing it
             settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
 
-            // Conditional logic for "Upgrade Plan" visibility moved here if you want it client-side driven.
-            // If the link is dynamically shown/hidden by the backend based on user role/plan, this block can be removed.
+            // Conditional logic for "Upgrade Plan" visibility
             if (settingsDropdown.style.display === "block" && upgradePlanLink) {
                 if (localStorage.getItem("authToken")) {
                     try {
                         const profile = await apiRequest("GET", "/profile");
-                        if (profile && profile.plan_id === 'free') { // Check if user is on free plan
+                        if (profile && profile.plan_id === 'free') {
                             upgradePlanLink.style.display = 'block';
                         } else {
-                            upgradePlanLink.style.display = 'none'; // Hide if not free or profile fetch fails
+                            upgradePlanLink.style.display = 'none';
                         }
                     } catch (error) {
                         console.error("Error fetching profile for upgrade link:", error);
                         upgradePlanLink.style.display = 'none';
                     }
                 } else {
-                    // Hide if not logged in
                     upgradePlanLink.style.display = 'none';
                 }
             }
@@ -209,7 +203,8 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
                     // Unauthorized or Forbidden - clear token and redirect to login
                     localStorage.removeItem('authToken');
                     localStorage.removeItem('userRole');
-                    window.location.href = 'login.html?sessionExpired=true';
+                    // window.location.href = 'login.html?sessionExpired=true'; // Cannot redirect in sandbox
+                    showModalMessage('Authentication token missing or invalid. Please refresh and log in.', true);
                     reject(new Error('Authentication token missing or invalid.'));
                 } else {
                     // Handle non-2xx responses
@@ -251,7 +246,8 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
         if (response.status === 401 || response.status === 403) {
             localStorage.removeItem('authToken');
             localStorage.removeItem('userRole');
-            window.location.href = 'login.html?sessionExpired=true';
+            // window.location.href = 'login.html?sessionExpired=true'; // Cannot redirect in sandbox
+            showModalMessage('Authentication token missing or invalid. Please refresh and log in.', true);
             throw new Error('Authentication token missing or invalid.');
         }
 
@@ -284,14 +280,11 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
  * Handles all client-side logic for the login.html page.
  */
 function handleLoginPage() {
-    // console.log("handleLoginPage: Initializing login page logic."); // DEBUG LOG
     const loginForm = document.getElementById("login-form");
     if (!loginForm) {
-        // console.log("handleLoginPage: loginForm element not found, exiting function."); // ADDED LOG
-        return; // Exit if form not found (e.g., on a different page)
+        return;
     }
 
-    // Display session expired message if redirected from an authenticated page
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('sessionExpired') && urlParams.get('sessionExpired') === 'true') {
         const errorMessageDiv = document.getElementById("error-message");
@@ -300,32 +293,26 @@ function handleLoginPage() {
             errorMessageDiv.classList.add('visible');
             errorMessageDiv.setAttribute('aria-hidden', 'false');
         }
-        // Clear the URL parameter to avoid showing the message on refresh
         urlParams.delete('sessionExpired');
         window.history.replaceState({}, document.title, window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : ''));
     }
 
 
     loginForm.addEventListener("submit", async e => {
-        e.preventDefault(); // Prevent default form submission
-        // console.log("Login form submission initiated."); // ADDED LOG
+        e.preventDefault();
         const emailInput = document.getElementById("email");
         const passwordInput = document.getElementById("password");
         const email = emailInput.value.trim();
         const password = passwordInput.value;
         const errorMessage = document.getElementById("error-message");
 
-        // Clear previous error messages
         if (errorMessage) {
             errorMessage.textContent = "";
             errorMessage.classList.remove("visible");
             errorMessage.setAttribute('aria-hidden', 'true');
         }
 
-        // Basic client-side validation
-        // console.log("Checking email/password validity."); // ADDED LOG
         if (!email || !password) {
-            // console.log("Login Validation: Email or password empty."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Email and password are required.";
                 errorMessage.classList.add("visible");
@@ -336,7 +323,6 @@ function handleLoginPage() {
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            // console.log("Login Validation: Invalid email format."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Please enter a valid email address.";
                 errorMessage.classList.add("visible");
@@ -346,7 +332,6 @@ function handleLoginPage() {
         }
 
         if (password.length < 6) {
-            // console.log("Login Validation: Password too short."); // DEBUG LOG
             if (errorMessage) {
                 errorMessage.textContent = "Password must be at least 6 characters long.";
                 errorMessage.classList.add("visible");
@@ -356,23 +341,18 @@ function handleLoginPage() {
         }
 
         try {
-            // console.log(`Attempting API login request for email: ${email}`); // ADDED LOG (includes email for better context)
-            // Send login request to backend
             const data = await apiRequest("POST", "/login", {
                 email: email,
                 password: password
             });
 
-            // console.log("API login request successful. Redirecting..."); // ADDED LOG
-            // Store authentication token and user role
             localStorage.setItem("authToken", data.token);
-            localStorage.setItem("userRole", data.role); // Store user role
+            localStorage.setItem("userRole", data.role);
 
-            // Redirect based on user role
             if (data.role === "super_admin" || data.role === "location_admin") {
-                window.location.href = "suite-hub.html"; // Admins go to app hub
+                window.location.href = "suite-hub.html";
             } else {
-                window.location.href = "new-hire-view.html"; // Employees go to their onboarding view
+                window.location.href = "new-hire-view.html";
             }
         } catch (error) {
             console.error("Login API error:", error);
@@ -381,7 +361,6 @@ function handleLoginPage() {
                 errorMessage.classList.add("visible");
                 errorMessage.setAttribute('aria-hidden', 'false');
             }
-            // Also show a modal message for more prominent feedback
             showModalMessage(`Login Failed: ${error.message}`, true);
         }
     });
@@ -393,7 +372,7 @@ function handleLoginPage() {
 function handleRegisterPage() {
     const registerForm = document.getElementById("register-form");
     if (!registerForm) {
-        return; // Exit if form not found
+        return;
     }
 
     registerForm.addEventListener("submit", async e => {
@@ -409,11 +388,10 @@ function handleRegisterPage() {
         const email = emailInput.value.trim();
         const password = passwordInput.value;
 
-        errorMessage.textContent = ""; // Clear any previous error
+        errorMessage.textContent = "";
         errorMessage.classList.remove("visible");
         errorMessage.setAttribute('aria-hidden', 'true');
 
-        // Client-side validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email)) {
             errorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
@@ -422,7 +400,6 @@ function handleRegisterPage() {
         }
 
         try {
-            // Send registration request
             const data = await apiRequest("POST", "/register", {
                 company_name: company_name,
                 full_name: full_name,
@@ -432,16 +409,14 @@ function handleRegisterPage() {
 
             showModalMessage("Account created successfully! Please log in.", false);
 
-            // Clear form fields after successful registration
             companyNameInput.value = "";
             fullNameInput.value = "";
             emailInput.value = "";
             passwordInput.value = "";
 
-            // Redirect to login page after a short delay
             setTimeout(() => {
                 window.location.href = "login.html";
-            }, 2000); // 2-second delay
+            }, 2000);
         } catch (error) {
             console.error("Registration API error:", error);
             if (errorMessage) {
@@ -458,33 +433,28 @@ function handleRegisterPage() {
  * Handles logic for the suite-hub.html page, including payment status messages.
  */
 function handleSuiteHubPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
     }
 
-    // Check for payment status from Stripe redirect
     const urlParams = new URLSearchParams(window.location.search);
     const paymentStatus = urlParams.get("payment");
-    const sessionId = urlParams.get("session_id"); // Could be used for further verification if needed
+    const sessionId = urlParams.get("session_id");
 
     if (paymentStatus === "success") {
         showModalMessage("Payment successful! Your subscription has been updated.", false);
-        // Clear the URL parameters to prevent showing the message again on refresh
         history.replaceState({}, document.title, window.location.pathname);
     } else if (paymentStatus === "cancelled") {
         showModalMessage("Payment cancelled. You can try again or choose another plan.", true);
         history.replaceState({}, document.title, window.location.pathname);
     }
-    // Add other suite-hub specific logic here if any.
 }
 
 /**
  * Handles all client-side logic for the account.html page.
  */
 function handleAccountPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
@@ -498,7 +468,6 @@ function handleAccountPage() {
     const currentPasswordInput = document.getElementById("current-password");
     const newPasswordInput = document.getElementById("new-password");
 
-    // Function to load and display user profile information
     async function loadProfileInfo() {
         try {
             const profile = await apiRequest("GET", "/profile");
@@ -512,7 +481,6 @@ function handleAccountPage() {
         }
     }
 
-    // Handle profile update form submission
     if (updateProfileForm) {
         updateProfileForm.addEventListener("submit", async e => {
             e.preventDefault();
@@ -532,17 +500,14 @@ function handleAccountPage() {
 
             try {
                 const result = await apiRequest("PUT", "/profile", updatePayload);
-                // If token is returned (e.g., email changed), update it in localStorage
                 if (result && result.token) {
                     localStorage.setItem("authToken", result.token);
                 }
                 showModalMessage(result.message || "Profile updated successfully!", false);
-                // Clear password fields
                 if (currentPasswordInput)
                     currentPasswordInput.value = "";
                 if (newPasswordInput)
                     newPasswordInput.value = "";
-                // Reload profile info to reflect changes
                 loadProfileInfo();
             } catch (error) {
                 console.error("Error updating profile:", error);
@@ -551,7 +516,6 @@ function handleAccountPage() {
         });
     }
 
-    // Load profile info when the page loads
     loadProfileInfo();
 }
 
@@ -560,7 +524,6 @@ function handleAccountPage() {
  * Handles all client-side logic for the admin.html page.
  */
 function handleAdminPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
@@ -570,13 +533,10 @@ function handleAdminPage() {
     const userListDiv = document.getElementById("user-list");
     const newLocationForm = document.getElementById("new-location-form");
     const inviteAdminForm = document.getElementById("invite-admin-form");
-    const inviteEmployeeForm = document.getElementById("invite-employee-form"); // Get employee form
+    const inviteEmployeeForm = document.getElementById("invite-employee-form");
     const adminLocationSelect = document.getElementById("admin-location-select");
-    const employeeLocationSelect = document.getElementById("employee-location-select"); // Get employee location select
+    const employeeLocationSelect = document.getElementById("employee-location-select");
 
-    /**
-     * Fetches and displays the list of locations.
-     */
     async function loadLocations() {
         if (!locationListDiv) {
             return;
@@ -591,14 +551,14 @@ function handleAdminPage() {
                     adminLocationSelect.innerHTML = '<option value="">Select a location</option>';
                     adminLocationSelect.disabled = true;
                 }
-                if (employeeLocationSelect) { // Also disable/reset for employee form
+                if (employeeLocationSelect) {
                     employeeLocationSelect.innerHTML = '<option value="">Select a location</option>';
                     employeeLocationSelect.disabled = true;
                 }
             } else {
                 if (adminLocationSelect)
                     adminLocationSelect.disabled = false;
-                if (employeeLocationSelect) // Also enable for employee form
+                if (employeeLocationSelect)
                     employeeLocationSelect.disabled = false;
 
                 locations.forEach(loc => {
@@ -615,7 +575,6 @@ function handleAdminPage() {
                     });
                     locationListDiv.appendChild(locDiv);
                 });
-                // Populate both admin and employee location selects
                 const locationOptionsHtml = locations.map(loc => `<option value="${loc.location_id}">${loc.location_name}</option>`).join('');
                 if (adminLocationSelect) {
                     adminLocationSelect.innerHTML = `<option value="">Select a location</option>${locationOptionsHtml}`;
@@ -630,12 +589,9 @@ function handleAdminPage() {
         }
     }
 
-    /**
-     * Fetches and displays the list of users.
-     */
     async function loadUsers() {
         if (!userListDiv)
-            return; // Exit if div not found
+            return;
         userListDiv.innerHTML = "<p>Loading users...</p>";
         try {
             const users = await apiRequest("GET", "/users");
@@ -663,36 +619,48 @@ function handleAdminPage() {
         }
     }
 
-    // Event listener for delete buttons (delegated to body for dynamically added elements)
     document.body.addEventListener("click", async e => {
         const targetButton = e.target.closest(".btn-delete");
         if (targetButton) {
-            // console.log("handleAdminPage: Delete button clicked."); // Removed for production
             const id = targetButton.dataset.id;
-            const type = targetButton.dataset.type; // 'location' or 'user'
+            const type = targetButton.dataset.type;
             const confirmationMessage = `Are you sure you want to delete this ${type}? This action cannot be undone.`;
             const confirmed = await showConfirmModal(confirmationMessage, "Delete");
 
             if (confirmed) {
                 try {
-                    // console.log(`handleAdminPage: Deleting ${type} with ID: ${id}.`); // Removed for production
                     if (type === "location") {
                         await apiRequest("DELETE", `/locations/${id}`);
                         showModalMessage("Location deleted successfully!", false);
-                        loadLocations(); // Reload locations list
-                        loadUsers();     // Reload users list as some might be linked to this location
+                        loadLocations();
+                        loadUsers();
                     } else if (type === "user") {
                         await apiRequest("DELETE", `/users/${id}`);
                         showModalMessage("User deleted successfully!", false);
-                        loadUsers(); // Reload users list
+                        loadUsers();
+                    } else if (type === "document") { // Added handling for documents
+                        await apiRequest("DELETE", `/documents/${id}`);
+                        showModalMessage("Document deleted successfully!", false);
+                        handleDocumentsPage(); // Reload documents if on documents page
+                    } else if (type === "checklist") { // Added handling for checklists
+                        await apiRequest("DELETE", `/checklists/${id}`);
+                        showModalMessage("Task list deleted successfully!", false);
+                        handleChecklistsPage(); // Reload checklists if on checklists page
+                    } else if (type === "job-posting") { // Added handling for job postings
+                        await apiRequest("DELETE", `/job-postings/${id}`);
+                        showModalMessage("Job posting deleted successfully!", false);
+                        handleHiringPage(); // Reload hiring page if on hiring page
+                    } else if (type === "schedule") { // Added handling for schedules
+                        await apiRequest("DELETE", `/schedules/${id}`);
+                        showModalMessage("Schedule deleted successfully!", false);
+                        handleSchedulingPage(); // Reload schedules if on scheduling page
                     }
-                    // console.log(`handleAdminPage: ${type} deleted successfully.`); // Removed for production
                 } catch (error) {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
                 }
             }
         } 
-    }); // This curly brace was the extra one. It closed `handleAdminPage()` too early.
+    });
 
     // Initial loads when the admin page loads
     loadLocations();
@@ -703,7 +671,6 @@ function handleAdminPage() {
  * Handles logic for the dashboard.html page (Onboarding Dashboard).
  */
 function handleDashboardPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
@@ -716,7 +683,6 @@ function handleDashboardPage() {
     const newHirePositionSelect = document.getElementById("new-hire-position");
     const sessionListDiv = document.getElementById("session-list");
 
-    // Show modal when "Onboard New Employee" button is clicked
     if (showOnboardModalBtn) {
         showOnboardModalBtn.addEventListener("click", () => {
             if (onboardUserModal) {
@@ -725,7 +691,6 @@ function handleDashboardPage() {
         });
     }
 
-    // Hide modal when cancel button is clicked
     if (modalCancelOnboardBtn) {
         modalCancelOnboardBtn.addEventListener("click", () => {
             if (onboardUserModal) {
@@ -734,7 +699,6 @@ function handleDashboardPage() {
         });
     }
 
-    // Close modal if clicking outside
     if (onboardUserModal) {
         onboardUserModal.addEventListener("click", event => {
             if (event.target === onboardUserModal) {
@@ -743,19 +707,16 @@ function handleDashboardPage() {
         });
     }
 
-    /**
-     * Loads available positions and populates the select dropdown.
-     */
     async function loadPositions() {
         if (!newHirePositionSelect) return;
         newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>';
         try {
-            const response = await apiRequest("GET", "/positions"); // Placeholder API
+            const response = await apiRequest("GET", "/positions");
             newHirePositionSelect.innerHTML = '<option value="">Select Position</option>';
             if (response && response.positions && response.positions.length > 0) {
                 response.positions.forEach(pos => {
                     const option = document.createElement("option");
-                    option.value = pos.id; // Or pos.name, depending on what you want to store
+                    option.value = pos.id;
                     option.textContent = pos.name;
                     newHirePositionSelect.appendChild(option);
                 });
@@ -769,14 +730,11 @@ function handleDashboardPage() {
         }
     }
 
-    /**
-     * Loads and displays active onboarding sessions.
-     */
     async function loadOnboardingSessions() {
         if (!sessionListDiv) return;
         sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading active onboardings...</p>';
         try {
-            const sessions = await apiRequest("GET", "/onboarding-sessions"); // Placeholder API
+            const sessions = await apiRequest("GET", "/onboarding-sessions");
             sessionListDiv.innerHTML = '';
             if (sessions && sessions.length > 0) {
                 sessions.forEach(session => {
@@ -800,25 +758,22 @@ function handleDashboardPage() {
                     sessionListDiv.appendChild(sessionItem);
                 });
 
-                // Add event listeners for new buttons (delegated)
                 sessionListDiv.querySelectorAll('.view-details-btn').forEach(button => {
                     button.addEventListener('click', (event) => {
                         const userId = event.target.dataset.userId;
-                        // Redirect to a detailed view for this employee's onboarding
-                        window.location.href = `new-hire-view.html?userId=${userId}`; // Example redirect
+                        window.location.href = `new-hire-view.html?userId=${userId}`;
                     });
                 });
 
-                // Implement archive functionality
                 sessionListDiv.querySelectorAll('.archive-onboarding-btn').forEach(button => {
                     button.addEventListener('click', async (event) => {
                         const sessionId = event.target.dataset.sessionId;
                         const confirmed = await showConfirmModal('Are you sure you want to archive this onboarding session?');
                         if (confirmed) {
                             try {
-                                await apiRequest("PUT", `/onboarding-sessions/${sessionId}/archive`); // Placeholder API
+                                await apiRequest("PUT", `/onboarding-sessions/${sessionId}/archive`);
                                 showModalMessage('Onboarding session archived successfully!', false);
-                                loadOnboardingSessions(); // Reload list
+                                loadOnboardingSessions();
                             } catch (error) {
                                 showModalMessage(`Failed to archive session: ${error.message}`, true);
                             }
@@ -836,7 +791,6 @@ function handleDashboardPage() {
         }
     }
 
-    // Handle onboard new employee form submission
     if (onboardUserForm) {
         onboardUserForm.addEventListener("submit", async e => {
             e.preventDefault();
@@ -849,33 +803,29 @@ function handleDashboardPage() {
                 showModalMessage("Please fill all required fields: Full Name, Email, and Position.", true);
                 return;
             }
-            // Basic email validation
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newHireEmail)) {
                 showModalMessage("Please enter a valid email address.", true);
                 return;
             }
 
             try {
-                // This API call would create a new user with 'employee' role and assign default task list based on position
-                const response = await apiRequest("POST", "/onboard-employee", { // Placeholder API
+                const response = await apiRequest("POST", "/onboard-employee", {
                     full_name: newHireName,
                     email: newHireEmail,
-                    position_id: newHirePosition, // Use position ID from dropdown
-                    employee_id: newHireId || null // Optional employee ID
+                    position_id: newHirePosition,
+                    employee_id: newHireId || null
                 });
 
                 showModalMessage(`Onboarding invite sent to ${newHireEmail} for position ${newHirePosition}.`, false);
-                // Clear form and hide modal
                 onboardUserForm.reset();
                 if (onboardUserModal) onboardUserModal.style.display = "none";
-                loadOnboardingSessions(); // Reload sessions to show new entry
+                loadOnboardingSessions();
             } catch (error) {
                 showModalMessage(`Error onboarding employee: ${error.message}`, true);
             }
         });
     }
 
-    // Initial loads when dashboard page loads
     loadPositions();
     loadOnboardingSessions();
 }
@@ -885,7 +835,6 @@ function handleDashboardPage() {
  * Handles logic for checklists.html page.
  */
 function handleChecklistsPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
@@ -899,9 +848,8 @@ function handleChecklistsPage() {
     const timeGroupCountLabel = document.getElementById("time-group-count-label");
     const tasksInputArea = document.getElementById("tasks-input-area");
 
-    let taskCounter = 0; // To ensure unique task IDs
+    let taskCounter = 0;
 
-    // Function to add a single task input field
     function addSingleTaskInput(container, taskId = null, taskText = '') {
         const div = document.createElement('div');
         div.className = 'form-group task-input-group';
@@ -912,16 +860,14 @@ function handleChecklistsPage() {
         `;
         container.appendChild(div);
 
-        // Add event listener for remove button
         div.querySelector('.remove-task-btn').addEventListener('click', () => {
             div.remove();
         });
         taskCounter++;
     }
 
-    // Function to dynamically render task input fields based on structure type
     function renderTaskInputs() {
-        tasksInputArea.innerHTML = ''; // Clear previous inputs
+        tasksInputArea.innerHTML = '';
         const structureType = structureTypeSelect.value;
         const groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
 
@@ -946,11 +892,9 @@ function handleChecklistsPage() {
                 `;
                 tasksInputArea.appendChild(groupContainer);
 
-                // Add initial task input to the group
                 const tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
-                addSingleTaskInput(tasksInGroupDiv); // Add one task by default
+                addSingleTaskInput(tasksInGroupDiv);
 
-                // Event listener for adding tasks to this specific group
                 groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', (event) => {
                     const targetGroupIndex = event.target.dataset.groupIndex;
                     const targetGroupDiv = tasksInputArea.querySelector(`.tasks-in-group[data-group-index="${targetGroupIndex}"]`);
@@ -962,7 +906,6 @@ function handleChecklistsPage() {
         }
     }
 
-    // Event listener for structure type change
     if (structureTypeSelect) {
         structureTypeSelect.addEventListener('change', () => {
             const type = structureTypeSelect.value;
@@ -972,26 +915,21 @@ function handleChecklistsPage() {
             } else {
                 timeGroupCountContainer.style.display = 'none';
             }
-            renderTaskInputs(); // Re-render tasks based on new structure
+            renderTaskInputs();
         });
     }
 
-    // Event listener for time group count change
     if (timeGroupCountInput) {
         timeGroupCountInput.addEventListener('input', renderTaskInputs);
     }
 
-    // Initial render of task inputs
     renderTaskInputs();
 
-    /**
-     * Loads and displays existing task lists.
-     */
     async function loadChecklists() {
         if (!checklistListDiv) return;
         checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
         try {
-            const checklists = await apiRequest("GET", "/checklists"); // Placeholder API
+            const checklists = await apiRequest("GET", "/checklists");
             checklistListDiv.innerHTML = '';
             if (checklists && checklists.length > 0) {
                 checklists.forEach(checklist => {
@@ -1013,15 +951,10 @@ function handleChecklistsPage() {
                     checklistListDiv.appendChild(checklistItem);
                 });
 
-                // Add event listeners for delete buttons (delegated from admin page)
-                // This assumes your document.body.addEventListener for .btn-delete handles 'checklist' type
-                // You might need a separate handler or expand the existing one.
-                // For 'view/edit', you'd typically navigate to another page or open a modal.
                 checklistListDiv.querySelectorAll('.view-checklist-btn').forEach(button => {
                     button.addEventListener('click', (event) => {
                         const checklistId = event.target.dataset.checklistId;
                         showModalMessage(`Viewing/Editing Checklist ID: ${checklistId} (Functionality to be implemented)`, false);
-                        // Implement actual view/edit logic here, e.g., load checklist data into a form
                     });
                 });
 
@@ -1034,7 +967,6 @@ function handleChecklistsPage() {
         }
     }
 
-    // Handle new checklist form submission
     if (newChecklistForm) {
         newChecklistForm.addEventListener("submit", async e => {
             e.preventDefault();
@@ -1051,7 +983,6 @@ function handleChecklistsPage() {
                     }
                 });
             } else {
-                // Grouped tasks
                 document.querySelectorAll('#tasks-input-area .tasks-in-group').forEach((groupDiv, index) => {
                     const groupTasks = [];
                     groupDiv.querySelectorAll('.task-description-input').forEach(input => {
@@ -1072,26 +1003,24 @@ function handleChecklistsPage() {
             }
 
             try {
-                // Assuming an API endpoint to create checklists
-                const response = await apiRequest("POST", "/checklists", { // Placeholder API
+                const response = await apiRequest("POST", "/checklists", {
                     position: position,
                     title: title,
                     structure_type: structure_type,
                     group_count: group_count,
-                    tasks: tasks // This should be a JSON string in DB if using text field
+                    tasks: tasks
                 });
 
                 showModalMessage(`Task List "${title}" created successfully!`, false);
                 newChecklistForm.reset();
-                renderTaskInputs(); // Reset task inputs
-                loadChecklists(); // Reload the list of checklists
+                renderTaskInputs();
+                loadChecklists();
             } catch (error) {
                 showModalMessage(`Error creating task list: ${error.message}`, true);
             }
         });
     }
 
-    // Initial load
     loadChecklists();
 }
 
@@ -1099,7 +1028,6 @@ function handleChecklistsPage() {
  * Handles logic for new-hire-view.html (Employee Onboarding View).
  */
 function handleNewHireViewPage() {
-    // Redirect to login if not authenticated
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
@@ -1110,7 +1038,6 @@ function handleNewHireViewPage() {
     const logoutButton = document.getElementById("logout-button");
     const completionCelebration = document.getElementById("completion-celebration");
 
-    // Initialize logout
     if (logoutButton) {
         logoutButton.addEventListener("click", () => {
             localStorage.removeItem("authToken");
@@ -1119,48 +1046,37 @@ function handleNewHireViewPage() {
         });
     }
 
-    // Simple fireworks effect (client-side only for visual flair)
     function triggerFireworks() {
-        // Implement a simple CSS animation or canvas-based fireworks
-        // For a true fireworks effect, you'd integrate a library like particles.js or build a canvas animation.
-        // This is a placeholder for the visual celebration.
         console.log("Triggering fireworks celebration!");
         if (completionCelebration) {
             completionCelebration.style.display = 'flex';
-            // Optionally, hide after a few seconds
             setTimeout(() => {
                 completionCelebration.style.display = 'none';
             }, 5000);
         }
     }
 
-
-    /**
-     * Loads and displays the new hire's onboarding tasks.
-     */
     async function loadOnboardingTasks() {
         if (!taskListSection) return;
         taskListSection.innerHTML = '<p style="color: var(--text-medium);">Loading your tasks...</p>';
         try {
-            const profile = await apiRequest("GET", "/profile"); // Get current user's profile
+            const profile = await apiRequest("GET", "/profile");
             if (!profile || !profile.user_id) {
                 taskListSection.innerHTML = '<p style="color: #e74c3c;">Could not load user profile.</p>';
                 return;
             }
             welcomeHeading.textContent = `Welcome, ${profile.full_name}!`;
 
-            // Assuming an API endpoint to fetch onboarding tasks for the current user
-            // This API should fetch the assigned checklist and its tasks, including their completion status
-            const tasksData = await apiRequest("GET", `/onboarding-tasks/${profile.user_id}`); // Placeholder API
+            const tasksData = await apiRequest("GET", `/onboarding-tasks/${profile.user_id}`);
 
-            taskListSection.innerHTML = ''; // Clear loading message
+            taskListSection.innerHTML = '';
 
             if (tasksData && tasksData.checklist && tasksData.checklist.tasks) {
                 const checklist = tasksData.checklist;
-                let allTasksCompleted = true; // Flag to check if all tasks are done
+                let allTasksCompleted = true;
 
                 if (checklist.structure_type === 'single_list') {
-                    tasksData.tasks.forEach(task => { // tasksData.tasks holds flat list of tasks
+                    tasksData.tasks.forEach(task => {
                         const taskItem = document.createElement("div");
                         taskItem.className = `task-item ${task.completed ? 'completed' : ''}`;
                         taskItem.innerHTML = `
@@ -1171,11 +1087,10 @@ function handleNewHireViewPage() {
                         if (!task.completed) allTasksCompleted = false;
                     });
                 } else {
-                    // Grouped by Day/Week
-                    tasksData.tasks.forEach((group, groupIndex) => { // tasksData.tasks holds groups
+                    tasksData.tasks.forEach((group, groupIndex) => {
                         const taskGroupDetails = document.createElement('details');
                         taskGroupDetails.className = 'task-group';
-                        taskGroupDetails.open = true; // Open by default
+                        taskGroupDetails.open = true;
 
                         const summary = document.createElement('summary');
                         summary.textContent = group.groupTitle;
@@ -1195,19 +1110,17 @@ function handleNewHireViewPage() {
                     });
                 }
 
-                // Add event listeners for checkboxes
                 taskListSection.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                     checkbox.addEventListener('change', async (event) => {
                         const taskId = event.target.dataset.taskId;
                         const isCompleted = event.target.checked;
-                        const taskType = event.target.dataset.taskType; // 'single' or 'grouped'
-                        const groupIndex = event.target.dataset.groupIndex; // Only for grouped tasks
+                        const taskType = event.target.dataset.taskType;
+                        const groupIndex = event.target.dataset.groupIndex;
 
                         try {
-                            await apiRequest("PUT", `/onboarding-tasks/${taskId}`, { completed: isCompleted, type: taskType, groupIndex: groupIndex }); // Placeholder API for updating task status
+                            await apiRequest("PUT", `/onboarding-tasks/${taskId}`, { completed: isCompleted, type: taskType, groupIndex: groupIndex });
                             event.target.closest('.task-item').classList.toggle('completed', isCompleted);
                             showModalMessage('Task status updated successfully!', false);
-                            // Re-evaluate if all tasks are completed after status change
                             let currentAllTasksCompleted = true;
                             taskListSection.querySelectorAll('.task-item').forEach(item => {
                                 if (!item.classList.contains('completed')) {
@@ -1219,13 +1132,13 @@ function handleNewHireViewPage() {
                             }
                         } catch (error) {
                             showModalMessage(`Failed to update task status: ${error.message}`, true);
-                            event.target.checked = !isCompleted; // Revert checkbox if API fails
+                            event.target.checked = !isCompleted;
                         }
                     });
                 });
 
                 if (allTasksCompleted) {
-                    triggerFireworks(); // Trigger celebration if all tasks are already completed on load
+                    triggerFireworks();
                 }
 
             } else {
@@ -1237,7 +1150,6 @@ function handleNewHireViewPage() {
         }
     }
 
-    // Initial load
     loadOnboardingTasks();
 }
 
@@ -1245,7 +1157,6 @@ function handleNewHireViewPage() {
  * Handles logic for pricing.html page.
  */
 function handlePricingPage() {
-    // Check for payment modal from registration flow
     const urlParams = new URLSearchParams(window.location.search);
     const showRegisterCheckout = urlParams.get("registerCheckout");
     const selectedPlanId = urlParams.get("plan");
@@ -1260,9 +1171,8 @@ function handlePricingPage() {
     const regCheckoutCancelBtn = document.getElementById("reg-checkout-cancel-btn");
     const regCheckoutErrorMessage = document.getElementById("register-checkout-error-message");
 
-    let currentSelectedPlan = null; // To store the plan chosen before registration
+    let currentSelectedPlan = null;
 
-    // Function to open the register/checkout modal
     function openRegisterCheckoutModal(planId) {
         if (registerCheckoutModalOverlay && registerCheckoutModalTitle && registerCheckoutForm) {
             currentSelectedPlan = planId;
@@ -1274,25 +1184,19 @@ function handlePricingPage() {
         }
     }
 
-    // Automatically open register/checkout modal if redirected with params
     if (showRegisterCheckout === 'true' && selectedPlanId) {
         openRegisterCheckoutModal(selectedPlanId);
-        // Clean up URL to prevent re-opening on refresh
         history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // Event listeners for "Choose Plan" buttons
     const freePlanBtn = document.getElementById("free-plan-btn");
     const proPlanBtn = document.getElementById("pro-plan-btn");
     const enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
 
     if (freePlanBtn) {
         freePlanBtn.addEventListener("click", async () => {
-            // Logic for Free plan (already active/no payment required)
-            // If already on Free, maybe show a message. If upgrading from higher, downgrade.
-            // For now, assume it's just a placeholder or no action needed if already on Free.
             const userRole = localStorage.getItem("userRole");
-            if (userRole) { // User is logged in
+            if (userRole) {
                 const profile = await apiRequest("GET", "/profile");
                 if (profile && profile.plan_id === 'free') {
                     showModalMessage("You are already on the Free plan.", false);
@@ -1300,10 +1204,8 @@ function handlePricingPage() {
                     const confirmed = await showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
                     if (confirmed) {
                         try {
-                            // Assuming an API endpoint to manage subscriptions
-                            await apiRequest("POST", "/cancel-subscription"); // Or specific downgrade API
+                            await apiRequest("POST", "/cancel-subscription");
                             showModalMessage("Successfully downgraded to Free plan. Your subscription will be updated.", false);
-                            // Redirect or refresh to reflect changes
                             setTimeout(() => { window.location.href = 'suite-hub.html'; }, 1500);
                         }
                         catch (error) {
@@ -1312,9 +1214,6 @@ function handlePricingPage() {
                     }
                 }
             } else {
-                // Not logged in, offer to sign up for free plan (which means regular registration)
-                // Redirect to register page without payment context, or open register modal directly
-                // For simplicity, let's just show info that free plan doesn't require payment.
                 showModalMessage("The Free plan is available upon regular sign-up.", false);
                 setTimeout(() => { window.location.href = 'register.html'; }, 1500);
             }
@@ -1331,7 +1230,6 @@ function handlePricingPage() {
     async function handlePlanSelection(planId) {
         const token = localStorage.getItem("authToken");
         if (token) {
-            // User is logged in, initiate Stripe checkout directly
             try {
                 const session = await apiRequest("POST", "/create-checkout-session", { planId: planId });
                 if (stripe && session.sessionId) {
@@ -1345,32 +1243,28 @@ function handlePricingPage() {
                 showModalMessage(`Failed to proceed with payment: ${error.message}`, true);
             }
         } else {
-            // User is not logged in, show registration modal
             openRegisterCheckoutModal(planId);
         }
     }
 
-    // Handle cancel button in register/checkout modal
     if (regCheckoutCancelBtn) {
         regCheckoutCancelBtn.addEventListener("click", () => {
             if (registerCheckoutModalOverlay) {
                 registerCheckoutModalOverlay.style.display = 'none';
-                currentSelectedPlan = null; // Clear selected plan
+                currentSelectedPlan = null;
             }
         });
     }
-    // Close modal if clicking outside
     if (regCheckoutModalOverlay) {
         regCheckoutModalOverlay.addEventListener("click", event => {
             if (event.target === regCheckoutModalOverlay) {
-                regCheckoutModalOverlay.style.display = "none";
+                registerCheckoutModalOverlay.style.display = "none";
                 currentSelectedPlan = null;
             }
         });
     }
 
 
-    // Handle registration from the pricing modal
     if (registerCheckoutForm) {
         registerCheckoutForm.addEventListener("submit", async e => {
             e.preventDefault();
@@ -1383,7 +1277,6 @@ function handlePricingPage() {
             regCheckoutErrorMessage.classList.remove('visible');
             regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
 
-            // Client-side validation
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email)) {
                 regCheckoutErrorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
@@ -1393,7 +1286,6 @@ function handlePricingPage() {
             }
 
             try {
-                // First, register the user
                 const registrationData = await apiRequest("POST", "/register", {
                     company_name: company_name,
                     full_name: full_name,
@@ -1401,7 +1293,6 @@ function handlePricingPage() {
                     password: password
                 });
 
-                // Then, log the user in to get a token
                 const loginData = await apiRequest("POST", "/login", {
                     email: email,
                     password: password
@@ -1409,14 +1300,13 @@ function handlePricingPage() {
                 localStorage.setItem("authToken", loginData.token);
                 localStorage.setItem("userRole", loginData.role);
 
-                // Then, initiate Stripe checkout with the selected plan
                 const session = await apiRequest("POST", "/create-checkout-session", { planId: currentSelectedPlan });
                 if (stripe && session.sessionId) {
                     showModalMessage("Account created! Redirecting to payment...", false);
                     stripe.redirectToCheckout({ sessionId: session.sessionId });
                 } else {
                     showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
-                    setTimeout(() => { window.location.href = 'login.html'; }, 2000); // Redirect to login
+                    setTimeout(() => { window.location.href = 'login.html'; }, 2000);
                 }
 
             } catch (error) {
@@ -1430,9 +1320,709 @@ function handlePricingPage() {
     }
 }
 
+/**
+ * Handles all client-side logic for the hiring.html page.
+ */
+function handleHiringPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
 
-// --- Main Application Logic (DOMContentLoaded Listener) ---
-// This ensures that the DOM is fully loaded before trying to attach event listeners or manipulate elements.
+    const createJobPostingForm = document.getElementById("create-job-posting-form");
+    const jobPostingListDiv = document.getElementById("job-posting-list");
+    const applicantListDiv = document.getElementById("applicant-list");
+    const jobPostingLocationSelect = document.getElementById("job-posting-location-select");
+    const filterApplicantJobPostingSelect = document.getElementById("filter-applicant-job-posting-select");
+    const filterApplicantStatusSelect = document.getElementById("filter-applicant-status");
+    const filterApplicantLocationSelect = document.getElementById("filter-applicant-location-select");
+    const applyApplicantFiltersBtn = document.getElementById("apply-applicant-filters-btn");
+    const clearApplicantFiltersBtn = document.getElementById("clear-applicant-filters-btn");
+
+    const shareLinkModalOverlay = document.getElementById("share-link-modal-overlay");
+    const shareJobLinkInput = document.getElementById("share-job-link-input");
+    const shareJobEmbedCodeInput = document.getElementById("share-job-embed-code-input");
+    const copyLinkBtn = document.getElementById("copy-link-btn");
+    const copyEmbedBtn = document.getElementById("copy-embed-btn");
+    const shareLinkModalCloseButton = document.getElementById("share-link-modal-close-button");
+
+
+    async function loadJobPostingLocations() {
+        if (!jobPostingLocationSelect) return;
+        jobPostingLocationSelect.innerHTML = '<option value="">Loading locations...</option>';
+        try {
+            const locations = await apiRequest("GET", "/locations");
+            jobPostingLocationSelect.innerHTML = '<option value="">Company Wide (All Locations)</option>'; // Default option
+            if (locations && locations.length > 0) {
+                locations.forEach(loc => {
+                    const option = document.createElement("option");
+                    option.value = loc.location_id;
+                    option.textContent = loc.location_name;
+                    jobPostingLocationSelect.appendChild(option);
+                });
+            } else {
+                jobPostingLocationSelect.innerHTML = '<option value="">No locations available</option>';
+            }
+            filterApplicantLocationSelect.innerHTML = jobPostingLocationSelect.innerHTML; // Copy options to filter dropdown
+        } catch (error) {
+            console.error("Error loading job posting locations:", error);
+            jobPostingLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            filterApplicantLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            showModalMessage(`Failed to load locations for job postings: ${error.message}`, true);
+        }
+    }
+
+    async function loadJobPostings() {
+        if (!jobPostingListDiv) return;
+        jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>';
+        try {
+            const queryParams = new URLSearchParams();
+            if (filterApplicantJobPostingSelect.value) { // This filter is for applicants, not job postings directly
+                // Not filtering loadJobPostings directly by ID from applicant filter
+            }
+            // For now, only show 'Open' jobs on the main list unless otherwise specified
+            queryParams.append('status', 'Open'); // Fetch only open jobs by default for this list
+
+            const jobPostings = await apiRequest("GET", `/job-postings?${queryParams.toString()}`);
+            jobPostingListDiv.innerHTML = '';
+            filterApplicantJobPostingSelect.innerHTML = '<option value="">All Job Postings</option>'; // Reset applicant filter
+
+            if (jobPostings && jobPostings.length > 0) {
+                jobPostings.forEach(job => {
+                    const jobItem = document.createElement("div");
+                    jobItem.className = "job-posting-item";
+                    jobItem.innerHTML = `
+                        <h4>${job.title}</h4>
+                        <p>Location: ${job.location_id ? job.location_name : 'Company Wide'}</p>
+                        <p>Status: ${job.status}</p>
+                        <p>Posted: ${new Date(job.created_date).toLocaleDateString()}</p>
+                        <div class="actions">
+                            <button class="btn btn-secondary btn-sm edit-job-btn" data-job-id="${job.job_posting_id}">Edit</button>
+                            <button class="btn btn-secondary btn-sm share-btn" data-job-id="${job.job_posting_id}" data-job-title="${job.title}">Share</button>
+                            <button class="btn-delete" data-type="job-posting" data-id="${job.job_posting_id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    jobPostingListDiv.appendChild(jobItem);
+
+                    // Populate job posting filter dropdown for applicants
+                    const option = document.createElement("option");
+                    option.value = job.job_posting_id;
+                    option.textContent = job.title;
+                    filterApplicantJobPostingSelect.appendChild(option);
+                });
+            } else {
+                jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">No job postings found.</p>';
+            }
+        } catch (error) {
+            console.error("Error loading job postings:", error);
+            jobPostingListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading job postings: ${error.message}</p>`;
+        }
+    }
+
+    async function loadApplicants(filters = {}) {
+        if (!applicantListDiv) return;
+        applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
+        try {
+            const queryParams = new URLSearchParams();
+            if (filters.job_posting_id) queryParams.append('job_posting_id', filters.job_posting_id);
+            if (filters.status) queryParams.append('status', filters.status);
+            if (filters.location_id) queryParams.append('location_id', filters.location_id);
+
+            const applicants = await apiRequest("GET", `/applicants?${queryParams.toString()}`);
+            applicantListDiv.innerHTML = '';
+            if (applicants && applicants.length > 0) {
+                applicants.forEach(applicant => {
+                    const applicantItem = document.createElement("div");
+                    applicantItem.className = "applicant-item";
+                    applicantItem.innerHTML = `
+                        <h4>${applicant.full_name}</h4>
+                        <p>Job: ${applicant.job_title || 'N/A'}</p>
+                        <p>Email: ${applicant.email}</p>
+                        <p>Phone: ${applicant.phone_number || 'N/A'}</p>
+                        <p>Status: ${applicant.status}</p>
+                        <p>Applied: ${new Date(applicant.application_date).toLocaleDateString()}</p>
+                        <div class="actions">
+                            <button class="btn btn-secondary btn-sm edit-applicant-btn" data-applicant-id="${applicant.applicant_id}">Update Status</button>
+                            <button class="btn-delete" data-type="applicant" data-id="${applicant.applicant_id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    applicantListDiv.appendChild(applicantItem);
+                });
+            } else {
+                applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">No applicants found with current filters.</p>';
+            }
+        } catch (error) {
+            console.error("Error loading applicants:", error);
+            applicantListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading applicants: ${error.message}</p>`;
+        }
+    }
+
+    if (createJobPostingForm) {
+        createJobPostingForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            const title = document.getElementById("job-title-input").value.trim();
+            const description = document.getElementById("job-description-input").value.trim();
+            const requirements = document.getElementById("job-requirements-input").value.trim();
+            const locationId = jobPostingLocationSelect.value ? parseInt(jobPostingLocationSelect.value, 10) : null;
+
+            if (!title || !description) {
+                showModalMessage("Job Title and Description are required.", true);
+                return;
+            }
+
+            try {
+                const response = await apiRequest("POST", "/job-postings", {
+                    title: title,
+                    description: description,
+                    requirements: requirements,
+                    location_id: locationId
+                });
+                showModalMessage(`Job "${title}" posted successfully!`, false);
+                createJobPostingForm.reset();
+                loadJobPostings();
+            } catch (error) {
+                showModalMessage(`Error posting job: ${error.message}`, true);
+            }
+        });
+    }
+
+    if (applyApplicantFiltersBtn) {
+        applyApplicantFiltersBtn.addEventListener("click", () => {
+            const filters = {
+                job_posting_id: filterApplicantJobPostingSelect.value || null,
+                status: filterApplicantStatusSelect.value || null,
+                location_id: filterApplicantLocationSelect.value ? parseInt(filterApplicantLocationSelect.value, 10) : null
+            };
+            loadApplicants(filters);
+        });
+    }
+
+    if (clearApplicantFiltersBtn) {
+        clearApplicantFiltersBtn.addEventListener("click", () => {
+            filterApplicantJobPostingSelect.value = "";
+            filterApplicantStatusSelect.value = "";
+            filterApplicantLocationSelect.value = "";
+            loadApplicants({}); // Load all applicants
+        });
+    }
+
+    // Share Job Posting Modal Logic
+    if (shareLinkModalCloseButton) {
+        shareLinkModalCloseButton.addEventListener("click", () => {
+            shareLinkModalOverlay.style.display = 'none';
+        });
+        shareLinkModalOverlay.addEventListener("click", (event) => {
+            if (event.target === shareLinkModalOverlay) {
+                shareLinkModalOverlay.style.display = 'none';
+            }
+        });
+    }
+
+    document.body.addEventListener("click", async e => {
+        const shareButton = e.target.closest(".share-btn");
+        if (shareButton) {
+            const jobId = shareButton.dataset.jobId;
+            const jobTitle = shareButton.dataset.jobTitle; // Get job title for dynamic link text
+            const directLink = `${API_BASE_URL}/apply/${jobId}`; // Example direct link
+            const embedCode = `<iframe src="${API_BASE_URL}/embed/job/${jobId}" width="600" height="400" frameborder="0" title="${jobTitle} Application"></iframe>`; // Example embed code
+
+            if (shareJobLinkInput) shareJobLinkInput.value = directLink;
+            if (shareJobEmbedCodeInput) shareJobEmbedCodeInput.value = embedCode;
+            if (shareLinkModalOverlay) shareLinkModalOverlay.style.display = 'flex';
+        }
+
+        const copyLink = e.target.closest("#copy-link-btn");
+        if (copyLink && shareJobLinkInput) {
+            document.execCommand('copy'); // Fallback for navigator.clipboard.writeText
+            navigator.clipboard.writeText(shareJobLinkInput.value).then(() => {
+                showModalMessage("Link copied to clipboard!", false);
+            }).catch(err => {
+                console.error('Failed to copy link: ', err);
+                showModalMessage("Failed to copy link. Please copy manually.", true);
+            });
+        }
+
+        const copyEmbed = e.target.closest("#copy-embed-btn");
+        if (copyEmbed && shareJobEmbedCodeInput) {
+            document.execCommand('copy'); // Fallback
+            navigator.clipboard.writeText(shareJobEmbedCodeInput.value).then(() => {
+                showModalMessage("Embed code copied to clipboard!", false);
+            }).catch(err => {
+                console.error('Failed to copy embed code: ', err);
+                showModalMessage("Failed to copy embed code. Please copy manually.", true);
+            });
+        }
+
+        const editApplicantButton = e.target.closest(".edit-applicant-btn");
+        if (editApplicantButton) {
+            const applicantId = editApplicantButton.dataset.applicantId;
+            showModalMessage(`Editing Applicant ID: ${applicantId} (Functionality to be implemented)`, false);
+            // Here you'd typically open a modal or navigate to an edit page for the applicant
+        }
+    });
+
+    // Initial loads
+    loadJobPostingLocations();
+    loadJobPostings();
+    loadApplicants({}); // Load all applicants initially
+}
+
+/**
+ * Handles all client-side logic for the scheduling.html page.
+ */
+function handleSchedulingPage() {
+    // Redirect to login if not authenticated
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
+    }
+
+    const filterEmployeeSelect = document.getElementById("filter-employee-select");
+    const filterLocationSelect = document.getElementById("filter-location-select");
+    const filterStartDateInput = document.getElementById("filter-start-date");
+    const filterEndDateInput = document.getElementById("filter-end-date");
+    const applyFiltersBtn = document.getElementById("apply-filters-btn");
+    const clearFiltersBtn = document.getElementById("clear-filters-btn");
+
+    const createShiftForm = document.getElementById("create-shift-form");
+    const employeeSelect = document.getElementById("employee-select");
+    const locationSelect = document.getElementById("location-select");
+    const startTimeInput = document.getElementById("start-time-input");
+    const endTimeInput = document.getElementById("end-time-input");
+    const notesInput = document.getElementById("notes-input");
+
+    const prevWeekBtn = document.getElementById("prev-week-btn");
+    const nextWeekBtn = document.getElementById("next-week-btn");
+    const currentWeekDisplay = document.getElementById("current-week-display");
+    const calendarGrid = document.getElementById("calendar-grid");
+    const timeColumn = document.getElementById("time-column");
+
+    let currentWeekStart = moment().startOf('isoWeek'); // Use moment.js for week manipulation
+
+    function renderTimeColumn() {
+        timeColumn.innerHTML = '';
+        // Add an empty cell for the top-left corner (above time, left of days)
+        const topLeftCorner = document.createElement('div');
+        topLeftCorner.className = 'calendar-day-header'; // Re-use header style
+        topLeftCorner.style.gridColumn = '1';
+        topLeftCorner.style.gridRow = '1';
+        topLeftCorner.textContent = ''; // Empty for spacing
+        calendarGrid.prepend(topLeftCorner); // Add before any other content
+
+        for (let i = 0; i < 24; i++) {
+            const time = moment().hour(i).minute(0);
+            const timeSlot = document.createElement('div');
+            timeSlot.className = 'calendar-time-slot';
+            timeSlot.textContent = time.format('h A');
+            timeColumn.appendChild(timeSlot);
+        }
+    }
+
+    async function loadEmployeesForScheduling() {
+        if (!employeeSelect) return;
+        employeeSelect.innerHTML = '<option value="">Loading employees...</option>';
+        filterEmployeeSelect.innerHTML = '<option value="">All Employees</option>'; // Always have "All Employees" option
+        try {
+            const employees = await apiRequest("GET", "/users?filterRole=employee"); // Assuming an API to get employees
+            if (employees && employees.length > 0) {
+                employeeSelect.innerHTML = '<option value="">Select Employee</option>';
+                employees.forEach(emp => {
+                    const option = document.createElement("option");
+                    option.value = emp.user_id;
+                    option.textContent = emp.full_name;
+                    employeeSelect.appendChild(option);
+                    // Add to filter dropdown as well
+                    filterEmployeeSelect.appendChild(option.cloneNode(true));
+                });
+            } else {
+                employeeSelect.innerHTML = '<option value="">No employees available</option>';
+                filterEmployeeSelect.innerHTML = '<option value="">No employees available</option>';
+            }
+        } catch (error) {
+            console.error("Error loading employees for scheduling:", error);
+            employeeSelect.innerHTML = '<option value="">Error loading employees</option>';
+            filterEmployeeSelect.innerHTML = '<option value="">Error loading employees</option>';
+            showModalMessage(`Failed to load employees: ${error.message}`, true);
+        }
+    }
+
+    async function loadLocationsForScheduling() {
+        if (!locationSelect) return;
+        locationSelect.innerHTML = '<option value="">Loading locations...</option>';
+        filterLocationSelect.innerHTML = '<option value="">All Locations</option>'; // Always have "All Locations" option
+        try {
+            const locations = await apiRequest("GET", "/locations");
+            if (locations && locations.length > 0) {
+                locationSelect.innerHTML = '<option value="">Select Location</option>';
+                locations.forEach(loc => {
+                    const option = document.createElement("option");
+                    option.value = loc.location_id;
+                    option.textContent = loc.location_name;
+                    locationSelect.appendChild(option);
+                    // Add to filter dropdown as well
+                    filterLocationSelect.appendChild(option.cloneNode(true));
+                });
+            } else {
+                locationSelect.innerHTML = '<option value="">No locations available</option>';
+                filterLocationSelect.innerHTML = '<option value="">No locations available</option>';
+            }
+        } catch (error) {
+            console.error("Error loading locations for scheduling:", error);
+            locationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            filterLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
+            showModalMessage(`Failed to load locations: ${error.message}`, true);
+        }
+    }
+
+    async function renderCalendar() {
+        if (!calendarGrid) return;
+
+        // Clear existing day headers and cells (except the fixed time column)
+        const existingDayElements = calendarGrid.querySelectorAll('.calendar-day-header:not([style*="grid-column: 1"]), .calendar-day-cell');
+        existingDayElements.forEach(el => el.remove());
+
+        currentWeekDisplay.textContent = `${currentWeekStart.format('MMM DD')} - ${moment(currentWeekStart).endOf('isoWeek').format('MMM DD, YYYY')}`;
+
+        const dates = [];
+        for (let i = 0; i < 7; i++) {
+            dates.push(moment(currentWeekStart).add(i, 'days'));
+        }
+
+        // Add Day Headers
+        dates.forEach((date, index) => {
+            const dayHeader = document.createElement('div');
+            dayHeader.className = 'calendar-day-header';
+            dayHeader.style.gridColumn = `${index + 2}`; // +2 because column 1 is for time
+            dayHeader.style.gridRow = '1';
+            dayHeader.innerHTML = `${date.format('ddd')}<br>${date.format('MMM D')}`;
+            calendarGrid.appendChild(dayHeader);
+        });
+
+        // Add Day Cells
+        dates.forEach((date, index) => {
+            const dayCell = document.createElement('div');
+            dayCell.className = 'calendar-day-cell';
+            dayCell.style.gridColumn = `${index + 2}`; // +2 because column 1 is for time
+            dayCell.style.gridRow = `2 / span 24`; // Span 24 hours
+            dayCell.dataset.date = date.format('YYYY-MM-DD'); // Store date for later use
+            calendarGrid.appendChild(dayCell);
+        });
+
+        // Fetch and display shifts for the current week
+        const startOfWeek = currentWeekStart.startOf('isoWeek').format('YYYY-MM-DDTHH:mm:ssZ');
+        const endOfWeek = moment(currentWeekStart).endOf('isoWeek').format('YYYY-MM-DDTHH:mm:ssZ');
+
+        const filters = {
+            start_date: startOfWeek,
+            end_date: endOfWeek,
+            employee_id: filterEmployeeSelect.value || null,
+            location_id: filterLocationSelect.value || null
+        };
+
+        try {
+            const shifts = await apiRequest("GET", `/schedules?${new URLSearchParams(filters).toString()}`);
+            shifts.forEach(shift => {
+                const shiftStart = moment(shift.start_time);
+                const shiftEnd = moment(shift.end_time);
+                const shiftDate = shiftStart.format('YYYY-MM-DD');
+
+                const targetCell = calendarGrid.querySelector(`.calendar-day-cell[data-date="${shiftDate}"]`);
+                if (targetCell) {
+                    const shiftDiv = document.createElement('div');
+                    shiftDiv.className = `calendar-shift ${moment().isAfter(shiftEnd) ? 'overdue' : ''}`; // Add 'overdue' class if shift has passed
+
+                    // Calculate top and height for positioning
+                    const startHour = shiftStart.hour();
+                    const startMinute = shiftStart.minute();
+                    const endHour = shiftEnd.hour();
+                    const endMinute = shiftEnd.minute();
+
+                    const topPosition = (startHour * 30) + (startMinute / 60 * 30); // 30px per hour
+                    const durationHours = shiftEnd.diff(shiftStart, 'minutes') / 60;
+                    const height = durationHours * 30; // 30px per hour
+
+                    shiftDiv.style.top = `${topPosition}px`;
+                    shiftDiv.style.height = `${height}px`;
+                    shiftDiv.textContent = `${shift.employee_name} @ ${shift.location_name} (${shiftStart.format('h:mm A')} - ${shiftEnd.format('h:mm A')})`;
+
+                    shiftDiv.addEventListener('click', async () => {
+                        const confirmDelete = await showConfirmModal(`
+                            <h4>Shift Details:</h4>
+                            <p><strong>Employee:</strong> ${shift.employee_name}</p>
+                            <p><strong>Location:</strong> ${shift.location_name}</p>
+                            <p><strong>Time:</strong> ${shiftStart.format('MMM DD, h:mm A')} - ${shiftEnd.format('MMM DD, h:mm A')}</p>
+                            <p><strong>Notes:</strong> ${shift.notes || 'None'}</p>
+                            <p style="margin-top: 15px;">Are you sure you want to delete this shift?</p>
+                        `, "Delete Shift");
+
+                        if (confirmDelete) {
+                            try {
+                                await apiRequest("DELETE", `/schedules/${shift.schedule_id}`);
+                                showModalMessage("Shift deleted successfully!", false);
+                                renderCalendar(); // Re-render calendar
+                            } catch (error) {
+                                showModalMessage(`Failed to delete shift: ${error.message}`, true);
+                            }
+                        }
+                    });
+
+                    targetCell.appendChild(shiftDiv);
+                }
+            });
+        } catch (error) {
+            console.error("Error loading schedules:", error);
+            calendarGrid.querySelector('p').textContent = `Error loading schedules: ${error.message}`;
+        }
+    }
+
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener("click", () => {
+            currentWeekStart.subtract(1, 'isoWeek');
+            renderCalendar();
+        });
+    }
+
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener("click", () => {
+            currentWeekStart.add(1, 'isoWeek');
+            renderCalendar();
+        });
+    }
+
+    if (createShiftForm) {
+        createShiftForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            const employeeId = employeeSelect.value ? parseInt(employeeSelect.value, 10) : null;
+            const locationId = locationSelect.value ? parseInt(locationSelect.value, 10) : null;
+            const startTime = startTimeInput.value;
+            const endTime = endTimeInput.value;
+            const notes = notesInput.value.trim();
+
+            if (!employeeId || !locationId || !startTime || !endTime) {
+                showModalMessage("Please select an employee, location, and valid start/end times.", true);
+                return;
+            }
+            if (new Date(startTime) >= new Date(endTime)) {
+                showModalMessage("Start time must be before end time.", true);
+                return;
+            }
+
+            try {
+                await apiRequest("POST", "/schedules", {
+                    employee_id: employeeId,
+                    location_id: locationId,
+                    start_time: startTime,
+                    end_time: endTime,
+                    notes: notes || null
+                });
+                showModalMessage("Shift created successfully!", false);
+                createShiftForm.reset();
+                renderCalendar();
+            } catch (error) {
+                showModalMessage(`Error creating shift: ${error.message}`, true);
+            }
+        });
+    }
+
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener("click", () => {
+            renderCalendar(); // Re-render calendar with new filters
+        });
+    }
+
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener("click", () => {
+            filterEmployeeSelect.value = "";
+            filterLocationSelect.value = "";
+            filterStartDateInput.value = "";
+            filterEndDateInput.value = "";
+            renderCalendar(); // Re-render calendar with cleared filters
+        });
+    }
+
+    // Initial load
+    renderTimeColumn();
+    loadEmployeesForScheduling();
+    loadLocationsForScheduling();
+    renderCalendar();
+}
+
+/**
+ * Handles all client-side logic for the documents.html page.
+ */
+function handleDocumentsPage() {
+    // Mock authentication for self-contained demo
+    // In a real app, remove this mock and ensure user is logged in before calling this handler
+    if (!localStorage.getItem("authToken")) {
+        localStorage.setItem("authToken", "mock-auth-token"); // Set a mock token
+        localStorage.setItem("userRole", "super_admin"); // Set a mock role
+        // console.warn("Mock authentication applied for demo purposes.");
+    }
+
+    const uploadDocumentForm = document.getElementById("upload-document-form");
+    const documentTitleInput = document.getElementById("document-title");
+    const documentFileInput = document.getElementById("document-file");
+    const documentDescriptionInput = document.getElementById("document-description");
+    const documentListDiv = document.getElementById("document-list");
+
+    const uploadProgressContainer = document.getElementById("upload-progress-container");
+    const uploadProgressFill = document.getElementById("upload-progress-fill");
+    const uploadProgressText = document.getElementById("upload-progress-text");
+
+    /**
+     * Shows the upload progress bar and updates its display.
+     * @param {number} percentage - The upload progress percentage (0-100).
+     * @param {string} text - Optional text to display, e.g., "Uploading..."
+     */
+    function showUploadProgress(percentage, text = `${percentage}%`) {
+        if (uploadProgressContainer && uploadProgressFill && uploadProgressText) {
+            uploadProgressContainer.style.display = 'block';
+            uploadProgressText.style.display = 'block';
+            uploadProgressFill.style.width = `${percentage}%`;
+            uploadProgressText.textContent = text;
+        }
+    }
+
+    /**
+     * Hides the upload progress bar.
+     */
+    function hideUploadProgress() {
+        if (uploadProgressContainer && uploadProgressText) {
+            uploadProgressContainer.style.display = 'none';
+            uploadProgressText.style.display = 'none';
+            uploadProgressFill.style.width = '0%';
+        }
+    }
+
+    /**
+     * Fetches and displays the list of uploaded documents.
+     * This function is mocked for this self-contained example.
+     * In a real app, it would make an actual API call.
+     */
+    async function loadDocuments() {
+        if (!documentListDiv) return;
+        documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
+
+        // Mock API call for documents
+        try {
+            // In a real scenario, this would be: const documents = await apiRequest("GET", "/documents");
+            // For this self-contained example, we'll use a dummy fetch or local storage
+            const dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
+
+            documentListDiv.innerHTML = '';
+
+            if (dummyDocuments.length === 0) {
+                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
+            } else {
+                dummyDocuments.forEach(doc => {
+                    const docItem = document.createElement("div");
+                    docItem.className = "document-item";
+                    const uploadDate = new Date(doc.upload_date).toLocaleDateString();
+                    docItem.innerHTML = `
+                        <h4>${doc.title}</h4>
+                        <p>File: ${doc.file_name}</p>
+                        <p>Description: ${doc.description || 'N/A'}</p>
+                        <p>Uploaded: ${uploadDate}</p>
+                        <div class="actions">
+                            <a href="${doc.file_path || '#'}" class="btn btn-secondary btn-sm" target="_blank" download>Download</a>
+                            <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    documentListDiv.appendChild(docItem);
+                });
+            }
+        } catch (error) {
+            console.error("Error loading documents:", error);
+            documentListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading documents: ${error.message}</p>`;
+        }
+    }
+
+    // Handle document upload form submission
+    if (uploadDocumentForm) {
+        uploadDocumentForm.addEventListener("submit", async e => {
+            e.preventDefault();
+
+            const title = documentTitleInput.value.trim();
+            const file = documentFileInput.files[0];
+            const description = documentDescriptionInput.value.trim();
+
+            if (!title || !file) {
+                showModalMessage("Please provide a document title and select a file.", true);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('document_file', file);
+            formData.append('description', description);
+
+            try {
+                showUploadProgress(0, 'Starting upload...');
+                // In a real application, you would use:
+                // const result = await apiRequest("POST", "/documents/upload", formData, true, event => { ... });
+                // For this self-contained demo, we'll simulate the upload and add to local storage.
+
+                // Simulate upload progress
+                let loaded = 0;
+                const total = file.size;
+                const interval = setInterval(() => {
+                    loaded += total / 10; // Simulate 10 chunks
+                    const percentComplete = Math.min(100, Math.round((loaded * 100) / total));
+                    showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
+                    if (loaded >= total) {
+                        clearInterval(interval);
+                        // Simulate API response delay
+                        setTimeout(async () => {
+                            // Add to dummy storage
+                            const dummyDocuments = JSON.parse(localStorage.getItem('dummyDocuments')) || [];
+                            const newDocId = dummyDocuments.length > 0 ? Math.max(...dummyDocuments.map(d => d.document_id)) + 1 : 1;
+                            const newDocument = {
+                                document_id: newDocId,
+                                title: title,
+                                description: description,
+                                file_name: file.name,
+                                file_path: URL.createObjectURL(file), // Create a temporary URL for demo download
+                                upload_date: new Date().toISOString()
+                            };
+                            dummyDocuments.push(newDocument);
+                            localStorage.setItem('dummyDocuments', JSON.stringify(dummyDocuments));
+
+                            showModalMessage("Document uploaded successfully!", false);
+                            uploadDocumentForm.reset();
+                            hideUploadProgress();
+                            loadDocuments();
+                        }, 500); // Small delay for "success" message
+                    }
+                }, 100); // Update every 100ms
+
+            } catch (error) {
+                console.error("Document upload error:", error);
+                showModalMessage(`Failed to upload document: ${error.message}`, true);
+                hideUploadProgress();
+            }
+        });
+    }
+
+    // Event listener for delete buttons (using delegation)
+    // This listener is now handled by the global `document.body.addEventListener("click", ...)` in `handleAdminPage`.
+    // We just need to ensure `handleAdminPage` is called on load or the event listener is moved to a shared location.
+    // For this app, `handleAdminPage` is called in the main `DOMContentLoaded` listener,
+    // so we will just need to make sure delete action from `handleAdminPage`
+    // correctly calls `handleDocumentsPage()` to refresh documents list.
+    // This is updated in the `handleAdminPage` delete listener above.
+
+    // Initial load of documents when the page loads
+    loadDocuments();
+}
+
+// Global DOMContentLoaded listener to call page-specific handlers
 document.addEventListener("DOMContentLoaded", () => {
     // Call setupSettingsDropdown on all pages that use it
     setupSettingsDropdown();
@@ -1460,13 +2050,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (path.includes("pricing.html")) {
         handlePricingPage();
     } else if (path.includes("documents.html")) {
-        // This is the call that's failing if handleDocumentsPage is undefined
-        if (typeof handleDocumentsPage === 'function') {
-            handleDocumentsPage();
-        } else {
-            console.error("Error: handleDocumentsPage function is not defined. JavaScript parsing issue or function missing.");
-            showModalMessage("Document page functionality could not load. Please try refreshing.", true);
-        }
+        handleDocumentsPage(); // Call the documents page handler directly
     } else if (path.includes("hiring.html")) {
         handleHiringPage();
     } else if (path.includes("scheduling.html")) {
