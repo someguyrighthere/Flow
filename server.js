@@ -1374,6 +1374,10 @@ app.post('/checklists', authenticateToken, async (req, res, next) => {
         );
         res.status(201).json({ message: 'Checklist created successfully!', checklistId: result.checklist_id });
     } catch (error) {
+        // *** UPDATED ERROR HANDLING LOGIC ***
+        if (error.code === '23505' && error.constraint === 'checklists_company_id_position_key') {
+            return res.status(409).json({ error: 'A task list for this position already exists. Please use a different position name.' });
+        }
         console.error("Error creating checklist:", error);
         next(error);
     }
@@ -1757,3 +1761,15 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
+" in the document and am asking a query about/based on this code below.
+Instructions to follow:
+  * Don't output/edit the document if the query is Direct/Simple. For example, if the query asks for a simple explanation, output a direct answer.
+  * Make sure to **edit** the document if the query shows the intent of editing the document, in which case output the entire edited document, **not just that section or the edits**.
+    * Don't output the same document/empty document and say that you have edited it.
+    * Don't change unrelated code in the document.
+  * Don't output  and  in your final response.
+  * Any references like "this" or "selected code" refers to the code between  and  tags.
+  * Just acknowledge my request in the introduction.
+  * Make sure to refer to the document as "Canvas" in your response.
+
+i have selected all the code in the document can you tell me what is going on he
