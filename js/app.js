@@ -822,7 +822,8 @@ function handleDashboardPage() {
                 if (onboardUserModal) onboardUserModal.style.display = "none";
                 loadOnboardingSessions();
             } catch (error) {
-                showModalMessage(`Error onboarding employee: ${error.message}`, true);
+                // **UPDATED CODE**: Instead of a generic message, show the specific one from the server.
+                showModalMessage(error.message, true);
             }
         });
     }
