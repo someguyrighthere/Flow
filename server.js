@@ -66,6 +66,31 @@ app.set('trust proxy', 1); // Trust the first proxy (Render's load balancer)
 // --- General Middleware ---
 app.use(morgan('dev')); // Request logger - placed early
 
+// --- Multer Configuration for File Uploads (Moved to top for visibility) ---
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+// Create the uploads directory if it doesn't exist
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, UPLOADS_DIR); // Store files in the 'uploads' directory
+    },
+    filename: function (req, file, cb) {
+        // Use a unique name to prevent collisions, e.g., timestamp-originalfilename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+// Configure Multer to accept single file uploads with the field name 'document_file'
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 1 * 1024 * 1024 * 1024 } // 1 GB limit (1 * 1024 * 1024 * 1024 bytes)
+});
+
+
 // Stripe Webhook Endpoint (This MUST be before express.json() to get raw body)
 app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -451,8 +476,8 @@ app.post('/register', authLimiter, async (req, res, next) => {
 
         // Insert new user as super_admin for the new company
         const userResult = await client.query(
-            `INSERT INTO users (company_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, 'super_admin', 'active', 'free') RETURNING user_id`,
-            [newCompanyId, full_name, email, password_hash]
+            `INSERT INTO users (company_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [newCompanyId, full_name, email, password_hash, 'super_admin', 'active', 'free']
         );
         const newUserId = userResult.rows[0].user_id;
 
@@ -1618,7 +1643,7 @@ app.put('/job-postings/:id', authenticateToken, async (req, res, next) => {
     // Ensure location admin can only update jobs within their assigned location or unassigned jobs
     if (role === 'location_admin' && currentUserLocationId !== null) {
         updateSql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
-        updateParams.push(currentUserLocationId);
+        params.push(currentUserLocationId);
     } else if (role === 'location_admin' && currentUserLocationId === null) {
         return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' });
     }
@@ -1839,239 +1864,6 @@ app.delete('/applicants/:id', authenticateToken, async (req, res, next) => {
 });
 
 
-// Documents API
-app.post('/documents/upload', authenticateToken, upload.single('document_file'), async (req, res, next) => {
-    const { title, description } = req.body;
-    const { id: userId, company_id: companyId, role } = req.user;
-    const file = req.file;
-
-    // Authorization: Only super_admin and location_admin can upload documents
-    if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Dismissed: Only admins can upload documents.' });
-    }
-
-    // Input validation
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-        return res.status(400).json({ error: "Document title is required and must be a non-empty string." });
-    }
-    if (!file) {
-        return res.status(400).json({ error: "No file provided for upload." });
-    }
-
-    try {
-        const result = await runCommand(
-            `INSERT INTO documents (company_id, uploaded_by_user_id, title, description, file_path, file_name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING document_id`,
-            [companyId, userId, title, description, file.path, file.originalname]
-        );
-        res.status(201).json({ message: 'Document uploaded successfully!', documentId: result.document_id, filePath: result.file_path });
-    } catch (error) {
-        console.error("Database error during document upload:", error);
-        // Clean up uploaded file if DB insert fails
-        if (file && fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-        }
-        next(error);
-    }
-});
-
-app.get('/documents', authenticateToken, async (req, res, next) => {
-    const { company_id: companyId } = req.user;
-
-    let sql = `SELECT document_id, title, description, file_name, upload_date, file_path, uploaded_by_user_id
-               FROM documents
-               WHERE company_id = $1 ORDER BY upload_date DESC`;
-
-    const params = [companyId];
-
-    try {
-        const documents = await query(sql, params);
-        res.json(documents);
-    } catch (error) {
-        console.error(`Database error fetching documents: ${error.message || JSON.stringify(error)}`);
-        next(error);
-    }
-});
-
-// Route to serve files for download
-app.get('/documents/download/:document_id', authenticateToken, async (req, res, next) => {
-    const { document_id } = req.params;
-    const { company_id: companyId } = req.user;
-
-    // Input validation
-    if (!document_id || isNaN(parseInt(document_id))) {
-        return res.status(400).json({ error: 'Invalid document ID provided.' });
-    }
-
-    try {
-        const docResult = await query(
-            'SELECT file_path, file_name, company_id FROM documents WHERE document_id = $1',
-            [document_id]
-        );
-        const document = docResult[0];
-
-        if (!document) {
-            return res.status(404).json({ error: 'Document not found.' });
-        }
-
-        // Authorization: Ensure document belongs to the authenticated user's company
-        if (document.company_id !== companyId) {
-            return res.status(403).json({ error: 'Access Dismissed: You are not authorized to download this document.' });
-        }
-
-        const filePath = document.file_path;
-        const fileName = document.file_name;
-        
-        // Check if file exists on disk
-        if (!fs.existsSync(filePath)) {
-            console.error(`Attempted to download non-existent file: ${filePath}`);
-            return res.status(404).json({ error: 'File not found on server storage.' });
-        }
-
-        res.setHeader('Content-Type', 'application/octet-stream'); // Default to generic type
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        res.sendFile(filePath); // Send the file from local storage
-
-    } catch (error) {
-        console.error("Error serving document for download:", error);
-        next(error);
-    }
-});
-
-app.delete('/documents/:id', authenticateToken, async (req, res, next) => {
-    const { id } = req.params;
-    const { company_id: companyId, role } = req.user;
-
-    // Authorization: Only super_admin and location_admin can delete documents
-    if (!['super_admin', 'location_admin'].includes(role)) {
-        return res.status(403).json({ error: 'Access Dismissed: Only admins can delete documents.' });
-    }
-    // Input validation
-    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid document ID provided.' }); }
-
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        // First, get the file_path to delete the physical file
-        const docResult = await client.query('SELECT file_path, company_id FROM documents WHERE document_id = $1', [id]);
-        const document = docResult.rows[0];
-
-        if (!document) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Document not found.' });
-        }
-        // Ensure document belongs to the authenticated user's company
-        if (document.company_id !== companyId) {
-            await client.query('ROLLBACK');
-            return res.status(403).json({ error: 'Access Dismissed: You are not authorized to delete this document.' });
-        }
-
-        // Delete from database
-        const dbDeleteResult = await client.query('DELETE FROM documents WHERE document_id = $1 AND company_id = $2', [id, companyId]);
-
-        if (dbDeleteResult.rowCount === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Document not found or not authorized to delete.' });
-        }
-
-        // Delete physical file after successful DB deletion
-        if (fs.existsSync(document.file_path)) {
-            fs.unlinkSync(document.file_path);
-            console.log(`Successfully deleted physical file: ${document.file_path}`);
-        } else {
-            console.warn(`Attempted to delete non-existent physical file: ${document.file_path}`);
-        }
-
-        await client.query('COMMIT');
-        res.status(204).send(); // No content for successful deletion
-
-    } catch (error) {
-        if (client) await client.query('ROLLBACK');
-        console.error("Database error deleting document:", error);
-        next(error);
-    } finally {
-        if (client) client.release();
-    }
-});
-
-
-app.get('/api/onboarding-sessions', authenticateToken, async (req, res, next) => {
-    try {
-        const sessions = await query(`
-            SELECT
-                os.session_id,
-                os.user_id,
-                u.full_name,
-                u.email,
-                pos.name AS position,
-                c.title AS checklist_title,
-                c.structure_type,
-                c.group_count
-            FROM onboarding_sessions os
-            JOIN users u ON os.user_id = u.user_id
-            JOIN checklists c ON os.checklist_id = c.id
-            LEFT JOIN positions pos ON u.position_id = pos.id
-            WHERE os.company_id = $1 AND os.status = 'active'
-        `, [req.user.company_id]);
-
-        // For each session, fetch the total tasks and completed tasks
-        for (const session of sessions) {
-            let totalTasks = 0;
-            let completedTasks = 0;
-
-            if (session.structure_type === 'single_list') {
-                const tasks = await query(`SELECT completed FROM tasks WHERE checklist_id = $1`, [session.checklist_id]);
-                totalTasks = tasks.length;
-                completedTasks = tasks.filter(t => t.completed === true).length; // PostgreSQL BOOLEAN is true/false
-            } else { // 'daily' or 'weekly'
-                const taskGroups = await query(`SELECT id FROM task_groups WHERE checklist_id = $1`, [session.checklist_id]);
-                for (const group of taskGroups) {
-                    const tasks = await query(`SELECT completed FROM tasks WHERE task_group_id = $1`, [group.id]);
-                    totalTasks += tasks.length;
-                    completedTasks += tasks.filter(t => t.completed === true).length;
-                }
-            }
-            session.totalTasks = totalTasks;
-            session.completedTasks = completedTasks;
-        }
-
-        res.json(sessions);
-    } catch (error) {
-        console.error('Error fetching onboarding sessions:', error.message);
-        next(error);
-    }
-});
-
-app.put('/api/onboarding-sessions/:id/archive', authenticateToken, async (req, res, next) => {
-    const sessionId = req.params.id;
-    const { company_id: companyId } = req.user;
-    try {
-        await runCommand(`UPDATE onboarding_sessions SET status = 'archived', completion_date = CURRENT_TIMESTAMP WHERE session_id = $1 AND company_id = $2`,
-            [sessionId, companyId]);
-        res.json({ message: 'Onboarding session archived.' });
-    } catch (error) {
-        console.error('Error archiving onboarding session:', error.message);
-        next(error);
-    }
-});
-
-
-app.get('/api/onboard-employee', authenticateToken, async (req, res, next) => {
-    const { company_id: companyId } = req.user;
-    try {
-        const employees = await query(`
-            SELECT user_id, full_name, email, employee_id, position_id
-            FROM users
-            WHERE company_id = $1 AND role = 'employee'
-        `, [companyId]);
-        res.json(employees);
-    } catch (error) {
-        console.error('Error fetching employees for onboarding:', error.message);
-        next(error);
-    }
-});
-
-
 // --- Static Files and SPA Fallback (Moved to the very end) ---
 // Define Public Directory Path - this assumes server.js is in the root of the repository
 const PUBLIC_DIR = path.join(__dirname, '/');
@@ -2148,4 +1940,3 @@ if (require.main === module) {
     });
 } else {
     module.exports = app;
-}
