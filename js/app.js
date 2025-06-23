@@ -138,17 +138,218 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
     return response.json();
 }
 
-function handleLoginPage() { /* ... function content from previous turn ... */ }
-function handleRegisterPage() { /* ... function content from previous turn ... */ }
-function handleSuiteHubPage() { /* ... function content from previous turn ... */ }
-function handleAccountPage() { /* ... function content from previous turn ... */ }
-function handleAdminPage() { /* ... function content from previous turn ... */ }
-function handleDashboardPage() { /* ... function content from previous turn ... */ }
-function handlePricingPage() { /* ... function content from previous turn ... */ }
-function handleHiringPage() { /* ... function content from previous turn ... */ }
-function handleSchedulingPage() { /* ... function content from previous turn ... */ }
-function handleDocumentsPage() { /* ... function content from previous turn ... */ }
-function handleNewHireViewPage() { /* ... function content from previous turn ... */ }
+function handleLoginPage() {
+    const loginForm = document.getElementById("login-form");
+    if (!loginForm) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('sessionExpired')) {
+        showModalMessage("Your session has expired. Please log in again.", true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    loginForm.addEventListener("submit", async e => {
+        e.preventDefault();
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        const errorMessage = document.getElementById("error-message");
+        errorMessage.textContent = "";
+        errorMessage.classList.remove("visible");
+        try {
+            const data = await apiRequest("POST", "/login", { email, password });
+            localStorage.setItem("authToken", data.token);
+            localStorage.setItem("userRole", data.role);
+            window.location.href = (data.role === "super_admin" || data.role === "location_admin") ? "suite-hub.html" : "new-hire-view.html";
+        } catch (error) {
+            errorMessage.textContent = `Login Failed: ${error.message}`;
+            errorMessage.classList.add("visible");
+        }
+    });
+}
+
+function handleRegisterPage() {
+    const registerForm = document.getElementById("register-form");
+    if (!registerForm) return;
+    registerForm.addEventListener("submit", async e => {
+        e.preventDefault();
+        const company_name = document.getElementById("company-name").value.trim();
+        const full_name = document.getElementById("full-name").value.trim();
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        const errorMessage = document.getElementById("error-message");
+        errorMessage.textContent = "";
+        errorMessage.classList.remove("visible");
+
+        if (!company_name || !full_name || !email || !password || password.length < 6) {
+            errorMessage.textContent = "Please fill all fields correctly.";
+            errorMessage.classList.add("visible");
+            return;
+        }
+
+        try {
+            await apiRequest("POST", "/register", { company_name, full_name, email, password });
+            showModalMessage("Account created successfully! Please log in.", false);
+            setTimeout(() => { window.location.href = "login.html"; }, 2000);
+        } catch (error) {
+            errorMessage.textContent = `Registration Failed: ${error.message}`;
+            errorMessage.classList.add("visible");
+        }
+    });
+}
+
+function handleSuiteHubPage() {
+    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("payment") === "success") {
+        showModalMessage("Payment successful! Your subscription has been updated.", false);
+        history.replaceState({}, document.title, window.location.pathname);
+    } else if (urlParams.get("payment") === "cancelled") {
+        showModalMessage("Payment cancelled. You can try again or choose another plan.", true);
+        history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+function handleAccountPage() {
+    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
+    // Add logic for account page here
+}
+
+function handleAdminPage() {
+    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
+    // Add logic for admin page here
+}
+
+function handleDashboardPage() {
+    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
+    // Add logic for dashboard page here
+}
+
+function handlePricingPage() {
+    // Add logic for pricing page here
+}
+
+function handleHiringPage() {
+    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
+    // Add logic for hiring page here
+}
+
+function handleSchedulingPage() {
+    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
+    // Add logic for scheduling page here
+}
+
+function handleDocumentsPage() {
+    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
+    const uploadDocumentForm = document.getElementById("upload-document-form");
+    const documentTitleInput = document.getElementById("document-title");
+    const documentFileInput = document.getElementById("document-file");
+    const documentDescriptionInput = document.getElementById("document-description");
+    const documentListDiv = document.getElementById("document-list");
+    const uploadProgressContainer = document.getElementById("upload-progress-container");
+    const uploadProgressFill = document.getElementById("upload-progress-fill");
+    const uploadProgressText = document.getElementById("upload-progress-text");
+
+    function showUploadProgress(percentage, text = `${percentage}%`) {
+        if (uploadProgressContainer && uploadProgressFill && uploadProgressText) {
+            uploadProgressContainer.style.display = 'block';
+            uploadProgressText.style.display = 'block';
+            uploadProgressFill.style.width = `${percentage}%`;
+            uploadProgressText.textContent = text;
+        }
+    }
+
+    function hideUploadProgress() {
+        if (uploadProgressContainer && uploadProgressText) {
+            uploadProgressContainer.style.display = 'none';
+            uploadProgressText.style.display = 'none';
+            uploadProgressFill.style.width = '0%';
+        }
+    }
+
+    async function loadDocuments() {
+        if (!documentListDiv) return;
+        documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
+        try {
+            const documents = await apiRequest("GET", "/documents");
+            documentListDiv.innerHTML = '';
+            if (documents.length === 0) {
+                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
+            } else {
+                documents.forEach(doc => {
+                    const docItem = document.createElement("div");
+                    docItem.className = "document-item";
+                    docItem.innerHTML = `
+                        <h4>${doc.title}</h4>
+                        <p>File: ${doc.file_name}</p>
+                        <p>Description: ${doc.description || 'N/A'}</p>
+                        <p>Uploaded: ${new Date(doc.upload_date).toLocaleDateString()}</p>
+                        <div class="actions">
+                            <a href="${API_BASE_URL}/documents/download/${doc.document_id}" class="btn btn-secondary btn-sm" download>Download</a>
+                            <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>`;
+                    documentListDiv.appendChild(docItem);
+                });
+            }
+        } catch (error) {
+            documentListDiv.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+        }
+    }
+    
+    if (uploadDocumentForm) {
+        uploadDocumentForm.addEventListener("submit", async e => {
+            e.preventDefault();
+            const title = documentTitleInput.value.trim();
+            const file = documentFileInput.files[0];
+            const description = documentDescriptionInput.value.trim();
+            if (!title || !file) {
+                showModalMessage("Please provide a document title and select a file.", true);
+                return;
+            }
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('document_file', file);
+            try {
+                showUploadProgress(0, 'Starting upload...');
+                await apiRequest("POST", "/documents/upload", formData, true, event => {
+                    if (event.lengthComputable) {
+                        const percentComplete = Math.round((event.loaded * 100) / event.total);
+                        showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
+                    }
+                });
+                showModalMessage("Document uploaded successfully!", false);
+                uploadDocumentForm.reset();
+                hideUploadProgress();
+                loadDocuments();
+            } catch (error) {
+                showModalMessage(`Upload failed: ${error.message}`, true);
+                hideUploadProgress();
+            }
+        });
+    }
+
+    if (documentListDiv) {
+        documentListDiv.addEventListener("click", async e => {
+            const targetButton = e.target.closest(".btn-delete");
+            if (targetButton && targetButton.dataset.type === "document") {
+                const idToDelete = parseInt(targetButton.dataset.id, 10);
+                const confirmed = await showConfirmModal("Are you sure you want to delete this document?", "Delete");
+                if (confirmed) {
+                    try {
+                        await apiRequest("DELETE", `/documents/${idToDelete}`);
+                        showModalMessage("Document deleted successfully.", false);
+                        loadDocuments();
+                    } catch (error) {
+                        showModalMessage(`Error deleting document: ${error.message}`, true);
+                    }
+                }
+            }
+        });
+    }
+    loadDocuments();
+}
 
 /**
  * =================================================================
@@ -175,31 +376,12 @@ function handleChecklistsPage() {
     let currentTaskElementForAttachment = null;
     let taskCounter = 0;
 
-    /**
-     * --- NEW: Helper function to generate the attachment chip UI ---
-     */
-    function renderAttachmentChip(task) {
-        if (!task || !task.documentName) return '';
-        return `
-            <div class="attachment-chip" data-doc-id="${task.documentId}" style="display: inline-flex; align-items: center; gap: 6px; background-color: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 12px; font-size: 0.85rem; margin-top: 5px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="flex-shrink: 0;"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/></svg>
-                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.documentName}</span>
-                <button type="button" class="remove-attachment-chip-btn" title="Remove Attachment" style="background: none; border: none; color: var(--text-medium); cursor: pointer; font-size: 1.2rem; line-height: 1; padding: 0 0 0 4px;">&times;</button>
-            </div>
-        `;
-    }
-
-    /**
-     * --- MODIFIED: This function now uses the helper to render the attachment chip ---
-     */
     function addSingleTaskInput(container, task = {}) {
         const div = document.createElement('div');
         div.className = 'form-group task-input-group';
         div.dataset.documentId = task.documentId || '';
-        div.dataset.documentName = task.documentName || ''; // Store name as well
-        
+        div.dataset.documentName = task.documentName || '';
         const uniqueInputId = `task-input-${taskCounter++}`;
-
         div.innerHTML = `
             <div class="task-input-container">
                 <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
@@ -212,11 +394,10 @@ function handleChecklistsPage() {
                 </div>
             </div>
             <div class="attached-document-info" style="margin-top: 5px; height: auto; min-height: 1.2em;">
-                ${renderAttachmentChip(task)}
+                ${task.documentName ? `<span class="attachment-chip">${task.documentName}</span>` : ''}
             </div>
         `;
         container.appendChild(div);
-
         div.querySelector('.remove-task-btn').addEventListener('click', () => div.remove());
         div.querySelector('.attach-file-btn').addEventListener('click', (e) => {
             currentTaskElementForAttachment = e.target.closest('.task-input-group');
@@ -255,9 +436,7 @@ function handleChecklistsPage() {
                         currentTaskElementForAttachment.dataset.documentName = docName;
                         
                         const infoDiv = currentTaskElementForAttachment.querySelector('.attached-document-info');
-                        if (infoDiv) {
-                            infoDiv.innerHTML = renderAttachmentChip({ documentId: docId, documentName: docName });
-                        }
+                        if (infoDiv) infoDiv.innerHTML = `<span class="attachment-chip">${docName}</span>`;
                     }
                     attachDocumentModalOverlay.style.display = 'none';
                 };
@@ -271,17 +450,6 @@ function handleChecklistsPage() {
     if (attachDocumentCancelBtn) attachDocumentCancelBtn.addEventListener('click', () => attachDocumentModalOverlay.style.display = 'none');
     if (attachDocumentModalOverlay) attachDocumentModalOverlay.addEventListener('click', (e) => {
         if (e.target === attachDocumentModalOverlay) attachDocumentModalOverlay.style.display = 'none';
-    });
-
-    // --- NEW: Event listener for removing an attachment chip directly ---
-    tasksInputArea.addEventListener('click', e => {
-        if (e.target.classList.contains('remove-attachment-chip-btn')) {
-            const taskGroup = e.target.closest('.task-input-group');
-            const infoDiv = taskGroup.querySelector('.attached-document-info');
-            taskGroup.dataset.documentId = '';
-            taskGroup.dataset.documentName = '';
-            infoDiv.innerHTML = '';
-        }
     });
 
     function renderNewChecklistTaskInputs() {
@@ -333,10 +501,56 @@ function handleChecklistsPage() {
     }
     renderNewChecklistTaskInputs();
 
-    async function loadChecklists() { /* ... same as previous turn ... */ }
+    async function loadChecklists() {
+        if (!checklistListDiv) return;
+        checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
+        try {
+            const checklists = await apiRequest("GET", "/checklists");
+            checklistListDiv.innerHTML = '';
+            if (checklists && checklists.length > 0) {
+                checklists.forEach(checklist => {
+                    const checklistItem = document.createElement("div");
+                    checklistItem.className = "checklist-item";
+                    checklistItem.innerHTML = `
+                        <div class="checklist-item-title">
+                            <span style="color: var(--primary-accent);">${checklist.position}</span>
+                            <span>- ${checklist.title}</span>
+                            <span style="font-size: 0.8em; color: var(--text-medium);">(${checklist.structure_type})</span>
+                        </div>
+                        <div class="checklist-item-actions">
+                            <button class="btn btn-secondary btn-sm view-checklist-btn" data-checklist-id="${checklist.checklist_id}">View/Edit</button>
+                            <button class="btn-delete" data-type="checklist" data-id="${checklist.checklist_id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>`;
+                    checklistListDiv.appendChild(checklistItem);
+                });
+            } else {
+                checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
+            }
+        } catch (error) {
+            console.error("Error loading checklists:", error);
+            checklistListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading task lists: ${error.message}</p>`;
+        }
+    }
     
     if (checklistSection) {
-        checklistSection.addEventListener('click', async (event) => { /* ... same as previous turn ... */ });
+        checklistSection.addEventListener('click', async (event) => {
+             const deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
+            if (deleteButton) {
+                const checklistId = deleteButton.dataset.id;
+                const confirmed = await showConfirmModal(`Are you sure you want to delete this task list? This action cannot be undone.`, "Delete");
+                if (confirmed) {
+                    try {
+                        await apiRequest("DELETE", `/checklists/${checklistId}`);
+                        showModalMessage("Task list deleted successfully!", false);
+                        loadChecklists();
+                    } catch (error) {
+                        showModalMessage(`Failed to delete task list: ${error.message}`, true);
+                    }
+                }
+            }
+        });
     }
 
     if (newChecklistForm) {
