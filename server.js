@@ -1324,6 +1324,116 @@ app.put('/onboarding-tasks/:taskId', authenticateToken, async (req, res, next) =
     }
 });
 
+// --- NEW: Checklist CRUD Endpoints ---
+
+// GET all checklists for the company
+app.get('/checklists', authenticateToken, async (req, res, next) => {
+    const { companyId } = req.user;
+    try {
+        // **UPDATED**: Select and alias checklist_id to 'id' for client-side consistency.
+        const checklists = await query('SELECT checklist_id, position, title, structure_type, group_count, tasks FROM Checklists WHERE company_id = $1 ORDER BY position, title', [companyId]);
+        res.status(200).json(checklists);
+    } catch (error) {
+        console.error("Error fetching checklists:", error);
+        next(error);
+    }
+});
+
+// GET a single checklist by its ID
+app.get('/checklists/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId } = req.user;
+    try {
+        const result = await query('SELECT * FROM Checklists WHERE checklist_id = $1 AND company_id = $2', [id, companyId]);
+        if (result.length === 0) {
+            return res.status(404).json({ error: 'Checklist not found or you do not have permission to view it.' });
+        }
+        res.status(200).json(result[0]);
+    } catch (error) {
+        console.error(`Error fetching checklist with id ${id}:`, error);
+        next(error);
+    }
+});
+
+// POST a new checklist
+app.post('/checklists', authenticateToken, async (req, res, next) => {
+    const { position, title, structure_type, group_count, tasks } = req.body;
+    const { companyId, role } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: You are not authorized to create task lists.' });
+    }
+    if (!position || !title || !structure_type || !tasks || tasks.length === 0) {
+        return res.status(400).json({ error: 'Missing required fields for checklist creation.' });
+    }
+
+    try {
+        const result = await runCommand(
+            `INSERT INTO Checklists (company_id, position, title, structure_type, group_count, tasks)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING checklist_id`,
+            [companyId, position, title, structure_type, group_count || 0, JSON.stringify(tasks)]
+        );
+        res.status(201).json({ message: 'Checklist created successfully!', checklistId: result.checklist_id });
+    } catch (error) {
+        // *** UPDATED ERROR HANDLING LOGIC ***
+        if (error.code === '23505' && error.constraint === 'checklists_company_id_position_key') {
+            return res.status(409).json({ error: 'A task list for this position already exists. Please use a different position name.' });
+        }
+        console.error("Error creating checklist:", error);
+        next(error);
+    }
+});
+
+// PUT (update) an existing checklist
+app.put('/checklists/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { position, title, structure_type, group_count, tasks } = req.body;
+    const { companyId, role } = req.user;
+
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: You are not authorized to update task lists.' });
+    }
+    if (!position || !title || !structure_type || !tasks || tasks.length === 0) {
+        return res.status(400).json({ error: 'Missing required fields for checklist update.' });
+    }
+
+    try {
+        const result = await runCommand(
+            `UPDATE Checklists SET position = $1, title = $2, structure_type = $3, group_count = $4, tasks = $5
+             WHERE checklist_id = $6 AND company_id = $7`,
+            [position, title, structure_type, group_count || 0, JSON.stringify(tasks), id, companyId]
+        );
+        if (result === 0) {
+            return res.status(404).json({ error: 'Checklist not found or you do not have permission to update it.' });
+        }
+        res.status(200).json({ message: 'Checklist updated successfully!' });
+    } catch (error) {
+        console.error(`Error updating checklist with id ${id}:`, error);
+        next(error);
+    }
+});
+
+// DELETE a checklist
+app.delete('/checklists/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role } = req.user;
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: You are not authorized to delete task lists.' });
+    }
+    try {
+        const result = await runCommand('DELETE FROM Checklists WHERE checklist_id = $1 AND company_id = $2', [id, companyId]);
+        if (result === 0) {
+            return res.status(404).json({ error: 'Checklist not found or you do not have permission to delete it.' });
+        }
+        res.status(204).send();
+    } catch (error) {
+        console.error(`Error deleting checklist with id ${id}:`, error);
+        next(error);
+    }
+});
+
+// --- End of NEW Checklist Endpoints ---
+
 
 
 app.post('/job-postings', authenticateToken, async (req, res, next) => {
@@ -1652,3 +1762,4 @@ if (require.main === module) {
 } else {
     module.exports = app;
 }
+
