@@ -252,13 +252,29 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
         }
 
         if (!response.ok) {
-            // Attempt to parse error as JSON, fallback to status text
+            // *** UPDATED ERROR HANDLING LOGIC ***
+            // This is more robust and will extract the specific error message from the server.
+            let errorMsg = `HTTP error! Status: ${response.status}`;
             try {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
-            } catch (e) {
-                throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText || 'Unknown Error'}`);
+                // Get the error message from the response body, if it exists
+                const errorText = await response.text();
+                if (errorText) {
+                    // Try to parse it as JSON
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        // Use the specific 'error' field if it exists, otherwise use the whole text
+                        errorMsg = errorData.error || errorText;
+                    } catch (parseError) {
+                        // If it's not JSON, use the raw text as the error message
+                        errorMsg = errorText;
+                    }
+                }
+            } catch (bodyError) {
+                // This catch block runs if we can't even read the response body.
+                // We'll stick with the original error message based on the status code.
+                console.error("Could not read error response body", bodyError);
             }
+            throw new Error(errorMsg);
         }
 
         // Special handling for file downloads: return blob instead of JSON
@@ -1495,7 +1511,7 @@ function handlePricingPage() {
     }
     if (regCheckoutModalOverlay) {
         regCheckoutModalOverlay.addEventListener("click", event => {
-            if (event.target === regCheckoutModalOverlay) {
+            if (event.target === registerCheckoutModalOverlay) {
                 registerCheckoutModalOverlay.style.display = "none";
                 currentSelectedPlan = null;
             }
@@ -2289,3 +2305,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     // Add more else if conditions for other pages as needed
 });
+" in the document and am asking a query about/based on this code below.
+Instructions to follow:
+  * Don't output/edit the document if the query is Direct/Simple. For example, if the query asks for a simple explanation, output a direct answer.
+  * Make sure to **edit** the document if the query is shows the intent of editing the document, in which case output the entire edited document, **not just that section or the edits**.
+    * Don't output the same document/empty document and say that you have edited it.
+    * Don't change unrelated code in the document.
+  * Don't output  and  in your final response.
+  * Any references like "this" or "selected code" refers to the code between  and  tags.
+  * Just acknowledge my request in the introduction.
+  * Make sure to refer to the document as "Canvas" in your response.
+
+the error message doesn't say what we discussed.
+file
+These are the files that the user uploaded:
+{"contentFetchId":"uploaded:image_e096f2.png-949216f2-1a41-4c17-91f8-00a8947b1e8d","fileMimeType":"image/png","fileName":"image_e096f2.png","fileNameIsCodeAccessible":true}
+{"contentFetchId":"uploaded:image_e096f7.png-ca8477d9-b003-4ab7-b893-6c8a7732a30d","fileMimeType":"image/png","fileName":"image_e096f7.png","fileNameIsCodeAccessible":true}
+{"contentFetchId":"uploaded:image_e0970a.png-60471b78-0112-40f4-ab18-e3250dd68603","fileMimeType":"image/png","fileName":"image_e0970a.png","fileNameIsCodeAccessible":tr
