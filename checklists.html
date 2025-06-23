@@ -42,9 +42,8 @@
             opacity: 0.7; transition: opacity 0.3s ease;
         }
         .checklist-item:hover .btn-delete { opacity: 1; color: #e74c3c; transform: scale(1.1); }
-        /* Ensure the SVG within the delete button inherits color */
         .checklist-item-actions .btn-delete svg {
-            fill: currentColor; /* This makes the SVG inherit the 'color' from the button */
+            fill: currentColor;
         }
         .time-group-container .card { margin-top: 15px; background-color: rgba(0,0,0,0.2); }
         .settings-menu { position: relative; }
@@ -61,119 +60,40 @@
             border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
         }
         .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
-
-        /* Styles for the custom message modal */
         .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            display: none; /* Hidden by default */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000; display: none;
         }
         .modal-content {
-            background-color: rgba(26, 26, 26, 0.95);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 30px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            background-color: rgba(26, 26, 26, 0.95); backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 400px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
             position: relative;
         }
-        .modal-content p {
-            margin-bottom: 20px;
-            font-size: 1.1rem;
-        }
-        .modal-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .modal-buttons .btn {
-            padding: 10px 25px;
-            font-size: 1rem;
-        }
-        /* Confirmation Modal Overlay (for showConfirmModal function) */
+        .modal-content p { margin-bottom: 20px; font-size: 1.1rem; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; }
+        .modal-buttons .btn { padding: 10px 25px; font-size: 1rem; }
         #confirm-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1001; /* Higher z-index than message modal */
-            display: none; /* Hidden by default */
+            z-index: 1001;
         }
-        #confirm-modal-overlay .modal-content {
-            background-color: rgba(26, 26, 26, 0.98); /* Slightly more opaque */
-            border: 1px solid var(--border-color);
+        #edit-checklist-modal-overlay, #attach-document-modal-overlay {
+            z-index: 1002;
         }
-        /* NEW: Styles for the Edit Checklist Modal */
-        #edit-checklist-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: none; /* Hidden by default */
-            align-items: center;
-            justify-content: center;
-            z-index: 1002; /* Even higher z-index */
-            overflow-y: auto; /* Enable scrolling for long content */
-            padding: 20px 0; /* Add some vertical padding */
-        }
-        #edit-checklist-modal-overlay .modal-content {
-            max-width: 600px; /* Wider for forms */
-            text-align: left;
-        }
-        #edit-checklist-modal-overlay h3 {
-            text-align: center;
-            margin-top: 0;
-            margin-bottom: 25px;
-            font-size: 1.8rem;
-            color: var(--text-light);
-        }
-        #edit-checklist-modal-overlay .task-input-group {
+        .task-input-container {
             display: flex;
             align-items: flex-end;
             gap: 10px;
-        }
-        #edit-checklist-modal-overlay .task-input-group label {
-            display: none; /* Hide individual task labels within the modal, as group label is sufficient */
-        }
-        #edit-checklist-modal-overlay .task-input-group input[type="text"] {
-            flex-grow: 1;
-        }
-        #edit-checklist-modal-overlay .modal-buttons {
-            justify-content: space-between;
-            margin-top: 25px;
-        }
-        #edit-checklist-modal-overlay .modal-buttons .btn {
-            flex-grow: 1;
-        }
-        .edit-tasks-container .card { /* Specific styling for tasks within edit modal */
-            margin-top: 15px;
-            background-color: rgba(0,0,0,0.2);
-            padding: 15px;
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .edit-tasks-container .card h4 {
-            color: var(--primary-accent);
-            margin-top: 0;
             margin-bottom: 10px;
+        }
+        .task-input-container .form-group {
+            flex-grow: 1;
+            margin-bottom: 0;
+        }
+        .attached-document-info {
+            font-size: 0.8rem;
+            color: var(--text-medium);
+            margin-top: 5px;
         }
     </style>
 </head>
@@ -232,7 +152,8 @@
             </div>
         </section>
     </div>
-    <!-- Message Modal Overlay (for showModalMessage function) -->
+
+    <!-- Modals -->
     <div id="message-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <p id="modal-message-text"></p>
@@ -241,7 +162,6 @@
             </div>
         </div>
     </div>
-    <!-- Confirmation Modal Overlay (for showConfirmModal function) -->
     <div id="confirm-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <p id="confirm-modal-message"></p>
@@ -251,47 +171,29 @@
             </div>
         </div>
     </div>
-
-    <!-- NEW: Edit Checklist Modal Overlay -->
     <div id="edit-checklist-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <h3 id="edit-checklist-modal-title">Edit Task List</h3>
             <form id="edit-checklist-form">
-                <input type="hidden" id="edit-checklist-id">
-                <div class="form-group">
-                    <label for="edit-checklist-position">Task List for Position</label>
-                    <input type="text" id="edit-checklist-position" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-checklist-title">Task List Title</label>
-                    <input type="text" id="edit-checklist-title" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-structure-type-select">Task Structure</label>
-                    <select id="edit-structure-type-select" name="structure_type">
-                        <option value="single_list">Single List</option>
-                        <option value="daily">Group by Day</option>
-                        <option value="weekly">Group by Week</option>
-                    </select>
-                </div>
-                <div class="form-group" id="edit-time-group-count-container" style="display: none;">
-                    <label id="edit-time-group-count-label" for="edit-time-group-count">Number of Weeks</label>
-                    <input type="number" id="edit-time-group-count" min="1" value="1">
-                </div>
-                <hr style="border-color: var(--border-color); margin: 20px 0;">
-                <h4>Tasks</h4>
-                <div id="edit-tasks-input-area" class="edit-tasks-container">
-                    <!-- Tasks will be dynamically loaded here -->
-                </div>
-                <button type="button" class="btn btn-secondary" id="add-edit-task-btn" style="margin-top: 10px;">Add Another Task +</button>
-
-                <div class="modal-buttons">
-                    <button type="button" id="edit-checklist-cancel-btn" class="btn btn-secondary">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
+                <!-- Form fields will be populated by JS -->
             </form>
         </div>
     </div>
+    <!-- NEW: Attach Document Modal -->
+    <div id="attach-document-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Attach a Document</h3>
+            <p>Select a document from your library to attach to this task.</p>
+            <div id="attach-document-list" style="max-height: 300px; overflow-y: auto; text-align: left;">
+                <!-- Document list will be populated by JS -->
+                <p>Loading documents...</p>
+            </div>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                 <button id="attach-document-cancel-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/app.min.js"></script>
 </body>
 </html>
