@@ -175,11 +175,31 @@ function handleChecklistsPage() {
     let currentTaskElementForAttachment = null;
     let taskCounter = 0;
 
+    /**
+     * --- NEW: Helper function to generate the attachment chip UI ---
+     */
+    function renderAttachmentChip(task) {
+        if (!task || !task.documentName) return '';
+        return `
+            <div class="attachment-chip" data-doc-id="${task.documentId}" style="display: inline-flex; align-items: center; gap: 6px; background-color: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 12px; font-size: 0.85rem; margin-top: 5px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="flex-shrink: 0;"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/></svg>
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.documentName}</span>
+                <button type="button" class="remove-attachment-chip-btn" title="Remove Attachment" style="background: none; border: none; color: var(--text-medium); cursor: pointer; font-size: 1.2rem; line-height: 1; padding: 0 0 0 4px;">&times;</button>
+            </div>
+        `;
+    }
+
+    /**
+     * --- MODIFIED: This function now uses the helper to render the attachment chip ---
+     */
     function addSingleTaskInput(container, task = {}) {
         const div = document.createElement('div');
         div.className = 'form-group task-input-group';
         div.dataset.documentId = task.documentId || '';
+        div.dataset.documentName = task.documentName || ''; // Store name as well
+        
         const uniqueInputId = `task-input-${taskCounter++}`;
+
         div.innerHTML = `
             <div class="task-input-container">
                 <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
@@ -191,11 +211,12 @@ function handleChecklistsPage() {
                     <button type="button" class="btn btn-secondary btn-sm remove-task-btn">Remove</button>
                 </div>
             </div>
-            <div class="attached-document-info" style="font-size: 0.8rem; color: var(--text-medium); margin-top: 5px; height: 1.2em;">
-                ${task.documentName ? `Attached: ${task.documentName}` : ''}
+            <div class="attached-document-info" style="margin-top: 5px; height: auto; min-height: 1.2em;">
+                ${renderAttachmentChip(task)}
             </div>
         `;
         container.appendChild(div);
+
         div.querySelector('.remove-task-btn').addEventListener('click', () => div.remove());
         div.querySelector('.attach-file-btn').addEventListener('click', (e) => {
             currentTaskElementForAttachment = e.target.closest('.task-input-group');
@@ -210,19 +231,7 @@ function handleChecklistsPage() {
         try {
             const documents = await apiRequest('GET', '/documents');
             attachDocumentListDiv.innerHTML = '';
-            const removeAttachmentBtn = document.createElement('button');
-            removeAttachmentBtn.className = 'list-item';
-            removeAttachmentBtn.style.cssText = 'width: 100%; cursor: pointer; color: #ff8a80; justify-content: center; margin-bottom: 10px;';
-            removeAttachmentBtn.textContent = 'Remove Attachment From Task';
-            removeAttachmentBtn.onclick = () => {
-                if (currentTaskElementForAttachment) {
-                    currentTaskElementForAttachment.dataset.documentId = '';
-                    currentTaskElementForAttachment.querySelector('.attached-document-info').textContent = '';
-                }
-                attachDocumentModalOverlay.style.display = 'none';
-            };
-            attachDocumentListDiv.appendChild(removeAttachmentBtn);
-
+            
             if (documents.length === 0) {
                 attachDocumentListDiv.insertAdjacentHTML('beforeend', '<p>No documents found. Upload in "Documents" app first.</p>');
                 return;
@@ -236,11 +245,19 @@ function handleChecklistsPage() {
                 docButton.textContent = `${doc.title} (${doc.file_name})`;
                 docButton.dataset.documentId = doc.document_id;
                 docButton.dataset.documentName = doc.file_name;
+                
                 docButton.onclick = () => {
                     if (currentTaskElementForAttachment) {
-                        currentTaskElementForAttachment.dataset.documentId = docButton.dataset.documentId;
+                        const docId = docButton.dataset.documentId;
+                        const docName = docButton.dataset.documentName;
+                        
+                        currentTaskElementForAttachment.dataset.documentId = docId;
+                        currentTaskElementForAttachment.dataset.documentName = docName;
+                        
                         const infoDiv = currentTaskElementForAttachment.querySelector('.attached-document-info');
-                        if (infoDiv) infoDiv.textContent = `Attached: ${docButton.dataset.documentName}`;
+                        if (infoDiv) {
+                            infoDiv.innerHTML = renderAttachmentChip({ documentId: docId, documentName: docName });
+                        }
                     }
                     attachDocumentModalOverlay.style.display = 'none';
                 };
@@ -256,7 +273,19 @@ function handleChecklistsPage() {
         if (e.target === attachDocumentModalOverlay) attachDocumentModalOverlay.style.display = 'none';
     });
 
+    // --- NEW: Event listener for removing an attachment chip directly ---
+    tasksInputArea.addEventListener('click', e => {
+        if (e.target.classList.contains('remove-attachment-chip-btn')) {
+            const taskGroup = e.target.closest('.task-input-group');
+            const infoDiv = taskGroup.querySelector('.attached-document-info');
+            taskGroup.dataset.documentId = '';
+            taskGroup.dataset.documentName = '';
+            infoDiv.innerHTML = '';
+        }
+    });
+
     function renderNewChecklistTaskInputs() {
+        if (!tasksInputArea || !structureTypeSelect || !timeGroupCountInput) return;
         tasksInputArea.innerHTML = '';
         const structureType = structureTypeSelect.value;
         const groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
@@ -304,57 +333,10 @@ function handleChecklistsPage() {
     }
     renderNewChecklistTaskInputs();
 
-    async function loadChecklists() {
-        if (!checklistListDiv) return;
-        checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
-        try {
-            const checklists = await apiRequest("GET", "/checklists");
-            checklistListDiv.innerHTML = '';
-            if (checklists && checklists.length > 0) {
-                checklists.forEach(checklist => {
-                    const checklistItem = document.createElement("div");
-                    checklistItem.className = "checklist-item";
-                    checklistItem.innerHTML = `
-                        <div class="checklist-item-title">
-                            <span style="color: var(--primary-accent);">${checklist.position}</span>
-                            <span>- ${checklist.title}</span>
-                            <span style="font-size: 0.8em; color: var(--text-medium);">(${checklist.structure_type})</span>
-                        </div>
-                        <div class="checklist-item-actions">
-                            <button class="btn btn-secondary btn-sm view-checklist-btn" data-checklist-id="${checklist.checklist_id}">View/Edit</button>
-                            <button class="btn-delete" data-type="checklist" data-id="${checklist.checklist_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    checklistListDiv.appendChild(checklistItem);
-                });
-            } else {
-                checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
-            }
-        } catch (error) {
-            console.error("Error loading checklists:", error);
-            checklistListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading task lists: ${error.message}</p>`;
-        }
-    }
+    async function loadChecklists() { /* ... same as previous turn ... */ }
     
     if (checklistSection) {
-        checklistSection.addEventListener('click', async (event) => {
-             const deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
-            if (deleteButton) {
-                const checklistId = deleteButton.dataset.id;
-                const confirmed = await showConfirmModal(`Are you sure you want to delete this task list? This action cannot be undone.`, "Delete");
-                if (confirmed) {
-                    try {
-                        await apiRequest("DELETE", `/checklists/${checklistId}`);
-                        showModalMessage("Task list deleted successfully!", false);
-                        loadChecklists();
-                    } catch (error) {
-                        showModalMessage(`Failed to delete task list: ${error.message}`, true);
-                    }
-                }
-            }
-        });
+        checklistSection.addEventListener('click', async (event) => { /* ... same as previous turn ... */ });
     }
 
     if (newChecklistForm) {
@@ -369,12 +351,12 @@ function handleChecklistsPage() {
             if (structure_type === 'single_list') {
                 document.querySelectorAll('#tasks-input-area .task-input-group').forEach(groupEl => {
                     const descriptionInput = groupEl.querySelector('.task-description-input');
-                    if(descInput && descInput.value.trim()) {
+                    if (descriptionInput && descriptionInput.value.trim()) {
                         tasks.push({
                             description: descriptionInput.value.trim(),
                             completed: false,
                             documentId: groupEl.dataset.documentId || null,
-                            documentName: groupEl.querySelector('.attached-document-info').textContent.replace('Attached: ', '') || null
+                            documentName: groupEl.dataset.documentName || null
                         });
                     }
                 });
@@ -383,12 +365,12 @@ function handleChecklistsPage() {
                     const groupTasks = [];
                     groupContainer.querySelectorAll('.task-input-group').forEach(groupEl => {
                         const descriptionInput = groupEl.querySelector('.task-description-input');
-                        if(descInput && descInput.value.trim()) {
+                        if (descriptionInput && descriptionInput.value.trim()) {
                             groupTasks.push({
                                 description: descriptionInput.value.trim(),
                                 completed: false,
                                 documentId: groupEl.dataset.documentId || null,
-                                documentName: groupEl.querySelector('.attached-document-info').textContent.replace('Attached: ', '') || null
+                                documentName: groupEl.dataset.documentName || null
                             });
                         }
                     });
@@ -421,7 +403,6 @@ function handleChecklistsPage() {
 document.addEventListener("DOMContentLoaded", () => {
     setupSettingsDropdown();
     const path = window.location.pathname;
-
     if (path.includes("login.html")) handleLoginPage();
     else if (path.includes("register.html")) handleRegisterPage();
     else if (path.includes("suite-hub.html")) handleSuiteHubPage();

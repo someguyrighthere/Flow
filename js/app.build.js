@@ -105,8 +105,8 @@ function _apiRequest() {
       response,
       errorMsg,
       _args5 = arguments,
-      _t5,
-      _t6;
+      _t3,
+      _t4;
     return _regenerator().w(function (_context5) {
       while (1) switch (_context5.n) {
         case 0:
@@ -186,19 +186,19 @@ function _apiRequest() {
           _context5.n = 5;
           return response.json();
         case 5:
-          _t5 = _context5.v.error;
-          if (_t5) {
+          _t3 = _context5.v.error;
+          if (_t3) {
             _context5.n = 6;
             break;
           }
-          _t5 = errorMsg;
+          _t3 = errorMsg;
         case 6:
-          errorMsg = _t5;
+          errorMsg = _t3;
           _context5.n = 8;
           break;
         case 7:
           _context5.p = 7;
-          _t6 = _context5.v;
+          _t4 = _context5.v;
         case 8:
           throw new Error(errorMsg);
         case 9:
@@ -255,13 +255,27 @@ function handleChecklistsPage() {
   var attachDocumentCancelBtn = document.getElementById("attach-document-cancel-btn");
   var currentTaskElementForAttachment = null;
   var taskCounter = 0;
+
+  /**
+   * --- NEW: Helper function to generate the attachment chip UI ---
+   */
+  function renderAttachmentChip(task) {
+    if (!task || !task.documentName) return '';
+    return "\n            <div class=\"attachment-chip\" data-doc-id=\"".concat(task.documentId, "\" style=\"display: inline-flex; align-items: center; gap: 6px; background-color: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 12px; font-size: 0.85rem; margin-top: 5px;\">\n                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" fill=\"currentColor\" viewBox=\"0 0 16 16\" style=\"flex-shrink: 0;\"><path d=\"M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z\"/></svg>\n                <span style=\"white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\">").concat(task.documentName, "</span>\n                <button type=\"button\" class=\"remove-attachment-chip-btn\" title=\"Remove Attachment\" style=\"background: none; border: none; color: var(--text-medium); cursor: pointer; font-size: 1.2rem; line-height: 1; padding: 0 0 0 4px;\">&times;</button>\n            </div>\n        ");
+  }
+
+  /**
+   * --- MODIFIED: This function now uses the helper to render the attachment chip ---
+   */
   function addSingleTaskInput(container) {
     var task = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
     var div = document.createElement('div');
     div.className = 'form-group task-input-group';
     div.dataset.documentId = task.documentId || '';
+    div.dataset.documentName = task.documentName || ''; // Store name as well
+
     var uniqueInputId = "task-input-".concat(taskCounter++);
-    div.innerHTML = "\n            <div class=\"task-input-container\">\n                <div class=\"form-group\" style=\"flex-grow: 1; margin-bottom: 0;\">\n                    <label for=\"".concat(uniqueInputId, "\">Task Description</label>\n                    <input type=\"text\" id=\"").concat(uniqueInputId, "\" class=\"task-description-input\" value=\"").concat(task.description || '', "\" placeholder=\"e.g., Complete HR paperwork\" required>\n                </div>\n                <div class=\"task-actions\" style=\"display: flex; align-items: flex-end; gap: 5px; margin-bottom: 0;\">\n                    <button type=\"button\" class=\"btn btn-secondary btn-sm attach-file-btn\">Attach</button>\n                    <button type=\"button\" class=\"btn btn-secondary btn-sm remove-task-btn\">Remove</button>\n                </div>\n            </div>\n            <div class=\"attached-document-info\" style=\"font-size: 0.8rem; color: var(--text-medium); margin-top: 5px; height: 1.2em;\">\n                ").concat(task.documentName ? "Attached: ".concat(task.documentName) : '', "\n            </div>\n        ");
+    div.innerHTML = "\n            <div class=\"task-input-container\">\n                <div class=\"form-group\" style=\"flex-grow: 1; margin-bottom: 0;\">\n                    <label for=\"".concat(uniqueInputId, "\">Task Description</label>\n                    <input type=\"text\" id=\"").concat(uniqueInputId, "\" class=\"task-description-input\" value=\"").concat(task.description || '', "\" placeholder=\"e.g., Complete HR paperwork\" required>\n                </div>\n                <div class=\"task-actions\" style=\"display: flex; align-items: flex-end; gap: 5px; margin-bottom: 0;\">\n                    <button type=\"button\" class=\"btn btn-secondary btn-sm attach-file-btn\">Attach</button>\n                    <button type=\"button\" class=\"btn btn-secondary btn-sm remove-task-btn\">Remove</button>\n                </div>\n            </div>\n            <div class=\"attached-document-info\" style=\"margin-top: 5px; height: auto; min-height: 1.2em;\">\n                ").concat(renderAttachmentChip(task), "\n            </div>\n        ");
     container.appendChild(div);
     div.querySelector('.remove-task-btn').addEventListener('click', function () {
       return div.remove();
@@ -276,7 +290,7 @@ function handleChecklistsPage() {
   }
   function _openDocumentSelectorModal() {
     _openDocumentSelectorModal = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3() {
-      var documents, removeAttachmentBtn, _t3;
+      var documents, _t2;
       return _regenerator().w(function (_context3) {
         while (1) switch (_context3.n) {
           case 0:
@@ -294,18 +308,6 @@ function handleChecklistsPage() {
           case 3:
             documents = _context3.v;
             attachDocumentListDiv.innerHTML = '';
-            removeAttachmentBtn = document.createElement('button');
-            removeAttachmentBtn.className = 'list-item';
-            removeAttachmentBtn.style.cssText = 'width: 100%; cursor: pointer; color: #ff8a80; justify-content: center; margin-bottom: 10px;';
-            removeAttachmentBtn.textContent = 'Remove Attachment From Task';
-            removeAttachmentBtn.onclick = function () {
-              if (currentTaskElementForAttachment) {
-                currentTaskElementForAttachment.dataset.documentId = '';
-                currentTaskElementForAttachment.querySelector('.attached-document-info').textContent = '';
-              }
-              attachDocumentModalOverlay.style.display = 'none';
-            };
-            attachDocumentListDiv.appendChild(removeAttachmentBtn);
             if (!(documents.length === 0)) {
               _context3.n = 4;
               break;
@@ -323,9 +325,17 @@ function handleChecklistsPage() {
               docButton.dataset.documentName = doc.file_name;
               docButton.onclick = function () {
                 if (currentTaskElementForAttachment) {
-                  currentTaskElementForAttachment.dataset.documentId = docButton.dataset.documentId;
+                  var docId = docButton.dataset.documentId;
+                  var docName = docButton.dataset.documentName;
+                  currentTaskElementForAttachment.dataset.documentId = docId;
+                  currentTaskElementForAttachment.dataset.documentName = docName;
                   var infoDiv = currentTaskElementForAttachment.querySelector('.attached-document-info');
-                  if (infoDiv) infoDiv.textContent = "Attached: ".concat(docButton.dataset.documentName);
+                  if (infoDiv) {
+                    infoDiv.innerHTML = renderAttachmentChip({
+                      documentId: docId,
+                      documentName: docName
+                    });
+                  }
                 }
                 attachDocumentModalOverlay.style.display = 'none';
               };
@@ -335,8 +345,8 @@ function handleChecklistsPage() {
             break;
           case 5:
             _context3.p = 5;
-            _t3 = _context3.v;
-            attachDocumentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error: ".concat(_t3.message, "</p>");
+            _t2 = _context3.v;
+            attachDocumentListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error: ".concat(_t2.message, "</p>");
           case 6:
             return _context3.a(2);
         }
@@ -350,7 +360,19 @@ function handleChecklistsPage() {
   if (attachDocumentModalOverlay) attachDocumentModalOverlay.addEventListener('click', function (e) {
     if (e.target === attachDocumentModalOverlay) attachDocumentModalOverlay.style.display = 'none';
   });
+
+  // --- NEW: Event listener for removing an attachment chip directly ---
+  tasksInputArea.addEventListener('click', function (e) {
+    if (e.target.classList.contains('remove-attachment-chip-btn')) {
+      var taskGroup = e.target.closest('.task-input-group');
+      var infoDiv = taskGroup.querySelector('.attached-document-info');
+      taskGroup.dataset.documentId = '';
+      taskGroup.dataset.documentName = '';
+      infoDiv.innerHTML = '';
+    }
+  });
   function renderNewChecklistTaskInputs() {
+    if (!tasksInputArea || !structureTypeSelect || !timeGroupCountInput) return;
     tasksInputArea.innerHTML = '';
     var structureType = structureTypeSelect.value;
     var groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
@@ -398,84 +420,24 @@ function handleChecklistsPage() {
   }
   function _loadChecklists() {
     _loadChecklists = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4() {
-      var checklists, _t4;
       return _regenerator().w(function (_context4) {
         while (1) switch (_context4.n) {
           case 0:
-            if (checklistListDiv) {
-              _context4.n = 1;
-              break;
-            }
-            return _context4.a(2);
-          case 1:
-            checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
-            _context4.p = 2;
-            _context4.n = 3;
-            return apiRequest("GET", "/checklists");
-          case 3:
-            checklists = _context4.v;
-            checklistListDiv.innerHTML = '';
-            if (checklists && checklists.length > 0) {
-              checklists.forEach(function (checklist) {
-                var checklistItem = document.createElement("div");
-                checklistItem.className = "checklist-item";
-                checklistItem.innerHTML = "\n                        <div class=\"checklist-item-title\">\n                            <span style=\"color: var(--primary-accent);\">".concat(checklist.position, "</span>\n                            <span>- ").concat(checklist.title, "</span>\n                            <span style=\"font-size: 0.8em; color: var(--text-medium);\">(").concat(checklist.structure_type, ")</span>\n                        </div>\n                        <div class=\"checklist-item-actions\">\n                            <button class=\"btn btn-secondary btn-sm view-checklist-btn\" data-checklist-id=\"").concat(checklist.checklist_id, "\">View/Edit</button>\n                            <button class=\"btn-delete\" data-type=\"checklist\" data-id=\"").concat(checklist.checklist_id, "\">\n                                <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z\"/><path d=\"M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z\"/></svg>\n                            </button>\n                        </div>\n                    ");
-                checklistListDiv.appendChild(checklistItem);
-              });
-            } else {
-              checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
-            }
-            _context4.n = 5;
-            break;
-          case 4:
-            _context4.p = 4;
-            _t4 = _context4.v;
-            console.error("Error loading checklists:", _t4);
-            checklistListDiv.innerHTML = "<p style=\"color: #e74c3c;\">Error loading task lists: ".concat(_t4.message, "</p>");
-          case 5:
             return _context4.a(2);
         }
-      }, _callee4, null, [[2, 4]]);
+      }, _callee4);
     }));
     return _loadChecklists.apply(this, arguments);
   }
   if (checklistSection) {
     checklistSection.addEventListener('click', /*#__PURE__*/function () {
       var _ref = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee(event) {
-        var deleteButton, checklistId, confirmed, _t;
         return _regenerator().w(function (_context) {
           while (1) switch (_context.n) {
             case 0:
-              deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
-              if (!deleteButton) {
-                _context.n = 5;
-                break;
-              }
-              checklistId = deleteButton.dataset.id;
-              _context.n = 1;
-              return showConfirmModal("Are you sure you want to delete this task list? This action cannot be undone.", "Delete");
-            case 1:
-              confirmed = _context.v;
-              if (!confirmed) {
-                _context.n = 5;
-                break;
-              }
-              _context.p = 2;
-              _context.n = 3;
-              return apiRequest("DELETE", "/checklists/".concat(checklistId));
-            case 3:
-              showModalMessage("Task list deleted successfully!", false);
-              loadChecklists();
-              _context.n = 5;
-              break;
-            case 4:
-              _context.p = 4;
-              _t = _context.v;
-              showModalMessage("Failed to delete task list: ".concat(_t.message), true);
-            case 5:
               return _context.a(2);
           }
-        }, _callee, null, [[2, 4]]);
+        }, _callee);
       }));
       return function (_x3) {
         return _ref.apply(this, arguments);
@@ -485,7 +447,7 @@ function handleChecklistsPage() {
   if (newChecklistForm) {
     newChecklistForm.addEventListener("submit", /*#__PURE__*/function () {
       var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(e) {
-        var position, title, structure_type, group_count, tasks, _t2;
+        var position, title, structure_type, group_count, tasks, _t;
         return _regenerator().w(function (_context2) {
           while (1) switch (_context2.n) {
             case 0:
@@ -498,12 +460,12 @@ function handleChecklistsPage() {
               if (structure_type === 'single_list') {
                 document.querySelectorAll('#tasks-input-area .task-input-group').forEach(function (groupEl) {
                   var descriptionInput = groupEl.querySelector('.task-description-input');
-                  if (descInput && descInput.value.trim()) {
+                  if (descriptionInput && descriptionInput.value.trim()) {
                     tasks.push({
                       description: descriptionInput.value.trim(),
                       completed: false,
                       documentId: groupEl.dataset.documentId || null,
-                      documentName: groupEl.querySelector('.attached-document-info').textContent.replace('Attached: ', '') || null
+                      documentName: groupEl.dataset.documentName || null
                     });
                   }
                 });
@@ -512,12 +474,12 @@ function handleChecklistsPage() {
                   var groupTasks = [];
                   groupContainer.querySelectorAll('.task-input-group').forEach(function (groupEl) {
                     var descriptionInput = groupEl.querySelector('.task-description-input');
-                    if (descInput && descInput.value.trim()) {
+                    if (descriptionInput && descriptionInput.value.trim()) {
                       groupTasks.push({
                         description: descriptionInput.value.trim(),
                         completed: false,
                         documentId: groupEl.dataset.documentId || null,
-                        documentName: groupEl.querySelector('.attached-document-info').textContent.replace('Attached: ', '') || null
+                        documentName: groupEl.dataset.documentName || null
                       });
                     }
                   });
@@ -554,8 +516,8 @@ function handleChecklistsPage() {
               break;
             case 3:
               _context2.p = 3;
-              _t2 = _context2.v;
-              showModalMessage(_t2.message, true);
+              _t = _context2.v;
+              showModalMessage(_t.message, true);
             case 4:
               return _context2.a(2);
           }
