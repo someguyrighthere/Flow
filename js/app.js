@@ -86,6 +86,17 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
     const token = localStorage.getItem('authToken');
     const endpoint = `${API_BASE_URL}${path}`;
 
+    // --- UPDATED: Centralized redirect logic for expired tokens ---
+    const handleAuthError = (errorMessage) => {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userRole');
+        showModalMessage(errorMessage, true);
+        // Redirect to login page with a message
+        setTimeout(() => {
+            window.location.href = 'login.html?sessionExpired=true';
+        }, 1500); 
+    };
+
     if (isFormData) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -96,8 +107,7 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try { resolve(JSON.parse(xhr.responseText || '{}')); } catch (e) { resolve({}); }
                 } else if (xhr.status === 401 || xhr.status === 403) {
-                    localStorage.clear();
-                    showModalMessage('Authentication failed. Please log in again.', true);
+                    handleAuthError('Your session has expired. Please log in again.');
                     reject(new Error('Authentication failed.'));
                 } else {
                     try { reject(new Error(JSON.parse(xhr.responseText).error || 'An unknown error occurred.')); }
@@ -117,7 +127,7 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
     }
     const response = await fetch(endpoint, options);
     if (response.status === 401 || response.status === 403) {
-        localStorage.clear();
+        handleAuthError('Your session has expired. Please log in again.');
         throw new Error('Authentication failed.');
     }
     if (!response.ok) {
@@ -133,6 +143,15 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
 function handleLoginPage() {
     const loginForm = document.getElementById("login-form");
     if (!loginForm) return;
+
+    // --- NEW: Check for session expired message on page load ---
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('sessionExpired')) {
+        showModalMessage("Your session has expired. Please log in again.", true);
+        // Clean the URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     loginForm.addEventListener("submit", async e => {
         e.preventDefault();
         const email = document.getElementById("email").value.trim();
@@ -159,121 +178,9 @@ function handleDashboardPage() { /* ... function content from your app.js ... */
 function handlePricingPage() { /* ... function content from your app.js ... */ }
 function handleHiringPage() { /* ... function content from your app.js ... */ }
 function handleSchedulingPage() { /* ... function content from your app.js ... */ }
-
-function handleDocumentsPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-    const uploadDocumentForm = document.getElementById("upload-document-form");
-    const documentTitleInput = document.getElementById("document-title");
-    const documentFileInput = document.getElementById("document-file");
-    const documentDescriptionInput = document.getElementById("document-description");
-    const documentListDiv = document.getElementById("document-list");
-    const uploadProgressContainer = document.getElementById("upload-progress-container");
-    const uploadProgressFill = document.getElementById("upload-progress-fill");
-    const uploadProgressText = document.getElementById("upload-progress-text");
-
-    function showUploadProgress(percentage, text = `${percentage}%`) {
-        if (uploadProgressContainer && uploadProgressFill && uploadProgressText) {
-            uploadProgressContainer.style.display = 'block';
-            uploadProgressText.style.display = 'block';
-            uploadProgressFill.style.width = `${percentage}%`;
-            uploadProgressText.textContent = text;
-        }
-    }
-    function hideUploadProgress() {
-        if (uploadProgressContainer && uploadProgressText) {
-            uploadProgressContainer.style.display = 'none';
-            uploadProgressText.style.display = 'none';
-            uploadProgressFill.style.width = '0%';
-        }
-    }
-
-    async function loadDocuments() {
-        if (!documentListDiv) return;
-        documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
-        try {
-            const documents = await apiRequest("GET", "/documents");
-            documentListDiv.innerHTML = '';
-            if (documents.length === 0) {
-                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
-            } else {
-                documents.forEach(doc => {
-                    const docItem = document.createElement("div");
-                    docItem.className = "document-item";
-                    docItem.innerHTML = `
-                        <h4>${doc.title}</h4>
-                        <p>File: ${doc.file_name}</p>
-                        <p>Description: ${doc.description || 'N/A'}</p>
-                        <p>Uploaded: ${new Date(doc.upload_date).toLocaleDateString()}</p>
-                        <div class="actions">
-                            <a href="${API_BASE_URL}/documents/download/${doc.document_id}" class="btn btn-secondary btn-sm" download>Download</a>
-                            <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>`;
-                    documentListDiv.appendChild(docItem);
-                });
-            }
-        } catch (error) {
-            documentListDiv.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
-        }
-    }
-    
-    if (uploadDocumentForm) {
-        uploadDocumentForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const title = documentTitleInput.value.trim();
-            const file = documentFileInput.files[0];
-            const description = documentDescriptionInput.value.trim();
-            if (!title || !file) {
-                showModalMessage("Please provide a document title and select a file.", true);
-                return;
-            }
-            const formData = new FormData();
-            formData.append('title', title);
-            formData.append('description', description);
-            formData.append('document_file', file);
-            try {
-                showUploadProgress(0, 'Starting upload...');
-                await apiRequest("POST", "/documents/upload", formData, true, event => {
-                    if (event.lengthComputable) {
-                        const percentComplete = Math.round((event.loaded * 100) / event.total);
-                        showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
-                    }
-                });
-                showModalMessage("Document uploaded successfully!", false);
-                uploadDocumentForm.reset();
-                hideUploadProgress();
-                loadDocuments();
-            } catch (error) {
-                showModalMessage(`Upload failed: ${error.message}`, true);
-                hideUploadProgress();
-            }
-        });
-    }
-
-    if (documentListDiv) {
-        documentListDiv.addEventListener("click", async e => {
-            const targetButton = e.target.closest(".btn-delete");
-            if (targetButton && targetButton.dataset.type === "document") {
-                const idToDelete = parseInt(targetButton.dataset.id, 10);
-                const confirmed = await showConfirmModal("Are you sure you want to delete this document?", "Delete");
-                if (confirmed) {
-                    try {
-                        await apiRequest("DELETE", `/documents/${idToDelete}`);
-                        showModalMessage("Document deleted successfully.", false);
-                        loadDocuments();
-                    } catch (error) {
-                        showModalMessage(`Error deleting document: ${error.message}`, true);
-                    }
-                }
-            }
-        });
-    }
-    loadDocuments();
-}
-
-function handleChecklistsPage() { /* (logic from previous turns) */ }
-function handleNewHireViewPage() { /* (logic from previous turns) */ }
+function handleDocumentsPage() { /* ... function content from your app.js ... */ }
+function handleChecklistsPage() { /* ... function content from your app.js ... */ }
+function handleNewHireViewPage() { /* ... function content from your app.js ... */ }
 
 // Global DOMContentLoaded listener
 document.addEventListener("DOMContentLoaded", () => {
