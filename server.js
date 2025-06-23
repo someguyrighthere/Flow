@@ -942,6 +942,34 @@ app.delete('/users/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
+
+// NEW: Endpoint to get positions for the dashboard dropdown
+app.get('/positions', authenticateToken, async (req, res, next) => {
+    const { companyId } = req.user;
+
+    try {
+        // This query selects the unique position names associated with the user's company
+        const result = await query(
+            'SELECT DISTINCT position FROM Checklists WHERE company_id = $1 ORDER BY position ASC', 
+            [companyId]
+        );
+
+        // The frontend expects an object with an array of {id, name}.
+        // We will map the database results to this format.
+        const positions = result.map(row => ({
+            id: row.position, // Using the position name as the ID
+            name: row.position
+        }));
+
+        res.status(200).json({ positions: positions });
+
+    } catch (error) {
+        console.error("Database error fetching positions:", error);
+        next(error);
+    }
+});
+
+
 app.post('/schedules', authenticateToken, async (req, res, next) => {
     const { employee_id, location_id, start_time, end_time, notes } = req.body;
     const { companyId, role, locationId: currentUserLocationId } = req.user;
@@ -1089,6 +1117,214 @@ app.delete('/schedules/:id', authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
+
+// --- Onboarding Endpoints ---
+
+// This endpoint is called from the "Onboard New Employee" modal on the dashboard.
+// It creates a new user with the 'employee' role.
+app.post('/onboard-employee', authenticateToken, async (req, res, next) => {
+    const { full_name, email, position_id, employee_id } = req.body;
+    const { companyId, role } = req.user;
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can onboard new employees.' });
+    }
+
+    // Use the position_id from the request, which is the position name (e.g., "Sales")
+    const position = position_id; 
+
+    // Basic validation
+    if (!full_name || !email || !position) {
+        return res.status(400).json({ error: 'Full name, email, and a valid position are required.' });
+    }
+
+    try {
+        // A simple, insecure temporary password. In a real-world scenario, you would
+        // generate a more secure random password or use a token-based invitation system.
+        const tempPassword = 'password123';
+        const password_hash = await bcrypt.hash(tempPassword, 10);
+
+        // Check if a checklist exists for this position to ensure it's a valid onboarding position
+        const checklist = await query('SELECT 1 FROM Checklists WHERE position = $1 AND company_id = $2', [position, companyId]);
+        if (checklist.length === 0) {
+            return res.status(400).json({ error: `No task list found for position: '${position}'. Please create one first.` });
+        }
+
+        // Insert the new employee into the Users table
+        const newUser = await runCommand(
+            `INSERT INTO Users (company_id, full_name, email, password_hash, role, position, employee_id, subscription_status, plan_id) 
+             VALUES ($1, $2, $3, $4, 'employee', $5, $6, 'active', 'free') RETURNING user_id`,
+            [companyId, full_name, email, password_hash, position, employee_id]
+        );
+        
+        res.status(201).json({ 
+            message: `Employee onboarded successfully! Their temporary password is: ${tempPassword}`,
+            userId: newUser.user_id 
+        });
+
+    } catch (error) {
+        if (error.code === '23505') { // Handle duplicate email error
+            return res.status(409).json({ error: 'An employee with this email address already exists.' });
+        }
+        console.error("Onboard employee error:", error);
+        next(error);
+    }
+});
+
+
+// This endpoint gets the list of active onboarding sessions for the main dashboard view.
+app.get('/onboarding-sessions', authenticateToken, async (req, res, next) => {
+    const { companyId } = req.user;
+    try {
+        // Step 1: Get all users with the 'employee' role for the company.
+        const employees = await query(`
+            SELECT user_id, full_name, email, position 
+            FROM Users 
+            WHERE role = 'employee' AND company_id = $1
+        `, [companyId]);
+
+        if (employees.length === 0) {
+            return res.json([]);
+        }
+
+        // Step 2: For each employee, get their checklist, total tasks, and completed tasks.
+        const sessions = await Promise.all(employees.map(async (employee) => {
+            // Find the checklist for the employee's position.
+            const checklistResult = await query('SELECT checklist_id, tasks FROM Checklists WHERE position = $1 AND company_id = $2 LIMIT 1', [employee.position, companyId]);
+            if (checklistResult.length === 0) {
+                return null; // Skip if no checklist is found for their position
+            }
+            const checklist = checklistResult[0];
+
+            // Calculate total tasks from the JSONB structure
+            let totalTasks = 0;
+            if (checklist.tasks[0]?.groupTitle) { // It's a grouped list
+                totalTasks = checklist.tasks.reduce((sum, group) => sum + group.tasks.length, 0);
+            } else { // It's a single list
+                totalTasks = checklist.tasks.length;
+            }
+
+            // Count completed tasks from the UserTasks table
+            const completedResult = await query('SELECT COUNT(*) FROM UserTasks WHERE user_id = $1 AND checklist_id = $2', [employee.user_id, checklist.checklist_id]);
+            const completedTasks = parseInt(completedResult[0].count, 10);
+
+            // Filter out completed sessions
+            if (totalTasks > 0 && completedTasks >= totalTasks) {
+                return null;
+            }
+
+            return {
+                ...employee,
+                totalTasks: totalTasks,
+                completedTasks: completedTasks
+            };
+        }));
+        
+        // Filter out the null values for employees with no checklist or who are complete
+        res.json(sessions.filter(session => session !== null));
+
+    } catch (error) {
+        console.error("Error loading onboarding sessions:", error);
+        next(error);
+    }
+});
+
+
+// This endpoint gets the specific task list for a new hire when they view their onboarding page.
+app.get('/onboarding-tasks/:userId', authenticateToken, async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const user = await query('SELECT * FROM Users WHERE user_id = $1', [userId]);
+        if (user.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const position = user[0].position;
+        const checklistResult = await query('SELECT * FROM Checklists WHERE position = $1 AND company_id = $2 LIMIT 1', [user[0].company_id, user[0].company_id]);
+        if (checklistResult.length === 0) {
+            return res.status(404).json({ error: `No checklist found for position: ${position}` });
+        }
+        
+        const checklist = checklistResult[0];
+        const completedTasksResult = await query('SELECT task_description FROM UserTasks WHERE user_id = $1 AND checklist_id = $2', [userId, checklist.checklist_id]);
+        const completedTaskDescriptions = new Set(completedTasksResult.map(t => t.task_description));
+
+        // Map tasks and add completion status and a unique ID for the frontend
+        const mapTasks = (task, groupIndex, taskIndex) => {
+            const isCompleted = completedTaskDescriptions.has(task.description);
+            // Generate a stable, unique ID for the frontend to use
+            const taskId = `${checklist.checklist_id}-${groupIndex}-${taskIndex}`;
+            return { ...task, completed: isCompleted, id: taskId };
+        };
+
+        let tasksWithStatus;
+        if (checklist.tasks[0]?.groupTitle) { // Grouped structure
+            tasksWithStatus = checklist.tasks.map((group, groupIndex) => ({
+                ...group,
+                tasks: group.tasks.map((task, taskIndex) => mapTasks(task, groupIndex, taskIndex))
+            }));
+        } else { // Single list structure
+            tasksWithStatus = checklist.tasks.map((task, taskIndex) => mapTasks(task, -1, taskIndex));
+        }
+
+        res.json({ checklist, tasks: tasksWithStatus });
+    } catch (error) {
+        console.error("Error fetching user onboarding tasks:", error);
+        next(error);
+    }
+});
+
+
+// This endpoint is called when a new hire checks or unchecks a task.
+app.put('/onboarding-tasks/:taskId', authenticateToken, async (req, res, next) => {
+    const { taskId } = req.params;
+    const { completed } = req.body;
+    const { userId } = req.user;
+
+    try {
+        // Deconstruct the task ID generated by the GET endpoint
+        const [checklistId, groupIndex, taskIndex] = taskId.split('-').map(Number);
+        
+        // Fetch the checklist to get the task description from the JSON
+        const checklistResult = await query('SELECT tasks FROM Checklists WHERE checklist_id = $1', [checklistId]);
+        if (checklistResult.length === 0) {
+            return res.status(404).json({ error: 'Checklist not found.' });
+        }
+        
+        const checklistTasks = checklistResult[0].tasks;
+        let taskDescription;
+
+        if (groupIndex === -1) { // Single list
+            taskDescription = checklistTasks[taskIndex]?.description;
+        } else { // Grouped list
+            taskDescription = checklistTasks[groupIndex]?.tasks[taskIndex]?.description;
+        }
+
+        if (!taskDescription) {
+             return res.status(404).json({ error: 'Task not found within checklist.' });
+        }
+
+        if (completed) {
+            // Add a record to UserTasks. ON CONFLICT DO NOTHING prevents errors if it's already there.
+            await runCommand(`
+                INSERT INTO UserTasks (user_id, checklist_id, task_description, completed_at)
+                VALUES ($1, $2, $3, NOW())
+                ON CONFLICT (user_id, checklist_id, task_description) DO NOTHING
+            `, [userId, checklistId, taskDescription]);
+        } else {
+            // Remove the record if the task is unchecked.
+            await runCommand('DELETE FROM UserTasks WHERE user_id = $1 AND checklist_id = $2 AND task_description = $3', [userId, checklistId, taskDescription]);
+        }
+        
+        res.status(200).json({ message: 'Task status updated.' });
+    } catch (error) {
+        console.error("Error updating task status:", error);
+        next(error);
+    }
+});
+
+
 
 app.post('/job-postings', authenticateToken, async (req, res, next) => {
     const { title, description, requirements, location_id } = req.body;
