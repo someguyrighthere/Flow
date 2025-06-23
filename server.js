@@ -1,2310 +1,1654 @@
-// app.js - Client-Side JavaScript for Flow Business Suite
-// This file handles all client-side logic, form submissions, and API requests.
+// --- Imports ---
+const express = require('express');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const path = require('path');
+const csv = require('csv-parser'); // Not used in provided routes, but kept.
+const { Readable } = require('stream'); // Not used in provided routes, but kept.
+const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
+const multer = require('multer'); // ADD THIS LINE: Import multer
+const fs = require('fs'); // ADD THIS LINE: Import file system module for local storage ops
 
-// IMPORTANT: Set this to your deployed backend API URL.
-// Your frontend is deployed at https://flow-gz1r.onrender.com/
-// Assuming your backend API is accessible at the same root with '/api' suffix (as per server.js routes configuration).
-const API_BASE_URL = 'https://flow-gz1r.onrender.com';
 
-// Initialize Stripe.js with your public key
-// This key should be retrieved from your backend or securely stored in your client-side config.
-// The Stripe object is defined by the Stripe.js script loaded in pricing.html.
-let stripe; // Declare as 'let' because it will be initialized conditionally
+// Load environment variables from .env file in development
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+    try {
+        require('fs').accessSync(path.join(__dirname, '.env'));
+        dotenv.config(); // Use dotenv.config() here
+    } catch (e) {
+        console.warn("Warning: .env file not found or accessible locally. Relying on system environment variables.");
+    }
+}
 
-// Add a check to ensure Stripe is defined before initializing
-if (typeof Stripe !== 'undefined') {
-    stripe = Stripe('pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td');
+// Ensure essential environment variables are set
+const PORT = process.env.PORT || 3000; // Default to 3000 if PORT is not set
+const JWT_SECRET = process.env.JWT_SECRET; // This was missing in the original code
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY; // Stripe key
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; // Stripe webhook secret
+// Retrieve Stripe Price IDs from environment variables
+const STRIPE_PRICE_ID_PRO = process.env.STRIPE_PRICE_ID_PRO;
+const STRIPE_PRICE_ID_ENT = process.env.STRIPE_PRICE_ID_ENT;
+
+// Define employee limits for each plan (adjust these values as per your actual tiers)
+const PLAN_EMPLOYEE_LIMITS = {
+    'free': 5,          // Free plan: up to 5 employees
+    'pro': 100,         // Pro plan: up to 100 employees
+    'enterprise': null  // Enterprise plan: null or Infinity for unlimited
+};
+
+
+// Validate JWT_SECRET
+if (!JWT_SECRET) {
+    console.error('FATAL ERROR: JWT_SECRET is not defined. Please set it in your environment variables or .env file.');
+    process.exit(1); // Exit the process if essential variable is missing
+}
+
+// Stripe instance (only if key is available)
+let stripeInstance;
+if (STRIPE_SECRET_KEY) {
+    stripeInstance = require('stripe')(STRIPE_SECRET_KEY);
 } else {
-    // This warning will appear on pages where Stripe is not expected/needed
-    console.warn("Stripe.js not loaded. Stripe functionalities will not work on this page.");
+    console.warn("Warning: STRIPE_SECRET_KEY is not defined. Stripe related functionalities might not work.");
 }
 
+const app = express();
 
-/**
- * Displays a custom modal message to the user.
- * Ensure your HTML includes elements with ids: 'message-modal-overlay', 'modal-message-text', 'modal-close-button'
- * @param {string} message - The message to display.
- * @param {boolean} isError - True if it's an error message, false otherwise.
- */
-function showModalMessage(message, isError = false) {
-    const modalOverlay = document.getElementById("message-modal-overlay");
-    const modalMessage = document.getElementById("modal-message-text");
-    const modalCloseButton = document.getElementById("modal-close-button");
-    if (modalOverlay && modalMessage && modalCloseButton) {
-        modalMessage.textContent = message;
-        modalMessage.style.color = isError ? "#ff8a80" : "var(--text-light)";
-        modalOverlay.style.display = "flex";
-        modalOverlay.style.zIndex = "1000";
-        modalCloseButton.onclick = () => {
-            modalOverlay.style.display = "none";
-        };
-        modalOverlay.onclick = event => {
-            if (event.target === modalOverlay) {
-                modalOverlay.style.display = "none";
-            }
-        };
-    } else {
-        console.error("Modal elements not found for showModalMessage. Message:", message);
-        if (isError) {
-            console.error(`ERROR: ${message}`);
-        } else {
-            console.log(`MESSAGE: ${message}`);
-        }
+// NEW: Trust proxy for Express when behind a load balancer (like Render)
+// This is crucial for rate-limiting middleware to correctly identify client IPs.
+app.set('trust proxy', 1); // Trust the first proxy (Render's load balancer)
+
+// --- General Middleware ---
+app.use(morgan('dev')); // Request logger - placed early
+
+// Stripe Webhook Endpoint (This MUST be before express.json() to get raw body)
+app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+        // Use Stripe's method to construct the event from the raw body and signature
+        // req.rawBody is provided by express.raw() middleware
+        event = stripeInstance.webhooks.constructEvent(req.rawBody, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+        console.error(`Webhook Error: ${err.message}`);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-}
 
-/**
- * Displays a confirmation modal to the user.
- * Ensure your HTML includes elements with ids: 'confirm-modal-overlay', 'confirm-modal-message', 'modal-confirm', 'modal-cancel'
- * @param {string} message - The confirmation message to display.
- * @param {string} confirmButtonText - Text for the confirm button.
- * @returns {Promise<boolean>} - Resolves to true if confirmed, false if cancelled.
- */
-function showConfirmModal(message, confirmButtonText = "Confirm") {
-    return new Promise(resolve => {
-        const confirmModalOverlay = document.getElementById("confirm-modal-overlay");
-        const confirmModalMessage = document.getElementById("confirm-modal-message");
-        const modalConfirmButton = document.getElementById("modal-confirm");
-        const modalCancelButton = document.getElementById("modal-cancel");
+    // --- Database Setup (PostgreSQL) is defined later, so we need to ensure pool is available
+    // or connect specifically for this webhook. For simplicity, we'll assume pool is set up globally.
+    const client = await pool.connect(); // Connect to DB for webhook logic
+    try {
+        await client.query('BEGIN'); // Start transaction for atomicity
 
-        if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
-            console.error("Confirmation modal elements not found. Falling back to native confirm.");
-            resolve(window.confirm(message)); // Fallback is generally not ideal in production for consistent UX
-            return;
-        }
-
-        confirmModalMessage.innerHTML = message; // Use innerHTML to allow for bolding etc.
-        modalConfirmButton.textContent = confirmButtonText;
-        confirmModalOverlay.style.display = "flex";
-
-        const handleConfirm = () => {
-            confirmModalOverlay.style.display = "none";
-            modalConfirmButton.removeEventListener("click", handleConfirm);
-            modalCancelButton.removeEventListener("click", handleCancel);
-            resolve(true);
-        };
-
-        const handleCancel = () => {
-            confirmModalOverlay.style.display = "none";
-            modalConfirmButton.removeEventListener("click", handleConfirm);
-            modalCancelButton.removeEventListener("click", handleCancel);
-            resolve(false);
-        };
-
-        modalConfirmButton.addEventListener("click", handleConfirm);
-        modalCancelButton.addEventListener("click", handleCancel);
-        confirmModalOverlay.onclick = event => {
-            if (event.target === confirmModalOverlay) {
-                handleCancel();
-            }
-        };
-    });
-}
-
-
-/**
- * Sets up the functionality for the settings dropdown menu.
- * This includes showing/hiding the dropdown and handling logout.
- */
-function setupSettingsDropdown() {
-    const settingsButton = document.getElementById("settings-button");
-    const settingsDropdown = document.getElementById("settings-dropdown");
-    const logoutButton = document.getElementById("logout-button");
-    const upgradePlanLink = document.getElementById("upgrade-plan-link");
-
-    if (settingsButton && settingsDropdown) {
-        settingsButton.addEventListener("click", async event => {
-            event.stopPropagation(); // Prevent the document click from immediately closing it
-            settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
-
-            // Conditional logic for "Upgrade Plan" visibility
-            if (settingsDropdown.style.display === "block" && upgradePlanLink) {
-                if (localStorage.getItem("authToken")) {
-                    try {
-                        const profile = await apiRequest("GET", "/profile");
-                        if (profile && profile.plan_id === 'free') {
-                            upgradePlanLink.style.display = 'block';
-                        } else {
-                            upgradePlanLink.style.display = 'none';
-                        }
-                    } catch (error) {
-                        console.error("Error fetching profile for upgrade link:", error);
-                        upgradePlanLink.style.display = 'none';
-                    }
-                } else {
-                    upgradePlanLink.style.display = 'none';
+        // Handle the event
+        switch (event.type) {
+            case 'checkout.session.completed':
+                const session = event.data.object;
+                console.log(`Checkout Session Completed: ${session.id}`);
+                const userId = session.metadata.userId;
+                const planId = session.metadata.planId;
+                if (session.payment_status === 'paid' && userId && planId) {
+                    await client.query(
+                        'UPDATE Users SET stripe_customer_id = $1, stripe_subscription_id = $2, subscription_status = $3, plan_id = $4 WHERE user_id = $5',
+                        [session.customer, session.subscription, 'active', planId, userId]
+                    );
+                    console.log(`User ${userId} subscription updated to ${planId} (active).`);
                 }
-            }
-        });
-        // Close dropdown if user clicks outside
-        document.addEventListener("click", event => {
-            if (!settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
-                settingsDropdown.style.display = "none";
-            }
-        });
-    }
-
-    if (logoutButton) {
-        logoutButton.addEventListener("click", () => {
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("userRole"); // Clear user role too
-            window.location.href = "login.html"; // Redirect to login page
-        });
-    }
-}
-
-
-/**
- * Handles API requests to the backend.
- * Includes authentication token in headers if available.
- * Supports file uploads with progress tracking for FormData.
- * @param {string} method - HTTP method (GET, POST, PUT, DELETE).
- * @param {string} path - API endpoint path (e.g., '/login', '/profile').
- * @param {object} body - Request body data (for POST, PUT).
- * @param {boolean} isFormData - Set to true if sending FormData (e.g., file uploads).
- * @param {function} onProgress - Callback function for upload progress (takes event as argument). Only used if isFormData is true.
- * @param {boolean} expectBlobResponse - Set to true if the API is expected to return a file (Blob).
- * @returns {Promise<object|Blob|null>} - JSON response data, Blob, or null if 204.
- * @throws {Error} - If the API response is not OK.
- */
-async function apiRequest(method, path, body = null, isFormData = false, onProgress = null, expectBlobResponse = false) {
-    const token = localStorage.getItem('authToken');
-    const endpoint = `${API_BASE_URL}${path}`;
-
-    // For FormData, use XMLHttpRequest for progress tracking
-    if (isFormData) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open(method, endpoint);
-
-            if (token) {
-                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-            }
-
-            // Progress event for uploads
-            if (onProgress && xhr.upload) {
-                xhr.upload.addEventListener('progress', onProgress);
-            }
-
-            xhr.onload = function () {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    if (xhr.status === 204 || (xhr.status === 200 && xhr.responseText.length === 0)) {
-                        resolve({}); // Resolve with empty object for 204 or empty 200
-                    } else {
-                        try {
-                            const responseData = JSON.parse(xhr.responseText);
-                            resolve(responseData);
-                        } catch (e) {
-                            console.warn("API response was not JSON, resolving with success status:", xhr.responseText);
-                            resolve({ message: "Operation successful", rawResponse: xhr.responseText });
-                        }
-                    }
-                } else if (xhr.status === 401 || xhr.status === 403) {
-                    // Unauthorized or Forbidden - clear token and redirect to login
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('userRole');
-                    // window.location.href = 'login.html?sessionExpired=true'; // Cannot redirect in sandbox
-                    showModalMessage('Authentication token missing or invalid. Please refresh and log in.', true);
-                    reject(new Error('Authentication token missing or invalid.'));
-                } else {
-                    // Handle non-2xx responses
-                    try {
-                        const errorData = JSON.parse(xhr.responseText);
-                        reject(new Error(errorData.error || `HTTP error! Status: ${xhr.status}`));
-                    } catch (e) {
-                        reject(new Error(`HTTP error! Status: ${xhr.status} - ${xhr.statusText || 'Unknown Error'}`));
-                    }
+                break;
+            case 'customer.subscription.updated':
+                const subscriptionUpdated = event.data.object;
+                console.log(`Subscription Updated: ${subscriptionUpdated.id}`);
+                if (subscriptionUpdated.customer && subscriptionUpdated.status && subscriptionUpdated.plan && subscriptionUpdated.plan.id) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1, plan_id = $2 WHERE stripe_customer_id = $3',
+                        [subscriptionUpdated.status, subscriptionUpdated.plan.id, subscriptionUpdated.customer]
+                    );
+                    console.log(`Subscription for customer ${subscriptionUpdated.customer} status updated to ${subscriptionUpdated.status} and plan to ${subscriptionUpdated.plan.id}.`);
                 }
-            };
-
-            xhr.onerror = function () {
-                reject(new Error('Network error or request failed. Please check your internet connection.'));
-            };
-
-            xhr.send(body);
-        });
-    } else {
-        // Use Fetch API for standard JSON or Blob requests
-        const options = {
-            method: method,
-            headers: {} // Start with empty headers to add Content-Type conditionally
-        };
-
-        if (token) {
-            options.headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        // Set Content-Type for JSON bodies on POST/PUT
-        if (body && (method === 'POST' || method === 'PUT')) {
-             options.headers['Content-Type'] = 'application/json';
-             options.body = JSON.stringify(body);
-        }
-
-
-        const response = await fetch(endpoint, options);
-
-        if (response.status === 401 || response.status === 403) {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('userRole');
-            // window.location.href = 'login.html?sessionExpired=true'; // Cannot redirect in sandbox
-            showModalMessage('Authentication token missing or invalid. Please refresh and log in.', true);
-            throw new Error('Authentication token missing or invalid.');
-        }
-
-        if (!response.ok) {
-            // *** UPDATED ERROR HANDLING LOGIC ***
-            // This is more robust and will extract the specific error message from the server.
-            let errorMsg = `HTTP error! Status: ${response.status}`;
-            try {
-                // Get the error message from the response body, if it exists
-                const errorText = await response.text();
-                if (errorText) {
-                    // Try to parse it as JSON
-                    try {
-                        const errorData = JSON.parse(errorText);
-                        // Use the specific 'error' field if it exists, otherwise use the whole text
-                        errorMsg = errorData.error || errorText;
-                    } catch (parseError) {
-                        // If it's not JSON, use the raw text as the error message
-                        errorMsg = errorText;
-                    }
+                break;
+            case 'customer.subscription.deleted':
+                const subscriptionDeleted = event.data.object;
+                console.log(`Subscription Deleted: ${subscriptionDeleted.id}`);
+                if (subscriptionDeleted.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1, plan_id = $2, stripe_subscription_id = NULL WHERE stripe_customer_id = $3',
+                        ['cancelled', 'free', subscriptionDeleted.customer]
+                    );
+                    console.log(`Subscription for customer ${subscriptionDeleted.customer} marked as cancelled and reverted to free.`);
                 }
-            } catch (bodyError) {
-                // This catch block runs if we can't even read the response body.
-                // We'll stick with the original error message based on the status code.
-                console.error("Could not read error response body", bodyError);
-            }
-            throw new Error(errorMsg);
-        }
-
-        // Special handling for file downloads: return blob instead of JSON
-        if (expectBlobResponse) {
-            return response.blob(); // Return the raw binary data as a Blob
-        }
-
-        if (response.status === 204 || (response.status === 200 && response.headers.get("content-length") === "0")) {
-            return null;
-        }
-
-        // Default to JSON response
-        return response.json();
-    }
-}
-
-
-/**
- * Handles all client-side logic for the login.html page.
- */
-function handleLoginPage() {
-    const loginForm = document.getElementById("login-form");
-    if (!loginForm) {
-        return;
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('sessionExpired') && urlParams.get('sessionExpired') === 'true') {
-        const errorMessageDiv = document.getElementById("error-message");
-        if (errorMessageDiv) {
-            errorMessageDiv.textContent = 'Your session has expired or is invalid. Please log in again.';
-            errorMessageDiv.classList.add('visible');
-            errorMessageDiv.setAttribute('aria-hidden', 'false');
-        }
-        urlParams.delete('sessionExpired');
-        window.history.replaceState({}, document.title, window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : ''));
-    }
-
-
-    loginForm.addEventListener("submit", async e => {
-        e.preventDefault();
-        const emailInput = document.getElementById("email");
-        const passwordInput = document.getElementById("password");
-        const email = emailInput.value.trim();
-        const password = passwordInput.value;
-        const errorMessage = document.getElementById("error-message");
-
-        if (errorMessage) {
-            errorMessage.textContent = "";
-            errorMessage.classList.remove("visible");
-            errorMessage.setAttribute('aria-hidden', 'true');
-        }
-
-        if (!email || !password) {
-            if (errorMessage) {
-                errorMessage.textContent = "Email and password are required.";
-                errorMessage.classList.add("visible");
-                errorMessage.setAttribute('aria-hidden', 'false');
-            }
-            return;
-        }
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            if (errorMessage) {
-                errorMessage.textContent = "Please enter a valid email address.";
-                errorMessage.classList.add("visible");
-                errorMessage.setAttribute('aria-hidden', 'false');
-            }
-            return;
-        }
-
-        if (password.length < 6) {
-            if (errorMessage) {
-                errorMessage.textContent = "Password must be at least 6 characters long.";
-                errorMessage.classList.add("visible");
-                errorMessage.setAttribute('aria-hidden', 'false');
-            }
-            return;
-        }
-
-        try {
-            const data = await apiRequest("POST", "/login", {
-                email: email,
-                password: password
-            });
-
-            localStorage.setItem("authToken", data.token);
-            localStorage.setItem("userRole", data.role);
-
-            if (data.role === "super_admin" || data.role === "location_admin") {
-                window.location.href = "suite-hub.html";
-            } else {
-                window.location.href = "new-hire-view.html";
-            }
-        } catch (error) {
-            console.error("Login API error:", error);
-            if (errorMessage) {
-                errorMessage.textContent = `Login Failed: ${error.message}`;
-                errorMessage.classList.add("visible");
-                errorMessage.setAttribute('aria-hidden', 'false');
-            }
-            showModalMessage(`Login Failed: ${error.message}`, true);
-        }
-    });
-}
-
-/**
- * Handles all client-side logic for the register.html page.
- */
-function handleRegisterPage() {
-    const registerForm = document.getElementById("register-form");
-    if (!registerForm) {
-        return;
-    }
-
-    registerForm.addEventListener("submit", async e => {
-        e.preventDefault();
-        const companyNameInput = document.getElementById("company-name");
-        const fullNameInput = document.getElementById("full-name");
-        const emailInput = document.getElementById("email");
-        const passwordInput = document.getElementById("password");
-        const errorMessage = document.getElementById("error-message");
-
-        const company_name = companyNameInput.value.trim();
-        const full_name = fullNameInput.value.trim();
-        const email = emailInput.value.trim();
-        const password = passwordInput.value;
-
-        errorMessage.textContent = "";
-        errorMessage.classList.remove("visible");
-        errorMessage.setAttribute('aria-hidden', 'true');
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email)) {
-            errorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
-            errorMessage.classList.add("visible");
-            return;
-        }
-
-        try {
-            const data = await apiRequest("POST", "/register", {
-                company_name: company_name,
-                full_name: full_name,
-                email: email,
-                password: password
-            });
-
-            showModalMessage("Account created successfully! Please log in.", false);
-
-            companyNameInput.value = "";
-            fullNameInput.value = "";
-            emailInput.value = "";
-            passwordInput.value = "";
-
-            setTimeout(() => {
-                window.location.href = "login.html";
-            }, 2000);
-        } catch (error) {
-            console.error("Registration API error:", error);
-            if (errorMessage) {
-                errorMessage.textContent = `Registration Failed: ${error.message}`;
-                errorMessage.classList.add("visible");
-                errorMessage.setAttribute('aria-hidden', 'false');
-            }
-            showModalMessage(`Registration Failed: ${error.message}`, true);
-        }
-    });
-}
-
-/**
- * Handles logic for the suite-hub.html page, including payment status messages.
- */
-function handleSuiteHubPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const paymentStatus = urlParams.get("payment");
-    const sessionId = urlParams.get("session_id");
-
-    if (paymentStatus === "success") {
-        showModalMessage("Payment successful! Your subscription has been updated.", false);
-        history.replaceState({}, document.title, window.location.pathname);
-    } else if (paymentStatus === "cancelled") {
-        showModalMessage("Payment cancelled. You can try again or choose another plan.", true);
-        history.replaceState({}, document.title, window.location.pathname);
-    }
-}
-
-/**
- * Handles all client-side logic for the account.html page.
- */
-function handleAccountPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    const displayProfileName = document.getElementById("display-profile-name");
-    const displayProfileEmail = document.getElementById("display-profile-email");
-    const profileNameInput = document.getElementById("profile-name");
-    const profileEmailInput = document.getElementById("profile-email");
-    const updateProfileForm = document.getElementById("update-profile-form");
-    const currentPasswordInput = document.getElementById("current-password");
-    const newPasswordInput = document.getElementById("new-password");
-
-    async function loadProfileInfo() {
-        try {
-            const profile = await apiRequest("GET", "/profile");
-            if (displayProfileName)
-                displayProfileName.textContent = profile.fullName || "N/A";
-            if (profileEmailInput)
-                profileEmailInput.value = profile.email || "";
-        } catch (error) {
-            console.error("Error loading profile info:", error);
-            showModalMessage(`Failed to load profile: ${error.message}`, true);
-        }
-    }
-
-    if (updateProfileForm) {
-        updateProfileForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const fullName = profileNameInput ? profileNameInput.value : "";
-            const email = profileEmailInput ? profileEmailInput.value : "";
-            const currentPassword = currentPasswordInput ? currentPasswordInput.value : "";
-            const newPassword = newPasswordInput ? newPasswordInput.value : "";
-
-            const updatePayload = {
-                fullName: fullName,
-                email: email
-            };
-            if (currentPassword && newPassword) {
-                updatePayload.currentPassword = currentPassword;
-                updatePayload.newPassword = newPassword;
-            }
-
-            try {
-                const result = await apiRequest("PUT", "/profile", updatePayload);
-                if (result && result.token) {
-                    localStorage.setItem("authToken", result.token);
+                break;
+            case 'invoice.payment_succeeded':
+                const invoiceSucceeded = event.data.object;
+                console.log(`Invoice Payment Succeeded: ${invoiceSucceeded.id}`);
+                if (invoiceSucceeded.subscription && invoiceSucceeded.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
+                        ['active', invoiceSucceeded.subscription, invoiceSucceeded.customer]
+                    );
+                    console.log(`Subscription ${invoiceSucceeded.subscription} status set to active.`);
                 }
-                showModalMessage(result.message || "Profile updated successfully!", false);
-                if (currentPasswordInput)
-                    currentPasswordInput.value = "";
-                if (newPasswordInput)
-                    newPasswordInput.value = "";
-                loadProfileInfo();
-            }
-            catch (error) {
-                console.error("Error updating profile:", error);
-                showModalMessage(`Failed to update profile: ${error.message}`, true);
-            }
-        });
-    }
-
-    loadProfileInfo();
-}
-
-
-/**
- * Handles all client-side logic for the admin.html page.
- */
-function handleAdminPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    const locationListDiv = document.getElementById("location-list");
-    const userListDiv = document.getElementById("user-list");
-    const newLocationForm = document.getElementById("new-location-form");
-    const inviteAdminForm = document.getElementById("invite-admin-form");
-    const inviteEmployeeForm = document.getElementById("invite-employee-form");
-    const adminLocationSelect = document.getElementById("admin-location-select");
-    const employeeLocationSelect = document.getElementById("employee-location-select");
-
-    async function loadLocations() {
-        if (!locationListDiv) {
-            return;
-        }
-        locationListDiv.innerHTML = "<p>Loading locations...</p>";
-        try {
-            const locations = await apiRequest("GET", "/locations");
-            locationListDiv.innerHTML = "";
-            if (locations.length === 0) {
-                locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
-                if (adminLocationSelect) {
-                    adminLocationSelect.innerHTML = '<option value="">Select a location</option>';
-                    adminLocationSelect.disabled = true;
+                break;
+            case 'invoice.payment_failed':
+                const invoiceFailed = event.data.object;
+                console.log(`Invoice Payment Failed: ${invoiceFailed.id}`);
+                // Corrected from invoiceNFailed.id to invoiceFailed.id
+                if (invoiceFailed.subscription && invoiceFailed.customer) {
+                    await client.query(
+                        'UPDATE Users SET subscription_status = $1 WHERE stripe_subscription_id = $2 AND stripe_customer_id = $3',
+                        ['past_due', invoiceFailed.subscription, invoiceFailed.customer]
+                    );
+                    console.log(`Subscription ${invoiceFailed.subscription} status set to past_due.`);
                 }
-                if (employeeLocationSelect) {
-                    employeeLocationSelect.innerHTML = '<option value="">Select a location</option>';
-                    employeeLocationSelect.disabled = true;
-                }
-            } else {
-                if (adminLocationSelect)
-                    adminLocationSelect.disabled = false;
-                if (employeeLocationSelect)
-                    employeeLocationSelect.disabled = false;
-
-                locations.forEach(loc => {
-                    const locDiv = document.createElement("div");
-                    locDiv.className = "list-item";
-                    locDiv.innerHTML = `<span>${loc.location_name} - ${loc.location_address}</span>
-                                        <button class="btn-delete" data-type="location" data-id="${loc.location_id}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                                        </button>`;
-                    locDiv.addEventListener("click", e => {
-                        if (!e.target.closest(".btn-delete")) {
-                            showModalMessage(`Location: ${loc.location_name} (ID: ${loc.location_id}) - Address: ${loc.location_address}`, false);
-                        }
-                    });
-                    locationListDiv.appendChild(locDiv);
-                });
-                const locationOptionsHtml = locations.map(loc => `<option value="${loc.location_id}">${loc.location_name}</option>`).join('');
-                if (adminLocationSelect) {
-                    adminLocationSelect.innerHTML = `<option value="">Select a location</option>${locationOptionsHtml}`;
-                }
-                if (employeeLocationSelect) {
-                    employeeLocationSelect.innerHTML = `<option value="">Select a location</option>${locationOptionsHtml}`;
-                }
-            }
-        } catch (error) {
-            console.error("Error loading locations:", error);
-            showModalMessage(`Failed to load locations: ${error.message}`, true);
-        }
-    }
-
-    async function loadUsers() {
-        if (!userListDiv)
-            return;
-        userListDiv.innerHTML = "<p>Loading users...</p>";
-        try {
-            const users = await apiRequest("GET", "/users");
-            userListDiv.innerHTML = "";
-            if (users.length === 0) {
-                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users invited yet.</p>';
-            } else {
-                users.forEach(user => {
-                    const userDiv = document.createElement("div");
-                    userDiv.className = "list-item";
-                    let userInfo = `${user.full_name} - Role: ${user.role}`;
-                    if (user.location_name) {
-                        userInfo += ` @ ${user.location_name}`;
-                    }
-                    userDiv.innerHTML = `<span>${userInfo}</span>
-                                         <button class="btn-delete" data-type="user" data-id="${user.user_id}">
-                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                                         </button>`;
-                    userListDiv.appendChild(userDiv);
-                });
-            }
-        } catch (error) {
-            console.error("Error loading users:", error);
-            userListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading users: ${error.message}</p>`;
-        }
-    }
-
-    document.body.addEventListener("click", async e => {
-        const targetButton = e.target.closest(".btn-delete");
-        if (targetButton) {
-            const id = targetButton.dataset.id;
-            const type = targetButton.dataset.type;
-            const confirmationMessage = `Are you sure you want to delete this ${type}? This action cannot be undone.`;
-            const confirmed = await showConfirmModal(confirmationMessage, "Delete");
-
-            if (confirmed) {
-                try {
-                    if (type === "location") {
-                        await apiRequest("DELETE", `/locations/${id}`);
-                        showModalMessage("Location deleted successfully!", false);
-                        loadLocations();
-                        loadUsers();
-                    } else if (type === "user") {
-                        await apiRequest("DELETE", `/users/${id}`);
-                        showModalMessage("User deleted successfully!", false);
-                        loadUsers();
-                    } else if (type === "document") {
-                        await apiRequest("DELETE", `/documents/${id}`);
-                        showModalMessage("Document deleted successfully!", false);
-                        handleDocumentsPage();
-                    } else if (type === "checklist") {
-                        await apiRequest("DELETE", `/checklists/${id}`);
-                        showModalMessage("Task list deleted successfully!", false);
-                        handleChecklistsPage(); // Reload checklists if on checklists page
-                    } else if (type === "job-posting") {
-                        await apiRequest("DELETE", `/job-postings/${id}`);
-                        showModalMessage("Job posting deleted successfully!", false);
-                        handleHiringPage();
-                    } else if (type === "schedule") {
-                        await apiRequest("DELETE", `/schedules/${id}`);
-                        showModalMessage("Schedule deleted successfully!", false);
-                        handleSchedulingPage();
-                    }
-                } catch (error) {
-                    showModalMessage(`Error deleting ${type}: ${error.message}`, true);
-                }
-            }
-        } 
-    });
-
-    // Initial loads when the admin page loads
-    loadLocations();
-    loadUsers();
-}
-
-/**
- * Handles logic for the dashboard.html page (Onboarding Dashboard).
- */
-function handleDashboardPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    const onboardUserModal = document.getElementById("onboard-user-modal");
-    const showOnboardModalBtn = document.getElementById("show-onboard-modal-btn");
-    const modalCancelOnboardBtn = document.getElementById("modal-cancel-onboard");
-    const onboardUserForm = document.getElementById("onboard-user-form");
-    const newHirePositionSelect = document.getElementById("new-hire-position");
-    const sessionListDiv = document.getElementById("session-list");
-
-    if (showOnboardModalBtn) {
-        showOnboardModalBtn.addEventListener("click", () => {
-            if (onboardUserModal) {
-                onboardUserModal.style.display = "flex";
-            }
-        });
-    }
-
-    if (modalCancelOnboardBtn) {
-        modalCancelOnboardBtn.addEventListener("click", () => {
-            if (onboardUserModal) {
-                onboardUserModal.style.display = "none";
-            }
-        });
-    }
-
-    if (onboardUserModal) {
-        onboardUserModal.addEventListener("click", event => {
-            if (event.target === onboardUserModal) {
-                onboardUserModal.style.display = "none";
-            }
-        });
-    }
-
-    async function loadPositions() {
-        if (!newHirePositionSelect) return;
-        newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>';
-        try {
-            const response = await apiRequest("GET", "/positions");
-            newHirePositionSelect.innerHTML = '<option value="">Select Position</option>';
-            if (response && response.positions && response.positions.length > 0) {
-                response.positions.forEach(pos => {
-                    const option = document.createElement("option");
-                    option.value = pos.id;
-                    option.textContent = pos.name;
-                    newHirePositionSelect.appendChild(option);
-                });
-            } else {
-                newHirePositionSelect.innerHTML = '<option value="">No positions available</option>';
-            }
-        } catch (error) {
-            console.error("Error loading positions:", error);
-            newHirePositionSelect.innerHTML = '<option value="">Error loading positions</option>';
-            showModalMessage(`Failed to load positions: ${error.message}`, true);
-        }
-    }
-
-    async function loadOnboardingSessions() {
-        if (!sessionListDiv) return;
-        sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading active onboardings...</p>';
-        try {
-            const sessions = await apiRequest("GET", "/onboarding-sessions");
-            sessionListDiv.innerHTML = '';
-            if (sessions && sessions.length > 0) {
-                sessions.forEach(session => {
-                    const sessionItem = document.createElement("div");
-                    sessionItem.className = "onboarding-item";
-                    let completionStatus = session.completedTasks === session.totalTasks ? 'Completed' : `${session.completedTasks}/${session.totalTasks} Tasks Completed`;
-                    let statusColor = session.completedTasks === session.totalTasks ? 'var(--primary-accent)' : 'var(--text-medium)';
-
-                    sessionItem.innerHTML = `
-                        <div class="onboarding-item-info">
-                            <p style="color: var(--text-light); font-weight: 600;">${session.full_name} (${session.position || 'N/A'})</p>
-                            <p style="color: var(--text-medium);">Email: ${session.email}</p>
-                            <p style="color: ${statusColor};">Status: ${completionStatus}</p>
-                        </div>
-                        <div class="onboarding-item-actions">
-                            <button class="btn btn-secondary btn-sm view-details-btn" data-user-id="${session.user_id}">View Progress</button>
-                            ${session.completedTasks === session.totalTasks ?
-                                `<button class="btn btn-primary btn-sm archive-onboarding-btn" data-session-id="${session.session_id}">Archive</button>` : ''}
-                        </div>
-                    `;
-                    sessionListDiv.appendChild(sessionItem);
-                });
-
-                sessionListDiv.querySelectorAll('.view-details-btn').forEach(button => {
-                    button.addEventListener('click', (event) => {
-                        const userId = event.target.dataset.userId;
-                        window.location.href = `new-hire-view.html?userId=${userId}`;
-                    });
-                });
-
-                sessionListDiv.querySelectorAll('.archive-onboarding-btn').forEach(button => {
-                    button.addEventListener('click', async (event) => {
-                        const sessionId = event.target.dataset.sessionId;
-                        const confirmed = await showConfirmModal('Are you sure you want to archive this onboarding session?');
-                        if (confirmed) {
-                            try {
-                                await apiRequest("PUT", `/onboarding-sessions/${sessionId}/archive`);
-                                showModalMessage('Onboarding session archived successfully!', false);
-                                loadOnboardingSessions();
-                            } catch (error) {
-                                showModalMessage(`Failed to archive session: ${error.message}`, true);
-                            }
-                        }
-                    });
-                });
-
-
-            } else {
-                sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">No active onboardings.</p>';
-            }
-        } catch (error) {
-            console.error("Error loading onboarding sessions:", error);
-            sessionListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading onboarding sessions: ${error.message}</p>`;
-        }
-    }
-
-    if (onboardUserForm) {
-        onboardUserForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const newHireName = document.getElementById("new-hire-name").value.trim();
-            const newHireEmail = document.getElementById("new-hire-email").value.trim();
-            const newHirePosition = newHirePositionSelect ? newHirePositionSelect.value : "";
-            const newHireId = document.getElementById("new-hire-id").value.trim();
-
-            if (!newHireName || !newHireEmail || !newHirePosition) {
-                showModalMessage("Please fill all required fields: Full Name, Email, and Position.", true);
-                return;
-            }
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newHireEmail)) {
-                showModalMessage("Please enter a valid email address.", true);
-                return;
-            }
-
-            try {
-                const response = await apiRequest("POST", "/onboard-employee", {
-                    full_name: newHireName,
-                    email: newHireEmail,
-                    position_id: newHirePosition,
-                    employee_id: newHireId || null
-                });
-
-                showModalMessage(`Onboarding invite sent to ${newHireEmail} for position ${newHirePosition}.`, false);
-                onboardUserForm.reset();
-                if (onboardUserModal) onboardUserModal.style.display = "none";
-                loadOnboardingSessions();
-            } catch (error) {
-                // **UPDATED CODE**: Instead of a generic message, show the specific one from the server.
-                showModalMessage(error.message, true);
-            }
-        });
-    }
-
-    loadPositions();
-    loadOnboardingSessions();
-}
-
-
-/**
- * Handles logic for checklists.html page.
- */
-function handleChecklistsPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    const checklistListDiv = document.getElementById("checklist-list");
-    const newChecklistForm = document.getElementById("new-checklist-form");
-    const structureTypeSelect = document.getElementById("structure-type-select");
-    const timeGroupCountContainer = document.getElementById("time-group-count-container");
-    const timeGroupCountInput = document.getElementById("time-group-count");
-    const timeGroupCountLabel = document.getElementById("time-group-count-label");
-    const tasksInputArea = document.getElementById("tasks-input-area");
-
-    // Elements for the Edit Checklist Modal
-    const editChecklistModalOverlay = document.getElementById("edit-checklist-modal-overlay");
-    const editChecklistIdInput = document.getElementById("edit-checklist-id");
-    const editChecklistPositionInput = document.getElementById("edit-checklist-position");
-    const editChecklistTitleInput = document.getElementById("edit-checklist-title");
-    const editStructureTypeSelect = document.getElementById("edit-structure-type-select");
-    const editTimeGroupCountContainer = document.getElementById("edit-time-group-count-container");
-    const editTimeGroupCountInput = document.getElementById("edit-time-group-count");
-    const editTimeGroupCountLabel = document.getElementById("edit-time-group-count-label");
-    const editTasksInputArea = document.getElementById("edit-tasks-input-area");
-    const addEditTaskBtn = document.getElementById("add-edit-task-btn");
-    const editChecklistCancelBtn = document.getElementById("edit-checklist-cancel-btn");
-    const editChecklistForm = document.getElementById("edit-checklist-form");
-
-
-    let taskCounter = 0; // For new checklist creation
-    let editTaskCounter = 0; // For edit checklist modal
-
-    /**
-     * Adds a single task input field.
-     * @param {HTMLElement} container - The container to add the input to.
-     * @param {string|number} taskId - Optional ID for the task input. Used primarily for existing tasks.
-     * @param {string} taskText - Optional initial text for the task.
-     * @param {boolean} isCompleted - Optional initial completed status for the task. (Note: currently tasks are always saved as `completed:false` from edit modal for simplicity).
-     */
-    function addSingleTaskInput(container, taskId = null, taskText = '', isCompleted = false) {
-        const div = document.createElement('div');
-        div.className = 'form-group task-input-group';
-        // Use a unique ID for the input field to prevent conflicts across multiple forms/modals
-        const uniqueInputId = `task-input-${container.id}-${taskId || (container.id === 'tasks-input-area' ? taskCounter++ : editTaskCounter++)}`;
-        div.innerHTML = `
-            <label for="${uniqueInputId}">Task Description</label>
-            <input type="text" id="${uniqueInputId}" class="task-description-input" value="${taskText}" placeholder="e.g., Complete HR paperwork" required>
-            <button type="button" class="btn btn-secondary remove-task-btn" style="margin-top: 5px;">Remove</button>
-        `;
-        container.appendChild(div);
-
-        div.querySelector('.remove-task-btn').addEventListener('click', () => {
-            div.remove();
-        });
-    }
-
-    // Function to dynamically render task input fields for the NEW checklist form
-    function renderNewChecklistTaskInputs() {
-        tasksInputArea.innerHTML = ''; // Clear previous inputs
-        const structureType = structureTypeSelect.value;
-        const groupCount = parseInt(timeGroupCountInput.value, 10) || 1;
-
-        if (structureType === 'single_list') {
-            addSingleTaskInput(tasksInputArea);
-            const addTaskBtn = document.createElement('button');
-            addTaskBtn.type = 'button';
-            addTaskBtn.className = 'btn btn-secondary';
-            addTaskBtn.textContent = 'Add Another Task +';
-            addTaskBtn.style.marginTop = '10px';
-            addTaskBtn.addEventListener('click', () => addSingleTaskInput(tasksInputArea));
-            tasksInputArea.appendChild(addTaskBtn);
-        } else {
-            for (let i = 0; i < groupCount; i++) {
-                const groupTitle = structureType === 'daily' ? `Day ${i + 1}` : `Week ${i + 1}`;
-                const groupContainer = document.createElement('div');
-                groupContainer.className = 'card time-group-container';
-                groupContainer.innerHTML = `
-                    <h4 style="color: var(--text-light); margin-top: 0;'>${groupTitle}</h4>
-                    <div class="tasks-in-group" data-group-index="${i}"></div>
-                    <button type="button" class="btn btn-secondary add-task-to-group-btn" style="margin-top: 10px;" data-group-index="${i}">Add Task to ${groupTitle} +</button>
-                `;
-                tasksInputArea.appendChild(groupContainer);
-
-                const tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
-                addSingleTaskInput(tasksInGroupDiv); // Add one task by default
-
-                groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', (event) => {
-                    const targetGroupIndex = event.target.dataset.groupIndex;
-                    const targetGroupDiv = tasksInputArea.querySelector(`.tasks-in-group[data-group-index="${targetGroupIndex}"]`);
-                    if (targetGroupDiv) {
-                        addSingleTaskInput(targetGroupDiv);
-                    }
-                });
-            }
-        }
-    }
-
-    // Function to dynamically render task input fields for the EDIT checklist form
-    function renderEditChecklistTaskInputs(tasksData, structureType, groupCount) {
-        editTasksInputArea.innerHTML = ''; // Clear previous inputs
-        editTaskCounter = 0; // Reset counter for edit modal
-
-        if (structureType === 'single_list') {
-            if (tasksData && tasksData.length > 0) {
-                tasksData.forEach(task => {
-                    addSingleTaskInput(editTasksInputArea, task.id, task.description, task.completed);
-                });
-            } else {
-                addSingleTaskInput(editTasksInputArea); // Add at least one empty task input
-            }
-        } else { // 'daily' or 'weekly'
-            for (let i = 0; i < groupCount; i++) {
-                const groupTitle = structureType === 'daily' ? `Day ${i + 1}` : `Week ${i + 1}`;
-                const groupContainer = document.createElement('div');
-                groupContainer.className = 'card time-group-container';
-                groupContainer.innerHTML = `
-                    <h4 style="color: var(--text-light); margin-top: 0;'>${groupTitle}</h4>
-                    <div class="tasks-in-group" data-group-index="${i}"></div>
-                    <button type="button" class="btn btn-secondary add-task-to-group-btn" style="margin-top: 10px;" data-group-index="${i}">Add Task to ${groupTitle} +</button>
-                `;
-                editTasksInputArea.appendChild(groupContainer);
-
-                const tasksInGroupDiv = groupContainer.querySelector('.tasks-in-group');
-                const currentGroupTasks = tasksData[i] && tasksData[i].tasks ? tasksData[i].tasks : [];
-
-                if (currentGroupTasks.length > 0) {
-                    currentGroupTasks.forEach(task => {
-                        addSingleTaskInput(tasksInGroupDiv, task.id, task.description, task.completed);
-                    });
-                } else {
-                    addSingleTaskInput(tasksInGroupDiv); // Add at least one empty task input
-                }
-
-                groupContainer.querySelector('.add-task-to-group-btn').addEventListener('click', (event) => {
-                    const targetGroupIndex = event.target.dataset.groupIndex;
-                    const targetGroupDiv = editTasksInputArea.querySelector(`.tasks-in-group[data-group-index="${targetGroupIndex}"]`);
-                    if (targetGroupDiv) {
-                        addSingleTaskInput(targetGroupDiv);
-                    }
-                });
-            }
-        }
-    }
-
-
-    // Event listener for structure type change (for NEW checklist form)
-    if (structureTypeSelect) {
-        structureTypeSelect.addEventListener('change', () => {
-            const type = structureTypeSelect.value;
-            if (type === 'daily' || type === 'weekly') {
-                timeGroupCountContainer.style.display = 'block';
-                timeGroupCountLabel.textContent = `Number of ${type === 'daily' ? 'Days' : 'Weeks'}`;
-            } else {
-                timeGroupCountContainer.style.display = 'none';
-            }
-            renderNewChecklistTaskInputs(); // Re-render tasks based on new structure
-        });
-    }
-
-    // Event listener for time group count change (for NEW checklist form)
-    if (timeGroupCountInput) {
-        timeGroupCountInput.addEventListener('input', renderNewChecklistTaskInputs);
-    }
-
-    // Initial render of task inputs for NEW checklist form
-    renderNewChecklistTaskInputs();
-
-    /**
-     * Loads and displays existing task lists.
-     */
-    async function loadChecklists() {
-        if (!checklistListDiv) return;
-        checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>';
-        try {
-            const checklists = await apiRequest("GET", "/checklists");
-            checklistListDiv.innerHTML = '';
-            if (checklists && checklists.length > 0) {
-                checklists.forEach(checklist => {
-                    const checklistItem = document.createElement("div");
-                    checklistItem.className = "checklist-item";
-                    // *** UPDATED CODE ***: Changed checklist.id to checklist.checklist_id
-                    checklistItem.innerHTML = `
-                        <div class="checklist-item-title">
-                            <span style="color: var(--primary-accent);">${checklist.position}</span>
-                            <span>- ${checklist.title}</span>
-                            <span style="font-size: 0.8em; color: var(--text-medium);">(${checklist.structure_type})</span>
-                        </div>
-                        <div class="checklist-item-actions">
-                            <button class="btn btn-secondary btn-sm view-checklist-btn" data-checklist-id="${checklist.checklist_id}">View/Edit</button>
-                            <button class="btn-delete" data-type="checklist" data-id="${checklist.checklist_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    checklistListDiv.appendChild(checklistItem);
-                });
-
-                // --- Event Delegation for Checklist Items ---
-                // We attach a single click listener to the parent container (checklistListDiv)
-                // and then determine which button was clicked based on its class.
-                checklistListDiv.addEventListener('click', async (event) => {
-                    const viewButton = event.target.closest('.view-checklist-btn');
-                    const deleteButton = event.target.closest('.btn-delete[data-type="checklist"]');
-
-                    if (viewButton) {
-                        event.stopPropagation(); // Prevent clicks on view button from bubbling up
-                        const checklistId = viewButton.dataset.checklistId;
-                        
-                        // Fetch checklist details and open the edit modal
-                        try {
-                            const checklistDetails = await apiRequest("GET", `/checklists/${checklistId}`);
-                            if (checklistDetails) {
-                                editChecklistIdInput.value = checklistDetails.checklist_id; // Use checklist_id
-                                editChecklistPositionInput.value = checklistDetails.position;
-                                editChecklistTitleInput.value = checklistDetails.title;
-                                editStructureTypeSelect.value = checklistDetails.structure_type;
-
-                                // Show/hide time group count based on structure type
-                                if (checklistDetails.structure_type === 'daily' || checklistDetails.structure_type === 'weekly') {
-                                    editTimeGroupCountContainer.style.display = 'block';
-                                    editTimeGroupCountInput.value = checklistDetails.group_count;
-                                    editTimeGroupCountLabel.textContent = `Number of ${checklistDetails.structure_type === 'daily' ? 'Days' : 'Weeks'}`;
-                                } else {
-                                    editTimeGroupCountContainer.style.display = 'none';
-                                }
-                                
-                                // Render tasks in the edit modal
-                                renderEditChecklistTaskInputs(checklistDetails.tasks, checklistDetails.structure_type, checklistDetails.group_count);
-
-                                editChecklistModalOverlay.style.display = 'flex'; // Show the modal
-                            } else {
-                                showModalMessage('Checklist details not found.', true);
-                            }
-                        } catch (error) {
-                            console.error('Error fetching checklist details:', error);
-                            showModalMessage(`Failed to load checklist details: ${error.message}`, true);
-                        }
-
-                    } else if (deleteButton) {
-                        event.stopPropagation(); // Prevent clicks on delete button from bubbling up
-                        const checklistId = deleteButton.dataset.id;
-                        const confirmed = await showConfirmModal(`Are you sure you want to delete this task list? This action cannot be undone.`, "Delete");
-                        if (confirmed) {
-                            try {
-                                await apiRequest("DELETE", `/checklists/${checklistId}`);
-                                showModalMessage("Task list deleted successfully!", false);
-                                loadChecklists(); // Reload the list after deletion
-                            } catch (error) {
-                                showModalMessage(`Failed to delete task list: ${error.message}`, true);
-                            }
-                        }
-                    }
-                });
-
-            } else {
-                checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
-            }
-        } catch (error) {
-            console.error("Error loading checklists:", error);
-            checklistListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading task lists: ${error.message}</p>`;
-        }
-    }
-
-    // Event listeners for the NEW checklist form submission
-    if (newChecklistForm) {
-        newChecklistForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const position = document.getElementById("new-checklist-position").value.trim();
-            const title = document.getElementById("new-checklist-title").value.trim();
-            const structure_type = structureTypeSelect.value;
-            const group_count = (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(timeGroupCountInput.value, 10) : 0;
-
-            let tasks = [];
-            if (structure_type === 'single_list') {
-                document.querySelectorAll('#tasks-input-area .task-description-input').forEach(input => {
-                    if (input.value.trim()) {
-                        tasks.push({ description: input.value.trim(), completed: false });
-                    }
-                });
-            } else {
-                document.querySelectorAll('#tasks-input-area .tasks-in-group').forEach((groupDiv, index) => {
-                    const groupTasks = [];
-                    groupDiv.querySelectorAll('.task-description-input').forEach(input => {
-                        if (input.value.trim()) {
-                            groupTasks.push({ description: input.value.trim(), completed: false });
-                        }
-                    });
-                    tasks.push({
-                        groupTitle: structure_type === 'daily' ? `Day ${index + 1}` : `Week ${index + 1}`,
-                        tasks: groupTasks
-                    });
-                });
-            }
-
-            if (!position || !title || tasks.length === 0 || (structure_type !== 'single_list' && tasks.every(group => group.tasks.length === 0))) {
-                showModalMessage("Please provide a position, title, and at least one task for the checklist.", true);
-                return;
-            }
-
-            try {
-                const response = await apiRequest("POST", "/checklists", {
-                    position: position,
-                    title: title,
-                    structure_type: structure_type,
-                    group_count: group_count,
-                    tasks: tasks
-                });
-
-                showModalMessage(`Task List "${title}" created successfully!`, false);
-                newChecklistForm.reset();
-                renderNewChecklistTaskInputs(); // Reset task inputs for new form
-                loadChecklists(); // Reload the list of checklists
-            } catch (error) {
-                showModalMessage(error.message, true);
-            }
-        });
-    }
-
-    // Event listeners for EDIT checklist modal
-    if (editChecklistCancelBtn) {
-        editChecklistCancelBtn.addEventListener('click', () => {
-            editChecklistModalOverlay.style.display = 'none';
-        });
-    }
-
-    if (editChecklistModalOverlay) {
-        editChecklistModalOverlay.addEventListener('click', (event) => {
-            if (event.target === editChecklistModalOverlay) {
-                editChecklistModalOverlay.style.display = 'none';
-            }
-        });
-    }
-
-    if (editStructureTypeSelect) {
-        editStructureTypeSelect.addEventListener('change', () => {
-            const type = editStructureTypeSelect.value;
-            if (type === 'daily' || type === 'weekly') {
-                editTimeGroupCountContainer.style.display = 'block';
-                editTimeGroupCountInput.value = '1'; // Reset to 1 when changing type
-                editTimeGroupCountLabel.textContent = `Number of ${type === 'daily' ? 'Days' : 'Weeks'}`;
-            } else {
-                editTimeGroupCountContainer.style.display = 'none';
-            }
-            renderEditChecklistTaskInputs([], type, parseInt(editTimeGroupCountInput.value, 10)); // Re-render tasks based on new structure
-        });
-    }
-
-    if (editTimeGroupCountInput) {
-        editTimeGroupCountInput.addEventListener('input', () => {
-            renderEditChecklistTaskInputs([], editStructureTypeSelect.value, parseInt(editTimeGroupCountInput.value, 10));
-        });
-    }
-
-    if (addEditTaskBtn) {
-        addEditTaskBtn.addEventListener('click', () => {
-            const structureType = editStructureTypeSelect.value;
-            if (structureType === 'single_list') {
-                addSingleTaskInput(editTasksInputArea);
-            } else {
-                const lastGroup = editTasksInputArea.querySelector('.tasks-in-group:last-child');
-                if (lastGroup) {
-                    addSingleTaskInput(lastGroup);
-                } else {
-                    // This scenario should ideally not happen if groups are always rendered.
-                    // But as a fallback, add to the main area.
-                    addSingleTaskInput(editTasksInputArea);
-                }
-            }
-        });
-    }
-
-    if (editChecklistForm) {
-        editChecklistForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const checklistId = editChecklistIdInput.value;
-            const position = editChecklistPositionInput.value.trim();
-            const title = editChecklistTitleInput.value.trim();
-            const structure_type = editStructureTypeSelect.value;
-            const group_count = (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(editTimeGroupCountInput.value, 10) : 0;
-
-            let tasks = [];
-            if (structure_type === 'single_list') {
-                editTasksInputArea.querySelectorAll('.task-description-input').forEach(input => {
-                    if (input.value.trim()) {
-                        tasks.push({ description: input.value.trim(), completed: false }); // Assume not completed on edit for simplicity, or add checkbox
-                    }
-                });
-            } else {
-                editTasksInputArea.querySelectorAll('.tasks-in-group').forEach((groupDiv, index) => {
-                    const groupTasks = [];
-                    groupDiv.querySelectorAll('.task-description-input').forEach(input => {
-                        if (input.value.trim()) {
-                            groupTasks.push({ description: input.value.trim(), completed: false });
-                        }
-                    });
-                    tasks.push({
-                        groupTitle: structure_type === 'daily' ? `Day ${index + 1}` : `Week ${index + 1}`,
-                        tasks: groupTasks
-                    });
-                });
-            }
-
-            if (!position || !title || tasks.length === 0 || (structure_type !== 'single_list' && tasks.every(group => group.tasks.length === 0))) {
-                showModalMessage("Please provide a position, title, and at least one task for the checklist.", true);
-                return;
-            }
-
-            try {
-                await apiRequest("PUT", `/checklists/${checklistId}`, {
-                    position: position,
-                    title: title,
-                    structure_type: structure_type,
-                    group_count: group_count,
-                    tasks: tasks
-                });
-
-                showModalMessage(`Task List "${title}" updated successfully!`, false);
-                editChecklistModalOverlay.style.display = 'none'; // Hide modal
-                loadChecklists(); // Reload the list of checklists
-            } catch (error) {
-                showModalMessage(`Error updating task list: ${error.message}`, true);
-            }
-        });
-    }
-
-
-    loadChecklists(); // Initial load of checklists when the page loads
-}
-
-/**
- * Handles logic for new-hire-view.html (Employee Onboarding View).
- */
-function handleNewHireViewPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    const welcomeHeading = document.getElementById("welcome-heading");
-    const taskListSection = document.getElementById("task-list-section");
-    const logoutButton = document.getElementById("logout-button");
-    const completionCelebration = document.getElementById("completion-celebration");
-
-    if (logoutButton) {
-        logoutButton.addEventListener("click", () => {
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("userRole");
-            window.location.href = "login.html";
-        });
-    }
-
-    function triggerFireworks() {
-        console.log("Triggering fireworks celebration!");
-        if (completionCelebration) {
-            completionCelebration.style.display = 'flex';
-            setTimeout(() => {
-                completionCelebration.style.display = 'none';
-            }, 5000);
-        }
-    }
-
-    async function loadOnboardingTasks() {
-        if (!taskListSection) return;
-        taskListSection.innerHTML = '<p style="color: var(--text-medium);">Loading your tasks...</p>';
-        try {
-            const profile = await apiRequest("GET", "/profile");
-            if (!profile || !profile.user_id) {
-                taskListSection.innerHTML = '<p style="color: #e74c3c;">Could not load user profile.</p>';
-                return;
-            }
-            welcomeHeading.textContent = `Welcome, ${profile.full_name}!`;
-
-            const tasksData = await apiRequest("GET", `/onboarding-tasks/${profile.user_id}`);
-
-            taskListSection.innerHTML = '';
-
-            if (tasksData && tasksData.checklist && tasksData.checklist.tasks) {
-                const checklist = tasksData.checklist;
-                let allTasksCompleted = true;
-
-                if (checklist.structure_type === 'single_list') {
-                    tasksData.tasks.forEach(task => {
-                        const taskItem = document.createElement("div");
-                        taskItem.className = `task-item ${task.completed ? 'completed' : ''}`;
-                        taskItem.innerHTML = `
-                            <input type="checkbox" id="task-${task.id}" ${task.completed ? 'checked' : ''} data-task-id="${task.id}" data-task-type="single">
-                            <label for="task-${task.id}">${task.description}</label>
-                        `;
-                        taskListSection.appendChild(taskItem);
-                        if (!task.completed) allTasksCompleted = false;
-                    });
-                } else {
-                    tasksData.tasks.forEach((group, groupIndex) => {
-                        const taskGroupDetails = document.createElement('details');
-                        taskGroupDetails.className = 'task-group';
-                        taskGroupDetails.open = true;
-
-                        const summary = document.createElement('summary');
-                        summary.textContent = group.groupTitle;
-                        taskGroupDetails.appendChild(summary);
-
-                        group.tasks.forEach(task => {
-                            const taskItem = document.createElement("div");
-                            taskItem.className = `task-item ${task.completed ? 'completed' : ''}`;
-                            taskItem.innerHTML = `
-                                <input type="checkbox" id="task-${task.id}" ${task.completed ? 'checked' : ''} data-task-id="${task.id}" data-task-type="grouped" data-group-index="${groupIndex}">
-                                <label for="task-${task.id}">${task.description}</label>
-                            `;
-                            taskGroupDetails.appendChild(taskItem);
-                            if (!task.completed) allTasksCompleted = false;
-                        });
-                        taskListSection.appendChild(taskGroupDetails);
-                    });
-                }
-
-                taskListSection.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.addEventListener('change', async (event) => {
-                        const taskId = event.target.dataset.taskId;
-                        const isCompleted = event.target.checked;
-                        const taskType = event.target.dataset.taskType;
-                        const groupIndex = event.target.dataset.groupIndex;
-
-                        try {
-                            await apiRequest("PUT", `/onboarding-tasks/${taskId}`, { completed: isCompleted, type: taskType, groupIndex: groupIndex });
-                            event.target.closest('.task-item').classList.toggle('completed', isCompleted);
-                            showModalMessage('Task status updated successfully!', false);
-                            let currentAllTasksCompleted = true;
-                            taskListSection.querySelectorAll('.task-item').forEach(item => {
-                                if (!item.classList.contains('completed')) {
-                                    currentAllTasksCompleted = false;
-                                }
-                            });
-                            if (currentAllTasksCompleted) {
-                                triggerFireworks();
-                            }
-                        } catch (error) {
-                            showModalMessage(`Failed to update task status: ${error.message}`, true);
-                            event.target.checked = !isCompleted;
-                        }
-                    });
-                });
-
-                if (allTasksCompleted) {
-                    triggerFireworks();
-                }
-
-            } else {
-                taskListSection.innerHTML = '<p style="color: var(--text-medium);">No onboarding tasks assigned or found.</p>';
-            }
-        } catch (error) {
-            console.error("Error loading onboarding tasks:", error);
-            taskListSection.innerHTML = `<p style="color: #e74c3c;">Error loading tasks: ${error.message}</p>`;
-        }
-    }
-
-    loadOnboardingTasks();
-}
-
-/**
- * Handles logic for pricing.html page.
- */
-function handlePricingPage() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const showRegisterCheckout = urlParams.get("registerCheckout");
-    const selectedPlanId = urlParams.get("plan");
-
-    const registerCheckoutModalOverlay = document.getElementById("register-checkout-modal-overlay");
-    const registerCheckoutModalTitle = document.getElementById("register-checkout-modal-title");
-    const registerCheckoutForm = document.getElementById("register-checkout-form");
-    const regCoNameInput = document.getElementById("reg-co-name");
-    const regFullNameInput = document.getElementById("reg-full-name");
-    const regEmailInput = document.getElementById("reg-email");
-    const regPasswordInput = document.getElementById("reg-password");
-    const regCheckoutCancelBtn = document.getElementById("reg-checkout-cancel-btn");
-    const regCheckoutErrorMessage = document.getElementById("register-checkout-error-message");
-
-    let currentSelectedPlan = null;
-
-    function openRegisterCheckoutModal(planId) {
-        if (registerCheckoutModalOverlay && registerCheckoutModalTitle && registerCheckoutForm) {
-            currentSelectedPlan = planId;
-            registerCheckoutModalTitle.textContent = `Sign Up & Subscribe to ${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan`;
-            registerCheckoutModalOverlay.style.display = 'flex';
-            regCheckoutErrorMessage.textContent = '';
-            regCheckoutErrorMessage.classList.remove('visible');
-            regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
-        }
-    }
-
-    if (showRegisterCheckout === 'true' && selectedPlanId) {
-        openRegisterCheckoutModal(selectedPlanId);
-        history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    const freePlanBtn = document.getElementById("free-plan-btn");
-    const proPlanBtn = document.getElementById("pro-plan-btn");
-    const enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
-
-    if (freePlanBtn) {
-        freePlanBtn.addEventListener("click", async () => {
-            const userRole = localStorage.getItem("userRole"); 
-            if (userRole) {
-                const profile = await apiRequest("GET", "/profile");
-                if (profile && profile.plan_id === 'free') {
-                    showModalMessage("You are already on the Free plan.", false);
-                } else {
-                    const confirmed = await showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
-                    if (confirmed) {
-                        try {
-                            await apiRequest("POST", "/cancel-subscription");
-                            showModalMessage("Successfully downgraded to Free plan. Your subscription will be updated.", false);
-                            setTimeout(() => { window.location.href = 'suite-hub.html'; }, 1500);
-                        }
-                        catch (error) {
-                            showModalMessage(`Failed to downgrade: ${error.message}`, true);
-                        }
-                    }
-                }
-            } else {
-                showModalMessage("The Free plan is available upon regular sign-up.", false);
-                setTimeout(() => { window.location.href = 'register.html'; }, 1500);
-            }
-        });
-    }
-
-    if (proPlanBtn) {
-        proPlanBtn.addEventListener("click", () => handlePlanSelection("pro"));
-    }
-    if (enterprisePlanBtn) {
-        enterprisePlanBtn.addEventListener("click", () => handlePlanSelection("enterprise"));
-    }
-
-    async function handlePlanSelection(planId) {
-        const token = localStorage.getItem("authToken");
-        if (token) {
-            try {
-                const session = await apiRequest("POST", "/create-checkout-session", { planId: planId });
-                if (stripe && session.sessionId) {
-                    showModalMessage("Account created! Redirecting to payment...", false);
-                    stripe.redirectToCheckout({ sessionId: session.sessionId });
-                } else {
-                    showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
-                }
-            } catch (error) {
-                console.error("Error creating checkout session:", error);
-                showModalMessage(`Failed to proceed with payment: ${error.message}`, true);
-            }
-        };
-    }
-
-    if (regCheckoutCancelBtn) {
-        regCheckoutCancelBtn.addEventListener("click", () => {
-            if (registerCheckoutModalOverlay) {
-                registerCheckoutModalOverlay.style.display = 'none';
-                currentSelectedPlan = null;
-            }
-        });
-    }
-    if (regCheckoutModalOverlay) {
-        regCheckoutModalOverlay.addEventListener("click", event => {
-            if (event.target === registerCheckoutModalOverlay) {
-                registerCheckoutModalOverlay.style.display = "none";
-                currentSelectedPlan = null;
-            }
-        });
-    }
-
-
-    if (registerCheckoutForm) {
-        registerCheckoutForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const company_name = regCoNameInput.value.trim();
-            const full_name = regFullNameInput.value.trim();
-            const email = regEmailInput.value.trim();
-            const password = regPasswordInput.value;
-
-            regCheckoutErrorMessage.textContent = "";
-            regCheckoutErrorMessage.classList.remove('visible');
-            regCheckoutErrorMessage.setAttribute('aria-hidden', 'true');
-
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!company_name || !full_name || !email || !password || password.length < 6 || !emailRegex.test(email)) {
-                regCheckoutErrorMessage.textContent = "Please fill all fields correctly. Password must be at least 6 characters and email valid.";
-                regCheckoutErrorMessage.classList.add('visible');
-                regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-                return;
-            }
-
-            try {
-                const registrationData = await apiRequest("POST", "/register", {
-                    company_name: company_name,
-                    full_name: full_name,
-                    email: email,
-                    password: password
-                });
-
-                const loginData = await apiRequest("POST", "/login", {
-                    email: email,
-                    password: password
-                });
-                localStorage.setItem("authToken", loginData.token);
-                localStorage.setItem("userRole", loginData.role);
-
-                const session = await apiRequest("POST", "/create-checkout-session", { planId: currentSelectedPlan });
-                if (stripe && session.sessionId) {
-                    showModalMessage("Account created! Redirecting to payment...", false);
-                    stripe.redirectToCheckout({ sessionId: session.sessionId });
-                } else {
-                    showModalMessage("Account created, but failed to initiate payment. Please log in and try upgrading your plan from My Account.", true);
-                    setTimeout(() => { window.location.href = 'login.html'; }, 2000);
-                }
-
-            } catch (error) {
-                console.error("Register/Checkout error:", error);
-                regCheckoutErrorMessage.textContent = `Sign Up Failed: ${error.message}`;
-                regCheckoutErrorMessage.classList.add('visible');
-                regCheckoutErrorMessage.setAttribute('aria-hidden', 'false');
-                showModalMessage(`Sign Up Failed: ${error.message}`, true);
-            }
-        });
-    }
-}
-
-/**
- * Handles all client-side logic for the hiring.html page.
- */
-function handleHiringPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    const createJobPostingForm = document.getElementById("create-job-posting-form");
-    const jobPostingListDiv = document.getElementById("job-posting-list");
-    const applicantListDiv = document.getElementById("applicant-list");
-    const jobPostingLocationSelect = document.getElementById("job-posting-location-select");
-    const filterApplicantJobPostingSelect = document.getElementById("filter-applicant-job-posting-select");
-    const filterApplicantStatusSelect = document.getElementById("filter-applicant-status");
-    const filterApplicantLocationSelect = document.getElementById("filter-applicant-location-select");
-    const applyApplicantFiltersBtn = document.getElementById("apply-applicant-filters-btn");
-    const clearApplicantFiltersBtn = document.getElementById("clear-applicant-filters-btn");
-
-    const shareLinkModalOverlay = document.getElementById("share-link-modal-overlay");
-    const shareJobLinkInput = document.getElementById("share-job-link-input");
-    const shareJobEmbedCodeInput = document.getElementById("share-job-embed-code-input");
-    const copyLinkBtn = document.getElementById("copy-link-btn");
-    const copyEmbedBtn = document.getElementById("copy-embed-btn");
-    const shareLinkModalCloseButton = document.getElementById("share-link-modal-close-button");
-
-
-    async function loadJobPostingLocations() {
-        if (!jobPostingLocationSelect) return;
-        jobPostingLocationSelect.innerHTML = '<option value="">Loading locations...</option>';
-        try {
-            const locations = await apiRequest("GET", "/locations");
-            jobPostingLocationSelect.innerHTML = '<option value="">Company Wide (All Locations)</option>'; // Default option
-            if (locations && locations.length > 0) {
-                locations.forEach(loc => {
-                    const option = document.createElement("option");
-                    option.value = loc.location_id;
-                    option.textContent = loc.location_name;
-                    jobPostingLocationSelect.appendChild(option);
-                });
-            } else {
-                jobPostingLocationSelect.innerHTML = '<option value="">No locations available</option>';
-            }
-            filterApplicantLocationSelect.innerHTML = jobPostingLocationSelect.innerHTML; // Copy options to filter dropdown
-        } catch (error) {
-            console.error("Error loading job posting locations:", error);
-            jobPostingLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            filterApplicantLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            showModalMessage(`Failed to load locations for job postings: ${error.message}`, true);
-        }
-    }
-
-    async function loadJobPostings() {
-        if (!jobPostingListDiv) return;
-        jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>';
-        try {
-            const queryParams = new URLSearchParams();
-            if (filterApplicantJobPostingSelect.value) { // This filter is for applicants, not job postings directly
-                // Not filtering loadJobPostings directly by ID from applicant filter
-            }
-            // For now, only show 'Open' jobs on the main list unless otherwise specified
-            queryParams.append('status', 'Open'); // Fetch only open jobs by default for this list
-
-            const jobPostings = await apiRequest("GET", `/job-postings?${queryParams.toString()}`);
-            jobPostingListDiv.innerHTML = '';
-            filterApplicantJobPostingSelect.innerHTML = '<option value="">All Job Postings</option>'; // Reset applicant filter
-
-            if (jobPostings && jobPostings.length > 0) {
-                jobPostings.forEach(job => {
-                    const jobItem = document.createElement("div");
-                    jobItem.className = "job-posting-item";
-                    jobItem.innerHTML = `
-                        <h4>${job.title}</h4>
-                        <p>Location: ${job.location_id ? job.location_name : 'Company Wide'}</p>
-                        <p>Status: ${job.status}</p>
-                        <p>Posted: ${new Date(job.created_date).toLocaleDateString()}</p>
-                        <div class="actions">
-                            <button class="btn btn-secondary btn-sm edit-job-btn" data-job-id="${job.job_posting_id}">Edit</button>
-                            <button class="btn btn-secondary btn-sm share-btn" data-job-id="${job.job_posting_id}" data-job-title="${job.title}">Share</button>
-                            <button class="btn-delete" data-type="job-posting" data-id="${job.job_posting_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    jobPostingListDiv.appendChild(jobItem);
-
-                    // Populate job posting filter dropdown for applicants
-                    const option = document.createElement("option");
-                    option.value = job.job_posting_id;
-                    option.textContent = job.title;
-                    filterApplicantJobPostingSelect.appendChild(option);
-                });
-            } else {
-                jobPostingListDiv.innerHTML = '<p style="color: var(--text-medium);">No job postings found.</p>';
-            }
-        } catch (error) {
-            console.error("Error loading job postings:", error);
-            jobPostingListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading job postings: ${error.message}</p>`;
-        }
-    }
-
-    async function loadApplicants(filters = {}) {
-        if (!applicantListDiv) return;
-        applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
-        try {
-            const queryParams = new URLSearchParams();
-            if (filters.job_posting_id) queryParams.append('job_posting_id', filters.job_posting_id);
-            if (filters.status) queryParams.append('status', filters.status);
-            if (filters.location_id) queryParams.append('location_id', filters.location_id);
-
-            const applicants = await apiRequest("GET", `/applicants?${queryParams.toString()}`);
-            applicantListDiv.innerHTML = '';
-            if (applicants && applicants.length > 0) {
-                applicants.forEach(applicant => {
-                    const applicantItem = document.createElement("div");
-                    applicantItem.className = "applicant-item";
-                    applicantItem.innerHTML = `
-                        <h4>${applicant.full_name}</h4>
-                        <p>Job: ${applicant.job_title || 'N/A'}</p>
-                        <p>Email: ${applicant.email}</p>
-                        <p>Phone: ${applicant.phone_number || 'N/A'}</p>
-                        <p>Status: ${applicant.status}</p>
-                        <p>Applied: ${new Date(applicant.application_date).toLocaleDateString()}</p>
-                        <div class="actions">
-                            <button class="btn btn-secondary btn-sm edit-applicant-btn" data-applicant-id="${applicant.applicant_id}">Update Status</button>
-                            <button class="btn-delete" data-type="applicant" data-id="${applicant.applicant_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    applicantListDiv.appendChild(applicantItem);
-                });
-            } else {
-                applicantListDiv.innerHTML = '<p style="color: var(--text-medium);">No applicants found with current filters.</p>';
-            }
-        } catch (error) {
-            console.error("Error loading applicants:", error);
-            applicantListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading applicants: ${error.message}</p>`;
-        }
-    }
-
-    if (createJobPostingForm) {
-        createJobPostingForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const title = document.getElementById("job-title-input").value.trim();
-            const description = document.getElementById("job-description-input").value.trim();
-            const requirements = document.getElementById("job-requirements-input").value.trim();
-            const locationId = jobPostingLocationSelect.value ? parseInt(jobPostingLocationSelect.value, 10) : null;
-
-            if (!title || !description) {
-                showModalMessage("Job Title and Description are required.", true);
-                return;
-            }
-
-            try {
-                const response = await apiRequest("POST", "/job-postings", {
-                    title: title,
-                    description: description,
-                    requirements: requirements,
-                    location_id: locationId
-                });
-                showModalMessage(`Job "${title}" posted successfully!`, false);
-                createJobPostingForm.reset();
-                loadJobPostings();
-            } catch (error) {
-                showModalMessage(`Error posting job: ${error.message}`, true);
-            }
-        });
-    }
-
-    if (applyApplicantFiltersBtn) {
-        applyApplicantFiltersBtn.addEventListener("click", () => {
-            const filters = {
-                job_posting_id: filterApplicantJobPostingSelect.value || null,
-                status: filterApplicantStatusSelect.value || null,
-                location_id: filterApplicantLocationSelect.value ? parseInt(filterApplicantLocationSelect.value, 10) : null
-            };
-            loadApplicants(filters);
-        });
-    }
-
-    if (clearApplicantFiltersBtn) {
-        clearApplicantFiltersBtn.addEventListener("click", () => {
-            filterApplicantJobPostingSelect.value = "";
-            filterApplicantStatusSelect.value = "";
-            filterApplicantLocationSelect.value = "";
-            loadApplicants({}); // Load all applicants
-        });
-    }
-
-    // Share Job Posting Modal Logic
-    if (shareLinkModalCloseButton) {
-        shareLinkModalCloseButton.addEventListener("click", () => {
-            shareLinkModalOverlay.style.display = 'none';
-        });
-        shareLinkModalOverlay.addEventListener("click", (event) => {
-            if (event.target === shareLinkModalOverlay) {
-                shareLinkModalOverlay.style.display = 'none';
-            }
-        });
-    }
-
-    document.body.addEventListener("click", async e => {
-        const shareButton = e.target.closest(".share-btn");
-        if (shareButton) {
-            const jobId = shareButton.dataset.jobId;
-            const jobTitle = shareButton.dataset.jobTitle; // Get job title for dynamic link text
-            const directLink = `${API_BASE_URL}/apply/${jobId}`; // Example direct link
-            const embedCode = `<iframe src="${API_BASE_URL}/embed/job/${jobId}" width="600" height="400" frameborder="0" title="${jobTitle} Application"></iframe>`; // Example embed code
-
-            if (shareJobLinkInput) shareJobLinkInput.value = directLink;
-            if (shareJobEmbedCodeInput) shareJobEmbedCodeInput.value = embedCode;
-            if (shareLinkModalOverlay) shareLinkModalOverlay.style.display = 'flex';
+                break;
+            // ... handle other event types as needed
+            default:
+                console.log(`Unhandled event type ${event.type}`);
         }
 
-        const copyLink = e.target.closest("#copy-link-btn");
-        if (copyLink && shareJobLinkInput) {
-            document.execCommand('copy'); // Fallback for navigator.clipboard.writeText
-            navigator.clipboard.writeText(shareJobLinkInput.value).then(() => {
-                showModalMessage("Link copied to clipboard!", false);
-            }).catch(err => {
-                console.error('Failed to copy link: ', err);
-                showModalMessage("Failed to copy link. Please copy manually.", true);
-            });
-        }
-
-        const copyEmbed = e.target.closest("#copy-embed-btn");
-        if (copyEmbed && shareJobEmbedCodeInput) {
-            document.execCommand('copy'); // Fallback
-            navigator.clipboard.writeText(shareJobEmbedCodeInput.value).then(() => {
-                showModalMessage("Embed code copied to clipboard!", false);
-            }).catch(err => {
-                console.error('Failed to copy embed code: ', err);
-                showModalMessage("Failed to copy embed code. Please copy manually.", true);
-            });
-        }
-
-        const editApplicantButton = e.target.closest(".edit-applicant-btn");
-        if (editApplicantButton) {
-            const applicantId = editApplicantButton.dataset.applicantId;
-            showModalMessage(`Editing Applicant ID: ${applicantId} (Functionality to be implemented)`, false);
-            // Here you'd typically open a modal or navigate to an edit page for the applicant
-        }
-    });
-
-    // Initial loads
-    loadJobPostingLocations();
-    loadJobPostings();
-    loadApplicants({}); // Load all applicants initially
-}
-
-/**
- * Handles all client-side logic for the scheduling.html page.
- */
-function handleSchedulingPage() {
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
+        await client.query('COMMIT'); // Commit transaction
+        // Return a 200 response to acknowledge receipt of the event
+        res.status(200).json({ received: true });
+    } catch (dbErr) {
+        await client.query('ROLLBACK'); // Rollback on error
+        console.error("Database update error during webhook processing:", dbErr.message);
+        res.status(500).json({ error: 'Webhook processing failed.' });
+    } finally {
+        client.release(); // Release client back to pool
     }
-
-    const filterEmployeeSelect = document.getElementById("filter-employee-select");
-    const filterLocationSelect = document.getElementById("filter-location-select");
-    const filterStartDateInput = document.getElementById("filter-start-date");
-    const filterEndDateInput = document.getElementById("filter-end-date");
-    const applyFiltersBtn = document.getElementById("apply-filters-btn");
-    const clearFiltersBtn = document.getElementById("clear-filters-btn");
-
-    const createShiftForm = document.getElementById("create-shift-form");
-    const employeeSelect = document.getElementById("employee-select");
-    const locationSelect = document.getElementById("location-select");
-    const startTimeInput = document.getElementById("start-time-input");
-    const endTimeInput = document.getElementById("end-time-input");
-    const notesInput = document.getElementById("notes-input");
-
-    const prevWeekBtn = document.getElementById("prev-week-btn");
-    const nextWeekBtn = document.getElementById("next-week-btn");
-    const currentWeekDisplay = document.getElementById("current-week-display");
-    const calendarGrid = document.getElementById("calendar-grid");
-    const timeColumn = document.getElementById("time-column");
-
-    let currentWeekStart = moment().startOf('isoWeek'); // Use moment.js for week manipulation
-
-    function renderTimeColumn() {
-        timeColumn.innerHTML = '';
-        // Add an empty cell for the top-left corner (above time, left of days)
-        const topLeftCorner = document.createElement('div');
-        topLeftCorner.className = 'calendar-day-header'; // Re-use header style
-        topLeftCorner.style.gridColumn = '1';
-        topLeftCorner.style.gridRow = '1';
-        topLeftCorner.textContent = ''; // Empty for spacing
-        calendarGrid.prepend(topLeftCorner); // Add before any other content
-
-        for (let i = 0; i < 24; i++) {
-            const time = moment().hour(i).minute(0);
-            const timeSlot = document.createElement('div');
-            timeSlot.className = 'calendar-time-slot';
-            timeSlot.textContent = time.format('h A');
-            timeColumn.appendChild(timeSlot);
-        }
-    }
-
-    async function loadEmployeesForScheduling() {
-        if (!employeeSelect) return;
-        employeeSelect.innerHTML = '<option value="">Loading employees...</option>';
-        filterEmployeeSelect.innerHTML = '<option value="">All Employees</option>'; // Always have "All Employees" option
-        try {
-            const employees = await apiRequest("GET", "/users?filterRole=employee"); // Assuming an API to get employees
-            if (employees && employees.length > 0) {
-                employeeSelect.innerHTML = '<option value="">Select Employee</option>';
-                employees.forEach(emp => {
-                    const option = document.createElement("option");
-                    option.value = emp.user_id;
-                    option.textContent = emp.full_name;
-                    employeeSelect.appendChild(option);
-                    // Add to filter dropdown as well
-                    filterEmployeeSelect.appendChild(option.cloneNode(true));
-                });
-            } else {
-                employeeSelect.innerHTML = '<option value="">No employees available</option>';
-                filterEmployeeSelect.innerHTML = '<option value="">No employees available</option>';
-            }
-        } catch (error) {
-            console.error("Error loading employees for scheduling:", error);
-            employeeSelect.innerHTML = '<option value="">Error loading employees</option>';
-            filterEmployeeSelect.innerHTML = '<option value="">Error loading employees</option>';
-            showModalMessage(`Failed to load employees: ${error.message}`, true);
-        }
-    }
-
-    async function loadLocationsForScheduling() {
-        if (!locationSelect) return;
-        locationSelect.innerHTML = '<option value="">Loading locations...</option>';
-        filterLocationSelect.innerHTML = '<option value="">All Locations</option>'; // Always have "All Locations" option
-        try {
-            const locations = await apiRequest("GET", "/locations");
-            if (locations && locations.length > 0) {
-                locationSelect.innerHTML = '<option value="">Select Location</option>';
-                locations.forEach(loc => {
-                    const option = document.createElement("option");
-                    option.value = loc.location_id;
-                    option.textContent = loc.location_name;
-                    locationSelect.appendChild(option);
-                    // Add to filter dropdown as well
-                    filterLocationSelect.appendChild(option.cloneNode(true));
-                });
-            } else {
-                locationSelect.innerHTML = '<option value="">No locations available</option>';
-                filterLocationSelect.innerHTML = '<option value="">No locations available</option>';
-            }
-        } catch (error) {
-            console.error("Error loading locations for scheduling:", error);
-            locationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            filterLocationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            showModalMessage(`Failed to load locations: ${error.message}`, true);
-        }
-    }
-
-    async function renderCalendar() {
-        if (!calendarGrid) return;
-
-        // Clear existing day headers and cells (except the fixed time column)
-        const existingDayElements = calendarGrid.querySelectorAll('.calendar-day-header:not([style*="grid-column: 1"]), .calendar-day-cell');
-        existingDayElements.forEach(el => el.remove());
-
-        currentWeekDisplay.textContent = `${currentWeekStart.format('MMM DD')} - ${moment(currentWeekStart).endOf('isoWeek').format('MMM DD,YYYY')}`;
-
-        const dates = [];
-        for (let i = 0; i < 7; i++) {
-            dates.push(moment(currentWeekStart).add(i, 'days'));
-        }
-
-        // Add Day Headers
-        dates.forEach((date, index) => {
-            const dayHeader = document.createElement('div');
-            dayHeader.className = 'calendar-day-header';
-            dayHeader.style.gridColumn = `${index + 2}`; // +2 because column 1 is for time
-            dayHeader.style.gridRow = '1';
-            dayHeader.innerHTML = `${date.format('ddd')}<br>${date.format('MMM D')}`;
-            calendarGrid.appendChild(dayHeader);
-        });
-
-        // Add Day Cells
-        dates.forEach((date, index) => {
-            const dayCell = document.createElement('div');
-            dayCell.className = 'calendar-day-cell';
-            dayCell.style.gridColumn = `${index + 2}`; // +2 because column 1 is for time
-            dayCell.style.gridRow = `2 / span 24`; // Span 24 hours
-            dayCell.dataset.date = date.format('YYYY-MM-DD'); // Store date for later use
-            calendarGrid.appendChild(dayCell);
-        });
-
-        // Fetch and display shifts for the current week
-        const startOfWeek = currentWeekStart.startOf('isoWeek').format('YYYY-MM-DDTHH:mm:ssZ');
-        const endOfWeek = moment(currentWeekStart).endOf('isoWeek').format('YYYY-MM-DDTHH:mm:ssZ');
-
-        const filters = {
-            start_date: startOfWeek,
-            end_date: endOfWeek,
-            employee_id: filterEmployeeSelect.value || null,
-            location_id: filterLocationSelect.value || null
-        };
-
-        try {
-            const shifts = await apiRequest("GET", `/schedules?${new URLSearchParams(filters).toString()}`);
-            shifts.forEach(shift => {
-                const shiftStart = moment(shift.start_time);
-                const shiftEnd = moment(shift.end_time);
-                const shiftDate = shiftStart.format('YYYY-MM-DD');
-
-                const targetCell = calendarGrid.querySelector(`.calendar-day-cell[data-date="${shiftDate}"]`);
-                if (targetCell) {
-                    const shiftDiv = document.createElement('div');
-                    shiftDiv.className = `calendar-shift ${moment().isAfter(shiftEnd) ? 'overdue' : ''}`; // Add 'overdue' class if shift has passed
-
-                    // Calculate top and height for positioning
-                    const startHour = shiftStart.hour();
-                    const startMinute = shiftStart.minute();
-                    const endHour = shiftEnd.hour();
-                    const endMinute = shiftEnd.minute();
-
-                    const topPosition = (startHour * 30) + (startMinute / 60 * 30); // 30px per hour
-                    const durationHours = shiftEnd.diff(shiftStart, 'minutes') / 60;
-                    const height = durationHours * 30; // 30px per hour
-
-                    shiftDiv.style.top = `${topPosition}px`;
-                    shiftDiv.style.height = `${height}px`;
-                    shiftDiv.textContent = `${shift.employee_name} @ ${shift.location_name} (${shiftStart.format('h:mm A')} - ${shiftEnd.format('h:mm A')})`;
-
-                    shiftDiv.addEventListener('click', async () => {
-                        const confirmDelete = await showConfirmModal(`
-                            <h4>Shift Details:</h4>
-                            <p><strong>Employee:</strong> ${shift.employee_name}</p>
-                            <p><strong>Location:</strong> ${shift.location_name}</p>
-                            <p><strong>Time:</strong> ${shiftStart.format('MMM DD, h:mm A')} - ${shiftEnd.format('MMM DD, h:mm A')}</p>
-                            <p><strong>Notes:</strong> ${shift.notes || 'None'}</p>
-                            <p style="margin-top: 15px;">Are you sure you want to delete this shift?</p>
-                        `, "Delete Shift");
-
-                        if (confirmDelete) {
-                            try {
-                                await apiRequest("DELETE", `/schedules/${shift.schedule_id}`);
-                                showModalMessage("Shift deleted successfully!", false);
-                                renderCalendar(); // Re-render calendar
-                            } catch (error) {
-                                showModalMessage(`Failed to delete shift: ${error.message}`, true);
-                            }
-                        }
-                    });
-
-                    targetCell.appendChild(shiftDiv);
-                }
-            });
-        } catch (error) {
-            console.error("Error loading schedules:", error);
-            calendarGrid.querySelector('p').textContent = `Error loading schedules: ${error.message}`;
-        }
-    }
-
-    if (prevWeekBtn) {
-        prevWeekBtn.addEventListener("click", () => {
-            currentWeekStart.subtract(1, 'isoWeek');
-            renderCalendar();
-        });
-    }
-
-    if (nextWeekBtn) {
-        nextWeekBtn.addEventListener("click", () => {
-            currentWeekStart.add(1, 'isoWeek');
-            renderCalendar();
-        });
-    }
-
-    if (createShiftForm) {
-        createShiftForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const employeeId = employeeSelect.value ? parseInt(employeeSelect.value, 10) : null;
-            const locationId = locationSelect.value ? parseInt(locationSelect.value, 10) : null;
-            const startTime = startTimeInput.value;
-            const endTime = endTimeInput.value;
-            const notes = notesInput.value.trim();
-
-            if (!employeeId || !locationId || !startTime || !endTime) {
-                showModalMessage("Please select an employee, location, and valid start/end times.", true);
-                return;
-            }
-            if (new Date(startTime) >= new Date(endTime)) {
-                showModalMessage("Start time must be before end time.", true);
-                return;
-            }
-
-            try {
-                await apiRequest("POST", "/schedules", {
-                    employee_id: employeeId,
-                    location_id: locationId,
-                    start_time: startTime,
-                    end_time: endTime,
-                    notes: notes || null
-                });
-                showModalMessage("Shift created successfully!", false);
-                createShiftForm.reset();
-                renderCalendar();
-            } catch (error) {
-                showModalMessage(`Error creating shift: ${error.message}`, true);
-            }
-        });
-    }
-
-    if (applyFiltersBtn) {
-        applyFiltersBtn.addEventListener("click", () => {
-            renderCalendar(); // Re-render calendar with new filters
-        });
-    }
-
-    if (clearFiltersBtn) {
-        clearFiltersBtn.addEventListener("click", () => {
-            filterEmployeeSelect.value = "";
-            filterLocationSelect.value = "";
-            filterStartDateInput.value = "";
-            filterEndDateInput.value = "";
-            renderCalendar(); // Re-render calendar with cleared filters
-        });
-    }
-
-    // Initial load
-    renderTimeColumn();
-    loadEmployeesForScheduling();
-    loadLocationsForScheduling();
-    renderCalendar();
-}
-
-/**
- * Handles all client-side logic for the documents.html page.
- */
-function handleDocumentsPage() {
-    // In a real app, remove this mock and ensure user is logged in before calling this handler
-    // The mock authentication below should be REMOVED for your live site.
-    if (!localStorage.getItem("authToken")) {
-        localStorage.setItem("authToken", "mock-auth-token"); // REMOVE FOR LIVE SITE
-        localStorage.setItem("userRole", "super_admin"); // REMOVE FOR LIVE SITE
-        // console.warn("Mock authentication applied for demo purposes. REMOVE FOR LIVE SITE.");
-    }
-
-    const uploadDocumentForm = document.getElementById("upload-document-form");
-    const documentTitleInput = document.getElementById("document-title");
-    const documentFileInput = document.getElementById("document-file");
-    const documentDescriptionInput = document.getElementById("document-description");
-    const documentListDiv = document.getElementById("document-list");
-
-    const uploadProgressContainer = document.getElementById("upload-progress-container");
-    const uploadProgressFill = document.getElementById("upload-progress-fill");
-    const uploadProgressText = document.getElementById("upload-progress-text");
-
-    /**
-     * Shows the upload progress bar and updates its display.
-     * @param {number} percentage - The upload progress percentage (0-100).
-     * @param {string} text - Optional text to display, e.g., "Uploading..."
-     */
-    function showUploadProgress(percentage, text = `${percentage}%`) {
-        if (uploadProgressContainer && uploadProgressFill && uploadProgressText) {
-            uploadProgressContainer.style.display = 'block';
-            uploadProgressText.style.display = 'block';
-            uploadProgressFill.style.width = `${percentage}%`;
-            uploadProgressText.textContent = text;
-        }
-    }
-
-    /**
-     * Hides the upload progress bar.
-     */
-    function hideUploadProgress() {
-        if (uploadProgressContainer && uploadProgressText) {
-            uploadProgressContainer.style.display = 'none';
-            uploadProgressText.style.display = 'none';
-            uploadProgressFill.style.width = '0%';
-        }
-    }
-
-    /**
-     * Fetches and displays the list of uploaded documents from the backend.
-     */
-    async function loadDocuments() {
-        if (!documentListDiv) return;
-        documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
-
-        try {
-            const documents = await apiRequest("GET", "/documents");
-
-            documentListDiv.innerHTML = '';
-
-            if (documents.length === 0) {
-                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
-            } else {
-                documents.forEach(doc => {
-                    const docItem = document.createElement("div");
-                    docItem.className = "document-item";
-                    const uploadDate = new Date(doc.upload_date).toLocaleDateString();
-                    docItem.innerHTML = `
-                        <h4>${doc.title}</h4>
-                        <p>File: ${doc.file_name}</p>
-                        <p>Description: ${doc.description || 'N/A'}</p>
-                        <p>Uploaded: ${uploadDate}</p>
-                        <div class="actions">
-                            <a href="${API_BASE_URL}/documents/download/${doc.document_id}" class="btn btn-secondary btn-sm" target="_blank" download>Download</a>
-                            <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    documentListDiv.appendChild(docItem);
-                });
-            }
-        } catch (error) {
-            console.error("Error loading documents:", error);
-            documentListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading documents: ${error.message}</p>`;
-        }
-    }
-
-    // Handle document upload form submission
-    if (uploadDocumentForm) {
-        uploadDocumentForm.addEventListener("submit", async e => {
-            e.preventDefault();
-
-            const title = documentTitleInput.value.trim();
-            const file = documentFileInput.files[0];
-            const description = documentDescriptionInput.value.trim();
-
-            if (!title || !file) {
-                showModalMessage("Please provide a document title and select a file.", true);
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('title', title);
-            formData.append('document_file', file);
-            formData.append('description', description);
-
-            try {
-                showUploadProgress(0, 'Starting upload...');
-                const result = await apiRequest(
-                    "POST",
-                    "/documents/upload",
-                    formData,
-                    true, // isFormData: true
-                    event => {
-                        if (event.lengthComputable) {
-                            const percentComplete = Math.round((event.loaded * 100) / event.total);
-                            showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
-                        }
-                    }
-                );
-
-                showModalMessage("Document uploaded successfully!", false);
-                uploadDocumentForm.reset();
-                hideUploadProgress();
-                loadDocuments(); // Reload the list of documents from the backend
-            } catch (error) {
-                console.error("Document upload error:", error);
-                showModalMessage(`Failed to upload document: ${error.message}`, true);
-                hideUploadProgress();
-            }
-        });
-    }
-
-    // Event listener for delete buttons on documents page (using delegation)
-    if (documentListDiv) {
-        documentListDiv.addEventListener("click", async e => {
-            const targetButton = e.target.closest(".btn-delete");
-            if (targetButton && targetButton.dataset.type === "document") {
-                const idToDelete = parseInt(targetButton.dataset.id, 10);
-                const confirmed = await showConfirmModal(`Are you sure you want to delete this document? This action cannot be undone.`, "Delete");
-
-                if (confirmed) {
-                    try {
-                        await apiRequest("DELETE", `/documents/${idToDelete}`);
-                        showModalMessage("Document deleted successfully!", false);
-                        loadDocuments(); // Reload the list of documents to reflect the change
-                    } catch (error) {
-                        showModalMessage(`Error deleting document: ${error.message}`, true);
-                    }
-                }
-            }
-        });
-    }
-
-
-    // Initial load of documents when the page loads
-    loadDocuments();
-}
-
-// Global DOMContentLoaded listener to call page-specific handlers
-document.addEventListener("DOMContentLoaded", () => {
-    // Call setupSettingsDropdown on all pages that use it
-    setupSettingsDropdown();
-
-    // Route calls to specific page handlers based on body ID or filename
-    // Using window.location.pathname to determine the current page
-    const path = window.location.pathname;
-
-    if (path.includes("login.html")) {
-        handleLoginPage();
-    } else if (path.includes("register.html")) {
-        handleRegisterPage();
-    } else if (path.includes("suite-hub.html")) {
-        handleSuiteHubPage();
-    } else if (path.includes("account.html")) {
-        handleAccountPage();
-    } else if (path.includes("admin.html")) {
-        handleAdminPage();
-    } else if (path.includes("dashboard.html")) { // Onboarding Dashboard
-        handleDashboardPage();
-    } else if (path.includes("checklists.html")) {
-        handleChecklistsPage(); // Call the checklists page handler directly
-    } else if (path.includes("new-hire-view.html")) { // Employee's Onboarding View
-        handleNewHireViewPage();
-    } else if (path.includes("pricing.html")) {
-        handlePricingPage();
-    } else if (path.includes("documents.html")) {
-        handleDocumentsPage();
-    } else if (path.includes("hiring.html")) {
-        handleHiringPage();
-    } else if (path.includes("scheduling.html")) {
-        // You'll need to load moment.js in scheduling.html for this to work
-        // <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-        // Make sure it's loaded before app.min.js
-        if (typeof moment === 'undefined') {
-            console.error("Moment.js is not loaded. Scheduling page functionality will be limited.");
-            showModalMessage("Scheduling requires Moment.js library. Please ensure it's loaded in scheduling.html.", true);
-        } else {
-            handleSchedulingPage();
-        }
-    }
-    // Add more else if conditions for other pages as needed
 });
+
+app.use(express.json()); // JSON body parser should be early - now after webhook
+
+// CORS Middleware
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow multiple origins by splitting a comma-separated string from env
+        const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()) : ['http://localhost:8000', 'http://127.0.0.1:8000', 'null'];
+
+        // console.log(`CORS Check: Incoming Origin -> ${origin}`); // Commented out for production
+        // console.log(`CORS Check: Allowed Origins -> ${allowedOrigins.join(', ')}`); // Commented out for production
+
+        if (!origin || allowedOrigins.includes(origin)) { // Use .includes for array check
+            callback(null, true);
+        } else {
+            const msg = `CORS Error: Origin ${origin} not allowed. Allowed: ${allowedOrigins.join(', ')}`;
+            console.error(msg);
+            callback(new Error(msg), false);
+        }
+    },
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+    optionsSuccessStatus: 204
+}));
+
+
+// --- Database Setup (PostgreSQL) ---
+// IMPORTANT: This part MUST be global and initialized before any route that uses 'pool' or 'query'/'runCommand'
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+pool.on('connect', () => console.log('Connected to PostgreSQL database'));
+pool.on('error', (err) => console.error('PostgreSQL database error:', err.message, err.stack));
+
+// --- Helper function for database queries (for consistency) ---
+async function query(text, params) {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(text, params);
+        return res.rows;
+    } finally {
+        client.release();
+    }
+}
+
+// Modified runCommand to return rowCount or potentially the ID if a RETURNING clause is used
+async function runCommand(text, params) {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(text, params);
+        // If a RETURNING clause is used, rows might be populated. Otherwise, return rowCount.
+        // This makes `runCommand` more versatile for INSERT/UPDATE/DELETE.
+        return res.rows.length > 0 ? res.rows[0] : res.rowCount;
+    } finally {
+        client.release();
+    }
+}
+
+// --- Authentication Middleware ---
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) {
+        return res.status(401).json({ error: 'Unauthorized: No token provided.' });
+    }
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            console.error("JWT Verification Error:", err.message);
+            // Specifically check for token expiration
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({ error: 'Forbidden: Token has expired.' });
+            }
+            return res.status(403).json({ error: 'Forbidden: Invalid token.' });
+        }
+        req.user = user;
+        next();
+    });
+}
+
+const isValidEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+// --- API Routes (Define ALL API routes FIRST) ---
+// These routes must come BEFORE any static file serving middleware
+// to ensure API requests are handled by your backend logic.
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Max 10 requests per 15 minutes per IP
+    message: 'Too many login/registration attempts from this IP, please try again after 15 minutes',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Applying authLimiter directly as middleware
+app.post('/register', authLimiter, async (req, res, next) => {
+    const { company_name, full_name, email, password } = req.body;
+    if (!company_name || !full_name || !email || !password || password.length < 6 || !isValidEmail(email)) {
+        return res.status(400).json({ error: "Invalid registration data provided. Please ensure all fields are filled, password is at least 6 characters, and email is valid." });
+    }
+
+    try {
+        const password_hash = await bcrypt.hash(password, 10);
+        
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN'); // Start transaction
+            const companyResult = await client.query('INSERT INTO Companies (company_name) VALUES ($1) RETURNING company_id', [company_name]);
+            const newCompanyId = companyResult.rows[0].company_id;
+
+            const userResult = await client.query(
+                `INSERT INTO Users (company_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, 'super_admin', 'active', 'free') RETURNING user_id`,
+                [newCompanyId, full_name, email, password_hash]
+            );
+            const newUserId = userResult.rows[0].user_id;
+
+            await client.query('COMMIT'); // Commit transaction
+            res.status(201).json({ message: "Company and user registered successfully!", userId: newUserId });
+        } catch (dbErr) {
+            await client.query('ROLLBACK'); // Rollback on error
+            console.error("Database error during registration:", dbErr);
+            // NEW: More specific error messages for duplicate unique constraints
+            if (dbErr.code === '23505') { // PostgreSQL unique_violation error code
+                if (dbErr.constraint === 'users_email_key') {
+                    return res.status(409).json({ error: 'Email already registered. Please use a different email address.' });
+                }
+                if (dbErr.constraint === 'companies_company_name_key') {
+                    return res.status(409).json({ error: 'Company name already registered. Please choose a different company name.' });
+                }
+            }
+            next(dbErr); // Pass to general error handler
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error("Registration error:", error);
+        next(error); // Pass to general error handler
+    }
+});
+
+app.post('/login', authLimiter, async (req, res, next) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required." });
+    }
+
+    try {
+        const userResult = await query("SELECT * FROM Users WHERE email = $1", [email]);
+        const user = userResult[0];
+
+        if (!user) { return res.status(401).json({ error: "Invalid credentials." }); }
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        if (!isMatch) { return res.status(401).json({ error: "Invalid credentials." }); }
+
+        const payload = {
+            userId: user.user_id,
+            email: user.email,
+            role: user.role,
+            fullName: user.full_name,
+            companyId: user.company_id,
+            locationId: user.location_id, // Can be null for super_admin
+            subscriptionStatus: user.subscription_status,
+            planId: user.plan_id
+        };
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }); // Token expires in 1 hour
+        res.status(200).json({ message: "Login successful!", token, role: user.role });
+    } catch (error) {
+        console.error("Login API error:", error);
+        next(error);
+    }
+});
+
+app.post('/create-checkout-session', authenticateToken, async (req, res, next) => {
+    const { planId } = req.body;
+    const { userId, email, companyId } = req.user; // Get user info from authenticated token
+
+    if (!stripeInstance) {
+        console.error("Stripe not initialized. STRIPE_SECRET_KEY might be missing.");
+        return res.status(500).json({ error: "Payment processing is unavailable." });
+    }
+
+    // Retrieve Stripe Price IDs from environment variables
+    let priceId;
+    switch (planId) {
+        case 'pro':
+            priceId = process.env.STRIPE_PRICE_ID_PRO; // Get from environment variable
+            break;
+        case 'enterprise':
+            priceId = process.env.STRIPE_PRICE_ID_ENT; // Get from environment variable
+            break;
+        default:
+            return res.status(400).json({ error: "Invalid plan selected." });
+    }
+
+    if (!priceId) {
+        console.error(`Stripe Price ID for plan '${planId}' is not configured.`);
+        return res.status(500).json({ error: `Payment processing: Price ID for ${planId} plan missing.` });
+    }
+
+    try {
+        const session = await stripeInstance.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+                {
+                    price: priceId,
+                    quantity: 1,
+                },
+            ],
+            mode: 'subscription', // Use 'subscription' mode for recurring payments
+            success_url: `${process.env.CORS_ORIGIN}/suite-hub.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.CORS_ORIGIN}/suite-hub.html?payment=cancelled`,
+            metadata: {
+                userId: userId,
+                planId: planId,
+                companyId: companyId,
+                userEmail: email // Useful for reconciliation in Stripe
+            },
+            customer_email: email, // Pre-fill customer email
+        });
+
+        res.status(200).json({ sessionId: session.id });
+    } catch (error) {
+        console.error("Error creating Stripe Checkout session:", error);
+        // Distinguish between Stripe-specific errors and general errors for better client feedback
+        if (error.type === 'StripeCardError' || error.type === 'StripeInvalidRequestError') {
+            return res.status(400).json({ error: error.message });
+        }
+        next(error); // Pass other errors to general error handler
+    }
+});
+
+app.post('/invite-admin', authenticateToken, async (req, res, next) => {
+    const { full_name, email, password, location_id } = req.body;
+    const { companyId, role } = req.user;
+
+    // Authorization check
+    if (role !== 'super_admin') {
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can invite other admins.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    // Input validation
+    if (!full_name || !email || !password || password.length < 6 || !isValidEmail(email) || typeof location_id !== 'number' || location_id <= 0) {
+        return res.status(400).json({ error: "Invalid admin invitation data provided. Full name, valid email, password (min 6 chars), and a valid location ID are required." });
+    }
+
+    try {
+        // Verify location exists and belongs to the company
+        const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
+        if (locationCheck.length === 0) {
+            return res.status(400).json({ error: 'Selected location does not exist or does not belong to your company.' });
+        }
+
+        const password_hash = await bcrypt.hash(password, 10);
+        // Corrected: Added RETURNING user_id to get the newly created user's ID
+        const result = await runCommand(
+            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id) VALUES ($1, $2, $3, $4, $5, 'location_admin', 'active', 'free') RETURNING user_id`,
+            [companyId, location_id, full_name, email, password_hash]
+        );
+        res.status(201).json({ message: "Location admin invited successfully!", userId: result.user_id });
+    } catch (error) {
+        console.error("Invite admin error:", error);
+        if (error.message && error.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
+            return res.status(409).json({ error: 'Email already registered.' });
+        }
+        next(error);
+    }
+});
+
+app.post('/invite-employee', authenticateToken, async (req, res, next) => {
+    const { full_name, email, password, position, employee_id, location_id } = req.body;
+    const { companyId, role, locationId: currentUserLocationId, planId: currentPlanId } = req.user; // Get planId from authenticated user
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can invite employees.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    
+    // Input validation
+    const isLocationIdValid = location_id === null || (typeof location_id === 'number' && !isNaN(location_id) && location_id >= 0); // location_id can be 0 or greater
+    if (!full_name || !email || !password || password.length < 6 || !isValidEmail(email) || !isLocationIdValid) {
+        return res.status(400).json({ error: "Invalid employee invitation data provided. Full name, valid email, password (min 6 chars), and a valid location are required." });
+    }
+    if (position !== undefined && typeof position !== 'string') { return res.status(400).json({ error: 'Position must be a string if provided.' }); }
+    if (employee_id !== undefined && employee_id !== null && typeof employee_id !== 'string' && typeof employee_id !== 'number') {
+        return res.status(400).json({ error: 'Employee ID must be a string, number, or null if provided.' });
+    }
+
+
+    // Location admin specific restriction
+    if (role === 'location_admin') {
+        if (currentUserLocationId !== null) {
+            if (location_id !== currentUserLocationId && location_id !== null) {
+                return res.status(403).json({ error: 'Access Dismissed: Location admin can only invite employees to their assigned location or unassigned roles.' }); // Changed 'Access Denied' to 'Access Dismissed'
+            }
+        } else {
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location cannot invite employees to any location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    }
+
+    // --- NEW: Employee Limit Enforcement Logic ---
+    const maxEmployeesForPlan = PLAN_EMPLOYEE_LIMITS[currentPlanId];
+
+    if (maxEmployeesForPlan !== null) { // If the plan has a defined limit (not 'unlimited')
+        try {
+            // Count existing users (employees and location_admins, but NOT super_admins) for this company
+            const employeeCountResult = await query(
+                `SELECT COUNT(*) FROM Users WHERE company_id = $1 AND role IN ('employee', 'location_admin')`,
+                [companyId]
+            );
+            const currentEmployeeCount = parseInt(employeeCountResult[0].count, 10);
+
+            if (currentEmployeeCount >= maxEmployeesForPlan) {
+                return res.status(403).json({ error: `Subscription limit reached: Your current plan allows up to ${maxEmployeesForPlan} employees. Please upgrade your plan.` });
+            }
+        } catch (dbError) {
+            console.error("Database error checking employee count:", dbError);
+            next(dbError); // Pass DB error to general error handler
+            return; // Prevent further execution
+        }
+    }
+    // --- END NEW LOGIC ---
+
+    try { // Outer try block
+        if (location_id !== null && location_id > 0) { // Only check if a specific location_id is provided and is valid
+            const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
+            if (locationCheck.length === 0) { return res.status(400).json({ error: 'Selected location does not exist or does not belong to your company.' }); }
+        }
+
+        const password_hash = await bcrypt.hash(password, 10);
+        // Corrected: Added RETURNING user_id to get the newly created user's ID
+        const result = await runCommand(
+            `INSERT INTO Users (company_id, location_id, full_name, email, password_hash, role, subscription_status, plan_id, position, employee_id) VALUES ($1, $2, $3, $4, $5, 'employee', 'active', 'free', $6, $7) RETURNING user_id`,
+            [companyId, location_id, full_name, email, password_hash, position, employee_id]
+        );
+        // The runCommand now returns an object with user_id if successful
+        res.status(201).json({ message: "Employee invited successfully!", userId: result.user_id });
+    } catch (error) { // The outer catch block for the above try
+        console.error("Invite employee error:", error);
+        if (error.message && error.message.includes('duplicate key value violates unique constraint "users_email_key"')) {
+            return res.status(409).json({ error: 'Email already registered.' });
+        }
+        next(error);
+    }
+}); // Corrected: This was the missing closing curly brace for the route handler itself
+
+// --- Multer Configuration for File Uploads ---
+const UPLOADS_DIR = path.join(__dirname, 'uploads'); // Files will be stored in a subfolder 'uploads'
+// Create the uploads directory if it doesn't exist
+// const fs = require('fs'); // fs is already imported at the top now
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, UPLOADS_DIR); // Store files in the 'uploads' directory
+    },
+    filename: function (req, file, cb) {
+        // Use a unique name to prevent collisions, e.g., timestamp-originalfilename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+// Configure Multer to accept single file uploads with the field name 'document_file'
+// NEW: Increased limits to multer for file size to 1GB
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 1 * 1024 * 1024 * 1024 } // 1 GB limit (1 * 1024 * 1024 * 1024 bytes)
+});
+
+// --- Document Management API Routes ---
+app.post('/documents/upload', authenticateToken, upload.single('document_file'), async (req, res, next) => {
+    const { title, description } = req.body;
+    const { userId, companyId, role } = req.user;
+    const file = req.file; // This comes from multer
+
+    // Authorization: Only super_admin and location_admin can upload documents
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        // If a location_admin tries to upload, they should only be able to if assigned to a location
+        // or if the document isn't specifically tied to a location within the document's metadata
+        // For now, let's keep it simple: any admin role can upload to the company's documents.
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can upload documents.' });
+    }
+
+    // Input validation
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+        return res.status(400).json({ error: "Document title is required and must be a non-empty string." });
+    }
+    if (!file) {
+        return res.status(400).json({ error: "No file provided for upload." });
+    }
+    // The Multer 'limits' option above handles file size before this point.
+    // If a file exceeds the limit, Multer will throw an FAILED_TO_PARSE_BODY error with code 'LIMIT_FILE_SIZE'
+    // that needs to be caught by the general error handler.
+    // The previous manual size check is now removed as Multer's limits are more robust.
+
+    try {
+        const result = await runCommand(
+            // Removed mime_type from the INSERT statement temporarily for debugging database schema
+            `INSERT INTO Documents (company_id, title, description, file_path, file_name, uploaded_by_user_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING document_id, file_path`,
+            [companyId, title, description, file.path, file.originalname, userId] // Removed file.mimetype
+        );
+        res.status(201).json({ message: 'Document uploaded successfully!', documentId: result.document_id, filePath: result.file_path });
+    } catch (error) {
+        console.error("Database error during document upload:", error);
+        // Clean up uploaded file if DB insert fails
+        if (file && fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path); // Delete the file
+        }
+        next(error);
+    }
+});
+
+app.get('/documents', authenticateToken, async (req, res, next) => {
+    const { companyId, role } = req.user;
+    // Authorization: Any user within the company should be able to view documents for now
+    // If specific roles should be restricted, add checks here.
+
+    // Removed mime_type from SELECT statement temporarily for debugging database schema
+    let sql = `SELECT document_id, title, description, file_name, upload_date, file_path,
+                      uploaded_by_user_id -- Select the ID directly from Documents table
+               FROM Documents
+               WHERE company_id = $1`;
+
+    const params = [companyId];
+
+    try {
+        const documents = await query(sql, params);
+        res.json(documents);
+    } catch (error) {
+        // This log message was identified as potentially causing a SyntaxError in previous logs
+        // Ensuring it correctly handles the error object.
+        console.error(`Database error fetching documents: ${error.message || JSON.stringify(error)}`); // Improved error logging
+        next(error); // Pass to general error handler
+    }
+});
+
+// Route to serve files for download
+app.get('/documents/download/:document_id', authenticateToken, async (req, res, next) => {
+    const { document_id } = req.params;
+    const { companyId, role } = req.user;
+
+    // Input validation
+    if (!document_id || isNaN(parseInt(document_id))) {
+        return res.status(400).json({ error: 'Invalid document ID provided.' });
+    }
+
+    try {
+        const docResult = await query(
+            // Removed mime_type from SELECT statement temporarily
+            'SELECT file_path, file_name, company_id FROM Documents WHERE document_id = $1',
+            [document_id]
+        );
+        const document = docResult[0];
+
+        if (!document) {
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+
+        // Authorization: Ensure document belongs to the authenticated user's company
+        if (document.company_id !== companyId) {
+            return res.status(403).json({ error: 'Access Dismissed: You are not authorized to download this document.' });
+        }
+
+        const filePath = document.file_path;
+        const fileName = document.file_name;
+        // const mimeType = document.mime_type; // No longer retrieving from DB for now
+
+        // Check if file exists on disk
+        if (!fs.existsSync(filePath)) {
+            console.error(`Attempted to download non-existent file: ${filePath}`);
+            return res.status(404).json({ error: 'File not found on server storage.' });
+        }
+
+        // For download, we need the mime_type. Since we're bypassing the DB for it,
+        // we'll have to infer it or default to a generic type.
+        // A more robust solution would be to use a library to infer mime type from file extension
+        // or ensure the DB column exists.
+        res.setHeader('Content-Type', 'application/octet-stream'); // Default to generic type
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.sendFile(filePath); // Send the file from local storage
+
+    } catch (error) {
+        console.error("Error serving document for download:", error);
+        next(error);
+    }
+});
+
+app.delete('/documents/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role } = req.user;
+
+    // Authorization: Only super_admin and location_admin can delete documents
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can delete documents.' });
+    }
+    // Input validation
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid document ID provided.' }); }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // First, get the file_path to delete the physical file
+        const docResult = await client.query('SELECT file_path, company_id FROM Documents WHERE document_id = $1', [id]);
+        const document = docResult.rows[0];
+
+        if (!document) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+        // Ensure document belongs to the authenticated user's company
+        if (document.company_id !== companyId) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Access Dismissed: You are not authorized to delete this document.' });
+        }
+
+        // Delete from database
+        const dbDeleteResult = await client.query('DELETE FROM Documents WHERE document_id = $1 AND company_id = $2', [id, companyId]);
+
+        if (dbDeleteResult.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Document not found or not authorized to delete.' });
+        }
+
+        // Delete physical file after successful DB deletion
+        if (fs.existsSync(document.file_path)) {
+            fs.unlinkSync(document.file_path);
+            console.log(`Successfully deleted physical file: ${document.file_path}`);
+        } else {
+            console.warn(`Attempted to delete non-existent physical file: ${document.file_path}`);
+        }
+
+        await client.query('COMMIT');
+        res.status(204).send(); // No content for successful deletion
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Database error deleting document:", error);
+        next(error);
+    } finally {
+        client.release();
+    }
+});
+
+app.get('/profile', authenticateToken, async (req, res, next) => {
+    try {
+        const userResult = await query('SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1', [req.user.userId]);
+        const user = userResult[0];
+        if (!user) { return res.status(404).json({ error: 'User not found.' }); }
+        res.status(200).json(user);
+    }    catch (error) {
+        console.error("Error fetching profile info:", error);
+        next(error);
+    }
+});
+
+app.put('/profile', authenticateToken, async (req, res, next) => {
+    const { fullName, email, currentPassword, newPassword } = req.body;
+    const { userId } = req.user;
+
+    // Input validation
+    if (fullName === undefined && email === undefined && (!currentPassword || !newPassword)) { return res.status(400).json({ error: 'No data provided for update.' }); }
+    if (fullName !== undefined && (typeof fullName !== 'string' || fullName.trim() === '')) { return res.status(400).json({ error: "Full name must be a non-empty string if provided." }); }
+    if (email !== undefined && !isValidEmail(email)) { return res.status(400).json({ error: "A valid email address must be provided if changing email." }); }
+    if (newPassword !== undefined && (typeof newPassword !== 'string' || newPassword.length < 6)) { return res.status(400).json({ error: "New password must be at least 6 characters long if changing password." }); }
+    if ((currentPassword && !newPassword) || (!currentPassword && newPassword)) { return res.status(400).json({ error: 'Both current password and new password are required to change password.' }); }
+
+    try {
+        const userResult = await query("SELECT * FROM Users WHERE user_id = $1", [userId]);
+        const user = userResult[0];
+        if (!user) { return res.status(404).json({ error: "User not found." }); }
+
+        let updateSql = 'UPDATE Users SET ';
+        const updateParams = [];
+        const clauses = [];
+        let paramIndex = 1;
+
+        if (fullName !== undefined && fullName !== user.full_name) {
+            clauses.push(`full_name = $${paramIndex++}`);
+            updateParams.push(fullName);
+        }
+        if (email !== undefined && email !== user.email) {
+            const existingUser = await query("SELECT user_id FROM Users WHERE email = $1 AND user_id != $2", [email, userId]);
+            if (existingUser.length > 0) { return res.status(409).json({ error: 'Email already in use by another account.' }); }
+            clauses.push(`email = $${paramIndex++}`);
+            updateParams.push(email);
+        }
+        if (currentPassword && newPassword) {
+            const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+            if (!isMatch) { return res.status(401).json({ error: "Current password incorrect." }); }
+            const newPasswordHash = await bcrypt.hash(newPassword, 10);
+            clauses.push(`password_hash = $${paramIndex++}`);
+            updateParams.push(newPasswordHash);
+        }
+
+        if (clauses.length === 0) { return res.status(200).json({ message: 'No changes detected. Profile remains the same.' }); }
+
+        updateSql += clauses.join(', ') + ` WHERE user_id = $${paramIndex}`;
+        updateParams.push(userId);
+
+        await runCommand(updateSql, updateParams);
+        
+        // Fetch updated user details to regenerate token with new info (e.g., email or full_name)
+        const updatedUserResult = await query("SELECT user_id, company_id, location_id, full_name, email, role, subscription_status, plan_id FROM Users WHERE user_id = $1", [userId]);
+        const updatedUser = updatedUserResult[0];
+        const newPayload = {
+            userId: updatedUser.user_id,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            fullName: updatedUser.full_name,
+            companyId: updatedUser.company_id,
+            locationId: updatedUser.location_id,
+            subscriptionStatus: updatedUser.subscription_status,
+            planId: updatedUser.plan_id
+        };
+        const newToken = jwt.sign(newPayload, JWT_SECRET, { expiresIn: '1h' });
+        res.status(200).json({ message: 'Profile updated successfully!', token: newToken });
+
+    } catch (error) {
+        console.error("Error updating profile:", error);
+        next(error);
+    }
+});
+
+app.get('/locations', authenticateToken, async (req, res, next) => {
+    const { companyId, role } = req.user;
+    let sql = 'SELECT location_id, location_name, location_address FROM Locations WHERE company_id = $1';
+    const params = [companyId];
+
+    // Authorization check
+    if (!['super_admin', 'location_admin', 'employee'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view locations.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    try {
+        const locations = await query(sql, params);
+        res.json(locations);
+    } catch (error) {
+        console.error("Database error fetching locations:", error);
+        next(error);
+    }
+});
+
+app.post('/locations', authenticateToken, async (req, res, next) => {
+    const { location_name, location_address } = req.body;
+    const { companyId, role } = req.user;
+
+    // Authorization check
+    if (role !== 'super_admin') {
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can create locations.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    // Input validation
+    if (!location_name || typeof location_name !== 'string' || location_name.trim() === '' || !location_address || typeof location_address !== 'string' || location_address.trim() === '') {
+        return res.status(400).json({ error: "Location name and address are required and must be non-empty strings." });
+    }
+
+    try {
+        const result = await query('INSERT INTO Locations (company_id, location_name, location_address) VALUES ($1, $2, $3) RETURNING location_id', [companyId, location_name, location_address]);
+        res.status(201).json({ message: 'Location created!', locationId: result[0].location_id });
+    }    catch (error) {
+        console.error("Database error creating location:", error);
+        next(error);
+    }
+});
+
+app.delete('/locations/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role } = req.user;
+
+    // Authorization check
+    if (role !== 'super_admin') {
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can delete locations.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    // Input validation
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid location ID provided.' }); }
+
+    try {
+        const result = await runCommand('DELETE FROM Locations WHERE location_id = $1 AND company_id = $2', [id, companyId]);
+        if (result === 0) { return res.status(404).json({ error: 'Location not found or not authorized to delete.' }); }
+        res.status(204).send(); // 204 No Content for successful deletion
+    } catch (error) {
+        console.error("Database error deleting location:", error);
+        next(error);
+    }
+});
+
+app.get('/users', authenticateToken, async (req, res, next) => {
+    const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
+    const { filterRole, filterLocationId } = req.query;
+
+    let sql = `SELECT Users.user_id, Users.full_name, Users.email, Users.role, Locations.location_name
+                FROM Users
+                LEFT JOIN Locations ON Users.location_id = Locations.location_id
+                WHERE Users.company_id = $1`;
+    const params = [companyId];
+    let paramIndex = 2;
+
+    // Authorization and filtering based on user role
+    if (role === 'location_admin') {
+        if (currentUserLocationId !== null) { // Ensure location admin is assigned a location
+            sql += ` AND (Users.location_id = $${paramIndex++} OR Users.location_id IS NULL)`;
+            params.push(currentUserLocationId);
+        } else {
+            // Location admin not assigned to a location should not see any users
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    } else if (role === 'employee') {
+        sql += ` AND Users.user_id = $${paramIndex++}`;
+        params.push(currentUserId);
+    } else if (!['super_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view users.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    const allowedRoles = ['super_admin', 'location_admin', 'employee']; // Roles that can be filtered by
+    if (filterRole) {
+        // Validate filterRole against allowed roles and current user's permissions
+        if (!allowedRoles.includes(filterRole) || (role === 'location_admin' && filterRole === 'super_admin')) {
+            return res.status(400).json({ error: 'Invalid filter role provided or insufficient permissions to filter by this role.' });
+        }
+        sql += ` AND Users.role = $${paramIndex++}`;
+        params.push(filterRole);
+    }
+
+    if (filterLocationId) {
+        if (isNaN(parseInt(filterLocationId))) { return res.status(400).json({ error: 'Invalid filter location ID provided.' }); }
+        const parsedLocationId = parseInt(filterLocationId);
+
+        // Super admin can filter by any location
+        // Location admin can only filter by their assigned location (or null/unassigned)
+        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) {
+            sql += ` AND Users.location_id = $${paramIndex++}`;
+            params.push(parsedLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to filter by location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    }
+
+    try {
+        const users = await query(sql, params);
+        res.json(users);
+    } catch (error) {
+        console.error("Database error fetching users:", error);
+        next(error);
+    }
+});
+
+app.delete('/users/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role, userId: authenticatedUserId } = req.user;
+
+    // Authorization check
+    if (role !== 'super_admin') {
+        return res.status(403).json({ error: 'Access Dismissed: Only super admins can delete users.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    // Prevent super admin from deleting their own account via this endpoint
+    if (parseInt(id) === authenticatedUserId) {
+        return res.status(403).json({ error: 'Cannot delete your own super admin account via this interface.' });
+    }
+    // Input validation
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid user ID provided.' }); }
+
+    try {
+        // Prevent deleting other super admin accounts
+        const userToDelete = await query('SELECT role FROM Users WHERE user_id = $1 AND company_id = $2', [id, companyId]);
+        if (userToDelete.length === 0) { return res.status(404).json({ error: 'User not found or not authorized to delete.' }); }
+        if (userToDelete[0].role === 'super_admin') {
+            return res.status(403).json({ error: 'Cannot delete another super admin account.' });
+        }
+
+        const result = await runCommand('DELETE FROM Users WHERE user_id = $1 AND company_id = $2', [id, companyId]);
+        if (result === 0) { return res.status(404).json({ error: 'User not found or not authorized to delete.' }); }
+        res.status(204).send();
+    }  catch (error) {
+        console.error("Database error deleting user:", error);
+        next(error);
+    }
+});
+
+
+// NEW: Endpoint to get positions for the dashboard dropdown
+app.get('/positions', authenticateToken, async (req, res, next) => {
+    const { companyId } = req.user;
+
+    try {
+        // This query selects the unique position names associated with the user's company
+        const result = await query(
+            'SELECT DISTINCT position FROM Checklists WHERE company_id = $1 ORDER BY position ASC', 
+            [companyId]
+        );
+
+        // The frontend expects an object with an array of {id, name}.
+        // We will map the database results to this format.
+        const positions = result.map(row => ({
+            id: row.position, // Using the position name as the ID
+            name: row.position
+        }));
+
+        res.status(200).json({ positions: positions });
+
+    } catch (error) {
+        console.error("Database error fetching positions:", error);
+        next(error);
+    }
+});
+
+
+app.post('/schedules', authenticateToken, async (req, res, next) => {
+    const { employee_id, location_id, start_time, end_time, notes } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can create schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    // Input validation
+    if (typeof employee_id !== 'number' || employee_id <= 0 || typeof location_id !== 'number' || location_id <= 0 || !start_time || !end_time || isNaN(new Date(start_time).getTime()) || isNaN(new Date(end_time).getTime()) || new Date(start_time) >= new Date(end_time)) {
+        return res.status(400).json({ error: 'Invalid schedule data provided. Ensure employee_id, location_id are valid numbers, and start_time is before end_time.' });
+    }
+    if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
+
+    try {
+        // Verify employee and location belong to the company and are accessible
+        const employeeCheck = await query('SELECT user_id, location_id FROM Users WHERE user_id = $1 AND company_id = $2', [employee_id, companyId]);
+        if (employeeCheck.length === 0) { return res.status(400).json({ error: 'Employee not found in your company.' }); }
+
+        const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
+        if (locationCheck.length === 0) { return res.status(400).json({ error: 'Location not found in your company.' }); }
+
+        // Location admin specific check for scheduling employees at specific locations
+        if (role === 'location_admin' && currentUserLocationId !== null) {
+            // If the employee is assigned to a location, it must be the admin's location or unassigned
+            if (employeeCheck[0].location_id !== null && employeeCheck[0].location_id !== currentUserLocationId) {
+                 return res.status(403).json({ error: 'Access Dismissed: Location admin can only schedule employees within their assigned location or unassigned employees.' }); // Changed 'Access Denied' to 'Access Dismissed'
+            }
+            // The schedule's location_id must match the admin's assigned location
+            if (location_id !== currentUserLocationId) {
+                return res.status(403).json({ error: 'Access Dismissed: Location admin can only create schedules for their assigned location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+            }
+        }
+
+
+        const result = await runCommand(
+            'INSERT INTO Schedules (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5) RETURNING schedule_id', // Return the new schedule ID
+            [employee_id, location_id, start_time, end_time, notes]
+        );
+        res.status(201).json({ message: 'Schedule created successfully!', scheduleId: result.schedule_id });
+    }  catch (error) {
+        console.error("Database error creating schedule:", error);
+        next(error);
+    }
+});
+
+app.get('/schedules', authenticateToken, async (req, res, next) => {
+    const { employee_id, location_id, start_date, end_date } = req.query;
+    const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
+
+    let sql = `SELECT Schedules.*, Users.full_name AS employee_name, Users.email AS employee_email, Locations.location_name
+                FROM Schedules
+                JOIN Users ON Schedules.employee_id = Users.user_id
+                JOIN Locations ON Schedules.location_id = Locations.location_id
+                WHERE Users.company_id = $1`;
+    const params = [companyId];
+    let paramIndex = 2;
+
+    // Authorization based on user role
+    if (role === 'location_admin') {
+        if (currentUserLocationId !== null) {
+            sql += ` AND Schedules.location_id = $${paramIndex++}`;
+            params.push(currentUserLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    } else if (role === 'employee') {
+        sql += ` AND Schedules.employee_id = $${paramIndex++}`;
+        params.push(currentUserId);
+    } else if (!['super_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    
+    // Optional filters
+    if (employee_id) {
+        if (isNaN(parseInt(employee_id))) { return res.status(400).json({ error: 'Invalid employee ID filter provided.' }); }
+        sql += ` AND Schedules.employee_id = $${paramIndex++}`;
+        params.push(parseInt(employee_id));
+    }
+    if (location_id) {
+        if (isNaN(parseInt(location_id))) { return res.status(400).json({ error: 'Invalid location ID filter provided.' }); }
+        sql += ` AND Schedules.location_id = $${paramIndex++}`;
+        params.push(parseInt(location_id));
+    }
+    if (start_date) {
+        if (isNaN(new Date(start_date).getTime())) { return res.status(400).json({ error: 'Invalid start date format.' }); }
+        sql += ` AND Schedules.start_time >= $${paramIndex++}`;
+        params.push(start_date);
+    }
+    if (end_date) {
+        if (isNaN(new Date(end_date).getTime())) { return res.status(400).json({ error: 'Invalid end date format.' }); }
+        sql += ` AND Schedules.end_time <= $${paramIndex++}`;
+        params.push(end_date);
+    }
+
+    try {
+        const schedules = await query(sql, params);
+        res.json(schedules);
+    } catch (error) {
+        console.error("Database error fetching schedules:", error);
+        next(error);
+    
+}
+});
+
+app.delete('/schedules/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role, userId: currentUserId, locationId: currentUserLocationId } = req.user;
+
+    // Authorization check
+    if (role === 'employee') {
+        return res.status(403).json({ error: 'Access Dismissed: Employees cannot delete schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    // Input validation
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid schedule ID provided.' }); }
+
+    let sql = `DELETE FROM Schedules WHERE schedule_id = $1`;
+    const params = [id];
+    let paramIndex = 2;
+
+    // Additional WHERE clauses based on role for secure deletion
+    if (role === 'location_admin') {
+        if (currentUserLocationId === null) {
+             return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+        // Location admin can only delete schedules for employees associated with their location
+        sql += ` AND employee_id IN (SELECT user_id FROM Users WHERE location_id = $${paramIndex++} AND company_id = $${paramIndex++})`;
+        params.push(currentUserLocationId, companyId);
+    } else if (role === 'super_admin') {
+        // Super admin can delete any schedule within their company
+        sql += ` AND employee_id IN (SELECT user_id FROM Users WHERE company_id = $${paramIndex++})`;
+        params.push(companyId);
+    } else {
+        // Should be caught by initial role check, but as a fallback
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to delete schedules.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    try {
+        const result = await runCommand(sql, params);
+        if (result === 0) { return res.status(404).json({ error: 'Schedule not found or not authorized to delete.' }); }
+        res.status(204).send();
+    }  catch (error) {
+        console.error("Database error deleting schedule:", error);
+        next(error);
+    }
+});
+
+// --- Onboarding Endpoints ---
+
+// This endpoint is called from the "Onboard New Employee" modal on the dashboard.
+// It creates a new user with the 'employee' role.
+app.post('/onboard-employee', authenticateToken, async (req, res, next) => {
+    const { full_name, email, position_id, employee_id } = req.body;
+    const { companyId, role } = req.user;
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can onboard new employees.' });
+    }
+
+    // Use the position_id from the request, which is the position name (e.g., "Sales")
+    const position = position_id; 
+
+    // Basic validation
+    if (!full_name || !email || !position) {
+        return res.status(400).json({ error: 'Full name, email, and a valid position are required.' });
+    }
+
+    try {
+        // A simple, insecure temporary password. In a real-world scenario, you would
+        // generate a more secure random password or use a token-based invitation system.
+        const tempPassword = 'password123';
+        const password_hash = await bcrypt.hash(tempPassword, 10);
+
+        // Check if a checklist exists for this position to ensure it's a valid onboarding position
+        const checklist = await query('SELECT 1 FROM Checklists WHERE position = $1 AND company_id = $2', [position, companyId]);
+        if (checklist.length === 0) {
+            return res.status(400).json({ error: `No task list found for position: '${position}'. Please create one first.` });
+        }
+
+        // Insert the new employee into the Users table
+        const newUser = await runCommand(
+            `INSERT INTO Users (company_id, full_name, email, password_hash, role, position, employee_id, subscription_status, plan_id) 
+             VALUES ($1, $2, $3, $4, 'employee', $5, $6, 'active', 'free') RETURNING user_id`,
+            [companyId, full_name, email, password_hash, position, employee_id]
+        );
+        
+        res.status(201).json({ 
+            message: `Employee onboarded successfully! Their temporary password is: ${tempPassword}`,
+            userId: newUser.user_id 
+        });
+
+    } catch (error) {
+        if (error.code === '23505') { // Handle duplicate email error
+            return res.status(409).json({ error: 'An employee with this email address already exists.' });
+        }
+        console.error("Onboard employee error:", error);
+        next(error);
+    }
+});
+
+
+// This endpoint gets the list of active onboarding sessions for the main dashboard view.
+app.get('/onboarding-sessions', authenticateToken, async (req, res, next) => {
+    const { companyId } = req.user;
+    try {
+        // Step 1: Get all users with the 'employee' role for the company.
+        const employees = await query(`
+            SELECT user_id, full_name, email, position 
+            FROM Users 
+            WHERE role = 'employee' AND company_id = $1
+        `, [companyId]);
+
+        if (employees.length === 0) {
+            return res.json([]);
+        }
+
+        // Step 2: For each employee, get their checklist, total tasks, and completed tasks.
+        const sessions = await Promise.all(employees.map(async (employee) => {
+            // Find the checklist for the employee's position.
+            const checklistResult = await query('SELECT checklist_id, tasks FROM Checklists WHERE position = $1 AND company_id = $2 LIMIT 1', [employee.position, companyId]);
+            if (checklistResult.length === 0) {
+                return null; // Skip if no checklist is found for their position
+            }
+            const checklist = checklistResult[0];
+
+            // Calculate total tasks from the JSONB structure
+            let totalTasks = 0;
+            if (checklist.tasks[0]?.groupTitle) { // It's a grouped list
+                totalTasks = checklist.tasks.reduce((sum, group) => sum + group.tasks.length, 0);
+            } else { // It's a single list
+                totalTasks = checklist.tasks.length;
+            }
+
+            // Count completed tasks from the UserTasks table
+            const completedResult = await query('SELECT COUNT(*) FROM UserTasks WHERE user_id = $1 AND checklist_id = $2', [employee.user_id, checklist.checklist_id]);
+            const completedTasks = parseInt(completedResult[0].count, 10);
+
+            // Filter out completed sessions
+            if (totalTasks > 0 && completedTasks >= totalTasks) {
+                return null;
+            }
+
+            return {
+                ...employee,
+                totalTasks: totalTasks,
+                completedTasks: completedTasks
+            };
+        }));
+        
+        // Filter out the null values for employees with no checklist or who are complete
+        res.json(sessions.filter(session => session !== null));
+
+    } catch (error) {
+        console.error("Error loading onboarding sessions:", error);
+        next(error);
+    }
+});
+
+
+// This endpoint gets the specific task list for a new hire when they view their onboarding page.
+app.get('/onboarding-tasks/:userId', authenticateToken, async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const user = await query('SELECT * FROM Users WHERE user_id = $1', [userId]);
+        if (user.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const position = user[0].position;
+        const checklistResult = await query('SELECT * FROM Checklists WHERE position = $1 AND company_id = $2 LIMIT 1', [user[0].company_id, user[0].company_id]);
+        if (checklistResult.length === 0) {
+            return res.status(404).json({ error: `No checklist found for position: ${position}` });
+        }
+        
+        const checklist = checklistResult[0];
+        const completedTasksResult = await query('SELECT task_description FROM UserTasks WHERE user_id = $1 AND checklist_id = $2', [userId, checklist.checklist_id]);
+        const completedTaskDescriptions = new Set(completedTasksResult.map(t => t.task_description));
+
+        // Map tasks and add completion status and a unique ID for the frontend
+        const mapTasks = (task, groupIndex, taskIndex) => {
+            const isCompleted = completedTaskDescriptions.has(task.description);
+            // Generate a stable, unique ID for the frontend to use
+            const taskId = `${checklist.checklist_id}-${groupIndex}-${taskIndex}`;
+            return { ...task, completed: isCompleted, id: taskId };
+        };
+
+        let tasksWithStatus;
+        if (checklist.tasks[0]?.groupTitle) { // Grouped structure
+            tasksWithStatus = checklist.tasks.map((group, groupIndex) => ({
+                ...group,
+                tasks: group.tasks.map((task, taskIndex) => mapTasks(task, groupIndex, taskIndex))
+            }));
+        } else { // Single list structure
+            tasksWithStatus = checklist.tasks.map((task, taskIndex) => mapTasks(task, -1, taskIndex));
+        }
+
+        res.json({ checklist, tasks: tasksWithStatus });
+    } catch (error) {
+        console.error("Error fetching user onboarding tasks:", error);
+        next(error);
+    }
+});
+
+
+// This endpoint is called when a new hire checks or unchecks a task.
+app.put('/onboarding-tasks/:taskId', authenticateToken, async (req, res, next) => {
+    const { taskId } = req.params;
+    const { completed } = req.body;
+    const { userId } = req.user;
+
+    try {
+        // Deconstruct the task ID generated by the GET endpoint
+        const [checklistId, groupIndex, taskIndex] = taskId.split('-').map(Number);
+        
+        // Fetch the checklist to get the task description from the JSON
+        const checklistResult = await query('SELECT tasks FROM Checklists WHERE checklist_id = $1', [checklistId]);
+        if (checklistResult.length === 0) {
+            return res.status(404).json({ error: 'Checklist not found.' });
+        }
+        
+        const checklistTasks = checklistResult[0].tasks;
+        let taskDescription;
+
+        if (groupIndex === -1) { // Single list
+            taskDescription = checklistTasks[taskIndex]?.description;
+        } else { // Grouped list
+            taskDescription = checklistTasks[groupIndex]?.tasks[taskIndex]?.description;
+        }
+
+        if (!taskDescription) {
+             return res.status(404).json({ error: 'Task not found within checklist.' });
+        }
+
+        if (completed) {
+            // Add a record to UserTasks. ON CONFLICT DO NOTHING prevents errors if it's already there.
+            await runCommand(`
+                INSERT INTO UserTasks (user_id, checklist_id, task_description, completed_at)
+                VALUES ($1, $2, $3, NOW())
+                ON CONFLICT (user_id, checklist_id, task_description) DO NOTHING
+            `, [userId, checklistId, taskDescription]);
+        } else {
+            // Remove the record if the task is unchecked.
+            await runCommand('DELETE FROM UserTasks WHERE user_id = $1 AND checklist_id = $2 AND task_description = $3', [userId, checklistId, taskDescription]);
+        }
+        
+        res.status(200).json({ message: 'Task status updated.' });
+    } catch (error) {
+        console.error("Error updating task status:", error);
+        next(error);
+    }
+});
+
+
+
+app.post('/job-postings', authenticateToken, async (req, res, next) => {
+    const { title, description, requirements, location_id } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+    const created_date = new Date().toISOString();
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can create job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    // Input validation
+    if (!title || typeof title !== 'string' || title.trim() === '') { return res.status(400).json({ error: "Job title is required and must be a non-empty string." }); }
+    if (description !== undefined && (typeof description !== 'string' || description.trim() === '')) { return res.status(400).json({ error: 'Description must be a non-empty string if provided.' }); }
+    if (requirements !== undefined && typeof requirements !== 'string') { return res.status(400).json({ error: 'Requirements must be a string if provided.' }); }
+    // location_id can be null or a number
+    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
+    if (location_id !== null && location_id <= 0) { return res.status(400).json({ error: 'Location ID must be a positive number or null.' }); }
+
+    // Location admin specific restriction for job posting location
+    if (role === 'location_admin' && currentUserLocationId !== null) {
+        // If location_id is provided and it's not the admin's location or null
+        if (location_id !== currentUserLocationId && location_id !== null) {
+            return res.status(403).json({ error: 'Access Dismissed: Location admin can only post jobs for their assigned location or unassigned (null).' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    }
+
+    try {
+        // If a location_id is provided, verify it exists and belongs to the company
+        if (location_id !== null) {
+            const locationCheck = await query('SELECT location_id FROM Locations WHERE location_id = $1 AND company_id = $2', [location_id, companyId]);
+            if (locationCheck.length === 0) {
+                return res.status(400).json({ error: 'Selected location does not exist or does not belong to your company.' });
+            }
+        }
+
+        const result = await runCommand(
+            `INSERT INTO JobPostings (company_id, location_id, title, description, requirements, status, created_date) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING job_posting_id`,
+            [companyId, location_id, title, description, requirements, 'Open', created_date]
+        );
+        res.status(201).json({ message: 'Job posting created successfully!', jobPostingId: result[0].job_posting_id });
+    } catch (error) {
+        console.error("Database error creating job posting:", error);
+        next(error);
+    }
+});
+
+app.get('/job-postings', authenticateToken, async (req, res, next) => {
+    const { status, location_id } = req.query;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    let sql = 'SELECT * FROM JobPostings WHERE company_id = $1';
+    const params = [companyId];
+    let paramIndex = 2;
+
+    // Authorization and filtering based on user role
+    if (role === 'location_admin') {
+        if (currentUserLocationId !== null) {
+            sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`; // Location admins see their location's jobs and unassigned jobs
+            params.push(currentUserLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    } else if (role === 'employee') {
+        // Employees generally shouldn't see all job postings unless for internal applications
+        // For now, deny access, or tailor a specific view for employees if needed
+        return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to view job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    // Super admin already has access via companyId filter
+
+
+    const allowedStatuses = ['Open', 'Closed', 'Filled'];
+    if (status) {
+        if (!allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid job posting status filter provided.' }); }
+        sql += ` AND status = $${paramIndex++}`;
+        params.push(status);
+    }
+
+    if (location_id) {
+        if (isNaN(parseInt(location_id))) { return res.status(400).json({ error: 'Invalid location ID filter provided.' }); }
+        const parsedLocationId = parseInt(location_id);
+
+        // Super admin can filter by any location
+        // Location admin can only filter by their assigned location or null (unassigned)
+        if (role === 'super_admin' || (role === 'location_admin' && (parsedLocationId === currentUserLocationId || parsedLocationId === 0))) {
+            sql += ` AND location_id = $${paramIndex++}`;
+            params.push(parsedLocationId);
+        } else {
+            return res.status(403).json({ error: 'Access Dismissed: Insufficient permissions to filter by location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    }
+
+    try {
+        const postings = await query(sql, params);
+        res.json(postings);
+    } catch (error) {
+        console.error("Database error fetching job postings:", error);
+        next(error);
+    }
+});
+
+app.put('/job-postings/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { title, description, requirements, status, location_id } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can update job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    // Input validation
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid job posting ID provided.' }); }
+    if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) { return res.status(400).json({ error: "Job title must be a non-empty string if provided." }); }
+    if (description !== undefined && (typeof description !== 'string' || description.trim() === '')) { return res.status(400).json({ error: 'Description must be a non-empty string if provided.' }); }
+    if (requirements !== undefined && typeof requirements !== 'string') { return res.status(400).json({ error: 'Requirements must be a string if provided.' }); }
+    const allowedStatuses = ['Open', 'Closed', 'Filled'];
+    if (status !== undefined && !allowedStatuses.includes(status)) { return res.status(400).json({ error: 'Invalid status provided.' }); }
+    // location_id can be null or a number
+    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
+    if (location_id !== null && location_id <= 0) { return res.status(400).json({ error: 'Location ID must be a positive number or null.' }); }
+
+
+    let updateSql = 'UPDATE JobPostings SET ';
+    const updateParams = [];
+    const clauses = [];
+    let paramIndex = 1;
+
+    // Dynamically build update clauses
+    if (title !== undefined) { clauses.push(`title = $${paramIndex++}`); updateParams.push(title); }
+    if (description !== undefined) { clauses.push(`description = $${paramIndex++}`); updateParams.push(description); }
+    if (requirements !== undefined) { clauses.push(`requirements = $${paramIndex++}`); updateParams.push(requirements); }
+    if (status !== undefined) { clauses.push(`status = $${paramIndex++}`); updateParams.push(status); }
+    
+    if (location_id !== undefined) {
+        // Super admin can change location to any valid location or null
+        // Location admin can only change location to their assigned location or null (unassign)
+        if (role === 'super_admin' || (role === 'location_admin' && (location_id === currentUserLocationId || location_id === null))) {
+            clauses.push(`location_id = $${paramIndex++}`);
+            updateParams.push(location_id);
+        } else if (role === 'location_admin') {
+            return res.status(403).json({ error: 'Access Dismissed: Location admin cannot change job posting location to another location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+        }
+    }
+
+    if (clauses.length === 0) { return res.status(400).json({ error: 'No fields provided for update.' }); }
+
+    updateSql += clauses.join(', ') + ` WHERE job_posting_id = $${paramIndex++} AND company_id = $${paramIndex++}`;
+    updateParams.push(parseInt(id), companyId);
+
+    // Ensure location admin can only update jobs within their assigned location or unassigned jobs
+    if (role === 'location_admin' && currentUserLocationId !== null) {
+        updateSql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`;
+        updateParams.push(currentUserLocationId);
+    } else if (role === 'location_admin' && currentUserLocationId === null) {
+        return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    try {
+        const result = await runCommand(updateSql, updateParams);
+        if (result === 0) { return res.status(404).json({ error: 'Job posting not found or not authorized to update.' }); }
+        res.status(200).json({ message: 'Job posting updated successfully!' });
+    } catch (error) {
+        console.error("Database error updating job posting:", error);
+        next(error);
+    }
+});
+
+app.delete('/job-postings/:id', authenticateToken, async (req, res, next) => {
+    const { id } = req.params;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can delete job postings.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+    // Input validation
+    if (!id || isNaN(parseInt(id))) { return res.status(400).json({ error: 'Invalid job posting ID provided.' }); }
+
+    let sql = 'DELETE FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2';
+    const params = [id, companyId];
+    let paramIndex = 3;
+
+    // Location admin specific restriction for deletion
+    if (role === 'location_admin' && currentUserLocationId !== null) {
+        sql += ` AND (location_id = $${paramIndex++} OR location_id IS NULL)`; // Can delete jobs at their location or unassigned
+        params.push(currentUserLocationId);
+    } else if (role === 'location_admin' && currentUserLocationId === null) {
+        return res.status(403).json({ error: 'Access Dismissed: Location admin not assigned to a location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    try {
+        const result = await runCommand(sql, params);
+        if (result === 0) { return res.status(404).json({ error: 'Job posting not found or not authorized to delete.' }); }
+        res.status(204).send();
+    }  catch (error) {
+        console.error("Database error deleting job posting:", error);
+        next(error);
+    }
+});
+
+app.post('/applicants', authenticateToken, async (req, res, next) => {
+    const { job_posting_id, full_name, email, notes, location_id, phone_number } = req.body;
+    const { companyId, role, locationId: currentUserLocationId } = req.user;
+    const application_date = new Date().toISOString();
+
+    // Authorization check
+    if (!['super_admin', 'location_admin'].includes(role)) {
+        return res.status(403).json({ error: 'Access Dismissed: Only admins can add applicants.' }); // Changed 'Access Denied' to 'Access Dismissed'
+    }
+
+    // Input validation
+    if (typeof job_posting_id !== 'number' || job_posting_id <= 0 || !full_name || typeof full_name !== 'string' || full_name.trim() === '' || !email || !isValidEmail(email) || !phone_number || typeof phone_number !== 'string' || phone_number.trim() === '') {
+        return res.status(400).json({ error: 'Invalid applicant data provided. Job Posting ID, full name, valid email, and phone number are required.' });
+    }
+    if (notes !== undefined && typeof notes !== 'string') { return res.status(400).json({ error: 'Notes must be a string if provided.' }); }
+    // location_id can be null or a number
+    if (location_id !== undefined && typeof location_id !== 'number' && location_id !== null) { return res.status(400).json({ error: 'Location ID must be a number or null if provided.' }); }
+    if (location_id !== null && location_id <= 0) { return res.status(400).json({ error: 'Location ID must be a positive number or null.' }); }
+
+
+    try {
+        const jobPostingCheck = await query('SELECT job_posting_id, location_id FROM JobPostings WHERE job_posting_id = $1 AND company_id = $2', [job_posting_id, companyId]);
+        if (jobPostingCheck.length === 0) { return res.status(400).json({ error: 'Job Posting not found or does not belong to your company.' }); }
+
+        // Determine the actual location_id for the applicant.
+        // If location_id is provided in the body, use it. Otherwise, use the job posting's location.
+        // If job posting's location is null, the applicant's location will also be null.
+        const actualLocationId = location_id === undefined ? jobPostingCheck[0].location_id : location_id;
+
+        // Location admin specific check
+        if (role === 'location_admin' && currentUserLocationId !== null) {
+            // An applicant cannot be added to a job posting whose location is outside the admin's assigned location,
+            // unless the job posting itself is unassigned (null).
+            if (actualLocationId !== currentUserLocationId && actualLocationId !== null) {
+                return res.status(403).json({ error: 'Access Dismissed: Location admin cannot add applicants to jobs outside their assigned location.' }); // Changed 'Access Denied' to 'Access Dismissed'
+            }
+        }
+
+        const result = await runCommand(
+            `INSERT INTO Applicants (company_id, location_id, job_posting_id, full_name, email, phone_number, notes, application_date, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING applicant_id`, // Added status with default and returning ID
+            [companyId, actualLocationId, job_posting_id, full_name, email, phone_number, notes, application_date, 'Applied'] // Default status 'Applied'
+        );
+        res.status(201).json({ message: 'Applicant added successfully!', applicantId: result.applicant_id });
+    } catch (error) {
+        console.error("Database error creating applicant:", error);
+        next(error);
+    
+}
+});
+
+// --- Static Files and SPA Fallback (Moved to the very end) ---
+// Define Public Directory Path - this assumes server.js is in the root of the repository
+const PUBLIC_DIR = path.join(__dirname, '/');
+// Serve static files (CSS, JS, images, etc.) from the public directory
+app.use(express.static(PUBLIC_DIR));
+
+// Explicitly serve HTML files for direct requests (e.g., typing URL into browser)
+// It's generally better to have a single entry point (index.html) for SPAs
+// and let client-side routing handle the rest. However, if direct access to these
+// files is needed, this is how.
+app.get('/', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
+});
+app.get('/register.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'register.html'));
+});
+app.get('/pricing.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'pricing.html'));
+});
+app.get('/suite-hub.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'suite-hub.html'));
+});
+app.get('/dashboard.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'dashboard.html'));
+});
+app.get('/checklists.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'checklists.html'));
+});
+app.get('/new-hire-view.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'new-hire-view.html'));
+});
+app.get('/hiring.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'hiring.html'));
+});
+app.get('/scheduling.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'scheduling.html'));
+});
+app.get('/sales-analytics.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'sales-analytics.html'));
+});
+app.get('/documents.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'documents.html'));
+});
+app.get('/account.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'account.html'));
+});
+app.get('/admin.html', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'admin.html'));
+});
+
+// SPA Fallback: For any other GET request not handled by an API route or explicit file route,
+// serve index.html. This is crucial for client-side routing.
+// This should be the very last route for GET requests.
+app.get(/'*'/, (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+
+// --- Error Handling Middleware (Always last) ---
+app.use((err, req, res, next) => {
+    console.error(`Unhandled Error: ${err.stack}`);
+    res.status(500).json({
+        error: 'An unexpected server error occurred. Please try again later.',
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined // Only expose message in dev
+    });
+});
+
+// --- Server Start ---
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server is running successfully on http://localhost:${PORT}`);
+    });
+} else {
+    module.exports = app;
+}
