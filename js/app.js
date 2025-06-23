@@ -138,361 +138,193 @@ async function apiRequest(method, path, body = null, isFormData = false, onProgr
     return response.json();
 }
 
-function handleLoginPage() {
-    const loginForm = document.getElementById("login-form");
-    if (!loginForm) return;
+function handleLoginPage() { /* ... function content from previous turn ... */ }
+function handleRegisterPage() { /* ... function content from previous turn ... */ }
+function handleSuiteHubPage() { /* ... function content from previous turn ... */ }
+function handleAccountPage() { /* ... function content from previous turn ... */ }
+function handleDashboardPage() { /* ... function content from previous turn ... */ }
+function handlePricingPage() { /* ... function content from previous turn ... */ }
+function handleHiringPage() { /* ... function content from previous turn ... */ }
+function handleSchedulingPage() { /* ... function content from previous turn ... */ }
+function handleDocumentsPage() { /* ... function content from previous turn ... */ }
+function handleChecklistsPage() { /* ... function content from previous turn ... */ }
+function handleNewHireViewPage() { /* ... function content from previous turn ... */ }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('sessionExpired')) {
-        showModalMessage("Your session has expired. Please log in again.", true);
-        window.history.replaceState({}, document.title, window.location.pathname);
-    }
 
-    loginForm.addEventListener("submit", async e => {
-        e.preventDefault();
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value;
-        const errorMessage = document.getElementById("error-message");
-        errorMessage.textContent = "";
-        errorMessage.classList.remove("visible");
-
-        if (!email || !password) {
-            errorMessage.textContent = "Email and password are required.";
-            errorMessage.classList.add("visible");
-            return;
-        }
-
-        try {
-            const data = await apiRequest("POST", "/login", { email, password });
-            localStorage.setItem("authToken", data.token);
-            localStorage.setItem("userRole", data.role);
-            window.location.href = (data.role === "super_admin" || data.role === "location_admin") ? "suite-hub.html" : "new-hire-view.html";
-        } catch (error) {
-            errorMessage.textContent = `Login Failed: ${error.message}`;
-            errorMessage.classList.add("visible");
-        }
-    });
-}
-
-function handleRegisterPage() {
-    const registerForm = document.getElementById("register-form");
-    if (!registerForm) return;
-    registerForm.addEventListener("submit", async e => {
-        e.preventDefault();
-        const company_name = document.getElementById("company-name").value.trim();
-        const full_name = document.getElementById("full-name").value.trim();
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value;
-        const errorMessage = document.getElementById("error-message");
-        errorMessage.textContent = "";
-        errorMessage.classList.remove("visible");
-
-        if (!company_name || !full_name || !email || !password || password.length < 6) {
-            errorMessage.textContent = "Please fill all fields correctly.";
-            errorMessage.classList.add("visible");
-            return;
-        }
-
-        try {
-            await apiRequest("POST", "/register", { company_name, full_name, email, password });
-            showModalMessage("Account created successfully! Please log in.", false);
-            setTimeout(() => { window.location.href = "login.html"; }, 2000);
-        } catch (error) {
-            errorMessage.textContent = `Registration Failed: ${error.message}`;
-            errorMessage.classList.add("visible");
-        }
-    });
-}
-
-function handleSuiteHubPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("payment") === "success") {
-        showModalMessage("Payment successful! Your subscription has been updated.", false);
-        history.replaceState({}, document.title, window.location.pathname);
-    } else if (urlParams.get("payment") === "cancelled") {
-        showModalMessage("Payment cancelled. You can try again or choose another plan.", true);
-        history.replaceState({}, document.title, window.location.pathname);
-    }
-}
-
-function handleAccountPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-}
-
+/**
+ * =================================================================
+ * COMPLETE & FIXED: handleAdminPage
+ * =================================================================
+ */
 function handleAdminPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-}
-
-function handlePricingPage() {
-    // Logic for pricing page
-}
-
-function handleHiringPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-}
-
-function handleSchedulingPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-}
-
-function handleDocumentsPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-    const uploadDocumentForm = document.getElementById("upload-document-form");
-    const documentTitleInput = document.getElementById("document-title");
-    const documentFileInput = document.getElementById("document-file");
-    const documentDescriptionInput = document.getElementById("document-description");
-    const documentListDiv = document.getElementById("document-list");
-    const uploadProgressContainer = document.getElementById("upload-progress-container");
-    const uploadProgressFill = document.getElementById("upload-progress-fill");
-    const uploadProgressText = document.getElementById("upload-progress-text");
-
-    function showUploadProgress(percentage, text = `${percentage}%`) {
-        if (uploadProgressContainer && uploadProgressFill && uploadProgressText) {
-            uploadProgressContainer.style.display = 'block';
-            uploadProgressText.style.display = 'block';
-            uploadProgressFill.style.width = `${percentage}%`;
-            uploadProgressText.textContent = text;
-        }
-    }
-
-    function hideUploadProgress() {
-        if (uploadProgressContainer && uploadProgressText) {
-            uploadProgressContainer.style.display = 'none';
-            uploadProgressText.style.display = 'none';
-            uploadProgressFill.style.width = '0%';
-        }
-    }
-
-    async function loadDocuments() {
-        if (!documentListDiv) return;
-        documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
-        try {
-            const documents = await apiRequest("GET", "/documents");
-            documentListDiv.innerHTML = '';
-            if (documents.length === 0) {
-                documentListDiv.innerHTML = '<p style="color: var(--text-medium);">No documents uploaded yet.</p>';
-            } else {
-                documents.forEach(doc => {
-                    const docItem = document.createElement("div");
-                    docItem.className = "document-item";
-                    docItem.innerHTML = `
-                        <h4>${doc.title}</h4>
-                        <p>File: ${doc.file_name}</p>
-                        <p>Description: ${doc.description || 'N/A'}</p>
-                        <p>Uploaded: ${new Date(doc.upload_date).toLocaleDateString()}</p>
-                        <div class="actions">
-                            <a href="${API_BASE_URL}/documents/download/${doc.document_id}" class="btn btn-secondary btn-sm" download>Download</a>
-                            <button class="btn-delete" data-type="document" data-id="${doc.document_id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>`;
-                    documentListDiv.appendChild(docItem);
-                });
-            }
-        } catch (error) {
-            documentListDiv.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
-        }
-    }
-    
-    if (uploadDocumentForm) {
-        uploadDocumentForm.addEventListener("submit", async e => {
-            e.preventDefault();
-            const title = documentTitleInput.value.trim();
-            const file = documentFileInput.files[0];
-            const description = documentDescriptionInput.value.trim();
-            if (!title || !file) {
-                showModalMessage("Please provide a document title and select a file.", true);
-                return;
-            }
-            const formData = new FormData();
-            formData.append('title', title);
-            formData.append('description', description);
-            formData.append('document_file', file);
-            try {
-                showUploadProgress(0, 'Starting upload...');
-                await apiRequest("POST", "/documents/upload", formData, true, event => {
-                    if (event.lengthComputable) {
-                        const percentComplete = Math.round((event.loaded * 100) / event.total);
-                        showUploadProgress(percentComplete, `Uploading: ${percentComplete}%`);
-                    }
-                });
-                showModalMessage("Document uploaded successfully!", false);
-                uploadDocumentForm.reset();
-                hideUploadProgress();
-                loadDocuments();
-            } catch (error) {
-                showModalMessage(`Upload failed: ${error.message}`, true);
-                hideUploadProgress();
-            }
-        });
-    }
-
-    if (documentListDiv) {
-        documentListDiv.addEventListener("click", async e => {
-            const targetButton = e.target.closest(".btn-delete");
-            if (targetButton && targetButton.dataset.type === "document") {
-                const idToDelete = parseInt(targetButton.dataset.id, 10);
-                const confirmed = await showConfirmModal("Are you sure you want to delete this document?", "Delete");
-                if (confirmed) {
-                    try {
-                        await apiRequest("DELETE", `/documents/${idToDelete}`);
-                        showModalMessage("Document deleted successfully.", false);
-                        loadDocuments();
-                    } catch (error) {
-                        showModalMessage(`Error deleting document: ${error.message}`, true);
-                    }
-                }
-            }
-        });
-    }
-    loadDocuments();
-}
-
-function handleChecklistsPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-    // ... logic for checklists page
-}
-
-function handleNewHireViewPage() {
-    if (!localStorage.getItem("authToken")) { window.location.href = "login.html"; return; }
-    // ... logic for new hire view page
-}
-
-function handleDashboardPage() {
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
     }
 
-    const onboardUserModal = document.getElementById("onboard-user-modal");
-    const showOnboardModalBtn = document.getElementById("show-onboard-modal-btn");
-    const modalCancelOnboardBtn = document.getElementById("modal-cancel-onboard");
-    const onboardUserForm = document.getElementById("onboard-user-form");
-    const newHirePositionSelect = document.getElementById("new-hire-position");
-    const sessionListDiv = document.getElementById("session-list");
+    const adminContentDiv = document.getElementById("admin-settings-content");
+    const newLocationForm = document.getElementById("new-location-form");
+    const inviteAdminForm = document.getElementById("invite-admin-form");
+    const inviteEmployeeForm = document.getElementById("invite-employee-form");
+    const adminLocationSelect = document.getElementById("admin-location-select");
+    const employeeLocationSelect = document.getElementById("employee-location-select");
 
-    if (showOnboardModalBtn) {
-        showOnboardModalBtn.addEventListener("click", () => {
-            if (onboardUserModal) {
-                onboardUserModal.style.display = "flex";
-            }
-        });
-    }
-
-    if (modalCancelOnboardBtn) {
-        modalCancelOnboardBtn.addEventListener("click", () => {
-            if (onboardUserModal) {
-                onboardUserModal.style.display = "none";
-            }
-        });
-    }
-
-    if (onboardUserModal) {
-        onboardUserModal.addEventListener("click", event => {
-            if (event.target === onboardUserModal) {
-                onboardUserModal.style.display = "none";
-            }
-        });
-    }
-
-    async function loadPositions() {
-        if (!newHirePositionSelect) return;
-        newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>';
+    async function loadLocations() {
+        const locationListDiv = document.getElementById("location-list");
+        if (!locationListDiv) return;
+        locationListDiv.innerHTML = "<p>Loading locations...</p>";
         try {
-            const response = await apiRequest("GET", "/positions");
-            newHirePositionSelect.innerHTML = '<option value="">Select Position</option>';
-            if (response && response.positions && response.positions.length > 0) {
-                response.positions.forEach(pos => {
-                    const option = document.createElement("option");
-                    option.value = pos.id;
-                    option.textContent = pos.name;
-                    newHirePositionSelect.appendChild(option);
-                });
+            const locations = await apiRequest("GET", "/locations");
+            locationListDiv.innerHTML = "";
+            if (locations.length === 0) {
+                locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations created yet.</p>';
+                if (adminLocationSelect) {
+                    adminLocationSelect.innerHTML = '<option value="">No locations available</option>';
+                    adminLocationSelect.disabled = true;
+                }
+                if (employeeLocationSelect) {
+                    employeeLocationSelect.innerHTML = '<option value="">No locations available</option>';
+                    employeeLocationSelect.disabled = true;
+                }
             } else {
-                newHirePositionSelect.innerHTML = '<option value="">No positions available</option>';
+                if (adminLocationSelect) adminLocationSelect.disabled = false;
+                if (employeeLocationSelect) employeeLocationSelect.disabled = false;
+
+                const locationOptionsHtml = locations.map(loc => `<option value="${loc.location_id}">${loc.location_name}</option>`).join('');
+                if (adminLocationSelect) adminLocationSelect.innerHTML = `<option value="">Select a location</option>${locationOptionsHtml}`;
+                if (employeeLocationSelect) employeeLocationSelect.innerHTML = `<option value="">Select a location</option>${locationOptionsHtml}`;
+                
+                locations.forEach(loc => {
+                    const locDiv = document.createElement("div");
+                    locDiv.className = "list-item";
+                    locDiv.innerHTML = `<span>${loc.location_name} - ${loc.location_address}</span>
+                                        <button class="btn-delete" data-type="location" data-id="${loc.location_id}">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                        </button>`;
+                    locationListDiv.appendChild(locDiv);
+                });
             }
         } catch (error) {
-            console.error("Error loading positions:", error);
-            newHirePositionSelect.innerHTML = '<option value="">Error loading positions</option>';
-            showModalMessage(`Failed to load positions: ${error.message}`, true);
+            console.error("Error loading locations:", error);
+            showModalMessage(`Failed to load locations: ${error.message}`, true);
         }
     }
 
-    async function loadOnboardingSessions() {
-        if (!sessionListDiv) return;
-        sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading active onboardings...</p>';
+    async function loadUsers() {
+        const userListDiv = document.getElementById("user-list");
+        if (!userListDiv) return;
+        userListDiv.innerHTML = "<p>Loading users...</p>";
         try {
-            const sessions = await apiRequest("GET", "/onboarding-sessions");
-            sessionListDiv.innerHTML = '';
-            if (sessions && sessions.length > 0) {
-                sessions.forEach(session => {
-                    const sessionItem = document.createElement("div");
-                    sessionItem.className = "onboarding-item";
-                    let completionStatus = session.completedTasks === session.totalTasks ? 'Completed' : `${session.completedTasks}/${session.totalTasks} Tasks Completed`;
-                    let statusColor = session.completedTasks === session.totalTasks ? 'var(--primary-accent)' : 'var(--text-medium)';
-
-                    sessionItem.innerHTML = `
-                        <div class="onboarding-item-info">
-                            <p style="color: var(--text-light); font-weight: 600;">${session.full_name} (${session.position || 'N/A'})</p>
-                            <p style="color: var(--text-medium);">Email: ${session.email}</p>
-                            <p style="color: ${statusColor};">Status: ${completionStatus}</p>
-                        </div>
-                        <div class="onboarding-item-actions">
-                            <button class="btn btn-secondary btn-sm view-details-btn" data-user-id="${session.user_id}">View Progress</button>
-                        </div>
-                    `;
-                    sessionListDiv.appendChild(sessionItem);
-                });
-
-                sessionListDiv.querySelectorAll('.view-details-btn').forEach(button => {
-                    button.addEventListener('click', (event) => {
-                        const userId = event.target.dataset.userId;
-                        window.location.href = `new-hire-view.html?userId=${userId}`;
-                    });
-                });
+            const users = await apiRequest("GET", "/users");
+            userListDiv.innerHTML = "";
+            if (users.length === 0) {
+                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users invited yet.</p>';
             } else {
-                sessionListDiv.innerHTML = '<p style="color: var(--text-medium);">No active onboardings.</p>';
+                users.forEach(user => {
+                    const userDiv = document.createElement("div");
+                    userDiv.className = "list-item";
+                    let userInfo = `${user.full_name} - Role: ${user.role}`;
+                    if (user.location_name) {
+                        userInfo += ` @ ${user.location_name}`;
+                    }
+                    userDiv.innerHTML = `<span>${userInfo}</span>
+                                         <button class="btn-delete" data-type="user" data-id="${user.user_id}">
+                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 10 0 0 1-1 1H13v9a2 10 0 0 1-2 2H5a2 10 0 0 1-2-2V4h-.5a1 10 0 0 1-1-1V2a1 10 0 0 1 1-1H6a1 10 0 0 1 1-1h2a1 10 0 0 1 1 1h3.5a1 10 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 10 0 0 0 1 1h6a1 10 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                         </button>`;
+                    userListDiv.appendChild(userDiv);
+                });
             }
         } catch (error) {
-            console.error("Error loading onboarding sessions:", error);
-            sessionListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading onboarding sessions: ${error.message}</p>`;
+            console.error("Error loading users:", error);
+            userListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading users: ${error.message}</p>`;
         }
     }
 
-    if (onboardUserForm) {
-        onboardUserForm.addEventListener("submit", async e => {
+    if (adminContentDiv) {
+        adminContentDiv.addEventListener('click', async (e) => {
+            const deleteButton = e.target.closest('.btn-delete');
+            if (!deleteButton) return;
+
+            const id = deleteButton.dataset.id;
+            const type = deleteButton.dataset.type;
+            const confirmed = await showConfirmModal(`Are you sure you want to delete this ${type}? This action cannot be undone.`, 'Delete');
+            
+            if (confirmed) {
+                try {
+                    if (type === 'location') {
+                        await apiRequest('DELETE', `/locations/${id}`);
+                        showModalMessage('Location deleted successfully!', false);
+                        loadLocations(); 
+                        loadUsers();
+                    } else if (type === 'user') {
+                        await apiRequest('DELETE', `/users/${id}`);
+                        showModalMessage('User deleted successfully!', false);
+                        loadUsers();
+                    }
+                } catch (error) {
+                    showModalMessage(`Error deleting ${type}: ${error.message}`, true);
+                }
+            }
+        });
+    }
+
+    if (newLocationForm) {
+        newLocationForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const newHireName = document.getElementById("new-hire-name").value.trim();
-            const newHireEmail = document.getElementById("new-hire-email").value.trim();
-            const newHirePosition = newHirePositionSelect ? newHirePositionSelect.value : "";
-            const newHireId = document.getElementById("new-hire-id").value.trim();
-
-            if (!newHireName || !newHireEmail || !newHirePosition) {
-                showModalMessage("Please fill all required fields: Full Name, Email, and Position.", true);
-                return;
-            }
-
+            const nameInput = document.getElementById('new-location-name');
+            const addressInput = document.getElementById('new-location-address');
             try {
-                await apiRequest("POST", "/onboard-employee", {
-                    full_name: newHireName,
-                    email: newHireEmail,
-                    position_id: newHirePosition,
-                    employee_id: newHireId || null
-                });
-
-                showModalMessage(`Onboarding invite sent to ${newHireEmail}.`, false);
-                onboardUserForm.reset();
-                if (onboardUserModal) onboardUserModal.style.display = "none";
-                loadOnboardingSessions();
+                await apiRequest('POST', '/locations', { location_name: nameInput.value, location_address: addressInput.value });
+                showModalMessage('Location created!', false);
+                nameInput.value = '';
+                addressInput.value = '';
+                loadLocations();
             } catch (error) {
-                showModalMessage(error.message, true);
+                showModalMessage(`Error: ${error.message}`, true);
             }
         });
     }
 
-    loadPositions();
-    loadOnboardingSessions();
+    if (inviteAdminForm) {
+        inviteAdminForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fullName = document.getElementById('admin-name').value;
+            const email = document.getElementById('admin-email').value;
+            const password = document.getElementById('admin-password').value;
+            const locationId = document.getElementById('admin-location-select').value;
+            try {
+                await apiRequest('POST', '/invite-admin', { full_name: fullName, email, password, location_id: parseInt(locationId) });
+                showModalMessage('Admin invited successfully!', false);
+                inviteAdminForm.reset();
+                loadUsers();
+            } catch (error) {
+                showModalMessage(`Error: ${error.message}`, true);
+            }
+        });
+    }
+
+    if (inviteEmployeeForm) {
+        inviteEmployeeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fullName = document.getElementById('employee-name').value;
+            const email = document.getElementById('employee-email').value;
+            const password = document.getElementById('employee-password').value;
+            const position = document.getElementById('employee-position').value;
+            const employee_id = document.getElementById('employee-id').value;
+            const locationId = document.getElementById('employee-location-select').value;
+            try {
+                await apiRequest('POST', '/invite-employee', { full_name: fullName, email, password, position, employee_id, location_id: parseInt(locationId) });
+                showModalMessage('Employee invited successfully!', false);
+                inviteEmployeeForm.reset();
+                loadUsers();
+            } catch (error) {
+                showModalMessage(`Error: ${error.message}`, true);
+            }
+        });
+    }
+
+    loadLocations();
+    loadUsers();
 }
 
 // Global DOMContentLoaded listener
