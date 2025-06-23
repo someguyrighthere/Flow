@@ -207,6 +207,8 @@ function _apiRequest() {
       endpoint,
       options,
       response,
+      errorMsg,
+      errorText,
       errorData,
       _args33 = arguments,
       _t33;
@@ -302,34 +304,52 @@ function _apiRequest() {
           throw new Error('Authentication token missing or invalid.');
         case 3:
           if (response.ok) {
-            _context33.n = 7;
-            break;
-          }
-          _context33.p = 4;
-          _context33.n = 5;
-          return response.json();
-        case 5:
-          errorData = _context33.v;
-          throw new Error(errorData.error || "HTTP error! Status: ".concat(response.status));
-        case 6:
-          _context33.p = 6;
-          _t33 = _context33.v;
-          throw new Error("HTTP error! Status: ".concat(response.status, " - ").concat(response.statusText || 'Unknown Error'));
-        case 7:
-          if (!expectBlobResponse) {
             _context33.n = 8;
             break;
           }
-          return _context33.a(2, response.blob());
+          // *** UPDATED ERROR HANDLING LOGIC ***
+          // This is more robust and will extract the specific error message from the server.
+          errorMsg = "HTTP error! Status: ".concat(response.status);
+          _context33.p = 4;
+          _context33.n = 5;
+          return response.text();
+        case 5:
+          errorText = _context33.v;
+          if (errorText) {
+            // Try to parse it as JSON
+            try {
+              errorData = JSON.parse(errorText); // Use the specific 'error' field if it exists, otherwise use the whole text
+              errorMsg = errorData.error || errorText;
+            } catch (parseError) {
+              // If it's not JSON, use the raw text as the error message
+              errorMsg = errorText;
+            }
+          }
+          _context33.n = 7;
+          break;
+        case 6:
+          _context33.p = 6;
+          _t33 = _context33.v;
+          // This catch block runs if we can't even read the response body.
+          // We'll stick with the original error message based on the status code.
+          console.error("Could not read error response body", _t33);
+        case 7:
+          throw new Error(errorMsg);
         case 8:
-          if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
+          if (!expectBlobResponse) {
             _context33.n = 9;
             break;
           }
-          return _context33.a(2, null);
+          return _context33.a(2, response.blob());
         case 9:
-          return _context33.a(2, response.json());
+          if (!(response.status === 204 || response.status === 200 && response.headers.get("content-length") === "0")) {
+            _context33.n = 10;
+            break;
+          }
+          return _context33.a(2, null);
         case 10:
+          return _context33.a(2, response.json());
+        case 11:
           return _context33.a(2);
       }
     }, _callee33, null, [[4, 6]]);
@@ -772,7 +792,7 @@ function handleAdminPage() {
   }
   document.body.addEventListener("click", /*#__PURE__*/function () {
     var _ref5 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(e) {
-      var targetButton, id, type, confirmationMessage, _confirmed, _t6;
+      var targetButton, id, type, confirmationMessage, confirmed, _t6;
       return _regenerator().w(function (_context6) {
         while (1) switch (_context6.n) {
           case 0:
@@ -787,8 +807,8 @@ function handleAdminPage() {
             _context6.n = 1;
             return showConfirmModal(confirmationMessage, "Delete");
           case 1:
-            _confirmed = _context6.v;
-            if (!_confirmed) {
+            confirmed = _context6.v;
+            if (!confirmed) {
               _context6.n = 16;
               break;
             }
@@ -1104,7 +1124,8 @@ function handleDashboardPage() {
             case 4:
               _context9.p = 4;
               _t9 = _context9.v;
-              showModalMessage("Error onboarding employee: ".concat(_t9.message), true);
+              // **UPDATED CODE**: Instead of a generic message, show the specific one from the server.
+              showModalMessage(_t9.message, true);
             case 5:
               return _context9.a(2);
           }
@@ -1314,7 +1335,7 @@ function handleChecklistsPage() {
               // and then determine which button was clicked based on its class.
               checklistListDiv.addEventListener('click', /*#__PURE__*/function () {
                 var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13(event) {
-                  var viewButton, deleteButton, checklistId, checklistDetails, _checklistId, _confirmed2, _t13, _t14;
+                  var viewButton, deleteButton, checklistId, checklistDetails, _checklistId, confirmed, _t13, _t14;
                   return _regenerator().w(function (_context13) {
                     while (1) switch (_context13.n) {
                       case 0:
@@ -1372,8 +1393,8 @@ function handleChecklistsPage() {
                         _context13.n = 6;
                         return showConfirmModal("Are you sure you want to delete this task list? This action cannot be undone.", "Delete");
                       case 6:
-                        _confirmed2 = _context13.v;
-                        if (!_confirmed2) {
+                        confirmed = _context13.v;
+                        if (!confirmed) {
                           _context13.n = 10;
                           break;
                         }
@@ -1821,7 +1842,7 @@ function handlePricingPage() {
   var enterprisePlanBtn = document.getElementById("enterprise-plan-btn");
   if (freePlanBtn) {
     freePlanBtn.addEventListener("click", /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17() {
-      var userRole, profile, _confirmed3, _t18;
+      var userRole, profile, confirmed, _t18;
       return _regenerator().w(function (_context17) {
         while (1) switch (_context17.n) {
           case 0:
@@ -1845,8 +1866,8 @@ function handlePricingPage() {
             _context17.n = 3;
             return showConfirmModal("Are you sure you want to downgrade to the Free plan? Your current subscription will be cancelled.", "Downgrade");
           case 3:
-            _confirmed3 = _context17.v;
-            if (!_confirmed3) {
+            confirmed = _context17.v;
+            if (!confirmed) {
               _context17.n = 7;
               break;
             }
@@ -1943,7 +1964,7 @@ function handlePricingPage() {
   }
   if (regCheckoutModalOverlay) {
     regCheckoutModalOverlay.addEventListener("click", function (event) {
-      if (event.target === regCheckoutModalOverlay) {
+      if (event.target === registerCheckoutModalOverlay) {
         registerCheckoutModalOverlay.style.display = "none";
         currentSelectedPlan = null;
       }
@@ -2595,7 +2616,7 @@ function handleSchedulingPage() {
                         return showConfirmModal("\n                            <h4>Shift Details:</h4>\n                            <p><strong>Employee:</strong> ".concat(shift.employee_name, "</p>\n                            <p><strong>Location:</strong> ").concat(shift.location_name, "</p>\n                            <p><strong>Time:</strong> ").concat(shiftStart.format('MMM DD, h:mm A'), " - ").concat(shiftEnd.format('MMM DD, h:mm A'), "</p>\n                            <p><strong>Notes:</strong> ").concat(shift.notes || 'None', "</p>\n                            <p style=\"margin-top: 15px;\">Are you sure you want to delete this shift?</p>\n                        "), "Delete Shift");
                       case 1:
                         confirmDelete = _context28.v;
-                        if (!confirmed) {
+                        if (!confirmDelete) {
                           _context28.n = 5;
                           break;
                         }
@@ -2640,8 +2661,10 @@ function handleSchedulingPage() {
     });
   }
   if (nextWeekBtn) {
-    nextWeekStart.add(1, 'isoWeek');
-    renderCalendar();
+    nextWeekBtn.addEventListener("click", function () {
+      currentWeekStart.add(1, 'isoWeek');
+      renderCalendar();
+    });
   }
   if (createShiftForm) {
     createShiftForm.addEventListener("submit", /*#__PURE__*/function () {
@@ -2879,7 +2902,7 @@ function handleDocumentsPage() {
   if (documentListDiv) {
     documentListDiv.addEventListener("click", /*#__PURE__*/function () {
       var _ref17 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31(e) {
-        var targetButton, idToDelete, _confirmed4, _t31;
+        var targetButton, idToDelete, confirmed, _t31;
         return _regenerator().w(function (_context31) {
           while (1) switch (_context31.n) {
             case 0:
@@ -2892,8 +2915,8 @@ function handleDocumentsPage() {
               _context31.n = 1;
               return showConfirmModal("Are you sure you want to delete this document? This action cannot be undone.", "Delete");
             case 1:
-              _confirmed4 = _context31.v;
-              if (!_confirmed4) {
+              confirmed = _context31.v;
+              if (!confirmed) {
                 _context31.n = 5;
                 break;
               }

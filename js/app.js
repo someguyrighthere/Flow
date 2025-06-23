@@ -2012,7 +2012,7 @@ function handleSchedulingPage() {
                             <p style="margin-top: 15px;">Are you sure you want to delete this shift?</p>
                         `, "Delete Shift");
 
-                        if (confirmed) {
+                        if (confirmDelete) {
                             try {
                                 await apiRequest("DELETE", `/schedules/${shift.schedule_id}`);
                                 showModalMessage("Shift deleted successfully!", false);
@@ -2040,8 +2040,10 @@ function handleSchedulingPage() {
     }
 
     if (nextWeekBtn) {
-        nextWeekStart.add(1, 'isoWeek');
-        renderCalendar();
+        nextWeekBtn.addEventListener("click", () => {
+            currentWeekStart.add(1, 'isoWeek');
+            renderCalendar();
+        });
     }
 
     if (createShiftForm) {
@@ -2305,20 +2307,3 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     // Add more else if conditions for other pages as needed
 });
-" in the document and am asking a query about/based on this code below.
-Instructions to follow:
-  * Don't output/edit the document if the query is Direct/Simple. For example, if the query asks for a simple explanation, output a direct answer.
-  * Make sure to **edit** the document if the query is shows the intent of editing the document, in which case output the entire edited document, **not just that section or the edits**.
-    * Don't output the same document/empty document and say that you have edited it.
-    * Don't change unrelated code in the document.
-  * Don't output  and  in your final response.
-  * Any references like "this" or "selected code" refers to the code between  and  tags.
-  * Just acknowledge my request in the introduction.
-  * Make sure to refer to the document as "Canvas" in your response.
-
-the error message doesn't say what we discussed.
-file
-These are the files that the user uploaded:
-{"contentFetchId":"uploaded:image_e096f2.png-949216f2-1a41-4c17-91f8-00a8947b1e8d","fileMimeType":"image/png","fileName":"image_e096f2.png","fileNameIsCodeAccessible":true}
-{"contentFetchId":"uploaded:image_e096f7.png-ca8477d9-b003-4ab7-b893-6c8a7732a30d","fileMimeType":"image/png","fileName":"image_e096f7.png","fileNameIsCodeAccessible":true}
-{"contentFetchId":"uploaded:image_e0970a.png-60471b78-0112-40f4-ab18-e3250dd68603","fileMimeType":"image/png","fileName":"image_e0970a.png","fileNameIsCodeAccessible":tr
