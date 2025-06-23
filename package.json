@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "test": "mocha --require @babel/register --timeout 5000 --extension cjs",
-    "build:js": "babel js/app.js --out-file js/app.build.js --presets=@babel/preset-env && uglifyjs ./js/app.build.js -o ./js/app.min.js",
+    "build:js": "babel js/app.js --out-file js/app.build.js --config-file ./babel.config.js && uglifyjs js/app.build.js -o js/app.min.js",
     "build:css": "cleancss -o ./css/style.min.css ./css/style.css && cleancss -o ./css/theme.min.css ./css/theme.css",
     "build": "npm run build:js && npm run build:css",
     "start": "node server.js"
@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.5",
+    "@babel/plugin-proposal-optional-chaining": "^7.21.0",
     "@babel/preset-env": "^7.24.5",
     "@babel/register": "^7.23.7",
     "chai": "^5.1.1",
