@@ -1164,7 +1164,7 @@ function handleChecklistsPage() {
                 renderNewChecklistTaskInputs(); // Reset task inputs for new form
                 loadChecklists(); // Reload the list of checklists
             } catch (error) {
-                showModalMessage(`Error creating task list: ${error.message}`, true);
+                showModalMessage(error.message, true);
             }
         });
     }
@@ -2306,4 +2306,3 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     // Add more else if conditions for other pages as needed
-});
