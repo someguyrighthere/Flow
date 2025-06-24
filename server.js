@@ -72,13 +72,49 @@ const initializeDatabase = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
-        // The one-time DROP TABLE commands have been removed.
-        await client.query(`CREATE TABLE IF NOT EXISTS locations (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS users (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS checklists (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS onboarding_sessions (...)`);
+        // --- CORRECTED: Replaced placeholders with full table schemas ---
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS locations (
+                location_id SERIAL PRIMARY KEY,
+                location_name TEXT NOT NULL,
+                location_address TEXT
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
+                position TEXT,
+                location_id INTEGER,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type TEXT,
+                time_group_count INTEGER
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS onboarding_sessions (
+                session_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                checklist_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Active',
+                tasks_status JSONB,
+                start_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
+            );
+        `);
         
-        // --- NEW: Documents Table ---
         await client.query(`
             CREATE TABLE IF NOT EXISTS documents (
                 document_id SERIAL PRIMARY KEY,
@@ -90,10 +126,9 @@ const initializeDatabase = async () => {
                 uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        console.log("Documents table is ready.");
+        console.log("Database schema verified.");
         
         await seedDatabase(client);
-        console.log("Database schema verified.");
         
     } catch (err) {
         console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
@@ -110,7 +145,6 @@ initializeDatabase();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
-// Make the 'uploads' directory publicly accessible
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
@@ -139,7 +173,7 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// --- NEW: Document Management Routes ---
+// Document Management Routes
 app.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
     const { title, description } = req.body;
     const { filename, path: filePath, mimetype } = req.file;
@@ -172,24 +206,17 @@ app.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
 app.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
-        // First, get the file path from the database
         const docRes = await pool.query('SELECT file_path FROM documents WHERE document_id = $1', [id]);
         if (docRes.rows.length === 0) {
             return res.status(404).json({ error: 'Document not found.' });
         }
         const filePath = docRes.rows[0].file_path;
-
-        // Delete the record from the database
         await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
-
-        // Then, delete the file from the filesystem
         fs.unlink(filePath, (err) => {
             if (err) {
-                // Log the error but don't block the response, as the DB entry is gone
                 console.error(`Failed to delete file from disk: ${filePath}`, err);
             }
         });
-
         res.status(204).send();
     } catch (err) {
         res.status(500).json({ error: 'Failed to delete document.' });
@@ -197,7 +224,6 @@ app.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 
-// ... (All other existing routes like /login, /positions, /users, etc. remain here)
 // User and Auth Routes
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
