@@ -60,6 +60,10 @@ const initializeDatabase = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
 
+        // --- ADDED: Safely drop the old users table to ensure the new schema is created ---
+        await client.query('DROP TABLE IF EXISTS users CASCADE;');
+        console.log("Users table dropped if it existed, ensuring a clean slate.");
+
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
