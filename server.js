@@ -36,7 +36,7 @@ const db = new sqlite3.Database('./onboardflow.db', (err) => {
                 else console.log("Locations table is ready.");
             });
 
-            // Create Users table (updated with location_id)
+            // --- UPDATED: Added 'position' column to users table ---
             db.run(`
                 CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,6 +44,7 @@ const db = new sqlite3.Database('./onboardflow.db', (err) => {
                     email TEXT NOT NULL UNIQUE,
                     password TEXT NOT NULL,
                     role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
+                    position TEXT,
                     location_id INTEGER,
                     FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
                 )
@@ -141,7 +142,7 @@ app.delete('/locations/:id', isAuthenticated, isAdmin, (req, res) => {
 // User Management Routes
 app.get('/users', isAuthenticated, isAdmin, (req, res) => {
     const sql = `
-        SELECT u.user_id, u.full_name, u.email, u.role, l.location_name
+        SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name
         FROM users u
         LEFT JOIN locations l ON u.location_id = l.location_id
     `;
@@ -163,7 +164,7 @@ app.delete('/users/:id', isAuthenticated, isAdmin, (req, res) => {
 });
 
 const inviteUser = (req, res, role) => {
-    const { full_name, email, password, location_id, position } = req.body; // Added position
+    const { full_name, email, password, location_id, position } = req.body;
     if (!full_name || !email || !password) {
         return res.status(400).json({ error: "Full name, email, and password are required to invite a user." });
     }
@@ -171,9 +172,12 @@ const inviteUser = (req, res, role) => {
     bcrypt.hash(password, 10, (err, hash) => {
         if (err) return res.status(500).json({ error: "Error hashing password." });
         
-        const sql = `INSERT INTO users (full_name, email, password, role, location_id, position) VALUES (?, ?, ?, ?, ?, ?)`;
-        db.run(sql, [full_name, email, hash, role, location_id, position || null], function(err) {
-            if (err) return res.status(400).json({ error: "Email may already be in use." });
+        const sql = `INSERT INTO users (full_name, email, password, role, position, location_id) VALUES (?, ?, ?, ?, ?, ?)`;
+        db.run(sql, [full_name, email, hash, role, position || null, location_id], function(err) {
+            if (err) {
+                console.error("Error inviting user:", err.message);
+                return res.status(400).json({ error: "Email may already be in use." });
+            }
             res.status(201).json({ id: this.lastID });
         });
     });
