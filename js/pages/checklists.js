@@ -11,22 +11,61 @@ export function handleChecklistsPage() {
         return;
     }
 
-    // Get all necessary elements from the DOM
+    // --- Get all necessary elements from the DOM ---
     const newChecklistForm = document.getElementById("new-checklist-form");
     const tasksInputArea = document.getElementById("tasks-input-area");
     const attachDocumentModalOverlay = document.getElementById("attach-document-modal-overlay");
     const attachDocumentListDiv = document.getElementById("attach-document-list");
     const attachDocumentCancelBtn = document.getElementById("attach-document-cancel-btn");
     
-    // --- NEW: Elements for task structure ---
+    // Elements for task structure
     const structureTypeSelect = document.getElementById('structure-type-select');
     const timeGroupCountContainer = document.getElementById('time-group-count-container');
     const timeGroupCountLabel = document.getElementById('time-group-count-label');
     const timeGroupCountInput = document.getElementById('time-group-count');
+
+    // *** NEW: Element for displaying the list of existing checklists ***
+    const checklistListDiv = document.getElementById('checklist-list');
     
     // State variables
     let currentTaskElementForAttachment = null;
     let taskCounter = 0;
+
+    // --- Data Loading and Rendering ---
+
+    /**
+     * *** NEW: Fetches and displays existing task lists ***
+     */
+    async function loadChecklists() {
+        if (!checklistListDiv) return;
+        checklistListDiv.innerHTML = '<p>Loading task lists...</p>';
+        try {
+            const checklists = await apiRequest('GET', '/checklists');
+            checklistListDiv.innerHTML = '';
+            if (checklists && checklists.length > 0) {
+                checklists.forEach(list => {
+                    const listItem = document.createElement('div');
+                    listItem.className = 'checklist-item';
+                    listItem.innerHTML = `
+                        <div class="checklist-item-title">
+                            <span><strong>${list.title}</strong> (For: ${list.position})</span>
+                        </div>
+                        <div class="checklist-item-actions">
+                            <button class="btn-delete" data-id="${list.id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    checklistListDiv.appendChild(listItem);
+                });
+            } else {
+                checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists created yet.</p>';
+            }
+        } catch (error) {
+            checklistListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading task lists: ${error.message}</p>`;
+        }
+    }
+
 
     /**
      * Adds a new task input field to the form.
@@ -85,7 +124,7 @@ export function handleChecklistsPage() {
             
             documents.forEach(doc => {
                 const docButton = document.createElement('button');
-                docButton.className = 'list-item'; // Re-using list-item style for buttons
+                docButton.className = 'list-item';
                 docButton.style.cssText = 'width: 100%; cursor: pointer; text-align: left;';
                 docButton.textContent = `${doc.title} (${doc.file_name})`;
                 docButton.dataset.documentId = doc.document_id;
@@ -109,7 +148,6 @@ export function handleChecklistsPage() {
 
     // --- Event Listeners ---
     
-    // Event listener for the document attachment modal
     if (attachDocumentCancelBtn) {
         attachDocumentCancelBtn.addEventListener('click', () => attachDocumentModalOverlay.style.display = 'none');
     }
@@ -120,8 +158,7 @@ export function handleChecklistsPage() {
             }
         });
     }
-
-    // *** NEW: Event listener for the Task Structure dropdown ***
+    
     if (structureTypeSelect) {
         structureTypeSelect.addEventListener('change', () => {
             const selectedValue = structureTypeSelect.value;
@@ -134,7 +171,26 @@ export function handleChecklistsPage() {
         });
     }
 
-    // Event listener for the new checklist form submission
+    // *** NEW: Event listener for deleting a checklist ***
+    if (checklistListDiv) {
+        checklistListDiv.addEventListener('click', async (e) => {
+            const deleteButton = e.target.closest('.btn-delete');
+            if (deleteButton) {
+                const checklistId = deleteButton.dataset.id;
+                const confirmed = await showConfirmModal('Are you sure you want to delete this task list?', 'Delete');
+                if (confirmed) {
+                    try {
+                        await apiRequest('DELETE', `/checklists/${checklistId}`);
+                        showModalMessage('Task list deleted successfully!', false);
+                        loadChecklists(); // Refresh the list
+                    } catch (error) {
+                        showModalMessage(`Error: ${error.message}`, true);
+                    }
+                }
+            }
+        });
+    }
+
     if (newChecklistForm) {
         newChecklistForm.addEventListener("submit", async e => {
             e.preventDefault();
@@ -142,7 +198,6 @@ export function handleChecklistsPage() {
             const position = document.getElementById("new-checklist-position").value.trim();
             const title = document.getElementById("new-checklist-title").value.trim();
             
-            // *** UPDATED: Get structure type and count ***
             const structure_type = structureTypeSelect.value;
             const time_group_count = timeGroupCountInput.value;
 
@@ -164,22 +219,22 @@ export function handleChecklistsPage() {
                 return;
             }
 
-            // *** UPDATED: Create the full payload for the API ***
             const payload = {
                 position,
                 title,
                 tasks,
-                structure_type, // Now included
-                time_group_count: (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(time_group_count, 10) : null // Now included
+                structure_type,
+                time_group_count: (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(time_group_count, 10) : null
             };
 
             try {
-                await apiRequest("POST", "/checklists", payload); // Send the complete payload
+                await apiRequest("POST", "/checklists", payload);
                 showModalMessage(`Task List created successfully!`, false);
                 newChecklistForm.reset();
-                timeGroupCountContainer.style.display = 'none'; // Hide the count input again
+                timeGroupCountContainer.style.display = 'none';
                 document.getElementById('tasks-input-area').innerHTML = '';
-                addSingleTaskInput(tasksInputArea); // Add a fresh input field
+                addSingleTaskInput(tasksInputArea);
+                loadChecklists(); // *** UPDATED: Refresh the list after creation ***
             } catch (error) {
                 showModalMessage(error.message, true);
             }
@@ -187,7 +242,8 @@ export function handleChecklistsPage() {
     }
 
     // --- Initial page setup ---
+    loadChecklists(); // *** NEW: Load existing lists on page load ***
     if(tasksInputArea) {
-        addSingleTaskInput(tasksInputArea); // Add one initial task input when the page loads
+        addSingleTaskInput(tasksInputArea);
     }
 }
