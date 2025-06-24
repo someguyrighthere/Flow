@@ -5,7 +5,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-// Add any other required imports (bcrypt, etc.) here
+const bcrypt = require('bcryptjs'); // Import bcrypt for password hashing
 
 // --- 2. Initialize Express App ---
 const app = express();
@@ -26,7 +26,6 @@ const db = new sqlite3.Database('./onboardflow.db', (err) => {
 app.use(cors()); // Enable Cross-Origin Resource Sharing
 app.use(express.json()); // Allow server to accept and parse JSON bodies
 
-// --- NEW ---
 // This line tells Express to serve static files (HTML, CSS, JS) from the project's root directory.
 // The `__dirname` variable provides the absolute path to the current directory.
 app.use(express.static(__dirname));
@@ -54,7 +53,6 @@ const isAuthenticated = (req, res, next) => {
 
 // --- 6. API Routes ---
 
-// --- NEW ---
 // This route serves your main index.html file when someone visits the root URL of your site.
 app.get('/', (req, res) => {
     // Note: The path should be relative to where you run the node command from.
@@ -63,12 +61,54 @@ app.get('/', (req, res) => {
 });
 
 
-/*
-  Example login route (you probably have this already)
-  app.post('/login', (req, res) => {
-    // ... your login logic
-  });
-*/
+// --- NEW: Login Route Implementation ---
+app.post('/login', (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required." });
+    }
+
+    const sql = `SELECT * FROM users WHERE email = ?`;
+
+    db.get(sql, [email], (err, user) => {
+        if (err) {
+            console.error("Database error during login:", err.message);
+            return res.status(500).json({ error: "An internal server error occurred." });
+        }
+        if (!user) {
+            // User not found
+            return res.status(401).json({ error: "Invalid credentials." });
+        }
+
+        // Compare submitted password with the hashed password from the database
+        bcrypt.compare(password, user.password, (err, isMatch) => {
+            if (err) {
+                console.error("Bcrypt comparison error:", err.message);
+                return res.status(500).json({ error: "An internal server error occurred." });
+            }
+            if (!isMatch) {
+                // Passwords do not match
+                return res.status(401).json({ error: "Invalid credentials." });
+            }
+
+            // Passwords match, generate a JWT
+            const payload = {
+                id: user.user_id,
+                role: user.role
+            };
+
+            const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' }); // Token expires in 1 day
+
+            res.json({
+                message: "Logged in successfully!",
+                token: token,
+                role: user.role
+            });
+        });
+    });
+});
+
 
 // --- THIS IS THE CORRECTED DELETE ROUTE ---
 // Place it with your other checklist-related routes.
