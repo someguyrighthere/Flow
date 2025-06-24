@@ -1,75 +1,60 @@
-// js/app.js (Main Router)
-import { handleLoginPage } from './pages/login.js';
-import { handleDashboardPage } from './pages/dashboard.js';
-import { handleChecklistsPage } from './pages/checklists.js';
-import { handleAdminPage } from './pages/admin.js';
-import { handleAccountPage } from './pages/account.js';
-import { handleDocumentsPage } from './pages/documents.js';
-import { handleHiringPage } from './pages/hiring.js';
-import { handleSchedulingPage } from './pages/scheduling.js';
-// Note: We will add a handler for new-hire-view.html later if needed.
+// js/pages/apply.js
+import { apiRequest, showModalMessage } from '../utils.js';
 
-/**
- * Sets up the functionality for the global settings dropdown menu.
- */
-function setupSettingsDropdown() {
-    const settingsButton = document.getElementById("settings-button");
-    const settingsDropdown = document.getElementById("settings-dropdown");
-    const logoutButton = document.getElementById("logout-button");
+export function handleApplyPage() {
+    const jobDetailsContainer = document.getElementById('job-details-container');
+    const applyForm = document.getElementById('apply-form');
+    const applyCard = document.getElementById('apply-card');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const jobId = urlParams.get('jobId');
 
-    if (settingsButton && settingsDropdown) {
-        settingsButton.addEventListener("click", event => {
-            // Stop the click from closing the dropdown immediately
-            event.stopPropagation();
-            settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
-        });
+    if (!jobId) {
+        jobDetailsContainer.innerHTML = '<h2>Job Not Found</h2><p>No job ID was provided in the URL.</p>';
+        return;
+    }
 
-        // Add a click listener to the whole document to close the dropdown
-        // if the user clicks anywhere else on the page.
-        document.addEventListener("click", event => {
-            if (settingsButton && !settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
-                settingsDropdown.style.display = "none";
+    async function loadJobDetails() {
+        try {
+            const job = await apiRequest('GET', `/job-postings/${jobId}`);
+            if (job) {
+                document.title = `Apply for ${job.title} - Flow Business Suite`;
+                jobDetailsContainer.innerHTML = `
+                    <h2>${job.title}</h2>
+                    <p><strong>Location:</strong> ${job.location_name || 'Company Wide'}</p>
+                    <p><strong>Description:</strong><br>${job.description.replace(/\n/g, '<br>')}</p>
+                    ${job.requirements ? `<p><strong>Requirements:</strong><br>${job.requirements.replace(/\n/g, '<br>')}</p>` : ''}
+                `;
+            } else {
+                 jobDetailsContainer.innerHTML = '<h2>Job Not Found</h2><p>The job you are looking for does not exist.</p>';
+            }
+        } catch (error) {
+            jobDetailsContainer.innerHTML = `<h2>Error</h2><p>Could not load job details. ${error.message}</p>`;
+        }
+    }
+
+    if (applyForm) {
+        applyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('applicant-name').value;
+            const email = document.getElementById('applicant-email').value;
+
+            try {
+                await apiRequest('POST', `/apply/${jobId}`, { name, email });
+                if(applyCard) {
+                    applyCard.innerHTML = `
+                        <div style="text-align: center;">
+                            <h2>Application Submitted!</h2>
+                            <p>Thank you for your interest. We have received your application and will be in touch if you are selected for an interview.</p>
+                            <a href="index.html" class="btn btn-secondary">Return to Home</a>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                showModalMessage(`Error submitting application: ${error.message}`, true);
             }
         });
     }
 
-    if (logoutButton) {
-        logoutButton.addEventListener("click", () => {
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("userRole");
-            window.location.href = "login.html";
-        });
-    }
+    loadJobDetails();
 }
-
-
-/**
- * Main application entry point. This function runs when the DOM is fully loaded.
- */
-document.addEventListener("DOMContentLoaded", () => {
-    // Set up global components that appear on multiple pages
-    setupSettingsDropdown();
-
-    // Get the current page's path to determine which logic to run
-    const path = window.location.pathname;
-
-    // --- Simple Page Router ---
-    if (path.includes("login.html")) {
-        handleLoginPage();
-    } else if (path.includes("dashboard.html")) {
-        handleDashboardPage();
-    } else if (path.includes("checklists.html")) {
-        handleChecklistsPage();
-    } else if (path.includes("admin.html")) {
-        handleAdminPage();
-    } else if (path.includes("account.html")) {
-        handleAccountPage();
-    } else if (path.includes("documents.html")) {
-        handleDocumentsPage();
-    } else if (path.includes("hiring.html")) {
-        handleHiringPage();
-    } else if (path.includes("scheduling.html")) {
-        handleSchedulingPage();
-    }
-    // Add any other page handlers here.
-});

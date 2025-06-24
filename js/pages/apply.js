@@ -1,15 +1,11 @@
 // js/pages/apply.js
 import { apiRequest, showModalMessage } from '../utils.js';
 
-/**
- * Handles all logic for the public job application page.
- */
 export function handleApplyPage() {
     const jobDetailsContainer = document.getElementById('job-details-container');
     const applyForm = document.getElementById('apply-form');
     const applyCard = document.getElementById('apply-card');
     
-    // Get the Job ID from the URL query parameter
     const urlParams = new URLSearchParams(window.location.search);
     const jobId = urlParams.get('jobId');
 
@@ -18,9 +14,6 @@ export function handleApplyPage() {
         return;
     }
 
-    /**
-     * Fetches and displays the details for a single job posting.
-     */
     async function loadJobDetails() {
         try {
             const job = await apiRequest('GET', `/job-postings/${jobId}`);
@@ -40,9 +33,6 @@ export function handleApplyPage() {
         }
     }
 
-    /**
-     * Handles the application form submission.
-     */
     if (applyForm) {
         applyForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -51,7 +41,6 @@ export function handleApplyPage() {
 
             try {
                 await apiRequest('POST', `/apply/${jobId}`, { name, email });
-                // Show a success message and hide the form
                 if(applyCard) {
                     applyCard.innerHTML = `
                         <div style="text-align: center;">
@@ -67,6 +56,5 @@ export function handleApplyPage() {
         });
     }
 
-    // Initial call to load job details
     loadJobDetails();
 }
