@@ -25,7 +25,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// --- 3. Database Connection ---
+// --- 3. Database Connection and Initialization ---
 if (!DATABASE_URL) {
     throw new Error("DATABASE_URL environment variable is not set.");
 }
@@ -37,14 +37,18 @@ const pool = new Pool({
     }
 });
 
-// --- NEW: Database Initialization Function ---
 const initializeDatabase = async () => {
     let client;
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
+        
+        // --- ONE-TIME FIX: Drop hiring tables to ensure a clean schema ---
+        // This is a temporary measure. REMOVE THESE 2 LINES after a successful deployment.
+        await client.query('DROP TABLE IF EXISTS applicants CASCADE;');
+        await client.query('DROP TABLE IF EXISTS job_postings CASCADE;');
+        console.log("Hiring tables dropped to ensure a fresh start.");
 
-        // The one-time DROP TABLE commands have been removed for safety.
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
