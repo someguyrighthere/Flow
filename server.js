@@ -1,13 +1,66 @@
-// Inside server.js
+// server.js
 
-// Find your existing app.delete('/checklists/:id', ...) route and replace it with this.
-// This example assumes you are using Express and the 'sqlite3' package.
+// --- 1. Imports and Setup ---
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+// Add any other required imports (bcrypt, etc.) here
 
+// --- 2. Initialize Express App ---
+const app = express();
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-key'; // IMPORTANT: Use environment variables for secrets
+
+// --- 3. Database Connection ---
+// This connects to the SQLite database file in your project root
+const db = new sqlite3.Database('./onboardflow.db', (err) => {
+    if (err) {
+        console.error('Error opening database', err.message);
+    } else {
+        console.log('Connected to the SQLite database.');
+    }
+});
+
+// --- 4. Middleware ---
+app.use(cors()); // Enable Cross-Origin Resource Sharing
+app.use(express.json()); // Allow server to accept and parse JSON bodies
+
+// --- 5. Authentication Middleware (Helper Function) ---
+// This function protects routes that require a user to be logged in.
+const isAuthenticated = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (token == null) {
+        return res.sendStatus(401); // Unauthorized
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.sendStatus(403); // Forbidden
+        }
+        req.user = user;
+        next();
+    });
+};
+
+
+// --- 6. API Routes ---
+// All of your app.get, app.post, app.put, app.delete routes go here.
+
+/*
+  Example login route (you probably have this already)
+  app.post('/login', (req, res) => {
+    // ... your login logic
+  });
+*/
+
+// --- THIS IS THE CORRECTED DELETE ROUTE ---
+// Place it with your other checklist-related routes.
 app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
 
-    // First, check if any active onboarding sessions are using this checklist.
-    // This provides a proactive, user-friendly error before attempting to delete.
     const checkUsageSql = `
         SELECT COUNT(*) AS count 
         FROM onboarding_sessions 
@@ -23,13 +76,11 @@ app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
         });
 
         if (usage && usage.count > 0) {
-            // If the checklist is in use, send a specific, helpful error message.
             return res.status(409).json({ 
                 error: `Cannot delete task list: It is currently assigned to ${usage.count} active onboarding session(s). Please complete or re-assign those sessions first.` 
             });
         }
 
-        // If not in use, proceed with deletion.
         const deleteSql = `DELETE FROM checklists WHERE id = ?`;
         await new Promise((resolve, reject) => {
             db.run(deleteSql, [id], function(err) {
@@ -39,11 +90,18 @@ app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
             });
         });
 
-        res.status(204).send(); // Send 204 No Content for successful deletion.
+        res.status(204).send();
 
     } catch (error) {
-        // This will catch other unexpected database errors.
         console.error('Error deleting checklist:', error.message);
         res.status(500).json({ error: 'An unexpected server error occurred. Please try again later.' });
     }
+});
+
+// Add your other routes (for documents, users, etc.) here...
+
+
+// --- 7. Start Server ---
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
