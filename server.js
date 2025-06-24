@@ -43,13 +43,59 @@ const initializeDatabase = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
-        await client.query(`CREATE TABLE IF NOT EXISTS locations (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS users (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS checklists (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS onboarding_sessions (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS documents (...)`);
-
-        // --- NEW: Hiring-related Tables ---
+        // --- CORRECTED: Replaced placeholders with full table schemas ---
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS locations (
+                location_id SERIAL PRIMARY KEY,
+                location_name TEXT NOT NULL,
+                location_address TEXT
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
+                position TEXT,
+                location_id INTEGER,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type TEXT,
+                time_group_count INTEGER
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS onboarding_sessions (
+                session_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                checklist_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Active',
+                tasks_status JSONB,
+                start_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
         await client.query(`
             CREATE TABLE IF NOT EXISTS job_postings (
                 id SERIAL PRIMARY KEY,
@@ -61,8 +107,6 @@ const initializeDatabase = async () => {
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
         `);
-        console.log("Job Postings table is ready.");
-        
         await client.query(`
             CREATE TABLE IF NOT EXISTS applicants (
                 id SERIAL PRIMARY KEY,
@@ -74,7 +118,6 @@ const initializeDatabase = async () => {
                 FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE
             );
         `);
-        console.log("Applicants table is ready.");
         
         console.log("Database schema verified.");
         
@@ -121,7 +164,7 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// --- NEW: Hiring Routes ---
+// Hiring Routes
 app.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     const { title, description, requirements, location_id } = req.body;
     if (!title || !description) return res.status(400).json({error: 'Title and description are required.'});
@@ -181,7 +224,6 @@ app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
         filters.push(`a.status = $${counter++}`);
         values.push(req.query.status);
     }
-    // Note: location filter would require a more complex join, skipping for now to keep it clean.
 
     if (filters.length > 0) {
         query += ' WHERE ' + filters.join(' AND ');
@@ -213,8 +255,6 @@ app.post('/apply/:jobId', async (req, res) => {
     }
 });
 
-
-// ... (All other existing routes remain here)
 
 // Document Management Routes
 app.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
