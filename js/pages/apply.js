@@ -41,17 +41,14 @@ export function handleApplyPage() {
         applyForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // Collect all form data
+            // Collect data from the simplified form
             const applicationData = {
                 name: document.getElementById('applicant-name').value,
                 email: document.getElementById('applicant-email').value,
                 address: document.getElementById('applicant-address').value,
                 phone: document.getElementById('applicant-phone').value,
                 date_of_birth: document.getElementById('applicant-dob').value,
-                ssn: document.getElementById('applicant-ssn').value,
-                desired_salary: document.getElementById('applicant-desired-salary').value,
                 availability: document.getElementById('applicant-availability').value,
-                can_relocate: document.getElementById('applicant-relocate').value === 'Yes',
                 is_authorized: document.getElementById('applicant-authorized').value === 'Yes',
             };
 
