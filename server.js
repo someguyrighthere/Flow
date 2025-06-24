@@ -5,187 +5,191 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs'); // Import bcrypt for password hashing
+const bcrypt = require('bcryptjs');
 
 // --- 2. Initialize Express App ---
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-key'; // IMPORTANT: Use environment variables for secrets
+const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-key';
 
 // --- 3. Database Connection ---
-// This connects to the SQLite database file in your project root
 const db = new sqlite3.Database('./onboardflow.db', (err) => {
     if (err) {
         console.error('Error opening database', err.message);
     } else {
         console.log('Connected to the SQLite database.');
-        // --- NEW: Initialize the database after connecting ---
         initializeDatabase();
     }
 });
 
-// --- NEW: Database Initialization Function ---
-/**
- * Creates the necessary tables in the database if they don't already exist.
- * This is crucial for environments with ephemeral filesystems like Render.
- */
+// --- Database Initialization Function ---
 function initializeDatabase() {
     db.serialize(() => {
-        // Create Users table
+        // Enable foreign key support
+        db.run("PRAGMA foreign_keys = ON;");
+
+        // Create Locations table
+        db.run(`
+            CREATE TABLE IF NOT EXISTS locations (
+                location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                location_name TEXT NOT NULL,
+                location_address TEXT
+            )
+        `, (err) => {
+            if (err) console.error("Error creating locations table:", err.message);
+            else console.log("Locations table is ready.");
+        });
+
+        // Create Users table (updated with location_id)
         db.run(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 full_name TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee'))
+                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
+                location_id INTEGER,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             )
         `, (err) => {
-            if (err) {
-                console.error("Error creating users table:", err.message);
-            } else {
-                console.log("Users table is ready.");
-            }
+            if (err) console.error("Error creating users table:", err.message);
+            else console.log("Users table is ready.");
         });
 
-        // Add other table creations here (e.g., checklists, documents)
-        // Example:
-        // db.run(`CREATE TABLE IF NOT EXISTS checklists (...)`);
+        // You can add other table creations here as we build them out
     });
 }
 
 
 // --- 4. Middleware ---
-app.use(cors()); // Enable Cross-Origin Resource Sharing
-app.use(express.json()); // Allow server to accept and parse JSON bodies
-
-// This line tells Express to serve static files (HTML, CSS, JS) from the project's root directory.
-// The `__dirname` variable provides the absolute path to the current directory.
+app.use(cors());
+app.use(express.json());
 app.use(express.static(__dirname));
 
 
-// --- 5. Authentication Middleware (Helper Function) ---
-// This function protects routes that require a user to be logged in.
+// --- 5. Authentication Middleware ---
 const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-    if (token == null) {
-        return res.sendStatus(401); // Unauthorized
-    }
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) return res.sendStatus(401);
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.sendStatus(403); // Forbidden
-        }
+        if (err) return res.sendStatus(403);
         req.user = user;
         next();
     });
 };
 
+// --- NEW: Admin-only Middleware ---
+const isAdmin = (req, res, next) => {
+    if (req.user.role !== 'super_admin' && req.user.role !== 'location_admin') {
+        return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    next();
+};
+
 
 // --- 6. API Routes ---
 
-// This route serves your main index.html file when someone visits the root URL of your site.
+// --- Static File and Root Routes ---
 app.get('/', (req, res) => {
-    // Note: The path should be relative to where you run the node command from.
-    // Using __dirname ensures the path is always correct.
     res.sendFile(__dirname + '/index.html');
 });
 
-
-// --- Login Route Implementation ---
+// --- Login Route ---
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required." });
-    }
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
 
     const sql = `SELECT * FROM users WHERE email = ?`;
-
     db.get(sql, [email], (err, user) => {
-        if (err) {
-            console.error("Database error during login:", err.message);
-            return res.status(500).json({ error: "An internal server error occurred." });
-        }
-        if (!user) {
-            // User not found
-            return res.status(401).json({ error: "Invalid credentials." });
-        }
+        if (err) return res.status(500).json({ error: "An internal server error occurred." });
+        if (!user) return res.status(401).json({ error: "Invalid credentials." });
 
-        // Compare submitted password with the hashed password from the database
         bcrypt.compare(password, user.password, (err, isMatch) => {
-            if (err) {
-                console.error("Bcrypt comparison error:", err.message);
-                return res.status(500).json({ error: "An internal server error occurred." });
-            }
-            if (!isMatch) {
-                // Passwords do not match
-                return res.status(401).json({ error: "Invalid credentials." });
-            }
+            if (err) return res.status(500).json({ error: "An internal server error occurred." });
+            if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
 
-            // Passwords match, generate a JWT
-            const payload = {
-                id: user.user_id,
-                role: user.role
-            };
-
-            const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' }); // Token expires in 1 day
-
-            res.json({
-                message: "Logged in successfully!",
-                token: token,
-                role: user.role
-            });
+            const payload = { id: user.user_id, role: user.role };
+            const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+            res.json({ message: "Logged in successfully!", token: token, role: user.role });
         });
     });
 });
 
-
-// --- THIS IS THE CORRECTED DELETE ROUTE ---
-// Place it with your other checklist-related routes.
-app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
-    const { id } = req.params;
-
-    const checkUsageSql = `
-        SELECT COUNT(*) AS count
-        FROM onboarding_sessions
-        WHERE checklist_id = ? AND status != 'Completed'
-    `;
-
-    try {
-        const usage = await new Promise((resolve, reject) => {
-            db.get(checkUsageSql, [id], (err, row) => {
-                if (err) return reject(err);
-                resolve(row);
-            });
-        });
-
-        if (usage && usage.count > 0) {
-            return res.status(409).json({
-                error: `Cannot delete task list: It is currently assigned to ${usage.count} active onboarding session(s). Please complete or re-assign those sessions first.`
-            });
-        }
-
-        const deleteSql = `DELETE FROM checklists WHERE id = ?`;
-        await new Promise((resolve, reject) => {
-            db.run(deleteSql, [id], function(err) {
-                if (err) return reject(err);
-                if (this.changes === 0) return reject(new Error('Checklist not found.'));
-                resolve();
-            });
-        });
-
-        res.status(204).send();
-
-    } catch (error) {
-        console.error('Error deleting checklist:', error.message);
-        res.status(500).json({ error: 'An unexpected server error occurred. Please try again later.' });
-    }
+// --- NEW: Location Management Routes ---
+app.get('/locations', isAuthenticated, isAdmin, (req, res) => {
+    db.all("SELECT * FROM locations", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
 });
 
-// Add your other routes (for documents, users, etc.) here...
+app.post('/locations', isAuthenticated, isAdmin, (req, res) => {
+    const { location_name, location_address } = req.body;
+    db.run(`INSERT INTO locations (location_name, location_address) VALUES (?, ?)`, [location_name, location_address], function(err) {
+        if (err) return res.status(400).json({ error: err.message });
+        res.status(201).json({ id: this.lastID, location_name, location_address });
+    });
+});
+
+app.delete('/locations/:id', isAuthenticated, isAdmin, (req, res) => {
+    db.run(`DELETE FROM locations WHERE location_id = ?`, req.params.id, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Location not found.' });
+        res.status(204).send();
+    });
+});
+
+// --- NEW: User Management Routes ---
+app.get('/users', isAuthenticated, isAdmin, (req, res) => {
+    const sql = `
+        SELECT u.user_id, u.full_name, u.email, u.role, l.location_name
+        FROM users u
+        LEFT JOIN locations l ON u.location_id = l.location_id
+    `;
+    db.all(sql, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.delete('/users/:id', isAuthenticated, isAdmin, (req, res) => {
+    // Optional: Prevent users from deleting themselves
+    if (req.user.id == req.params.id) {
+        return res.status(403).json({ error: "You cannot delete your own account." });
+    }
+    db.run(`DELETE FROM users WHERE user_id = ?`, req.params.id, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'User not found.' });
+        res.status(204).send();
+    });
+});
+
+const inviteUser = (req, res, role) => {
+    const { full_name, email, password, location_id } = req.body;
+    if (!full_name || !email || !password || !location_id) {
+        return res.status(400).json({ error: "All fields are required to invite a user." });
+    }
+
+    bcrypt.hash(password, 10, (err, hash) => {
+        if (err) return res.status(500).json({ error: "Error hashing password." });
+        const sql = `INSERT INTO users (full_name, email, password, role, location_id) VALUES (?, ?, ?, ?, ?)`;
+        db.run(sql, [full_name, email, hash, role, location_id], function(err) {
+            if (err) return res.status(400).json({ error: "Email may already be in use." });
+            res.status(201).json({ id: this.lastID });
+        });
+    });
+};
+
+app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
+app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
+
+// --- Existing Routes to be filled in later ---
+app.delete('/checklists/:id', isAuthenticated, (req, res) => {
+    // Placeholder - will be fully implemented later
+    res.status(510).send("Not yet implemented");
+});
 
 
 // --- 7. Start Server ---
