@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Database file
+*.db
+
+# Build artifacts
+/js/app.build.js
+/js/app.min.js
+/css/style.min.css
+/css/theme.min.css
