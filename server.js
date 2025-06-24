@@ -25,13 +25,51 @@ const pool = new Pool({
     }
 });
 
-// --- REVISED: Correctly initialize database schema sequentially ---
-const initializeDatabase = async () => {
+// --- NEW: TEMPORARY PASSWORD RESET FUNCTION ---
+/**
+ * This function will run ONCE to reset a specific user's password.
+ * After you have successfully logged in, you MUST REMOVE this function
+ * and the call to it below for security reasons.
+ */
+const temporaryPasswordReset = async (client) => {
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // !! 1. FILL IN YOUR DETAILS HERE                                     !!
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    const adminEmailToReset = "xarcy123@gmail.com"; // <--- Enter your email address
+    const newTemporaryPassword = "kain6669D_HERE"; // <--- Enter a new password
+
+    // Do nothing if the email is still the placeholder
+    if (adminEmailToReset === "YOUR_ADMIN_EMAIL_HERE") {
+        console.log("Password reset script skipped (email not set).");
+        return;
+    }
+    
     try {
-        const client = await pool.connect();
+        console.log(`Attempting to reset password for ${adminEmailToReset}...`);
+        const hash = await bcrypt.hash(newTemporaryPassword, 10);
+        const result = await client.query(
+            'UPDATE users SET password = $1 WHERE email = $2',
+            [hash, adminEmailToReset]
+        );
+
+        if (result.rowCount > 0) {
+            console.log(`SUCCESS: Password for ${adminEmailToReset} has been reset.`);
+            console.log("IMPORTANT: You can now log in with your new temporary password.");
+        } else {
+            console.warn(`WARNING: User with email ${adminEmailToReset} not found. Could not reset password.`);
+        }
+    } catch (err) {
+        console.error("Error during temporary password reset:", err);
+    }
+};
+
+
+const initializeDatabase = async () => {
+    let client;
+    try {
+        client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
 
-        // Run table creation queries one by one to ensure correct order and avoid errors
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
@@ -54,14 +92,18 @@ const initializeDatabase = async () => {
             );
         `);
         console.log("Users table is ready.");
-
-        // Add other table creations here in the future
         
-        client.release();
+        // --- THIS WILL RUN THE TEMPORARY PASSWORD RESET ---
+        await temporaryPasswordReset(client);
+        
         console.log("Database schema is ready.");
     } catch (err) {
         console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
         process.exit(1);
+    } finally {
+        if (client) {
+            client.release();
+        }
     }
 };
 
@@ -97,12 +139,11 @@ const isAdmin = (req, res, next) => {
 
 
 // --- 6. API Routes ---
-
+// (The rest of your routes remain unchanged)
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// --- UPDATED: Made Login Route more robust ---
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
@@ -112,7 +153,6 @@ app.post('/login', async (req, res) => {
         const result = await pool.query(sql, [email]);
         const user = result.rows[0];
 
-        // Check for user AND for a password. If no password, credentials are treated as invalid.
         if (!user || !user.password) {
             return res.status(401).json({ error: "Invalid credentials." });
         }
@@ -131,7 +171,6 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ error: "An internal server error occurred." });
     }
 });
-
 
 // Location Management Routes
 app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
