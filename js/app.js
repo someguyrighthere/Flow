@@ -1,60 +1,50 @@
-// js/pages/apply.js
-import { apiRequest, showModalMessage } from '../utils.js';
+// js/app.js (Main Router)
+import { handleLoginPage } from './pages/login.js';
+import { handleDashboardPage } from './pages/dashboard.js';
+import { handleChecklistsPage } from './pages/checklists.js';
+import { handleAdminPage } from './pages/admin.js';
+import { handleAccountPage } from './pages/account.js';
+import { handleDocumentsPage } from './pages/documents.js';
+import { handleHiringPage } from './pages/hiring.js';
+import { handleSchedulingPage } from './pages/scheduling.js';
+import { handleApplyPage } from './pages/apply.js'; // --- NEW ---
 
-export function handleApplyPage() {
-    const jobDetailsContainer = document.getElementById('job-details-container');
-    const applyForm = document.getElementById('apply-form');
-    const applyCard = document.getElementById('apply-card');
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const jobId = urlParams.get('jobId');
+function setupSettingsDropdown() {
+    const settingsButton = document.getElementById("settings-button");
+    const settingsDropdown = document.getElementById("settings-dropdown");
+    const logoutButton = document.getElementById("logout-button");
 
-    if (!jobId) {
-        jobDetailsContainer.innerHTML = '<h2>Job Not Found</h2><p>No job ID was provided in the URL.</p>';
-        return;
-    }
-
-    async function loadJobDetails() {
-        try {
-            const job = await apiRequest('GET', `/job-postings/${jobId}`);
-            if (job) {
-                document.title = `Apply for ${job.title} - Flow Business Suite`;
-                jobDetailsContainer.innerHTML = `
-                    <h2>${job.title}</h2>
-                    <p><strong>Location:</strong> ${job.location_name || 'Company Wide'}</p>
-                    <p><strong>Description:</strong><br>${job.description.replace(/\n/g, '<br>')}</p>
-                    ${job.requirements ? `<p><strong>Requirements:</strong><br>${job.requirements.replace(/\n/g, '<br>')}</p>` : ''}
-                `;
-            } else {
-                 jobDetailsContainer.innerHTML = '<h2>Job Not Found</h2><p>The job you are looking for does not exist.</p>';
-            }
-        } catch (error) {
-            jobDetailsContainer.innerHTML = `<h2>Error</h2><p>Could not load job details. ${error.message}</p>`;
-        }
-    }
-
-    if (applyForm) {
-        applyForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('applicant-name').value;
-            const email = document.getElementById('applicant-email').value;
-
-            try {
-                await apiRequest('POST', `/apply/${jobId}`, { name, email });
-                if(applyCard) {
-                    applyCard.innerHTML = `
-                        <div style="text-align: center;">
-                            <h2>Application Submitted!</h2>
-                            <p>Thank you for your interest. We have received your application and will be in touch if you are selected for an interview.</p>
-                            <a href="index.html" class="btn btn-secondary">Return to Home</a>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                showModalMessage(`Error submitting application: ${error.message}`, true);
+    if (settingsButton && settingsDropdown) {
+        settingsButton.addEventListener("click", event => {
+            event.stopPropagation();
+            settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
+        });
+        document.addEventListener("click", event => {
+            if (settingsButton && !settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
+                settingsDropdown.style.display = "none";
             }
         });
     }
-
-    loadJobDetails();
+    if (logoutButton) {
+        logoutButton.addEventListener("click", () => {
+            localStorage.removeItem("authToken");
+            localStorage.removeItem("userRole");
+            window.location.href = "login.html";
+        });
+    }
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+    setupSettingsDropdown();
+    const path = window.location.pathname;
+
+    if (path.includes("login.html")) handleLoginPage();
+    else if (path.includes("dashboard.html")) handleDashboardPage();
+    else if (path.includes("checklists.html")) handleChecklistsPage();
+    else if (path.includes("admin.html")) handleAdminPage();
+    else if (path.includes("account.html")) handleAccountPage();
+    else if (path.includes("documents.html")) handleDocumentsPage();
+    else if (path.includes("hiring.html")) handleHiringPage();
+    else if (path.includes("scheduling.html")) handleSchedulingPage();
+    else if (path.includes("apply.html")) handleApplyPage(); // --- NEW ---
+});
