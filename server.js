@@ -25,18 +25,23 @@ const pool = new Pool({
     }
 });
 
-pool.connect()
-    .then(client => {
+// --- REVISED: Correctly initialize database schema sequentially ---
+const initializeDatabase = async () => {
+    try {
+        const client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-        client.release();
 
-        const initialSchema = `
+        // Run table creation queries one by one to ensure correct order and avoid errors
+        await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
                 location_name TEXT NOT NULL,
                 location_address TEXT
             );
+        `);
+        console.log("Locations table is ready.");
 
+        await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id SERIAL PRIMARY KEY,
                 full_name TEXT NOT NULL,
@@ -47,23 +52,26 @@ pool.connect()
                 location_id INTEGER,
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
-        `;
+        `);
+        console.log("Users table is ready.");
 
-        return pool.query(initialSchema);
-    })
-    .then(() => {
+        // Add other table creations here in the future
+        
+        client.release();
         console.log("Database schema is ready.");
-    })
-    .catch(err => {
+    } catch (err) {
         console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
         process.exit(1);
-    });
+    }
+};
+
+// Call the initialization function
+initializeDatabase();
 
 
 // --- 4. Middleware ---
 app.use(cors());
 app.use(express.json());
-// --- UNCOMMENTED THIS LINE TO SERVE YOUR FRONT-END FILES ---
 app.use(express.static(__dirname));
 
 
