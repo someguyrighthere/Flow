@@ -19,8 +19,41 @@ const db = new sqlite3.Database('./onboardflow.db', (err) => {
         console.error('Error opening database', err.message);
     } else {
         console.log('Connected to the SQLite database.');
+        // --- NEW: Initialize the database after connecting ---
+        initializeDatabase();
     }
 });
+
+// --- NEW: Database Initialization Function ---
+/**
+ * Creates the necessary tables in the database if they don't already exist.
+ * This is crucial for environments with ephemeral filesystems like Render.
+ */
+function initializeDatabase() {
+    db.serialize(() => {
+        // Create Users table
+        db.run(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee'))
+            )
+        `, (err) => {
+            if (err) {
+                console.error("Error creating users table:", err.message);
+            } else {
+                console.log("Users table is ready.");
+            }
+        });
+
+        // Add other table creations here (e.g., checklists, documents)
+        // Example:
+        // db.run(`CREATE TABLE IF NOT EXISTS checklists (...)`);
+    });
+}
+
 
 // --- 4. Middleware ---
 app.use(cors()); // Enable Cross-Origin Resource Sharing
@@ -61,7 +94,7 @@ app.get('/', (req, res) => {
 });
 
 
-// --- NEW: Login Route Implementation ---
+// --- Login Route Implementation ---
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
 
