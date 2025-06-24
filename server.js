@@ -102,6 +102,7 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
+// --- UPDATED: Made Login Route more robust ---
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
@@ -111,10 +112,15 @@ app.post('/login', async (req, res) => {
         const result = await pool.query(sql, [email]);
         const user = result.rows[0];
 
-        if (!user) return res.status(401).json({ error: "Invalid credentials." });
+        // Check for user AND for a password. If no password, credentials are treated as invalid.
+        if (!user || !user.password) {
+            return res.status(401).json({ error: "Invalid credentials." });
+        }
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
+        if (!isMatch) {
+            return res.status(401).json({ error: "Invalid credentials." });
+        }
         
         const payload = { id: user.user_id, role: user.role };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
@@ -125,6 +131,7 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ error: "An internal server error occurred." });
     }
 });
+
 
 // Location Management Routes
 app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
