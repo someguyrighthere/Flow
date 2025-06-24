@@ -36,7 +36,6 @@ const seedDatabase = async (client) => {
             console.log("Super admin user already exists. Seeding not required.");
             return;
         }
-
         console.log("Default super admin not found, creating one...");
         const hash = await bcrypt.hash(adminPassword, 10);
         await client.query(
@@ -44,7 +43,6 @@ const seedDatabase = async (client) => {
             [adminFullName, adminEmail, hash, 'super_admin']
         );
         console.log("Default super admin created successfully.");
-
     } catch (err) {
         console.error("Error during database seeding:", err);
     }
@@ -56,15 +54,8 @@ const initializeDatabase = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
 
-        // --- ONE-TIME FIX: Drop all tables to ensure a clean schema ---
-        // This is a temporary measure. REMOVE THIS BLOCK after a successful deployment.
-        console.log("Ensuring a clean slate for schema creation...");
-        await client.query('DROP TABLE IF EXISTS onboarding_sessions CASCADE;');
-        await client.query('DROP TABLE IF EXISTS checklists CASCADE;');
-        await client.query('DROP TABLE IF EXISTS users CASCADE;');
-        await client.query('DROP TABLE IF EXISTS locations CASCADE;');
-        console.log("Existing tables dropped to ensure a fresh start.");
-
+        // Schema creation will now only run if tables do not exist.
+        // The one-time DROP TABLE commands have been removed for safety.
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
@@ -72,8 +63,6 @@ const initializeDatabase = async () => {
                 location_address TEXT
             );
         `);
-        console.log("Locations table is ready.");
-
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id SERIAL PRIMARY KEY,
@@ -86,20 +75,16 @@ const initializeDatabase = async () => {
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
         `);
-        console.log("Users table is ready.");
-        
         await client.query(`
             CREATE TABLE IF NOT EXISTS checklists (
                 id SERIAL PRIMARY KEY,
-                position TEXT NOT NULL,
+                position TEXT NOT NULL UNIQUE,
                 title TEXT NOT NULL,
                 tasks JSONB NOT NULL,
                 structure_type TEXT,
                 time_group_count INTEGER
             );
         `);
-        console.log("Checklists table is ready.");
-
         await client.query(`
             CREATE TABLE IF NOT EXISTS onboarding_sessions (
                 session_id SERIAL PRIMARY KEY,
@@ -112,11 +97,10 @@ const initializeDatabase = async () => {
                 FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
             );
         `);
-        console.log("Onboarding sessions table is ready.");
         
+        console.log("Database schema verified.");
         await seedDatabase(client);
         
-        console.log("Database initialization complete.");
     } catch (err) {
         console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
         process.exit(1);
@@ -141,7 +125,6 @@ const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (token == null) return res.sendStatus(401);
-
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) return res.sendStatus(403);
         req.user = user;
@@ -194,12 +177,7 @@ app.get('/positions', isAuthenticated, isAdmin, async (req, res) => {
 app.get('/onboarding-sessions', isAuthenticated, isAdmin, async (req, res) => {
     const sql = `
         SELECT 
-            s.session_id,
-            u.user_id,
-            u.full_name,
-            u.email,
-            c.position,
-            s.tasks_status,
+            s.session_id, u.user_id, u.full_name, u.email, c.position, s.tasks_status,
             (SELECT COUNT(*) FROM jsonb_array_elements(c.tasks)) as total_tasks,
             (SELECT COUNT(*) FROM jsonb_to_recordset(s.tasks_status) as x(description text, completed boolean) WHERE completed = true) as completed_tasks
         FROM onboarding_sessions s
@@ -211,13 +189,12 @@ app.get('/onboarding-sessions', isAuthenticated, isAdmin, async (req, res) => {
         const result = await pool.query(sql);
         res.json(result.rows);
     } catch (err) {
-        console.error("Error fetching onboarding sessions:", err);
         res.status(500).json({ error: 'Failed to load onboarding sessions.' });
     }
 });
 
 app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
-    const { full_name, email, position_id, employee_id } = req.body;
+    const { full_name, email, position_id } = req.body;
     if (!full_name || !email || !position_id) {
         return res.status(400).json({ error: 'Full name, email, and position are required.' });
     }
@@ -232,12 +209,9 @@ app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
         );
         const newUserId = userRes.rows[0].user_id;
         const checklistRes = await client.query('SELECT tasks FROM checklists WHERE id = $1', [position_id]);
-        if (checklistRes.rows.length === 0) {
-            throw new Error('Checklist for the selected position not found.');
-        }
+        if (checklistRes.rows.length === 0) throw new Error('Checklist not found.');
         const tasks = checklistRes.rows[0].tasks;
-        const initialTasksStatus = tasks.map(task => ({ description: task.description, completed: false, documentId: task.documentId || null, documentName: task.documentName || null }));
-
+        const initialTasksStatus = tasks.map(task => ({ ...task, completed: false }));
         await client.query(
             `INSERT INTO onboarding_sessions (user_id, checklist_id, tasks_status) VALUES ($1, $2, $3)`,
             [newUserId, position_id, JSON.stringify(initialTasksStatus)]
@@ -247,11 +221,53 @@ app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
         res.status(201).json({ message: 'Onboarding started successfully.' });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("Error onboarding employee:", err);
         if (err.code === '23505') return res.status(400).json({ error: 'This email address is already in use.' });
         res.status(500).json({ error: 'An error occurred during the onboarding process.' });
     } finally {
         client.release();
+    }
+});
+
+// --- NEW: Checklist Routes ---
+app.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM checklists ORDER BY position');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve checklists.' });
+    }
+});
+
+app.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    const { position, title, tasks, structure_type, time_group_count } = req.body;
+    if (!position || !title || !tasks || !Array.isArray(tasks)) {
+        return res.status(400).json({ error: 'Position, title, and a valid tasks array are required.' });
+    }
+    try {
+        const result = await pool.query(
+            `INSERT INTO checklists (position, title, tasks, structure_type, time_group_count) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [position, title, JSON.stringify(tasks), structure_type, time_group_count]
+        );
+        res.status(201).json({ id: result.rows[0].id, message: 'Checklist created successfully' });
+    } catch (err) {
+        if (err.code === '23505') return res.status(400).json({ error: 'A checklist for this position already exists.' });
+        res.status(500).json({ error: 'Failed to create checklist.' });
+    }
+});
+
+app.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Optional: Check if the checklist is in use by active onboarding sessions
+        const usageCheck = await pool.query('SELECT COUNT(*) FROM onboarding_sessions WHERE checklist_id = $1', [id]);
+        if (usageCheck.rows[0].count > 0) {
+            return res.status(409).json({ error: `Cannot delete: This task list is assigned to ${usageCheck.rows[0].count} onboarding session(s).` });
+        }
+        const result = await pool.query('DELETE FROM checklists WHERE id = $1', [id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Checklist not found.' });
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete checklist.' });
     }
 });
 
@@ -282,7 +298,6 @@ app.delete('/users/:id', isAuthenticated, isAdmin, (req, res) => {
         .then(r => r.rowCount === 0 ? res.status(404).json({error:'User not found.'}) : res.status(204).send())
         .catch(err => res.status(500).json({ error: err.message }));
 });
-
 const inviteUser = async (req, res, role) => {
     const { full_name, email, password, location_id, position } = req.body;
     if (!full_name || !email || !password) return res.status(400).json({ error: "Full name, email, and password are required." });
@@ -295,13 +310,8 @@ const inviteUser = async (req, res, role) => {
         res.status(500).json({ error: "An internal server error occurred." });
     }
 };
-
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
-
-app.delete('/checklists/:id', isAuthenticated, (req, res) => {
-    res.status(501).send("Not yet implemented");
-});
 
 
 // --- 7. Start Server ---
