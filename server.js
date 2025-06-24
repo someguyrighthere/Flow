@@ -37,6 +37,98 @@ const pool = new Pool({
     }
 });
 
+// --- NEW: Database Initialization Function ---
+const initializeDatabase = async () => {
+    let client;
+    try {
+        client = await pool.connect();
+        console.log('Connected to the PostgreSQL database.');
+        
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS locations (
+                location_id SERIAL PRIMARY KEY,
+                location_name TEXT NOT NULL,
+                location_address TEXT
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
+                position TEXT,
+                location_id INTEGER,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type TEXT,
+                time_group_count INTEGER
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS onboarding_sessions (
+                session_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                checklist_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Active',
+                tasks_status JSONB,
+                start_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS job_postings (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                requirements TEXT,
+                location_id INTEGER,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS applicants (
+                id SERIAL PRIMARY KEY,
+                job_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                status VARCHAR(50) DEFAULT 'Applied',
+                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE
+            );
+        `);
+        
+        console.log("Database schema verified.");
+        
+    } catch (err) {
+        console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
+        process.exit(1);
+    } finally {
+        if (client) client.release();
+    }
+};
+
 // --- 4. Middleware ---
 app.use(cors());
 app.use(express.json());
@@ -425,7 +517,7 @@ app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(
 // --- 7. Start Server ---
 const startServer = async () => {
     try {
-        // No longer need to call initializeDatabase here
+        await initializeDatabase();
         app.listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`);
         });
@@ -435,9 +527,4 @@ const startServer = async () => {
     }
 };
 
-const main = async () => {
-    await initializeDatabase();
-    startServer();
-}
-
-main();
+startServer();
