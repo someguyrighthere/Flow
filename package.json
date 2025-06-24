@@ -2,9 +2,9 @@
   "name": "backend",
   "version": "1.0.0",
   "scripts": {
-    "test": "mocha --require @babel/register --timeout 5000 --extension cjs",
-    "build:js": "babel js/app.js --out-file js/app.build.js --config-file ./babel.config.js && uglifyjs js/app.build.js -o js/app.min.js",
-    "build:css": "cleancss -o ./css/style.min.css ./css/style.css && cleancss -o ./css/theme.min.css ./css/theme.css",
+    "test": "./node_modules/.bin/mocha --require @babel/register --timeout 5000 --extension cjs",
+    "build:js": "./node_modules/.bin/babel js/app.js --out-file js/app.build.js --config-file ./babel.config.js && ./node_modules/.bin/uglifyjs js/app.build.js -o js/app.min.js",
+    "build:css": "./node_modules/.bin/cleancss -o ./css/style.min.css ./css/style.css && ./node_modules/.bin/cleancss -o ./css/theme.min.css ./css/theme.css",
     "build": "npm run build:js && npm run build:css",
     "start": "node server.js"
   },
