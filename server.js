@@ -18,42 +18,38 @@ const db = new sqlite3.Database('./onboardflow.db', (err) => {
         console.error('Error opening database', err.message);
     } else {
         console.log('Connected to the SQLite database.');
-        // Run database initialization directly inside the connection callback
-        // to prevent race conditions on deployment.
-        db.serialize(() => {
-            // Enable foreign key support
-            db.run("PRAGMA foreign_keys = ON;");
+        
+        // --- REVISED: Use db.exec() for robust, sequential table creation ---
+        // This runs all commands in a single transaction after the file is ready.
+        const initialSchema = `
+            PRAGMA foreign_keys = ON;
 
-            // Create Locations table
-            db.run(`
-                CREATE TABLE IF NOT EXISTS locations (
-                    location_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    location_name TEXT NOT NULL,
-                    location_address TEXT
-                )
-            `, (err) => {
-                if (err) console.error("Error creating locations table:", err.message);
-                else console.log("Locations table is ready.");
-            });
+            CREATE TABLE IF NOT EXISTS locations (
+                location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                location_name TEXT NOT NULL,
+                location_address TEXT
+            );
 
-            // --- UPDATED: Added 'position' column to users table ---
-            db.run(`
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    full_name TEXT NOT NULL,
-                    email TEXT NOT NULL UNIQUE,
-                    password TEXT NOT NULL,
-                    role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
-                    position TEXT,
-                    location_id INTEGER,
-                    FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
-                )
-            `, (err) => {
-                if (err) console.error("Error creating users table:", err.message);
-                else console.log("Users table is ready.");
-            });
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
+                position TEXT,
+                location_id INTEGER,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
 
-            // You can add other table creations here as we build them out
+            -- Add other CREATE TABLE statements here in the future
+        `;
+
+        db.exec(initialSchema, (err) => {
+            if (err) {
+                console.error("Error initializing database schema:", err.message);
+            } else {
+                console.log("Database schema is ready.");
+            }
         });
     }
 });
