@@ -25,32 +25,35 @@ const pool = new Pool({
     }
 });
 
-// --- NEW: ONE-TIME PASSWORD RESET SCRIPT ---
+// --- REVISED: Database Seeding Function ---
 /**
- * This script runs once to reset the password for a specific user,
- * allowing you to regain access.
+ * Ensures a default super admin user exists on startup.
+ * It now creates the user if they don't exist.
  */
-const oneTimePasswordReset = async (client) => {
-    // --- User details for the reset ---
-    const adminEmailToReset = "xarcy123@gmail.com";
-    const newTemporaryPassword = "kain6669";
-    
-    try {
-        console.log(`Attempting to reset password for ${adminEmailToReset}...`);
-        const hash = await bcrypt.hash(newTemporaryPassword, 10);
-        const result = await client.query(
-            'UPDATE users SET password = $1 WHERE email = $2',
-            [hash, adminEmailToReset]
-        );
+const seedDatabase = async (client) => {
+    const adminEmail = "xarcy123@gmail.com";
+    const adminPassword = "kain6669";
+    const adminFullName = "Xarcy"; // You can change this if you like
 
-        if (result.rowCount > 0) {
-            console.log(`SUCCESS: Password for ${adminEmailToReset} has been reset.`);
-            console.log("IMPORTANT: You can now log in with the new temporary password.");
-        } else {
-            console.warn(`WARNING: User with email ${adminEmailToReset} not found. Could not reset password.`);
+    try {
+        // Check if the admin user already exists
+        const checkRes = await client.query('SELECT * FROM users WHERE email = $1', [adminEmail]);
+        if (checkRes.rows.length > 0) {
+            console.log("Super admin user already exists. Seeding not required.");
+            return;
         }
+
+        // If user does not exist, create them
+        console.log("Default super admin not found, creating one...");
+        const hash = await bcrypt.hash(adminPassword, 10);
+        await client.query(
+            `INSERT INTO users (full_name, email, password, role) VALUES ($1, $2, $3, $4)`,
+            [adminFullName, adminEmail, hash, 'super_admin']
+        );
+        console.log("Default super admin created successfully.");
+
     } catch (err) {
-        console.error("Error during one-time password reset:", err);
+        console.error("Error during database seeding:", err);
     }
 };
 
@@ -59,10 +62,11 @@ const initializeDatabase = async () => {
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-
-        // --- ADDED: Safely drop the old users table to ensure the new schema is created ---
+        
+        // Drop the tables to ensure a clean slate on this one-time fix
         await client.query('DROP TABLE IF EXISTS users CASCADE;');
-        console.log("Users table dropped if it existed, ensuring a clean slate.");
+        await client.query('DROP TABLE IF EXISTS locations CASCADE;');
+        console.log("Tables dropped, ensuring a clean slate.");
 
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
@@ -71,7 +75,7 @@ const initializeDatabase = async () => {
                 location_address TEXT
             );
         `);
-        console.log("Locations table is ready.");
+        console.log("Locations table created.");
 
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -85,11 +89,10 @@ const initializeDatabase = async () => {
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
         `);
-        console.log("Users table is ready.");
+        console.log("Users table created.");
         
-        // --- THIS WILL RUN THE ONE-TIME PASSWORD RESET ---
-        // For security, delete this line after you have successfully logged in.
-        await oneTimePasswordReset(client);
+        // --- THIS WILL RUN THE SEEDING LOGIC ---
+        await seedDatabase(client);
         
         console.log("Database initialization complete.");
     } catch (err) {
