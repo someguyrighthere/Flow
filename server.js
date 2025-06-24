@@ -25,25 +25,18 @@ const pool = new Pool({
     }
 });
 
-// --- REVISED: Database Seeding Function ---
-/**
- * Ensures a default super admin user exists on startup.
- * It now creates the user if they don't exist.
- */
 const seedDatabase = async (client) => {
     const adminEmail = "xarcy123@gmail.com";
     const adminPassword = "kain6669";
-    const adminFullName = "Xarcy"; // You can change this if you like
+    const adminFullName = "Xarcy";
 
     try {
-        // Check if the admin user already exists
         const checkRes = await client.query('SELECT * FROM users WHERE email = $1', [adminEmail]);
         if (checkRes.rows.length > 0) {
             console.log("Super admin user already exists. Seeding not required.");
             return;
         }
 
-        // If user does not exist, create them
         console.log("Default super admin not found, creating one...");
         const hash = await bcrypt.hash(adminPassword, 10);
         await client.query(
@@ -62,11 +55,6 @@ const initializeDatabase = async () => {
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-        
-        // Drop the tables to ensure a clean slate on this one-time fix
-        await client.query('DROP TABLE IF EXISTS users CASCADE;');
-        await client.query('DROP TABLE IF EXISTS locations CASCADE;');
-        console.log("Tables dropped, ensuring a clean slate.");
 
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
@@ -75,7 +63,7 @@ const initializeDatabase = async () => {
                 location_address TEXT
             );
         `);
-        console.log("Locations table created.");
+        console.log("Locations table is ready.");
 
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -89,9 +77,35 @@ const initializeDatabase = async () => {
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
         `);
-        console.log("Users table created.");
+        console.log("Users table is ready.");
         
-        // --- THIS WILL RUN THE SEEDING LOGIC ---
+        // --- NEW: Create checklists and onboarding_sessions tables ---
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position TEXT NOT NULL,
+                title TEXT NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type TEXT,
+                time_group_count INTEGER
+            );
+        `);
+        console.log("Checklists table is ready.");
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS onboarding_sessions (
+                session_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                checklist_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Active',
+                tasks_status JSONB,
+                start_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
+            );
+        `);
+        console.log("Onboarding sessions table is ready.");
+        
         await seedDatabase(client);
         
         console.log("Database initialization complete.");
@@ -105,7 +119,6 @@ const initializeDatabase = async () => {
     }
 };
 
-// Call the initialization function
 initializeDatabase();
 
 
@@ -137,113 +150,136 @@ const isAdmin = (req, res, next) => {
 
 
 // --- 6. API Routes ---
-// (The rest of your routes remain unchanged)
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
+// User and Auth Routes
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
-
     try {
-        const sql = `SELECT * FROM users WHERE email = $1`;
-        const result = await pool.query(sql, [email]);
+        const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
         const user = result.rows[0];
-
-        if (!user || !user.password) {
-            return res.status(401).json({ error: "Invalid credentials." });
-        }
-
+        if (!user || !user.password) return res.status(401).json({ error: "Invalid credentials." });
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: "Invalid credentials." });
-        }
-        
+        if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
         const payload = { id: user.user_id, role: user.role };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ message: "Logged in successfully!", token: token, role: user.role });
-
     } catch (err) {
-        console.error("Login error:", err.message);
         res.status(500).json({ error: "An internal server error occurred." });
     }
 });
 
-// Location Management Routes
-app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
+// --- NEW: Onboarding and Position Routes ---
+app.get('/positions', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM locations");
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+        const result = await pool.query('SELECT id, position, title FROM checklists');
+        // Simple mapping to fit the dashboard's expectation
+        const positions = result.rows.map(row => ({ id: row.id, name: `${row.position} - ${row.title}` }));
+        res.json({ positions });
+    } catch(err) {
+        res.status(500).json({ error: "Failed to load positions." });
     }
 });
 
-app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_name, location_address } = req.body;
-    try {
-        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING location_id`, [location_name, location_address]);
-        res.status(201).json({ id: result.rows[0].location_id, location_name, location_address });
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
-});
-
-app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
-        res.status(204).send();
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// User Management Routes
-app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+app.get('/onboarding-sessions', isAuthenticated, isAdmin, async (req, res) => {
     const sql = `
-        SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name
-        FROM users u
-        LEFT JOIN locations l ON u.location_id = l.location_id
+        SELECT 
+            s.user_id,
+            u.full_name,
+            u.email,
+            c.position,
+            s.tasks_status,
+            (SELECT COUNT(*) FROM jsonb_array_elements(c.tasks)) as total_tasks,
+            (SELECT COUNT(*) FROM jsonb_array_elements(s.tasks_status) as elem WHERE elem->>'completed' = 'true') as completed_tasks
+        FROM onboarding_sessions s
+        JOIN users u ON s.user_id = u.user_id
+        JOIN checklists c ON s.checklist_id = c.id
+        ORDER BY s.start_date DESC;
     `;
     try {
         const result = await pool.query(sql);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("Error fetching onboarding sessions:", err);
+        res.status(500).json({ error: 'Failed to load onboarding sessions.' });
     }
 });
 
-app.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    if (req.user.id == req.params.id) {
-        return res.status(403).json({ error: "You cannot delete your own account." });
+app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
+    const { full_name, email, position_id, employee_id } = req.body;
+    if (!full_name || !email || !position_id) {
+        return res.status(400).json({ error: 'Full name, email, and position are required.' });
     }
+    const client = await pool.connect();
     try {
-        const result = await pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
-        res.status(204).send();
+        await client.query('BEGIN');
+        const tempPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        const userRes = await client.query(
+            `INSERT INTO users (full_name, email, password, role, position) VALUES ($1, $2, $3, $4, (SELECT position FROM checklists WHERE id = $5)) RETURNING user_id`,
+            [full_name, email, hashedPassword, 'employee', position_id]
+        );
+        const newUserId = userRes.rows[0].user_id;
+        const checklistRes = await client.query('SELECT tasks FROM checklists WHERE id = $1', [position_id]);
+        const tasks = checklistRes.rows[0].tasks;
+        await client.query(
+            `INSERT INTO onboarding_sessions (user_id, checklist_id, tasks_status) VALUES ($1, $2, $3)`,
+            [newUserId, position_id, JSON.stringify(tasks)]
+        );
+        await client.query('COMMIT');
+        // In a real app, you would email the tempPassword to the user. Here we just log it.
+        console.log(`Onboarding invite for ${email} complete. Temporary password: ${tempPassword}`);
+        res.status(201).json({ message: 'Onboarding started successfully.' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        await client.query('ROLLBACK');
+        console.error("Error onboarding employee:", err);
+        if (err.code === '23505') return res.status(400).json({ error: 'This email address is already in use.' });
+        res.status(500).json({ error: 'An error occurred during the onboarding process.' });
+    } finally {
+        client.release();
     }
+});
+
+
+// Location Management Routes
+app.get('/locations', isAuthenticated, isAdmin, (req, res) => { pool.query("SELECT * FROM locations").then(r => res.json(r.rows)).catch(err => res.status(500).json({error:err.message}))});
+app.post('/locations', isAuthenticated, isAdmin, (req, res) => {
+    const { location_name, location_address } = req.body;
+    pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING location_id`, [location_name, location_address])
+        .then(r => res.status(201).json({ id: r.rows[0].location_id, location_name, location_address }))
+        .catch(err => res.status(400).json({ error: err.message }));
+});
+app.delete('/locations/:id', isAuthenticated, isAdmin, (req, res) => {
+    pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id])
+        .then(r => r.rowCount === 0 ? res.status(404).json({error:'Location not found.'}) : res.status(204).send())
+        .catch(err => res.status(500).json({ error: err.message }));
+});
+
+// User Management Routes
+app.get('/users', isAuthenticated, isAdmin, (req, res) => {
+    pool.query(`SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id`)
+        .then(r => res.json(r.rows))
+        .catch(err => res.status(500).json({ error: err.message }));
+});
+app.delete('/users/:id', isAuthenticated, isAdmin, (req, res) => {
+    if (req.user.id == req.params.id) return res.status(403).json({ error: "You cannot delete your own account." });
+    pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id])
+        .then(r => r.rowCount === 0 ? res.status(404).json({error:'User not found.'}) : res.status(204).send())
+        .catch(err => res.status(500).json({ error: err.message }));
 });
 
 const inviteUser = async (req, res, role) => {
     const { full_name, email, password, location_id, position } = req.body;
-    if (!full_name || !email || !password) {
-        return res.status(400).json({ error: "Full name, email, and password are required." });
-    }
-
+    if (!full_name || !email || !password) return res.status(400).json({ error: "Full name, email, and password are required." });
     try {
         const hash = await bcrypt.hash(password, 10);
-        const sql = `INSERT INTO users (full_name, email, password, role, position, location_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING user_id`;
-        const result = await pool.query(sql, [full_name, email, hash, role, position || null, location_id || null]);
+        const result = await pool.query(`INSERT INTO users (full_name, email, password, role, position, location_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING user_id`, [full_name, email, hash, role, position || null, location_id || null]);
         res.status(201).json({ id: result.rows[0].user_id });
     } catch (err) {
-        console.error("Error inviting user:", err.message);
-        if (err.code === '23505') { // Unique constraint violation
-            return res.status(400).json({ error: "Email may already be in use." });
-        }
+        if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
         res.status(500).json({ error: "An internal server error occurred." });
     }
 };
@@ -251,7 +287,6 @@ const inviteUser = async (req, res, role) => {
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
-// Placeholder for future routes
 app.delete('/checklists/:id', isAuthenticated, (req, res) => {
     res.status(501).send("Not yet implemented");
 });
