@@ -25,10 +25,19 @@
         .job-details p { color: var(--text-medium); margin-bottom: 20px; }
         .apply-form .form-group { margin-bottom: 20px; text-align: left; }
         .apply-form label { display: block; margin-bottom: 8px; font-weight: 500; }
-        .apply-form input {
+        .apply-form input, .apply-form select {
             width: 100%; padding: 12px; border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.3); background-color: rgba(255, 255, 255, 0.1);
             color: #fff; box-sizing: border-box; font-size: 1rem;
+        }
+        .form-section-header {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-light);
+            margin-top: 20px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
         }
     </style>
 </head>
@@ -47,15 +56,65 @@
             <hr style="border-color: var(--border-color); margin: 30px 0;">
             <h3>Submit Your Application</h3>
             <form id="apply-form" class="apply-form">
+                
+                <h4 class="form-section-header">Personal Information</h4>
                 <div class="form-group">
                     <label for="applicant-name">Full Name</label>
                     <input type="text" id="applicant-name" required placeholder="John Doe">
                 </div>
                 <div class="form-group">
+                    <label for="applicant-address">Address</label>
+                    <input type="text" id="applicant-address" placeholder="123 Main St, Anytown, USA">
+                </div>
+                <div class="form-group">
+                    <label for="applicant-phone">Phone Number</label>
+                    <input type="tel" id="applicant-phone" placeholder="(555) 555-5555">
+                </div>
+                <div class="form-group">
                     <label for="applicant-email">Email Address</label>
                     <input type="email" id="applicant-email" required placeholder="you@example.com">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Submit Application</button>
+                <div class="form-group">
+                    <label for="applicant-dob">Date of Birth</label>
+                    <input type="date" id="applicant-dob">
+                </div>
+                 <div class="form-group">
+                    <label for="applicant-ssn">Social Security Number (for background checks)</label>
+                    <input type="text" id="applicant-ssn" placeholder="XXX-XX-XXXX">
+                </div>
+
+                <h4 class="form-section-header">Employment Information</h4>
+                 <div class="form-group">
+                    <label for="applicant-desired-salary">Desired Salary (e.g., $50,000/year, $20/hour)</label>
+                    <input type="text" id="applicant-desired-salary">
+                </div>
+                <div class="form-group">
+                    <label for="applicant-availability">Availability</label>
+                    <select id="applicant-availability">
+                        <option value="">Select...</option>
+                        <option value="Full-time">Full-time</option>
+                        <option value="Part-time">Part-time</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                 <div class="form-group">
+                    <label for="applicant-relocate">Willingness to Relocate</label>
+                    <select id="applicant-relocate">
+                        <option value="">Select...</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="applicant-authorized">Authorized to Work in Country?</label>
+                    <select id="applicant-authorized">
+                        <option value="">Select...</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Submit Application</button>
             </form>
         </div>
     </main>
