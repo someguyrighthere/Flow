@@ -37,45 +37,13 @@ const pool = new Pool({
     }
 });
 
-const seedDatabase = async (client) => {
-    const adminEmail = "xarcy123@gmail.com";
-    const adminPassword = "kain6669";
-    const adminFullName = "Xarcy";
-    try {
-        const checkRes = await client.query('SELECT * FROM users WHERE email = $1', [adminEmail]);
-        if (checkRes.rows.length > 0) {
-            console.log("Super admin user already exists. Seeding not required.");
-            return;
-        }
-        console.log("Default super admin not found, creating one...");
-        const hash = await bcrypt.hash(adminPassword, 10);
-        await client.query(
-            `INSERT INTO users (full_name, email, password, role) VALUES ($1, $2, $3, 'super_admin')`,
-            [adminFullName, adminEmail, hash]
-        );
-        console.log("Default super admin created successfully.");
-    } catch (err) {
-        console.error("Error during database seeding:", err);
-    }
-};
-
 const initializeDatabase = async () => {
     let client;
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
-        // --- ONE-TIME FIX: Drop all tables to ensure a clean schema ---
-        // This is a temporary measure. REMOVE THIS BLOCK after a successful deployment.
-        console.log("Ensuring a clean slate for schema creation...");
-        await client.query('DROP TABLE IF EXISTS documents CASCADE;');
-        await client.query('DROP TABLE IF EXISTS onboarding_sessions CASCADE;');
-        await client.query('DROP TABLE IF EXISTS checklists CASCADE;');
-        await client.query('DROP TABLE IF EXISTS users CASCADE;');
-        await client.query('DROP TABLE IF EXISTS locations CASCADE;');
-        console.log("Existing tables dropped to ensure a fresh start.");
-
-        // Recreate all tables with the correct schema
+        // Final schema creation. The one-time DROP commands are removed.
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
@@ -128,9 +96,7 @@ const initializeDatabase = async () => {
                 uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        console.log("Database schema verified and all tables created.");
-        
-        await seedDatabase(client);
+        console.log("Database schema verified.");
         
     } catch (err) {
         console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
@@ -235,6 +201,53 @@ app.post('/login', async (req, res) => {
     }
 });
 
+// --- NEW: "My Account" Routes ---
+app.get('/users/me', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
+    }
+});
+
+app.put('/users/me', isAuthenticated, async (req, res) => {
+    const { full_name, email, current_password, new_password } = req.body;
+    const userId = req.user.id;
+
+    try {
+        // If changing password, first verify the current password
+        if (new_password) {
+            if (!current_password) {
+                return res.status(400).json({ error: 'Current password is required to set a new password.' });
+            }
+            const userRes = await pool.query('SELECT password FROM users WHERE user_id = $1', [userId]);
+            const user = userRes.rows[0];
+            const isMatch = await bcrypt.compare(current_password, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ error: 'Incorrect current password.' });
+            }
+            const newHashedPassword = await bcrypt.hash(new_password, 10);
+            await pool.query('UPDATE users SET password = $1 WHERE user_id = $2', [newHashedPassword, userId]);
+        }
+
+        // Update full_name and email
+        await pool.query('UPDATE users SET full_name = $1, email = $2 WHERE user_id = $3', [full_name, email, userId]);
+        
+        res.json({ message: 'Profile updated successfully.' });
+
+    } catch (err) {
+        if (err.code === '23505') { // unique_violation for email
+            return res.status(400).json({ error: 'This email is already in use by another account.' });
+        }
+        res.status(500).json({ error: 'Failed to update profile.' });
+    }
+});
+
+
 // Onboarding and Position Routes
 app.get('/positions', isAuthenticated, isAdmin, async (req, res) => {
     try {
@@ -267,7 +280,9 @@ app.get('/onboarding-sessions', isAuthenticated, isAdmin, async (req, res) => {
 
 app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
     const { full_name, email, position_id } = req.body;
-    if (!full_name || !email || !position_id) return res.status(400).json({ error: 'Full name, email, and position are required.' });
+    if (!full_name || !email || !position_id) {
+        return res.status(400).json({ error: 'Full name, email, and position are required.' });
+    }
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
