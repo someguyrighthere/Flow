@@ -6,9 +6,9 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const multer = require('multer'); // For handling file uploads
-const fs = require('fs'); // For interacting with the file system
-const path = require('path'); // For handling file paths
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 
 // --- 2. Initialize Express App ---
 const app = express();
@@ -18,16 +18,10 @@ const DATABASE_URL = process.env.DATABASE_URL;
 
 // --- Multer Setup for File Uploads ---
 const uploadDir = 'uploads';
-// Ensure the upload directory exists
 fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        // Create a unique filename to avoid overwrites
-        cb(null, `${Date.now()}-${file.originalname}`);
-    }
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
 const upload = multer({ storage: storage });
 
@@ -47,7 +41,6 @@ const seedDatabase = async (client) => {
     const adminEmail = "xarcy123@gmail.com";
     const adminPassword = "kain6669";
     const adminFullName = "Xarcy";
-
     try {
         const checkRes = await client.query('SELECT * FROM users WHERE email = $1', [adminEmail]);
         if (checkRes.rows.length > 0) {
@@ -57,8 +50,8 @@ const seedDatabase = async (client) => {
         console.log("Default super admin not found, creating one...");
         const hash = await bcrypt.hash(adminPassword, 10);
         await client.query(
-            `INSERT INTO users (full_name, email, password, role) VALUES ($1, $2, $3, $4)`,
-            [adminFullName, adminEmail, hash, 'super_admin']
+            `INSERT INTO users (full_name, email, password, role) VALUES ($1, $2, $3, 'super_admin')`,
+            [adminFullName, adminEmail, hash]
         );
         console.log("Default super admin created successfully.");
     } catch (err) {
@@ -72,7 +65,17 @@ const initializeDatabase = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
-        // --- CORRECTED: Replaced placeholders with full table schemas ---
+        // --- ONE-TIME FIX: Drop all tables to ensure a clean schema ---
+        // This is a temporary measure. REMOVE THIS BLOCK after a successful deployment.
+        console.log("Ensuring a clean slate for schema creation...");
+        await client.query('DROP TABLE IF EXISTS documents CASCADE;');
+        await client.query('DROP TABLE IF EXISTS onboarding_sessions CASCADE;');
+        await client.query('DROP TABLE IF EXISTS checklists CASCADE;');
+        await client.query('DROP TABLE IF EXISTS users CASCADE;');
+        await client.query('DROP TABLE IF EXISTS locations CASCADE;');
+        console.log("Existing tables dropped to ensure a fresh start.");
+
+        // Recreate all tables with the correct schema
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
@@ -114,7 +117,6 @@ const initializeDatabase = async () => {
                 FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
             );
         `);
-        
         await client.query(`
             CREATE TABLE IF NOT EXISTS documents (
                 document_id SERIAL PRIMARY KEY,
@@ -126,7 +128,7 @@ const initializeDatabase = async () => {
                 uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        console.log("Database schema verified.");
+        console.log("Database schema verified and all tables created.");
         
         await seedDatabase(client);
         
@@ -177,11 +179,7 @@ app.get('/', (req, res) => {
 app.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
     const { title, description } = req.body;
     const { filename, path: filePath, mimetype } = req.file;
-
-    if (!title || !req.file) {
-        return res.status(400).json({ error: 'Title and file are required.' });
-    }
-
+    if (!title || !req.file) return res.status(400).json({ error: 'Title and file are required.' });
     try {
         const result = await pool.query(
             `INSERT INTO documents (title, description, file_name, file_path, mime_type) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
@@ -189,7 +187,6 @@ app.post('/documents', isAuthenticated, isAdmin, upload.single('document'), asyn
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        console.error("Error uploading document:", err);
         res.status(500).json({ error: 'Failed to save document information.' });
     }
 });
@@ -207,15 +204,11 @@ app.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
         const docRes = await pool.query('SELECT file_path FROM documents WHERE document_id = $1', [id]);
-        if (docRes.rows.length === 0) {
-            return res.status(404).json({ error: 'Document not found.' });
-        }
+        if (docRes.rows.length === 0) return res.status(404).json({ error: 'Document not found.' });
         const filePath = docRes.rows[0].file_path;
         await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
         fs.unlink(filePath, (err) => {
-            if (err) {
-                console.error(`Failed to delete file from disk: ${filePath}`, err);
-            }
+            if (err) console.error(`Failed to delete file from disk: ${filePath}`, err);
         });
         res.status(204).send();
     } catch (err) {
@@ -274,9 +267,7 @@ app.get('/onboarding-sessions', isAuthenticated, isAdmin, async (req, res) => {
 
 app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
     const { full_name, email, position_id } = req.body;
-    if (!full_name || !email || !position_id) {
-        return res.status(400).json({ error: 'Full name, email, and position are required.' });
-    }
+    if (!full_name || !email || !position_id) return res.status(400).json({ error: 'Full name, email, and position are required.' });
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
