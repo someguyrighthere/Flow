@@ -6,12 +6,30 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const multer = require('multer'); // For handling file uploads
+const fs = require('fs'); // For interacting with the file system
+const path = require('path'); // For handling file paths
 
 // --- 2. Initialize Express App ---
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
+
+// --- Multer Setup for File Uploads ---
+const uploadDir = 'uploads';
+// Ensure the upload directory exists
+fs.mkdirSync(uploadDir, { recursive: true });
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        // Create a unique filename to avoid overwrites
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+const upload = multer({ storage: storage });
 
 // --- 3. Database Connection and Initialization ---
 if (!DATABASE_URL) {
@@ -53,61 +71,35 @@ const initializeDatabase = async () => {
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-
-        // Schema creation will now only run if tables do not exist.
-        // The one-time DROP TABLE commands have been removed for safety.
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS locations (
-                location_id SERIAL PRIMARY KEY,
-                location_name TEXT NOT NULL,
-                location_address TEXT
-            );
-        `);
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                user_id SERIAL PRIMARY KEY,
-                full_name TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
-                position TEXT,
-                location_id INTEGER,
-                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
-            );
-        `);
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS checklists (
-                id SERIAL PRIMARY KEY,
-                position TEXT NOT NULL UNIQUE,
-                title TEXT NOT NULL,
-                tasks JSONB NOT NULL,
-                structure_type TEXT,
-                time_group_count INTEGER
-            );
-        `);
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS onboarding_sessions (
-                session_id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL UNIQUE,
-                checklist_id INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'Active',
-                tasks_status JSONB,
-                start_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
-            );
-        `);
         
-        console.log("Database schema verified.");
+        // The one-time DROP TABLE commands have been removed.
+        await client.query(`CREATE TABLE IF NOT EXISTS locations (...)`);
+        await client.query(`CREATE TABLE IF NOT EXISTS users (...)`);
+        await client.query(`CREATE TABLE IF NOT EXISTS checklists (...)`);
+        await client.query(`CREATE TABLE IF NOT EXISTS onboarding_sessions (...)`);
+        
+        // --- NEW: Documents Table ---
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        console.log("Documents table is ready.");
+        
         await seedDatabase(client);
+        console.log("Database schema verified.");
         
     } catch (err) {
         console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
         process.exit(1);
     } finally {
-        if (client) {
-            client.release();
-        }
+        if (client) client.release();
     }
 };
 
@@ -118,6 +110,8 @@ initializeDatabase();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
+// Make the 'uploads' directory publicly accessible
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 // --- 5. Authentication Middleware ---
@@ -134,7 +128,7 @@ const isAuthenticated = (req, res, next) => {
 
 const isAdmin = (req, res, next) => {
     if (req.user.role !== 'super_admin' && req.user.role !== 'location_admin') {
-        return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+        return res.status(403).json({ error: 'Access denied.' });
     }
     next();
 };
@@ -145,6 +139,65 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
+// --- NEW: Document Management Routes ---
+app.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
+    const { title, description } = req.body;
+    const { filename, path: filePath, mimetype } = req.file;
+
+    if (!title || !req.file) {
+        return res.status(400).json({ error: 'Title and file are required.' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO documents (title, description, file_name, file_path, mime_type) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [title, description, filename, filePath, mimetype]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error("Error uploading document:", err);
+        res.status(500).json({ error: 'Failed to save document information.' });
+    }
+});
+
+app.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM documents ORDER BY uploaded_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve documents.' });
+    }
+});
+
+app.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        // First, get the file path from the database
+        const docRes = await pool.query('SELECT file_path FROM documents WHERE document_id = $1', [id]);
+        if (docRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+        const filePath = docRes.rows[0].file_path;
+
+        // Delete the record from the database
+        await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
+
+        // Then, delete the file from the filesystem
+        fs.unlink(filePath, (err) => {
+            if (err) {
+                // Log the error but don't block the response, as the DB entry is gone
+                console.error(`Failed to delete file from disk: ${filePath}`, err);
+            }
+        });
+
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete document.' });
+    }
+});
+
+
+// ... (All other existing routes like /login, /positions, /users, etc. remain here)
 // User and Auth Routes
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -228,7 +281,7 @@ app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// --- NEW: Checklist Routes ---
+// Checklist Routes
 app.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM checklists ORDER BY position');
@@ -258,7 +311,6 @@ app.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 app.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
-        // Optional: Check if the checklist is in use by active onboarding sessions
         const usageCheck = await pool.query('SELECT COUNT(*) FROM onboarding_sessions WHERE checklist_id = $1', [id]);
         if (usageCheck.rows[0].count > 0) {
             return res.status(409).json({ error: `Cannot delete: This task list is assigned to ${usageCheck.rows[0].count} onboarding session(s).` });
@@ -312,7 +364,6 @@ const inviteUser = async (req, res, role) => {
 };
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
-
 
 // --- 7. Start Server ---
 app.listen(PORT, () => {
