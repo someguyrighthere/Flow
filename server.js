@@ -5,97 +5,80 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs'); // Assuming you use bcrypt for passwords
+// Add any other required imports (bcrypt, etc.) here
 
 // --- 2. Initialize Express App ---
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-that-is-long';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-key'; // IMPORTANT: Use environment variables for secrets
 
-// --- 3. Database Connection & Schema Setup ---
+// --- 3. Database Connection ---
+// This connects to the SQLite database file in your project root
 const db = new sqlite3.Database('./onboardflow.db', (err) => {
     if (err) {
         console.error('Error opening database', err.message);
     } else {
         console.log('Connected to the SQLite database.');
-        // Use serialize to ensure table creation runs in order
-        db.serialize(() => {
-            console.log('Running database schema setup...');
-            // Enable foreign key support
-            db.run('PRAGMA foreign_keys = ON;');
-
-            // Create Users Table
-            db.run(`
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    full_name TEXT NOT NULL,
-                    email TEXT NOT NULL UNIQUE,
-                    password TEXT NOT NULL,
-                    role TEXT NOT NULL DEFAULT 'employee'
-                );
-            `);
-            
-            // Create Checklists Table
-            db.run(`
-                CREATE TABLE IF NOT EXISTS checklists (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
-                    position TEXT NOT NULL UNIQUE,
-                    structure_type TEXT,
-                    time_group_count INTEGER
-                );
-            `);
-
-            // *** THIS IS THE CORRECTED Onboarding Sessions Table ***
-            db.run(`
-                CREATE TABLE IF NOT EXISTS onboarding_sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    checklist_id INTEGER NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'In Progress',  -- ADDED THIS COLUMN
-                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-                    FOREIGN KEY (checklist_id) REFERENCES checklists (id)
-                );
-            `);
-
-            console.log('Database schema setup complete.');
-        });
     }
 });
 
 // --- 4. Middleware ---
-app.use(cors());
-app.use(express.json());
+app.use(cors()); // Enable Cross-Origin Resource Sharing
+app.use(express.json()); // Allow server to accept and parse JSON bodies
 
-// --- 5. Authentication Middleware ---
+// --- 5. Authentication Middleware (Helper Function) ---
+// This function protects routes that require a user to be logged in.
 const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) return res.sendStatus(401);
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (token == null) {
+        return res.sendStatus(401); // Unauthorized
+    }
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
+        if (err) {
+            return res.sendStatus(403); // Forbidden
+        }
         req.user = user;
         next();
     });
 };
 
+
 // --- 6. API Routes ---
+// All of your app.get, app.post, app.put, app.delete routes go here.
 
-// Your existing /login route would go here...
+/*
+  Example login route (you probably have this already)
+  app.post('/login', (req, res) => {
+    // ... your login logic
+  });
+*/
 
-// Corrected Checklist Deletion Route
+// --- THIS IS THE CORRECTED DELETE ROUTE ---
+// Place it with your other checklist-related routes.
 app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
-    const checkUsageSql = `SELECT COUNT(*) AS count FROM onboarding_sessions WHERE checklist_id = ? AND status != 'Completed'`;
+
+    const checkUsageSql = `
+        SELECT COUNT(*) AS count 
+        FROM onboarding_sessions 
+        WHERE checklist_id = ? AND status != 'Completed'
+    `;
 
     try {
         const usage = await new Promise((resolve, reject) => {
-            db.get(checkUsageSql, [id], (err, row) => (err ? reject(err) : resolve(row)));
+            db.get(checkUsageSql, [id], (err, row) => {
+                if (err) return reject(err);
+                resolve(row);
+            });
         });
 
         if (usage && usage.count > 0) {
-            return res.status(409).json({ error: `Cannot delete: Task list is in use by ${usage.count} active session(s).` });
+            return res.status(409).json({ 
+                error: `Cannot delete task list: It is currently assigned to ${usage.count} active onboarding session(s). Please complete or re-assign those sessions first.` 
+            });
         }
 
         const deleteSql = `DELETE FROM checklists WHERE id = ?`;
@@ -106,15 +89,16 @@ app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
                 resolve();
             });
         });
+
         res.status(204).send();
 
     } catch (error) {
         console.error('Error deleting checklist:', error.message);
-        res.status(500).json({ error: 'An unexpected server error occurred.' });
+        res.status(500).json({ error: 'An unexpected server error occurred. Please try again later.' });
     }
 });
 
-// Add all your other API routes here...
+// Add your other routes (for documents, users, etc.) here...
 
 
 // --- 7. Start Server ---
