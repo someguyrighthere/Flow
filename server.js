@@ -25,24 +25,15 @@ const pool = new Pool({
     }
 });
 
-// --- NEW: TEMPORARY PASSWORD RESET FUNCTION ---
+// --- NEW: ONE-TIME PASSWORD RESET SCRIPT ---
 /**
- * This function will run ONCE to reset a specific user's password.
- * After you have successfully logged in, you MUST REMOVE this function
- * and the call to it below for security reasons.
+ * This script runs once to reset the password for a specific user,
+ * allowing you to regain access.
  */
-const temporaryPasswordReset = async (client) => {
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // !! 1. FILL IN YOUR DETAILS HERE                                     !!
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    const adminEmailToReset = "xarcy123@gmail.com"; // <--- Enter your email address
-    const newTemporaryPassword = "kain6669D_HERE"; // <--- Enter a new password
-
-    // Do nothing if the email is still the placeholder
-    if (adminEmailToReset === "YOUR_ADMIN_EMAIL_HERE") {
-        console.log("Password reset script skipped (email not set).");
-        return;
-    }
+const oneTimePasswordReset = async (client) => {
+    // --- User details for the reset ---
+    const adminEmailToReset = "xarcy123@gmail.com";
+    const newTemporaryPassword = "kain6669";
     
     try {
         console.log(`Attempting to reset password for ${adminEmailToReset}...`);
@@ -54,15 +45,14 @@ const temporaryPasswordReset = async (client) => {
 
         if (result.rowCount > 0) {
             console.log(`SUCCESS: Password for ${adminEmailToReset} has been reset.`);
-            console.log("IMPORTANT: You can now log in with your new temporary password.");
+            console.log("IMPORTANT: You can now log in with the new temporary password.");
         } else {
             console.warn(`WARNING: User with email ${adminEmailToReset} not found. Could not reset password.`);
         }
     } catch (err) {
-        console.error("Error during temporary password reset:", err);
+        console.error("Error during one-time password reset:", err);
     }
 };
-
 
 const initializeDatabase = async () => {
     let client;
@@ -93,10 +83,11 @@ const initializeDatabase = async () => {
         `);
         console.log("Users table is ready.");
         
-        // --- THIS WILL RUN THE TEMPORARY PASSWORD RESET ---
-        await temporaryPasswordReset(client);
+        // --- THIS WILL RUN THE ONE-TIME PASSWORD RESET ---
+        // For security, delete this line after you have successfully logged in.
+        await oneTimePasswordReset(client);
         
-        console.log("Database schema is ready.");
+        console.log("Database initialization complete.");
     } catch (err) {
         console.error('Error connecting to or initializing PostgreSQL database:', err.stack);
         process.exit(1);
