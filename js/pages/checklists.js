@@ -18,6 +18,12 @@ export function handleChecklistsPage() {
     const attachDocumentListDiv = document.getElementById("attach-document-list");
     const attachDocumentCancelBtn = document.getElementById("attach-document-cancel-btn");
     
+    // --- NEW: Elements for task structure ---
+    const structureTypeSelect = document.getElementById('structure-type-select');
+    const timeGroupCountContainer = document.getElementById('time-group-count-container');
+    const timeGroupCountLabel = document.getElementById('time-group-count-label');
+    const timeGroupCountInput = document.getElementById('time-group-count');
+    
     // State variables
     let currentTaskElementForAttachment = null;
     let taskCounter = 0;
@@ -100,8 +106,10 @@ export function handleChecklistsPage() {
             attachDocumentListDiv.innerHTML = `<p style="color: #e74c3c;">Error: ${error.message}</p>`;
         }
     }
+
+    // --- Event Listeners ---
     
-    // Event listeners for the document attachment modal
+    // Event listener for the document attachment modal
     if (attachDocumentCancelBtn) {
         attachDocumentCancelBtn.addEventListener('click', () => attachDocumentModalOverlay.style.display = 'none');
     }
@@ -113,14 +121,32 @@ export function handleChecklistsPage() {
         });
     }
 
+    // *** NEW: Event listener for the Task Structure dropdown ***
+    if (structureTypeSelect) {
+        structureTypeSelect.addEventListener('change', () => {
+            const selectedValue = structureTypeSelect.value;
+            if (selectedValue === 'daily' || selectedValue === 'weekly') {
+                timeGroupCountLabel.textContent = selectedValue === 'daily' ? 'Number of Days' : 'Number of Weeks';
+                timeGroupCountContainer.style.display = 'block';
+            } else {
+                timeGroupCountContainer.style.display = 'none';
+            }
+        });
+    }
+
     // Event listener for the new checklist form submission
     if (newChecklistForm) {
         newChecklistForm.addEventListener("submit", async e => {
             e.preventDefault();
+            
             const position = document.getElementById("new-checklist-position").value.trim();
             const title = document.getElementById("new-checklist-title").value.trim();
-            const tasks = [];
             
+            // *** UPDATED: Get structure type and count ***
+            const structure_type = structureTypeSelect.value;
+            const time_group_count = timeGroupCountInput.value;
+
+            const tasks = [];
             document.querySelectorAll('#tasks-input-area .task-input-group').forEach(groupEl => {
                 const descriptionInput = groupEl.querySelector('.task-description-input');
                 if (descriptionInput && descriptionInput.value.trim()) {
@@ -137,10 +163,21 @@ export function handleChecklistsPage() {
                 showModalMessage("Please provide a position, title, and at least one task.", true);
                 return;
             }
+
+            // *** UPDATED: Create the full payload for the API ***
+            const payload = {
+                position,
+                title,
+                tasks,
+                structure_type, // Now included
+                time_group_count: (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(time_group_count, 10) : null // Now included
+            };
+
             try {
-                await apiRequest("POST", "/checklists", { position, title, tasks });
+                await apiRequest("POST", "/checklists", payload); // Send the complete payload
                 showModalMessage(`Task List created successfully!`, false);
                 newChecklistForm.reset();
+                timeGroupCountContainer.style.display = 'none'; // Hide the count input again
                 document.getElementById('tasks-input-area').innerHTML = '';
                 addSingleTaskInput(tasksInputArea); // Add a fresh input field
             } catch (error) {
@@ -149,7 +186,7 @@ export function handleChecklistsPage() {
         });
     }
 
-    // Initial page setup
+    // --- Initial page setup ---
     if(tasksInputArea) {
         addSingleTaskInput(tasksInputArea); // Add one initial task input when the page loads
     }
