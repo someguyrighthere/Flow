@@ -16,7 +16,8 @@ export function handleHiringPage() {
     const jobPostingListDiv = document.getElementById('job-posting-list');
     const applicantListDiv = document.getElementById('applicant-list');
     
-    // Filters
+    // Filters and Dropdowns
+    const jobPostingLocationSelect = document.getElementById('job-posting-location-select');
     const filterJobSelect = document.getElementById('filter-applicant-job-posting-select');
     const filterStatusSelect = document.getElementById('filter-applicant-status');
     const filterLocationSelect = document.getElementById('filter-applicant-location-select');
@@ -35,6 +36,33 @@ export function handleHiringPage() {
     // --- Data Loading and Rendering ---
 
     /**
+     * NEW: Fetches locations and populates the various location dropdown menus.
+     */
+    async function loadLocationsIntoSelects() {
+        const selectsToPopulate = [jobPostingLocationSelect, filterLocationSelect];
+        try {
+            const locations = await apiRequest("GET", "/locations");
+            
+            selectsToPopulate.forEach(select => {
+                if (select) {
+                    // Clear existing options except for the default
+                    while (select.options.length > 1) {
+                        select.remove(1);
+                    }
+                    locations.forEach(loc => {
+                        const option = new Option(loc.location_name, loc.location_id);
+                        select.add(option);
+                    });
+                }
+            });
+        } catch (error) {
+            console.error("Failed to load locations for dropdowns:", error);
+            showModalMessage("Could not load locations for filtering.", true);
+        }
+    }
+
+
+    /**
      * Loads all active job postings and renders them.
      */
     async function loadJobPostings() {
@@ -43,6 +71,16 @@ export function handleHiringPage() {
         try {
             const postings = await apiRequest('GET', '/job-postings');
             jobPostingListDiv.innerHTML = '';
+            
+            // Also populate the filter dropdown
+            if (filterJobSelect) {
+                filterJobSelect.innerHTML = '<option value="">All Job Postings</option>'; // Reset
+                postings.forEach(job => {
+                    const option = new Option(job.title, job.id);
+                    filterJobSelect.add(option);
+                });
+            }
+
             if (postings && postings.length > 0) {
                 postings.forEach(job => {
                     const jobItem = document.createElement('div');
@@ -75,7 +113,6 @@ export function handleHiringPage() {
         if (!applicantListDiv) return;
         applicantListDiv.innerHTML = '<p>Loading applicants...</p>';
         
-        // Build query string from filters
         const params = new URLSearchParams();
         if (filterJobSelect.value) params.append('jobId', filterJobSelect.value);
         if (filterStatusSelect.value) params.append('status', filterStatusSelect.value);
@@ -89,7 +126,6 @@ export function handleHiringPage() {
                  applicants.forEach(applicant => {
                     const applicantItem = document.createElement('div');
                     applicantItem.className = 'applicant-item';
-                    // NOTE: This structure assumes your /applicants API returns this data.
                     applicantItem.innerHTML = `
                         <h4>${applicant.name}</h4>
                         <p><strong>Applying for:</strong> ${applicant.job_title || 'N/A'}</p>
@@ -113,7 +149,6 @@ export function handleHiringPage() {
 
     // --- Event Handlers ---
 
-    // Create a new job posting
     if (createJobForm) {
         createJobForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -128,13 +163,13 @@ export function handleHiringPage() {
                 showModalMessage('Job posted successfully!', false);
                 createJobForm.reset();
                 loadJobPostings();
+                loadApplicants();
             } catch (error) {
                 showModalMessage(`Error posting job: ${error.message}`, true);
             }
         });
     }
 
-    // Handle clicks on job list (for share and delete)
     if (jobPostingListDiv) {
         jobPostingListDiv.addEventListener('click', async (e) => {
             const shareBtn = e.target.closest('.share-btn');
@@ -143,7 +178,6 @@ export function handleHiringPage() {
             if (shareBtn) {
                 const jobId = shareBtn.dataset.jobId;
                 const jobTitle = shareBtn.dataset.jobTitle;
-                // Example URLs - replace with your actual public-facing job page URL structure
                 const publicLink = `${window.location.origin}/apply.html?jobId=${jobId}`;
                 const embedCode = `<a href="${publicLink}" target="_blank" style="padding: 10px 20px; background-color: #C86DD7; color: white; border-radius: 5px; text-decoration: none;">Apply for ${jobTitle}</a>`;
                 
@@ -160,6 +194,7 @@ export function handleHiringPage() {
                         await apiRequest('DELETE', `/job-postings/${jobId}`);
                         showModalMessage('Job posting deleted.', false);
                         loadJobPostings();
+                        loadApplicants();
                     } catch (error) {
                          showModalMessage(`Error: ${error.message}`, true);
                     }
@@ -168,18 +203,16 @@ export function handleHiringPage() {
         });
     }
 
-    // Applicant filter buttons
     if(applyFiltersBtn) applyFiltersBtn.addEventListener('click', loadApplicants);
     if(clearFiltersBtn) {
         clearFiltersBtn.addEventListener('click', () => {
-            filterJobSelect.value = '';
-            filterStatusSelect.value = '';
-            filterLocationSelect.value = '';
-            loadApplicants(); // Reload with no filters
+            if (filterJobSelect) filterJobSelect.value = '';
+            if (filterStatusSelect) filterStatusSelect.value = '';
+            if (filterLocationSelect) filterLocationSelect.value = '';
+            loadApplicants();
         });
     }
 
-    // Share modal close and copy buttons
     if(closeModalBtn) closeModalBtn.addEventListener('click', () => shareModal.style.display = 'none');
     if(shareModal) shareModal.addEventListener('click', (e) => { if (e.target === shareModal) shareModal.style.display = 'none'; });
     if(copyLinkBtn) copyLinkBtn.addEventListener('click', () => {
@@ -196,5 +229,5 @@ export function handleHiringPage() {
     // --- Initial Page Load ---
     loadJobPostings();
     loadApplicants();
-    // NOTE: You would also need a function here to load locations into the filter dropdowns.
+    loadLocationsIntoSelects(); // Load locations into all dropdowns
 }
