@@ -43,7 +43,7 @@ const initializeDatabase = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
-        // Final schema creation. The one-time DROP commands are removed.
+        // Final schema creation. The one-time DROP and SEED commands are removed.
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
