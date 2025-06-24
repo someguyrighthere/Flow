@@ -26,6 +26,12 @@ const db = new sqlite3.Database('./onboardflow.db', (err) => {
 app.use(cors()); // Enable Cross-Origin Resource Sharing
 app.use(express.json()); // Allow server to accept and parse JSON bodies
 
+// --- NEW ---
+// This line tells Express to serve static files (HTML, CSS, JS) from the project's root directory.
+// The `__dirname` variable provides the absolute path to the current directory.
+app.use(express.static(__dirname));
+
+
 // --- 5. Authentication Middleware (Helper Function) ---
 // This function protects routes that require a user to be logged in.
 const isAuthenticated = (req, res, next) => {
@@ -47,7 +53,15 @@ const isAuthenticated = (req, res, next) => {
 
 
 // --- 6. API Routes ---
-// All of your app.get, app.post, app.put, app.delete routes go here.
+
+// --- NEW ---
+// This route serves your main index.html file when someone visits the root URL of your site.
+app.get('/', (req, res) => {
+    // Note: The path should be relative to where you run the node command from.
+    // Using __dirname ensures the path is always correct.
+    res.sendFile(__dirname + '/index.html');
+});
+
 
 /*
   Example login route (you probably have this already)
@@ -62,8 +76,8 @@ app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
 
     const checkUsageSql = `
-        SELECT COUNT(*) AS count 
-        FROM onboarding_sessions 
+        SELECT COUNT(*) AS count
+        FROM onboarding_sessions
         WHERE checklist_id = ? AND status != 'Completed'
     `;
 
@@ -76,8 +90,8 @@ app.delete('/checklists/:id', isAuthenticated, async (req, res) => {
         });
 
         if (usage && usage.count > 0) {
-            return res.status(409).json({ 
-                error: `Cannot delete task list: It is currently assigned to ${usage.count} active onboarding session(s). Please complete or re-assign those sessions first.` 
+            return res.status(409).json({
+                error: `Cannot delete task list: It is currently assigned to ${usage.count} active onboarding session(s). Please complete or re-assign those sessions first.`
             });
         }
 
