@@ -56,6 +56,15 @@ const initializeDatabase = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
 
+        // --- ONE-TIME FIX: Drop all tables to ensure a clean schema ---
+        // This is a temporary measure. REMOVE THIS BLOCK after a successful deployment.
+        console.log("Ensuring a clean slate for schema creation...");
+        await client.query('DROP TABLE IF EXISTS onboarding_sessions CASCADE;');
+        await client.query('DROP TABLE IF EXISTS checklists CASCADE;');
+        await client.query('DROP TABLE IF EXISTS users CASCADE;');
+        await client.query('DROP TABLE IF EXISTS locations CASCADE;');
+        console.log("Existing tables dropped to ensure a fresh start.");
+
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
@@ -79,7 +88,6 @@ const initializeDatabase = async () => {
         `);
         console.log("Users table is ready.");
         
-        // --- NEW: Create checklists and onboarding_sessions tables ---
         await client.query(`
             CREATE TABLE IF NOT EXISTS checklists (
                 id SERIAL PRIMARY KEY,
@@ -172,11 +180,10 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// --- NEW: Onboarding and Position Routes ---
+// Onboarding and Position Routes
 app.get('/positions', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('SELECT id, position, title FROM checklists');
-        // Simple mapping to fit the dashboard's expectation
         const positions = result.rows.map(row => ({ id: row.id, name: `${row.position} - ${row.title}` }));
         res.json({ positions });
     } catch(err) {
@@ -187,13 +194,14 @@ app.get('/positions', isAuthenticated, isAdmin, async (req, res) => {
 app.get('/onboarding-sessions', isAuthenticated, isAdmin, async (req, res) => {
     const sql = `
         SELECT 
-            s.user_id,
+            s.session_id,
+            u.user_id,
             u.full_name,
             u.email,
             c.position,
             s.tasks_status,
             (SELECT COUNT(*) FROM jsonb_array_elements(c.tasks)) as total_tasks,
-            (SELECT COUNT(*) FROM jsonb_array_elements(s.tasks_status) as elem WHERE elem->>'completed' = 'true') as completed_tasks
+            (SELECT COUNT(*) FROM jsonb_to_recordset(s.tasks_status) as x(description text, completed boolean) WHERE completed = true) as completed_tasks
         FROM onboarding_sessions s
         JOIN users u ON s.user_id = u.user_id
         JOIN checklists c ON s.checklist_id = c.id
@@ -219,18 +227,22 @@ app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
         const tempPassword = Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         const userRes = await client.query(
-            `INSERT INTO users (full_name, email, password, role, position) VALUES ($1, $2, $3, $4, (SELECT position FROM checklists WHERE id = $5)) RETURNING user_id`,
-            [full_name, email, hashedPassword, 'employee', position_id]
+            `INSERT INTO users (full_name, email, password, role, position) VALUES ($1, $2, $3, 'employee', (SELECT position FROM checklists WHERE id = $4)) RETURNING user_id`,
+            [full_name, email, hashedPassword, position_id]
         );
         const newUserId = userRes.rows[0].user_id;
         const checklistRes = await client.query('SELECT tasks FROM checklists WHERE id = $1', [position_id]);
+        if (checklistRes.rows.length === 0) {
+            throw new Error('Checklist for the selected position not found.');
+        }
         const tasks = checklistRes.rows[0].tasks;
+        const initialTasksStatus = tasks.map(task => ({ description: task.description, completed: false, documentId: task.documentId || null, documentName: task.documentName || null }));
+
         await client.query(
             `INSERT INTO onboarding_sessions (user_id, checklist_id, tasks_status) VALUES ($1, $2, $3)`,
-            [newUserId, position_id, JSON.stringify(tasks)]
+            [newUserId, position_id, JSON.stringify(initialTasksStatus)]
         );
         await client.query('COMMIT');
-        // In a real app, you would email the tempPassword to the user. Here we just log it.
         console.log(`Onboarding invite for ${email} complete. Temporary password: ${tempPassword}`);
         res.status(201).json({ message: 'Onboarding started successfully.' });
     } catch (err) {
