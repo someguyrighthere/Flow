@@ -26,6 +26,7 @@ export function handleHiringPage() {
     // View Applicant Modal
     const viewApplicantModal = document.getElementById('view-applicant-modal');
     const viewApplicantCloseBtn = document.getElementById('view-applicant-close-btn');
+    const printApplicantBtn = document.getElementById('print-applicant-btn'); // New button
 
     // --- Data Loading and Rendering Functions ---
 
@@ -253,6 +254,12 @@ export function handleHiringPage() {
     if (viewApplicantCloseBtn) {
         viewApplicantCloseBtn.addEventListener('click', () => {
             if(viewApplicantModal) viewApplicantModal.style.display = 'none';
+        });
+    }
+    
+    if (printApplicantBtn) {
+        printApplicantBtn.addEventListener('click', () => {
+            window.print();
         });
     }
     
