@@ -204,10 +204,6 @@ const startServer = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
-        // --- ONE-TIME FIX: Drop the applicants table to update its schema ---
-        await client.query('DROP TABLE IF EXISTS applicants CASCADE;');
-        console.log("Applicants table dropped to apply new schema.");
-
         // Initialize all tables
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
@@ -272,6 +268,9 @@ const startServer = async () => {
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
         `);
+        // --- ONE-TIME FIX: Drop the old applicants table to update its schema ---
+        await client.query('DROP TABLE IF EXISTS applicants CASCADE;');
+        console.log("Applicants table dropped to apply new schema.");
         // --- MODIFIED: Simplified Applicants Table ---
         await client.query(`
             CREATE TABLE IF NOT EXISTS applicants (
