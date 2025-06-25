@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hiring - Flow Business Suite</title>
     <link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/Theme.css">
+    <link rel="stylesheet" href="css/Theme.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
@@ -28,24 +28,13 @@
             border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
         }
         .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
-        /* Fix for settings button icon cutoff */
         #settings-button {
-            display: flex; /* Use flexbox to center content */
-            align-items: center; /* Vertically center */
-            justify-content: center; /* Horizontally center */
-            padding: 8px; /* Ensure enough padding around the icon */
-            width: 40px; /* Fixed width to make it a square button */
-            height: 40px; /* Fixed height to make it a square button */
-            box-sizing: border-box; /* Include padding in the width/height */
+            display: flex; align-items: center; justify-content: center;
+            padding: 8px; width: 40px; height: 40px; box-sizing: border-box;
         }
         #settings-button svg {
-            display: block; /* Ensure SVG is a block element */
-            width: 24px; /* Slightly larger icon */
-            height: 24px;
-            vertical-align: middle; /* Align middle just in case, though flexbox handles most */
+            display: block; width: 24px; height: 24px; vertical-align: middle;
         }
-
-        /* Hiring specific styles */
         .card {
             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
@@ -62,7 +51,6 @@
             color: var(--text-light); box-sizing: border-box;
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
-
         .applicant-grid, .job-posting-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -70,7 +58,7 @@
             margin-top: 20px;
         }
         .applicant-item, .job-posting-item {
-            background-color: rgba(26, 26, 26, 0.7); /* Darker background for better text contrast */
+            background-color: rgba(26, 26, 26, 0.7);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.15);
             padding: 20px;
@@ -87,7 +75,7 @@
         }
         .applicant-item p, .job-posting-item p {
             margin: 0;
-            color: var(--text-color); /* Changed from --text-medium for better contrast */
+            color: var(--text-color);
             font-size: 0.9rem;
         }
         .applicant-item .actions, .job-posting-item .actions {
@@ -97,113 +85,58 @@
             margin-top: 10px;
         }
         .applicant-item .delete-btn, .job-posting-item .delete-btn {
-            background: none;
-            border: none;
-            color: var(--text-medium);
-            cursor: pointer;
-            opacity: 0.7;
-            transition: opacity 0.3s ease;
+            background: none; border: none; color: var(--text-medium);
+            cursor: pointer; opacity: 0.7; transition: opacity 0.3s ease;
         }
         .applicant-item .delete-btn:hover, .job-posting-item .delete-btn:hover {
-            opacity: 1;
-            color: #e74c3c;
+            opacity: 1; color: #e74c3c;
         }
         .job-posting-item .share-btn {
-            background: none;
-            border: none;
-            color: var(--primary-accent);
-            cursor: pointer;
-            opacity: 0.7;
-            transition: opacity 0.3s ease;
-            font-weight: 600;
+            background: none; border: none; color: var(--primary-accent);
+            cursor: pointer; opacity: 0.7; transition: opacity 0.3s ease; font-weight: 600;
         }
-        .job-posting-item .share-btn:hover {
-            opacity: 1;
-        }
-        /* Styles for the custom message modal (copied for consistency) */
+        .job-posting-item .share-btn:hover { opacity: 1; }
         .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            display: none; /* Hidden by default */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000; display: none;
         }
         .modal-content {
             background-color: rgba(26, 26, 26, 0.95);
             backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 30px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            position: relative;
+            padding: 30px; border-radius: 12px; width: 90%;
+            max-width: 500px; text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); position: relative;
         }
-        .modal-content p {
-            margin-bottom: 20px;
-            font-size: 1.1rem;
-        }
-        .modal-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .modal-buttons .btn {
-            padding: 10px 25px;
-            font-size: 1rem;
-        }
-        /* Confirmation Modal Overlay */
-        #confirm-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1001; /* Higher z-index than message modal */
-            display: none; /* Hidden by default */
-        }
-        #confirm-modal-overlay .modal-content {
-            background-color: rgba(26, 26, 26, 0.98); /* Slightly more opaque */
-            border: 1px solid var(--border-color);
-        }
-        /* New Shareable Link Modal specific styling */
-        .share-link-modal-content {
-            text-align: left;
-        }
+        .modal-content p { margin-bottom: 20px; font-size: 1.1rem; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; }
+        .modal-buttons .btn { padding: 10px 25px; font-size: 1rem; }
+        #confirm-modal-overlay { z-index: 1001; }
+        .share-link-modal-content { text-align: left; }
         .share-link-modal-content textarea {
-            width: 100%;
-            min-height: 100px;
-            background-color: rgba(0,0,0,0.2);
-            border: 1px solid var(--border-color);
-            color: var(--text-light);
-            padding: 10px;
-            border-radius: 6px;
-            resize: vertical;
-            font-family: monospace;
-            font-size: 0.9rem;
-            margin-top: 10px;
+            width: 100%; min-height: 100px; background-color: rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color); color: var(--text-light);
+            padding: 10px; border-radius: 6px; resize: vertical;
+            font-family: monospace; font-size: 0.9rem; margin-top: 10px;
         }
         .share-link-modal-content label {
-            font-weight: 600;
-            display: block;
-            margin-bottom: 5px;
-            color: var(--text-light);
+            font-weight: 600; display: block;
+            margin-bottom: 5px; color: var(--text-light);
         }
-        .share-link-modal-content .copy-btn {
-            margin-top: 15px;
-            width: auto;
-            align-self: flex-end;
+        .share-link-modal-content .copy-btn { margin-top: 15px; width: auto; align-self: flex-end; }
+        /* --- Styles for View Applicant Modal --- */
+        #view-applicant-modal .modal-content { max-width: 600px; text-align: left; }
+        .applicant-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 15px;
+        }
+        .applicant-details-grid dt {
+            font-weight: 600; color: var(--text-medium);
+        }
+        .applicant-details-grid dd {
+            margin: 0; color: var(--text-light);
         }
     </style>
 </head>
@@ -230,116 +163,56 @@
         </nav>
         <section>
             <h2 style="color: var(--text-light);">Employee Hiring - Applicant Tracking</h2>
-
             <div class="card">
                 <h3>Create New Job Posting</h3>
                 <form id="create-job-posting-form">
-                    <div class="form-group">
-                        <label for="job-title-input">Job Title</label>
-                        <input type="text" id="job-title-input" placeholder="e.g., Senior Software Engineer" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="job-description-input">Description</label>
-                        <textarea id="job-description-input" rows="5" placeholder="Detailed job description..." required></textarea>
-                    </div>
-                     <div class="form-group">
-                        <label for="job-requirements-input">Requirements (Optional)</label>
-                        <textarea id="job-requirements-input" rows="3" placeholder="List required skills and experience..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="job-posting-location-select">Location (Optional, defaults to company-wide)</label>
-                        <select id="job-posting-location-select">
-                            <option value="">Company Wide (All Locations)</option>
-                            <!-- Locations will be populated by JS -->
-                        </select>
-                    </div>
+                    <div class="form-group"><label for="job-title-input">Job Title</label><input type="text" id="job-title-input" placeholder="e.g., Senior Software Engineer" required></div>
+                    <div class="form-group"><label for="job-description-input">Description</label><textarea id="job-description-input" rows="5" placeholder="Detailed job description..." required></textarea></div>
+                    <div class="form-group"><label for="job-requirements-input">Requirements (Optional)</label><textarea id="job-requirements-input" rows="3" placeholder="List required skills and experience..."></textarea></div>
+                    <div class="form-group"><label for="job-posting-location-select">Location (Optional, defaults to company-wide)</label><select id="job-posting-location-select"><option value="">Company Wide (All Locations)</option></select></div>
                     <button type="submit" class="btn btn-primary">Post Job</button>
                 </form>
             </div>
-
             <div class="card">
                 <h3>Active Job Postings</h3>
-                <div id="job-posting-list" class="job-posting-grid">
-                    <p style="color: var(--text-medium);">No job postings found.</p>
-                </div>
+                <div id="job-posting-list" class="job-posting-grid"><p style="color: var(--text-medium);">No job postings found.</p></div>
             </div>
-
             <div class="card">
                 <h3>Applicant Tracking</h3>
                 <div class="filter-controls" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
-                    <div class="form-group" style="flex: 1; min-width: 150px;">
-                        <label for="filter-applicant-job-posting-select">Filter by Job Posting</label>
-                        <select id="filter-applicant-job-posting-select">
-                            <option value="">All Job Postings</option>
-                            <!-- Job postings will be populated by JS -->
-                        </select>
-                    </div>
-                    <div class="form-group" style="flex: 1; min-width: 150px;">
-                        <label for="filter-applicant-status">Filter by Status</label>
-                        <select id="filter-applicant-status">
-                            <option value="">All Statuses</option>
-                            <option value="Applied">Applied</option>
-                            <option value="Interviewing">Interviewing</option>
-                            <option value="Rejected">Rejected</option>
-                            <option value="Hired">Hired</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="flex: 1; min-width: 150px;">
-                        <label for="filter-applicant-location-select">Filter by Location</label>
-                        <select id="filter-applicant-location-select">
-                            <option value="">All Locations</option>
-                            <!-- Locations will be populated by JS -->
-                        </select>
-                    </div>
-                    <div style="align-self: flex-end; display: flex; gap: 10px;">
-                        <button id="apply-applicant-filters-btn" class="btn btn-primary">Apply Filters</button>
-                        <button id="clear-applicant-filters-btn" class="btn btn-secondary">Clear</button>
-                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 150px;"><label for="filter-applicant-job-posting-select">Filter by Job Posting</label><select id="filter-applicant-job-posting-select"><option value="">All Job Postings</option></select></div>
+                    <div class="form-group" style="flex: 1; min-width: 150px;"><label for="filter-applicant-status">Filter by Status</label><select id="filter-applicant-status"><option value="">All Statuses</option><option value="Applied">Applied</option><option value="Interviewing">Interviewing</option><option value="Rejected">Rejected</option><option value="Hired">Hired</option></select></div>
+                    <div class="form-group" style="flex: 1; min-width: 150px;"><label for="filter-applicant-location-select">Filter by Location</label><select id="filter-applicant-location-select"><option value="">All Locations</option></select></div>
+                    <div style="align-self: flex-end; display: flex; gap: 10px;"><button id="apply-applicant-filters-btn" class="btn btn-primary">Apply Filters</button><button id="clear-applicant-filters-btn" class="btn btn-secondary">Clear</button></div>
                 </div>
-                <div id="applicant-list" class="applicant-grid">
-                    <p style="color: var(--text-medium);">No applicants found.</p>
-                </div>
+                <div id="applicant-list" class="applicant-grid"><p style="color: var(--text-medium);">No applicants found.</p></div>
             </div>
         </section>
     </div>
-    <!-- Message Modal Overlay (for showModalMessage function) -->
-    <div id="message-modal-overlay" class="modal-overlay">
+    <!-- Modals -->
+    <div id="message-modal-overlay" class="modal-overlay"> ... </div>
+    <div id="confirm-modal-overlay" class="modal-overlay"> ... </div>
+    <div id="share-link-modal-overlay" class="modal-overlay"> ... </div>
+
+    <!-- NEW: View Applicant Modal -->
+    <div id="view-applicant-modal" class="modal-overlay">
         <div class="modal-content">
-            <p id="modal-message-text"></p>
-            <div class="modal-buttons">
-                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            <h3 style="color: var(--text-light); margin-top: 0; margin-bottom: 20px;">Applicant Details</h3>
+            <dl class="applicant-details-grid">
+                <dt>Name</dt><dd id="view-applicant-name">-</dd>
+                <dt>Email</dt><dd id="view-applicant-email">-</dd>
+                <dt>Phone</dt><dd id="view-applicant-phone">-</dd>
+                <dt>Address</dt><dd id="view-applicant-address">-</dd>
+                <dt>Date of Birth</dt><dd id="view-applicant-dob">-</dd>
+                <dt>Availability</dt><dd id="view-applicant-availability">-</dd>
+                <dt>Authorized to Work</dt><dd id="view-applicant-authorized">-</dd>
+            </dl>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                <button id="view-applicant-close-btn" class="btn btn-secondary">Close</button>
             </div>
         </div>
     </div>
-    <!-- Confirmation Modal Overlay (for showConfirmModal function) -->
-    <div id="confirm-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-            <p id="confirm-modal-message"></p>
-            <div class="modal-buttons">
-                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
-                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
-            </div>
-        </div>
-    </div>
-    <!-- Shareable Link Modal -->
-    <div id="share-link-modal-overlay" class="modal-overlay">
-        <div class="modal-content share-link-modal-content">
-            <h3 style="color: var(--text-light); margin-top: 0; margin-bottom: 20px;">Share Job Posting</h3>
-            <div class="form-group">
-                <label for="share-job-link-input">Direct Link to Job Posting:</label>
-                <textarea id="share-job-link-input" readonly></textarea>
-            </div>
-            <div class="form-group">
-                <label for="share-job-embed-code-input">Embed Code (Basic HTML for your site):</label>
-                <textarea id="share-job-embed-code-input" readonly></textarea>
-            </div>
-            <div class="modal-buttons">
-                <button id="copy-link-btn" class="btn btn-primary copy-btn">Copy Link</button>
-                <button id="copy-embed-btn" class="btn btn-primary copy-btn">Copy Embed Code</button>
-                <button id="share-link-modal-close-button" class="btn btn-secondary">Close</button>
-            </div>
-        </div>
-    </div>
+
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
