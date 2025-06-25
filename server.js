@@ -34,6 +34,7 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
+
 // --- 4. Middleware ---
 app.use(cors());
 app.use(express.json());
@@ -161,9 +162,13 @@ app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
+// --- MODIFIED: Simplified /apply/:jobId Route ---
 app.post('/apply/:jobId', async (req, res) => {
     const { jobId } = req.params;
-    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
+    const { 
+        name, email, address, phone, date_of_birth, 
+        availability, is_authorized 
+    } = req.body;
 
     if (!name || !email) {
         return res.status(400).json({ error: 'Name and email are required.' });
@@ -199,6 +204,10 @@ const startServer = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
+        // --- ONE-TIME FIX: Drop the applicants table to update its schema ---
+        await client.query('DROP TABLE IF EXISTS applicants CASCADE;');
+        console.log("Applicants table dropped to apply new schema.");
+
         // Initialize all tables
         await client.query(`
             CREATE TABLE IF NOT EXISTS locations (
@@ -263,6 +272,7 @@ const startServer = async () => {
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
         `);
+        // --- MODIFIED: Simplified Applicants Table ---
         await client.query(`
             CREATE TABLE IF NOT EXISTS applicants (
                 id SERIAL PRIMARY KEY,
