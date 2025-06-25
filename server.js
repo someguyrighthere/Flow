@@ -37,8 +37,15 @@ const pool = new Pool({
 // --- 4. Middleware ---
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
+// Serve static files from the root directory
+app.use(express.static(path.join(__dirname)));
+// Serve uploaded files from the /uploads directory
 app.use('/uploads', express.static(uploadDir));
+// Serve CSS files from the /css directory
+app.use('/css', express.static(path.join(__dirname, 'css')));
+// Serve JS files from the /js directory
+app.use('/js', express.static(path.join(__dirname, 'js')));
+
 
 // --- 5. Authentication Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -60,9 +67,12 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- 6. API Routes ---
+
+// Serve the main index.html for the root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
+
 
 // User, Auth, and Account Routes
 app.post('/login', async (req, res) => {
@@ -194,7 +204,7 @@ app.get('/positions', isAuthenticated, isAdmin, async (req, res) => {
 
 app.get('/onboarding-sessions', isAuthenticated, isAdmin, async (req, res) => {
     const sql = `
-        SELECT 
+        SELECT
             s.session_id, u.user_id, u.full_name, u.email, c.position, s.tasks_status,
             (SELECT COUNT(*) FROM jsonb_array_elements(c.tasks)) as total_tasks,
             (SELECT COUNT(*) FROM jsonb_to_recordset(s.tasks_status) as x(description text, completed boolean) WHERE completed = true) as completed_tasks
@@ -483,18 +493,87 @@ const startServer = async () => {
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-        
+
         // Full schema initialization
-        await client.query(`CREATE TABLE IF NOT EXISTS locations (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS users (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS checklists (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS onboarding_sessions (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS documents (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS job_postings (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS applicants (...)`);
-        await client.query(`CREATE TABLE IF NOT EXISTS shifts (...)`);
+        const schemaQueries = `
+            CREATE TABLE IF NOT EXISTS locations (
+                location_id SERIAL PRIMARY KEY,
+                location_name VARCHAR(255) NOT NULL,
+                location_address TEXT
+            );
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                full_name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'location_admin', 'employee')),
+                position VARCHAR(255),
+                location_id INT,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+            CREATE TABLE IF NOT EXISTS shifts (
+                id SERIAL PRIMARY KEY,
+                employee_id INT NOT NULL,
+                location_id INT NOT NULL,
+                start_time TIMESTAMPTZ NOT NULL,
+                end_time TIMESTAMPTZ NOT NULL,
+                notes TEXT,
+                FOREIGN KEY (employee_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                file_name VARCHAR(255) NOT NULL,
+                file_path VARCHAR(255) NOT NULL,
+                mime_type VARCHAR(100) NOT NULL,
+                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS job_postings (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                description TEXT NOT NULL,
+                requirements TEXT,
+                location_id INT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+            CREATE TABLE IF NOT EXISTS applicants (
+                id SERIAL PRIMARY KEY,
+                job_id INT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                address TEXT,
+                phone VARCHAR(50),
+                date_of_birth DATE,
+                availability TEXT,
+                is_authorized BOOLEAN,
+                status VARCHAR(50) DEFAULT 'pending' NOT NULL,
+                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position VARCHAR(255) UNIQUE NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type VARCHAR(50) DEFAULT 'single_list',
+                time_group_count INT DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS onboarding_sessions (
+                session_id SERIAL PRIMARY KEY,
+                user_id INT UNIQUE NOT NULL,
+                checklist_id INT NOT NULL,
+                tasks_status JSONB,
+                start_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE RESTRICT
+            );
+        `;
         
-        console.log("Database schema verified.");
+        await client.query(schemaQueries);
+        console.log("Database schema verified/created.");
         client.release();
 
         app.listen(PORT, () => {
