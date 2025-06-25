@@ -57,14 +57,10 @@ export function handleApplyPage() {
                     applyCard.innerHTML = `
                         <div style="text-align: center;">
                             <h2>Application Submitted!</h2>
-                            <p>Thank you for your interest. We have received your application and will be in touch if you are selected for an interview. You may now close this page.</p>
-                            <button id="close-page-btn" class="btn btn-secondary">Close Page</button>
+                            <p>Thank you for your interest. We have received your application and will be in touch if you are selected for an interview.</p>
+                            <p style="margin-top: 20px; font-weight: 600;">You may now safely close this browser tab.</p>
                         </div>
                     `;
-                    // Add event listener to the new button
-                    document.getElementById('close-page-btn').addEventListener('click', () => {
-                        window.close();
-                    });
                 }
             } catch (error) {
                 showModalMessage(`Error submitting application: ${error.message}`, true);
