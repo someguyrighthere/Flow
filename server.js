@@ -67,134 +67,255 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// --- User, Auth, and Account Routes ---
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
+// Hiring Routes
+app.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, description, requirements, location_id } = req.body;
+    if (!title || !description) return res.status(400).json({error: 'Title and description are required.'});
     try {
-        const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
-        const user = result.rows[0];
-        if (!user || !user.password) return res.status(401).json({ error: "Invalid credentials." });
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
-        const payload = { id: user.user_id, role: user.role };
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ message: "Logged in successfully!", token: token, role: user.role });
-    } catch (err) {
-        res.status(500).json({ error: "An internal server error occurred." });
-    }
-});
-
-app.get('/users/me', isAuthenticated, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
-        res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve user profile.' });
-    }
-});
-
-app.put('/users/me', isAuthenticated, async (req, res) => {
-    const { full_name, email, current_password, new_password } = req.body;
-    const userId = req.user.id;
-    try {
-        if (new_password) {
-            if (!current_password) return res.status(400).json({ error: 'Current password is required.' });
-            const userRes = await pool.query('SELECT password FROM users WHERE user_id = $1', [userId]);
-            const user = userRes.rows[0];
-            const isMatch = await bcrypt.compare(current_password, user.password);
-            if (!isMatch) return res.status(401).json({ error: 'Incorrect current password.' });
-            const newHashedPassword = await bcrypt.hash(new_password, 10);
-            await pool.query('UPDATE users SET password = $1 WHERE user_id = $2', [newHashedPassword, userId]);
-        }
-        await pool.query('UPDATE users SET full_name = $1, email = $2 WHERE user_id = $3', [full_name, email, userId]);
-        res.json({ message: 'Profile updated successfully.' });
-    } catch (err) {
-        if (err.code === '23505') return res.status(400).json({ error: 'This email is already in use.' });
-        res.status(500).json({ error: 'Failed to update profile.' });
-    }
-});
-
-// Admin Routes (Users and Locations)
-app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_name, location_address } = req.body;
-    try {
-        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
+        const result = await pool.query(
+            `INSERT INTO job_postings (title, description, requirements, location_id) VALUES ($1, $2, $3, $4) RETURNING *`,
+            [title, description, requirements, location_id || null]
+        );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        res.status(400).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to create job posting.' });
     }
 });
 
-app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
+app.get('/job-postings/:id', async (req, res) => {
+    const { id } = req.params;
+    const sql = `
+        SELECT jp.*, l.location_name
+        FROM job_postings jp
+        LEFT JOIN locations l ON jp.location_id = l.location_id
+        WHERE jp.id = $1;
+    `;
     try {
-        const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
-        res.status(204).send();
+        const result = await pool.query(sql, [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Job posting not found.' });
+        }
+        res.json(result.rows[0]);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to retrieve job posting.' });
     }
 });
 
-app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
+app.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+    const sql = `
+        SELECT jp.id, jp.title, jp.location_id, l.location_name, COUNT(a.id) as applicant_count
+        FROM job_postings jp
+        LEFT JOIN locations l ON jp.location_id = l.location_id
+        LEFT JOIN applicants a ON jp.id = a.job_id
+        GROUP BY jp.id, l.location_name
+        ORDER BY jp.created_at DESC;
+    `;
     try {
         const result = await pool.query(sql);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("Error fetching job postings:", err);
+        res.status(500).json({ error: 'Failed to retrieve job postings.' });
     }
 });
 
-app.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    if (req.user.id == req.params.id) return res.status(403).json({ error: "You cannot delete your own account." });
+app.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const result = await pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
+        const result = await pool.query('DELETE FROM job_postings WHERE id = $1', [req.params.id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Job posting not found.' });
         res.status(204).send();
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to delete job posting.' });
     }
 });
 
-const inviteUser = async (req, res, role) => {
-    const { full_name, email, password, location_id, position } = req.body;
-    if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
+app.get('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
     try {
-        const hash = await bcrypt.hash(password, 10);
-        const result = await pool.query(`INSERT INTO users (full_name, email, password, role, position, location_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING user_id`, [full_name, email, hash, role, position || null, location_id || null]);
-        res.status(201).json({ id: result.rows[0].user_id });
+        const result = await pool.query('SELECT * FROM applicants WHERE id = $1', [id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Applicant not found.' });
+        res.json(result.rows[0]);
     } catch (err) {
-        if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
-        res.status(500).json({ error: "An internal server error occurred." });
+        res.status(500).json({ error: 'Failed to retrieve applicant details.' });
     }
-};
+});
 
-app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
-app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
+app.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM applicants WHERE id = $1', [id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Applicant not found.' });
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete applicant.' });
+    }
+});
 
-// ... (All other routes follow)
+app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
+    let query = `
+        SELECT a.*, jp.title as job_title
+        FROM applicants a
+        JOIN job_postings jp ON a.job_id = jp.id
+    `;
+    const filters = [];
+    const values = [];
+    let counter = 1;
+
+    if (req.query.jobId) {
+        filters.push(`a.job_id = $${counter++}`);
+        values.push(req.query.jobId);
+    }
+    if (req.query.status) {
+        filters.push(`a.status = $${counter++}`);
+        values.push(req.query.status);
+    }
+    if (filters.length > 0) {
+        query += ' WHERE ' + filters.join(' AND ');
+    }
+    query += ' ORDER BY a.applied_at DESC;';
+
+    try {
+        const result = await pool.query(query, values);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Error fetching applicants:", err);
+        res.status(500).json({ error: 'Failed to retrieve applicants.' });
+    }
+});
+
+app.post('/apply/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email are required.' });
+    const sql = `
+        INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
+    const values = [jobId, name, email, address, phone, date_of_birth || null, availability, is_authorized];
+    try {
+        await pool.query(sql, values);
+        res.status(201).json({ message: 'Application submitted successfully!' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to submit application.' });
+    }
+});
+
+
+// Document Management Routes
+// ...
+
+// User and Auth Routes
+// ...
+
+// Onboarding and Position Routes
+// ...
+
+// Checklist Routes
+// ...
+
+// Location Management Routes
+// ...
+
 
 // --- 7. Server Startup Logic ---
-const initializeDatabase = async () => {
-    // ...
-};
-
 const startServer = async () => {
-    await initializeDatabase();
-    app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
-    });
+    let client;
+    try {
+        client = await pool.connect();
+        console.log('Connected to the PostgreSQL database.');
+        
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS locations (
+                location_id SERIAL PRIMARY KEY,
+                location_name TEXT NOT NULL,
+                location_address TEXT
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('super_admin', 'location_admin', 'employee')),
+                position TEXT,
+                location_id INTEGER,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type TEXT,
+                time_group_count INTEGER
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS onboarding_sessions (
+                session_id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                checklist_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Active',
+                tasks_status JSONB,
+                start_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS job_postings (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                requirements TEXT,
+                location_id INTEGER,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+        `);
+        
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS applicants (
+                id SERIAL PRIMARY KEY,
+                job_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                address TEXT,
+                phone TEXT,
+                date_of_birth DATE,
+                availability TEXT,
+                is_authorized BOOLEAN,
+                status VARCHAR(50) DEFAULT 'Applied',
+                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE
+            );
+        `);
+        
+        console.log("Database schema verified.");
+        client.release();
+
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+
+    } catch (err) {
+        console.error('Failed to initialize database or start server:', err.stack);
+        if (client) client.release();
+        process.exit(1);
+    }
 };
 
 startServer();
