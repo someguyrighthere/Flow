@@ -80,48 +80,55 @@
         .applicant-details p { margin: 10px 0; }
         .applicant-details strong { color: var(--primary-accent); }
 
-        /* --- ENHANCED PRINT STYLES --- */
+        /* --- CORRECTED & ENHANCED PRINT STYLES --- */
         @media print {
             body {
-                background: #fff !important; /* Force white background */
+                background: #fff !important;
             }
 
-            /* Hide everything except the printable area */
-            body > *:not(.printable-area) {
+            /* Hide all direct children of the body by default */
+            body > * {
                 display: none !important;
             }
             
-            /* Make the printable area take up the whole page */
-            .printable-area {
-                visibility: visible !important;
+            /* Explicitly show the applicant modal and its contents */
+            #view-applicant-modal, #view-applicant-modal * {
                 display: block !important;
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                height: auto;
+                visibility: visible !important;
+            }
+
+            /* Reset the modal overlay to be a simple container for the printed page */
+            #view-applicant-modal {
+                position: static !important;
                 background: transparent !important;
                 backdrop-filter: none !important;
-                border: none !important;
+                overflow: visible !important;
+                padding: 0;
+            }
+
+            /* Style the inner content for printing */
+            #view-applicant-modal .modal-content {
                 box-shadow: none !important;
-                padding: 2cm; /* Standard margin for a printed page */
+                border: none !important;
+                background: transparent !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 2cm; /* A4-like margins */
                 box-sizing: border-box;
             }
 
-            .printable-area * {
-                visibility: visible !important;
-                color: #000 !important; /* All text should be black */
-                font-family: Arial, sans-serif; /* Use a standard print font */
+            #view-applicant-modal .modal-content * {
+                color: #000 !important;
+                font-family: Arial, sans-serif;
                 font-size: 12pt;
             }
 
             /* Hide the on-screen modal buttons */
-            .printable-area .modal-buttons {
+            #view-applicant-modal .modal-buttons {
                 display: none !important;
             }
             
-            /* Style the header for the printout */
-            .printable-area #view-applicant-modal-title {
+            #view-applicant-modal #view-applicant-modal-title {
                 font-size: 24pt;
                 font-weight: bold;
                 text-align: center;
@@ -130,30 +137,25 @@
                 margin-bottom: 20px;
             }
             
-            /* Style the details section with a two-column grid */
-            .printable-area .applicant-details {
+            #view-applicant-modal .applicant-details {
                 display: grid;
-                grid-template-columns: 1fr 1fr; /* Two equal columns */
-                gap: 15px 30px; /* Row and column gap */
+                grid-template-columns: 1fr 1fr;
+                gap: 15px 30px;
             }
 
-            .printable-area .applicant-details p {
+            #view-applicant-modal .applicant-details p {
                 margin: 0;
                 padding: 8px 0;
-                border-bottom: 1px dotted #ccc; /* Dotted line under each item */
+                border-bottom: 1px dotted #ccc;
                 display: flex;
                 flex-direction: column;
             }
 
-            .printable-area .applicant-details strong {
+            #view-applicant-modal .applicant-details strong {
                 font-weight: bold;
                 font-size: 10pt;
                 margin-bottom: 4px;
-                color: #333 !important; /* Slightly lighter for labels */
-            }
-
-             .printable-area .applicant-details span {
-                font-size: 12pt;
+                color: #333 !important;
             }
         }
     </style>
@@ -214,7 +216,7 @@
         </div>
         <div class="card" style="margin-top: 30px;">
             <h3>Applicant Tracking</h3>
-            <div class="applicant-filters" style="display: flex; gap: 15px; margin-bottom: 20px;">
+            <div class="applicant-filters" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
                 <div class="form-group">
                     <label for="filter-applicant-job-posting-select">Filter by Job Posting</label>
                     <select id="filter-applicant-job-posting-select">
@@ -268,9 +270,8 @@
         </div>
     </div>
 
-    <!-- IMPORTANT: Added 'printable-area' class to the modal's content div -->
     <div id="view-applicant-modal" class="modal-overlay">
-        <div class="modal-content printable-area">
+        <div class="modal-content">
             <h3 id="view-applicant-modal-title">Applicant Details</h3>
             <div class="applicant-details">
                 <p><strong>Name:</strong> <span id="view-applicant-name"></span></p>
