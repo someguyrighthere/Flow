@@ -37,13 +37,9 @@ const pool = new Pool({
 // --- 4. Middleware ---
 app.use(cors());
 app.use(express.json());
-// Serve static files from the root directory
 app.use(express.static(path.join(__dirname)));
-// Serve uploaded files from the /uploads directory
 app.use('/uploads', express.static(uploadDir));
-// Serve CSS files from the /css directory
 app.use('/css', express.static(path.join(__dirname, 'css')));
-// Serve JS files from the /js directory
 app.use('/js', express.static(path.join(__dirname, 'js')));
 
 
@@ -68,7 +64,6 @@ const isAdmin = (req, res, next) => {
 
 // --- 6. API Routes ---
 
-// Serve the main index.html for the root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -155,7 +150,7 @@ app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
+    const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
     try {
         const result = await pool.query(sql);
         res.json(result.rows);
@@ -176,13 +171,17 @@ app.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 const inviteUser = async (req, res, role) => {
-    const { full_name, email, password, location_id, position } = req.body;
+    const { full_name, email, password, location_id, position, employment_type, availability } = req.body;
     if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
     try {
         const hash = await bcrypt.hash(password, 10);
-        const result = await pool.query(`INSERT INTO users (full_name, email, password, role, position, location_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING user_id`, [full_name, email, hash, role, position || null, location_id || null]);
+        const result = await pool.query(
+            `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING user_id`,
+            [full_name, email, hash, role, position || null, location_id || null, employment_type || null, JSON.stringify(availability) || null]
+        );
         res.status(201).json({ id: result.rows[0].user_id });
     } catch (err) {
+        console.error('Invite user error:', err);
         if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
         res.status(500).json({ error: "An internal server error occurred." });
     }
@@ -509,6 +508,8 @@ const startServer = async () => {
                 role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'location_admin', 'employee')),
                 position VARCHAR(255),
                 location_id INT,
+                employment_type VARCHAR(50),
+                availability JSONB,
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS shifts (

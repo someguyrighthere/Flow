@@ -53,51 +53,53 @@
         .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
         .form-group { margin-bottom: 20px; text-align: left; }
         .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
-        .form-group input, .form-group select {
+        .form-group input, .form-group select, .form-group textarea {
             width: 100%; padding: 12px; border-radius: 6px;
             border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
             color: var(--text-light); box-sizing: border-box;
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
-        /* Styles for the custom message modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+        
+        /* New Styles for Availability Grid */
+        .availability-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+        .availability-day {
+            display: contents; /* Make this act like a direct child of the grid */
+        }
+        .availability-day label {
             display: flex;
             align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            display: none; /* Hidden by default */
+            gap: 10px;
+            grid-column: 1 / 2;
+        }
+        .availability-day .time-range {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            grid-column: 2 / 3;
+        }
+        .availability-day select {
+            flex-grow: 1;
+        }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000; display: none;
         }
         .modal-content {
-            background-color: rgba(26, 26, 26, 0.95);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 30px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            position: relative;
+            background-color: rgba(26, 26, 26, 0.95); backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 400px; text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); position: relative;
         }
-        .modal-content p {
-            margin-bottom: 20px;
-            font-size: 1.1rem;
-        }
-        .modal-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .modal-buttons .btn {
-            padding: 10px 25px;
-            font-size: 1rem;
-        }
+        .modal-content p { margin-bottom: 20px; font-size: 1.1rem; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; }
+        .modal-buttons .btn { padding: 10px 25px; font-size: 1rem; }
     </style>
 </head>
 <body>
@@ -110,11 +112,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
-    <a href="account.html">My Account</a>
-    <a href="admin.html">Admin Settings</a>
-    <a href="pricing.html" id="upgrade-plan-link" style="display: none;">Upgrade Plan</a>
-    <button id="logout-button">Logout</button>
-</div>
+                    <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <a href="pricing.html" id="upgrade-plan-link" style="display: none;">Upgrade Plan</a>
+                    <button id="logout-button">Logout</button>
                 </div>
             </div>
         </header>
@@ -129,7 +130,6 @@
                 <div class="card">
                     <h3>Manage Locations</h3>
                     <div id="location-list"></div>
-                    <!-- Added a horizontal rule here for separation -->
                     <hr style="border-color: var(--border-color); margin: 30px 0;">
                     <form id="new-location-form" style="margin-top: 20px;">
                         <div class="form-group">
@@ -151,7 +151,6 @@
                     <form id="invite-admin-form">
                         <div class="form-group"><label for="admin-name">Full Name</label><input type="text" id="admin-name" required></div>
                         <div class="form-group"><label for="admin-email">Email</label><input type="email" id="admin-email" required></div>
-                        <!-- New: Temporary Password field -->
                         <div class="form-group">
                             <label for="admin-password">Temporary Password</label>
                             <input type="password" id="admin-password" placeholder="Enter temporary password" required>
@@ -181,9 +180,21 @@
                             <input type="text" id="employee-id" placeholder="e.g., EMP001">
                         </div>
                         <div class="form-group">
+                            <label for="employee-type">Employment Type</label>
+                            <select id="employee-type">
+                                <option value="Full-time">Full-time</option>
+                                <option value="Part-time">Part-time</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Weekly Availability</label>
+                            <div class="availability-grid" id="employee-availability-grid">
+                                <!-- Availability slots will be generated by JS -->
+                            </div>
+                        </div>
+                        <div class="form-group">
                             <label for="employee-location-select">Assign to Location</label>
                             <select id="employee-location-select" required>
-                                <!-- Locations will be populated by JS -->
                             </select>
                         </div>
                         <button type="submit" class="btn btn-primary">Send Invite</button>
@@ -192,7 +203,7 @@
              </div>
         </div>
     </div>
-    <!-- Message Modal Overlay (for showModalMessage function) -->
+    <!-- Modals -->
     <div id="message-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <p id="modal-message-text"></p>
@@ -201,7 +212,6 @@
             </div>
         </div>
     </div>
-    <!-- Confirmation Modal Overlay (for showConfirmModal function) -->
     <div id="confirm-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <p id="confirm-modal-message"></p>
