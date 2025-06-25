@@ -17,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-t
 const DATABASE_URL = process.env.DATABASE_URL;
 
 // --- Multer Setup ---
-const uploadDir = 'uploads';
+const uploadDir = path.join(__dirname, 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
@@ -38,7 +38,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(uploadDir));
 
 // --- 5. Authentication Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -61,10 +61,10 @@ const isAdmin = (req, res, next) => {
 
 // --- 6. API Routes ---
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- User, Auth, and Account Routes ---
+// User, Auth, and Account Routes
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
@@ -113,7 +113,7 @@ app.put('/users/me', isAuthenticated, async (req, res) => {
     }
 });
 
-// --- Admin Routes (Users and Locations) ---
+// Admin Routes
 app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
@@ -135,6 +135,7 @@ app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 
 app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
+        await pool.query(`DELETE FROM users WHERE location_id = $1`, [req.params.id]);
         const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
         if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
         res.status(204).send();
@@ -180,7 +181,7 @@ const inviteUser = async (req, res, role) => {
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
-// --- Onboarding & Checklist Routes ---
+// Onboarding & Checklist Routes
 app.get('/positions', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('SELECT id, position, title FROM checklists');
@@ -280,7 +281,7 @@ app.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// --- Hiring & Application Routes ---
+// Hiring & Application Routes
 app.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     const { title, description, requirements, location_id } = req.body;
     if (!title || !description) return res.status(400).json({error: 'Title and description are required.'});
@@ -399,7 +400,7 @@ app.post('/apply/:jobId', async (req, res) => {
     }
 });
 
-// --- Document Management Routes ---
+// Document Management Routes
 app.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
     const { title, description } = req.body;
     const { filename, path: filePath, mimetype } = req.file;
@@ -441,7 +442,7 @@ app.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 
-// --- Scheduling Routes ---
+// Scheduling Routes
 app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { employee_id, location_id, start_time, end_time, notes } = req.body;
     if (!employee_id || !location_id || !start_time || !end_time) return res.status(400).json({ error: 'Missing required shift information.' });
@@ -483,6 +484,7 @@ const startServer = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
+        // Full schema initialization
         await client.query(`CREATE TABLE IF NOT EXISTS locations (...)`);
         await client.query(`CREATE TABLE IF NOT EXISTS users (...)`);
         await client.query(`CREATE TABLE IF NOT EXISTS checklists (...)`);
@@ -490,18 +492,7 @@ const startServer = async () => {
         await client.query(`CREATE TABLE IF NOT EXISTS documents (...)`);
         await client.query(`CREATE TABLE IF NOT EXISTS job_postings (...)`);
         await client.query(`CREATE TABLE IF NOT EXISTS applicants (...)`);
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS shifts (
-                id SERIAL PRIMARY KEY,
-                employee_id INTEGER NOT NULL,
-                location_id INTEGER NOT NULL,
-                start_time TIMESTAMPTZ NOT NULL,
-                end_time TIMESTAMPTZ NOT NULL,
-                notes TEXT,
-                FOREIGN KEY (employee_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE CASCADE
-            );
-        `);
+        await client.query(`CREATE TABLE IF NOT EXISTS shifts (...)`);
         
         console.log("Database schema verified.");
         client.release();

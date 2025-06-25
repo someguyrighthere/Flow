@@ -1,37 +1,29 @@
 // js/pages/scheduling.js
-import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
+import { apiRequest, showModalMessage } from '../utils.js';
 
-/**
- * Handles all logic for the scheduling page.
- */
 export function handleSchedulingPage() {
-    // Security check
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
     }
 
-    // --- DOM Element Selection ---
     const calendarGrid = document.getElementById('calendar-grid');
     const timeColumn = document.getElementById('time-column');
     const currentWeekDisplay = document.getElementById('current-week-display');
     const prevWeekBtn = document.getElementById('prev-week-btn');
     const nextWeekBtn = document.getElementById('next-week-btn');
     const createShiftForm = document.getElementById('create-shift-form');
+    
+    const employeeSelect = document.getElementById('employee-select');
+    const locationSelect = document.getElementById('location-select');
 
-    // --- State Management ---
     let currentStartDate = new Date();
-    // Adjust to the beginning of the week (Sunday)
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
+    currentStartDate.setHours(0, 0, 0, 0);
 
-    // --- Calendar Generation ---
-
-    /**
-     * Generates the time slots for the calendar (e.g., 12 AM, 1 AM).
-     */
     function generateTimeSlots() {
         if (!timeColumn) return;
-        timeColumn.innerHTML = ''; // Clear existing
+        timeColumn.innerHTML = '';
         for (let i = 0; i < 24; i++) {
             const timeSlot = document.createElement('div');
             timeSlot.className = 'calendar-time-slot';
@@ -42,40 +34,30 @@ export function handleSchedulingPage() {
         }
     }
 
-    /**
-     * Renders the entire calendar for the week starting on the given date.
-     * @param {Date} startDate - The starting date of the week (should be a Sunday).
-     */
     async function renderCalendar(startDate) {
         if (!calendarGrid || !currentWeekDisplay) return;
         
-        // --- Update Week Display Header ---
         const endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + 6);
         const options = { month: 'short', day: 'numeric' };
         currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
         
-        // --- Clear and Rebuild Day Columns ---
-        // Clear everything except the time column elements
-        calendarGrid.innerHTML = ''; 
-        calendarGrid.appendChild(timeColumn.previousElementSibling); // Re-add Time header
+        const oldDayCells = calendarGrid.querySelectorAll('.calendar-day-header, .calendar-day-cell');
+        oldDayCells.forEach(cell => cell.remove());
+        
+        calendarGrid.appendChild(timeColumn.previousElementSibling);
         calendarGrid.appendChild(timeColumn);
 
-        const days = [];
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startDate);
             dayDate.setDate(startDate.getDate() + i);
-            days.push(dayDate);
 
-            // Create Day Header
             const dayHeader = document.createElement('div');
             dayHeader.className = 'calendar-day-header';
-            dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short' });
+            dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
             dayHeader.style.gridColumn = i + 2;
-            dayHeader.style.gridRow = 1;
             calendarGrid.appendChild(dayHeader);
 
-            // Create Day Cell Container
             const dayCell = document.createElement('div');
             dayCell.className = 'calendar-day-cell';
             dayCell.id = `day-cell-${i}`;
@@ -84,20 +66,18 @@ export function handleSchedulingPage() {
             calendarGrid.appendChild(dayCell);
         }
         
-        // --- Load and Display Shifts ---
         await loadAndDisplayShifts(startDate, endDate);
     }
 
-    /**
-     * Fetches shifts for the given date range and displays them on the calendar.
-     * @param {Date} start - The start of the date range.
-     * @param {Date} end - The end of the date range.
-     */
     async function loadAndDisplayShifts(start, end) {
-        // Format dates to YYYY-MM-DD for the API request
         const formatDate = (d) => d.toISOString().split('T')[0];
+        let endOfDay = new Date(end);
+        endOfDay.setHours(23, 59, 59, 999);
+        
         try {
-            const shifts = await apiRequest('GET', `/shifts?startDate=${formatDate(start)}&endDate=${formatDate(end)}`);
+            const shifts = await apiRequest('GET', `/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
+            document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
+
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
                     const shiftStart = new Date(shift.start_time);
@@ -109,13 +89,10 @@ export function handleSchedulingPage() {
                     if (dayCell) {
                         const startHour = shiftStart.getHours();
                         const startMinute = shiftStart.getMinutes();
-                        const endHour = shiftEnd.getHours();
-                        const endMinute = shiftEnd.getMinutes();
                         
-                        // Calculate position and height
                         const topPosition = (startHour + startMinute / 60) * 30; // 30px per hour
                         const durationHours = (shiftEnd - shiftStart) / (1000 * 60 * 60);
-                        const height = durationHours * 30;
+                        const height = Math.max(15, durationHours * 30);
 
                         const shiftElement = document.createElement('div');
                         shiftElement.className = 'calendar-shift';
@@ -133,10 +110,36 @@ export function handleSchedulingPage() {
         }
     }
 
+    async function populateDropdowns() {
+        try {
+            const [users, locations] = await Promise.all([
+                apiRequest('GET', '/users'),
+                apiRequest('GET', '/locations')
+            ]);
+            
+            if (employeeSelect) {
+                employeeSelect.innerHTML = '<option value="">Select Employee</option>';
+                const employees = users.filter(u => u.role === 'employee');
+                employees.forEach(user => {
+                    const option = new Option(user.full_name, user.user_id);
+                    employeeSelect.add(option);
+                });
+            }
+
+            if (locationSelect) {
+                locationSelect.innerHTML = '<option value="">Select Location</option>';
+                locations.forEach(loc => {
+                    const option = new Option(loc.location_name, loc.location_id);
+                    locationSelect.add(option);
+                });
+            }
+        } catch (error) {
+            showModalMessage('Failed to load data for form dropdowns.', true);
+        }
+    }
+
 
     // --- Event Handlers ---
-
-    // Week navigation buttons
     if (prevWeekBtn) {
         prevWeekBtn.addEventListener('click', () => {
             currentStartDate.setDate(currentStartDate.getDate() - 7);
@@ -150,8 +153,7 @@ export function handleSchedulingPage() {
             renderCalendar(currentStartDate);
         });
     }
-
-    // Create new shift form submission
+    
     if (createShiftForm) {
         createShiftForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -172,7 +174,7 @@ export function handleSchedulingPage() {
                 await apiRequest('POST', '/shifts', shiftData);
                 showModalMessage('Shift created successfully!', false);
                 createShiftForm.reset();
-                renderCalendar(currentStartDate); // Refresh calendar
+                renderCalendar(currentStartDate);
             } catch (error) {
                 showModalMessage(`Error creating shift: ${error.message}`, true);
             }
@@ -182,5 +184,5 @@ export function handleSchedulingPage() {
     // --- Initial Page Load ---
     generateTimeSlots();
     renderCalendar(currentStartDate);
-    // NOTE: You would also need functions to populate the employee and location dropdowns in the sidebar.
+    populateDropdowns();
 }
