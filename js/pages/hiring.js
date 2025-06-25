@@ -7,7 +7,6 @@ export function handleHiringPage() {
     const jobPostingListDiv = document.getElementById('job-posting-list');
     const applicantListDiv = document.getElementById('applicant-list');
     
-    // Filters and Dropdowns
     const jobPostingLocationSelect = document.getElementById('job-posting-location-select');
     const filterJobSelect = document.getElementById('filter-applicant-job-posting-select');
     const filterStatusSelect = document.getElementById('filter-applicant-status');
@@ -15,7 +14,6 @@ export function handleHiringPage() {
     const applyFiltersBtn = document.getElementById('apply-applicant-filters-btn');
     const clearFiltersBtn = document.getElementById('clear-applicant-filters-btn');
 
-    // Share Modal
     const shareModal = document.getElementById('share-link-modal-overlay');
     const shareLinkInput = document.getElementById('share-job-link-input');
     const shareEmbedInput = document.getElementById('share-job-embed-code-input');
@@ -23,7 +21,6 @@ export function handleHiringPage() {
     const copyLinkBtn = document.getElementById('copy-link-btn');
     const copyEmbedBtn = document.getElementById('copy-embed-btn');
 
-    // View Applicant Modal
     const viewApplicantModal = document.getElementById('view-applicant-modal');
     const viewApplicantCloseBtn = document.getElementById('view-applicant-close-btn');
 
@@ -33,7 +30,6 @@ export function handleHiringPage() {
         const selectsToPopulate = [jobPostingLocationSelect, filterLocationSelect];
         try {
             const locations = await apiRequest("GET", "/locations");
-            
             selectsToPopulate.forEach(select => {
                 if (select) {
                     while (select.options.length > 1) {
@@ -47,6 +43,7 @@ export function handleHiringPage() {
             });
         } catch (error) {
             console.error("Failed to load locations for dropdowns:", error);
+            showModalMessage("Could not load locations for filtering.", true);
         }
     }
 
@@ -178,9 +175,9 @@ export function handleHiringPage() {
                 const publicLink = `${window.location.origin}/apply.html?jobId=${jobId}`;
                 const embedCode = `<a href="${publicLink}" target="_blank" style="padding: 10px 20px; background-color: #C86DD7; color: white; border-radius: 5px; text-decoration: none;">Apply for ${jobTitle}</a>`;
                 
-                shareLinkInput.value = publicLink;
-                shareEmbedInput.value = embedCode;
-                shareModal.style.display = 'flex';
+                if (shareLinkInput) shareLinkInput.value = publicLink;
+                if (shareEmbedInput) shareEmbedInput.value = embedCode;
+                if (shareModal) shareModal.style.display = 'flex';
             }
 
             if (deleteBtn) {
@@ -252,6 +249,14 @@ export function handleHiringPage() {
     if (viewApplicantCloseBtn) {
         viewApplicantCloseBtn.addEventListener('click', () => {
             if(viewApplicantModal) viewApplicantModal.style.display = 'none';
+        });
+    }
+    
+    if (viewApplicantModal) {
+        viewApplicantModal.addEventListener('click', (e) => {
+            if (e.target === viewApplicantModal) {
+                viewApplicantModal.style.display = 'none';
+            }
         });
     }
 
