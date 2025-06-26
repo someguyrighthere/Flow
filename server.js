@@ -252,7 +252,8 @@ app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate } = req.body;
+    // *** FIX: Changed req.body to req.query ***
+    const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ error: 'Start date and end date are required.' });
     const sql = `
         SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
