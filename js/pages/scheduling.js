@@ -275,20 +275,41 @@ export function handleSchedulingPage() {
             const deleteBtn = e.target.closest('.delete-shift-btn');
             if (deleteBtn) {
                 e.stopPropagation(); // Prevent other click events on the grid
-                const shiftId = deleteBtn.dataset.shiftId; // Get the shift ID from data attribute
+                const shiftId = String(deleteBtn.dataset.shiftId); // Ensure shiftId is a string
                 console.log("Attempting to delete shift with ID:", shiftId); // DEBUG: Log captured shift ID
-                if (!shiftId) {
+                if (!shiftId || shiftId === "undefined" || shiftId === "null") { // Added checks for "undefined" or "null" strings
                     showModalMessage('Shift ID not found. Cannot delete.', true);
                     return;
                 }
                 const confirmed = await showConfirmModal('Are you sure you want to delete this shift?');
                 if (confirmed) {
                     try {
-                        await apiRequest('DELETE', `/shifts/${shiftId}`); // This call returns null for 204
-                        showModalMessage('Shift deleted successfully.', false);
-                        renderCalendar(currentStartDate); // Re-render calendar after deletion
+                        // Removed apiRequest and using direct fetch for testing
+                        console.log("Attempting direct fetch DELETE for:", `/shifts/${shiftId}`); // Debugging
+                        const token = localStorage.getItem('authToken');
+                        const API_BASE_URL = 'https://flow-gz1r.onrender.com'; // Make sure this is defined
+                        const endpoint = `${API_BASE_URL}/shifts/${shiftId}`;
+
+                        const response = await fetch(endpoint, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+
+                        if (response.status === 204) {
+                            showModalMessage('Shift deleted successfully (Direct Fetch).', false);
+                            renderCalendar(currentStartDate);
+                        } else if (response.status === 401 || response.status === 403) {
+                            showModalMessage('Authentication failed for deletion. Please log in again.', true);
+                            setTimeout(() => { window.location.href = 'login.html?sessionExpired=true'; }, 1500);
+                        } else {
+                            const errorData = await response.json().catch(() => ({}));
+                            showModalMessage(`Error deleting shift (Direct Fetch): ${errorData.error || response.statusText}`, true);
+                        }
                     } catch (error) {
-                        showModalMessage(`Error deleting shift: ${error.message}`, true);
+                        console.error("Direct fetch DELETE failed:", error); // Debugging
+                        showModalMessage(`Network or unexpected error during deletion (Direct Fetch): ${error.message}`, true);
                     }
                 }
             }
@@ -344,10 +365,9 @@ export function handleSchedulingPage() {
     }
 
     if (nextWeekBtn) {
-        nextWeekBtn.addEventListener('click', () => {
-            currentStartDate.setDate(currentStartDate.getDate() + 7); // Go forward one week
-            renderCalendar(currentStartDate); // Re-render calendar
-        });
+        // Corrected variable name from 'nextStartDate' to 'currentStartDate'
+        currentStartDate.setDate(currentStartDate.getDate() + 7); // Go forward one week
+        renderCalendar(currentStartDate); // Re-render calendar
     }
     
     // Event listener for the create shift form submission
