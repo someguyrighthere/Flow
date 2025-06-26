@@ -82,16 +82,16 @@
         }
         .calendar-grid {
             display: grid;
-            /* 1st column for time, 7 equal-width columns for days. */
+            /* 1st column for time (fixed 80px), 7 equal-width columns for days (1fr each) */
             grid-template-columns: 80px repeat(7, 1fr); 
             /* 1st row for day headers (auto height), then 24 rows for each hour (fixed 60px height). */
             grid-template-rows: auto repeat(24, 60px); 
             min-width: 1500px; /* Ensures horizontal scroll if needed */
         }
         
-        /* Position elements within the calendar-grid using grid-area properties */
+        /* Styles for the top-left corner header (empty cell) */
         .calendar-corner-header {
-            grid-column: 1 / 2; /* Spans the first column */
+            grid-column: 1 / 2; /* Positions it in the first column */
             grid-row: 1 / 2;    /* Stays in the first row */
             padding: 10px 0;
             text-align: center;
@@ -106,6 +106,7 @@
             z-index: 7; /* Higher z-index to stay on top */
         }
 
+        /* Styles for the day headers (Mon, Tue, etc.) */
         .calendar-day-header {
             padding: 10px 0;
             text-align: center;
@@ -123,27 +124,6 @@
             border-right: none;
         }
         
-        /* Time column styling - it now just holds the time slots, not a separate grid cell */
-        /* Removed time-column wrapper, individual time-slots are direct grid children */
-        /* This style block now largely redundant, as each time-slot is positioned by JS */
-
-
-        /* Day column styling - these now span all 24 hour rows */
-        .day-column {
-            position: relative; /* Needed for absolute positioning of shifts/availability */
-            /* These will be assigned grid-column dynamically in JS */
-            grid-row: 2 / -1;   /* Spans from row 2 to the end (all 24 hour rows) */
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
-            box-sizing: border-box;
-            /* Add hour lines as background or using pseudo-elements */
-            background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-            background-size: 100% 60px; /* Repeat every 60px for hour lines */
-        }
-        /* Remove right border from the last day column */
-        .calendar-grid .day-column:last-of-type {
-            border-right: none;
-        }
-
         /* Time slot styling: these are now direct children of calendar-grid */
         .time-slot {
             height: 60px; /* Each hour slot is 60px tall */
@@ -162,6 +142,23 @@
         /* Remove bottom border from the last time slot */
         .time-slot:last-of-type {
             border-bottom: none;
+        }
+
+        /* Day column styling - these now span all 24 hour rows */
+        .day-column {
+            position: relative; /* Needed for absolute positioning of shifts/availability */
+            /* These will be assigned grid-column dynamically in JS */
+            grid-row: 2 / -1;   /* Spans from row 2 to the end (all 24 hour rows) */
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
+            /* Add hour lines as background or using pseudo-elements */
+            background-image: 
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 100% 60px; /* Repeat every 60px for hour lines */
+        }
+        /* Remove right border from the last day column */
+        .calendar-grid .day-column:last-of-type {
+            border-right: none;
         }
 
 
@@ -215,7 +212,7 @@
              <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
              <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
              <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
