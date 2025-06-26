@@ -180,8 +180,10 @@ export function handleSchedulingPage() {
                             <strong>${shift.employee_name}</strong><br>
                             <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
                             <span style="color: #ddd;">${shift.location_name || ''}</span>
-                            <button class="delete-shift-btn" data-shift-id="${shift.id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                            <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                                </svg>
                             </button>
                         `;
                         // Add a title attribute for tooltip on hover
@@ -285,41 +287,43 @@ export function handleSchedulingPage() {
     // --- Event Handlers ---
 
     /**
-     * Handles click events on the calendar grid, primarily for deleting shifts.
-     * Uses event delegation to detect clicks on dynamically created delete buttons.
+     * Completely re-implemented delete shift functionality.
+     * Handles click events on the calendar grid via event delegation.
+     * When a delete button is clicked, it extracts the shift ID,
+     * prompts for confirmation, calls the delete API, and re-renders the calendar.
      */
     if (calendarGrid) {
         calendarGrid.addEventListener('click', async (e) => {
-            // Log the element that was actually clicked
-            console.log("Calendar grid clicked on:", e.target); 
-            // Find the closest parent element with the class 'delete-shift-btn' starting from the clicked target
-            const deleteBtn = e.target.closest('.delete-shift-btn');
-            console.log("Delete button found by closest():", deleteBtn); // Log what closest() found
+            // Use e.target.closest() to find the nearest ancestor with the class 'delete-shift-btn'
+            // This handles clicks on the SVG path inside the button.
+            const deleteButton = e.target.closest('.delete-shift-btn');
 
-            if (deleteBtn) {
-                e.stopPropagation(); // Prevent the click event from bubbling up to parent elements
-                const shiftId = String(deleteBtn.dataset.shiftId); // Get the shift ID from the data-shift-id attribute
+            if (deleteButton) {
+                e.stopPropagation(); // Stop event propagation to prevent other calendar click handlers from firing
+                const shiftIdToDelete = deleteButton.dataset.shiftId; // Get the shift ID from the data attribute
 
                 // Basic validation for shift ID
-                if (!shiftId || shiftId === "undefined" || shiftId === "null") {
+                if (!shiftIdToDelete || shiftIdToDelete === "undefined" || shiftIdToDelete === "null") {
                     showModalMessage('Shift ID not found. Cannot delete.', true);
                     return;
                 }
-                
-                // Show a confirmation modal before proceeding with deletion
-                const confirmed = await showConfirmModal('Are you sure you want to delete this shift?');
-                console.log("Confirmation modal resolved with:", confirmed); // DEBUG: Log confirmed value
-                
-                if (confirmed) {
+
+                // Show confirmation modal to the user
+                const isConfirmed = await showConfirmModal('Are you sure you want to delete this shift? This action cannot be undone.');
+
+                if (isConfirmed) {
                     try {
-                        // Send a DELETE request to the backend API
-                        await apiRequest('DELETE', `/shifts/${shiftId}`);
+                        // Call the API to delete the shift
+                        await apiRequest('DELETE', `/shifts/${shiftIdToDelete}`);
                         showModalMessage('Shift deleted successfully!', false); // Show success message
-                        renderCalendar(currentStartDate); // Re-render the calendar to reflect changes
+                        renderCalendar(currentStartDate); // Re-render the calendar to show the updated shifts
                     } catch (error) {
-                        // Display an error message if deletion fails
+                        // Display an error message if the API call fails
                         showModalMessage(`Error deleting shift: ${error.message}`, true);
                     }
+                } else {
+                    // User cancelled the deletion
+                    showModalMessage('Shift deletion cancelled.', false);
                 }
             }
         });
