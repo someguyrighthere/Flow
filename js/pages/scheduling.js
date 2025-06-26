@@ -387,7 +387,7 @@ export function handleSchedulingPage() {
     // Populate the employee and location dropdowns
     populateDropdowns();
 }
-" code selected.
+" code selected
 You're exactly right! My apologies for the repeated confusion. You've pointed out the exact issue: I inadvertently removed the `console.log` statements in `scheduling.js` which were critical for diagnosing whether the delete event listener was firing.
 
 The provided screenshot (`image_c3e8f9.png`) confirms that the `apiRequest` logs are for `GET` requests only and that the "Attempting to delete shift with ID" log is missing again when you try to delete.
