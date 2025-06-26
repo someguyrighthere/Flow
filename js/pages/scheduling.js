@@ -50,7 +50,6 @@ export function handleSchedulingPage() {
         
         calendarGrid.innerHTML = '';
 
-        // Create Header Row
         const headerRow = document.createElement('div');
         headerRow.className = 'calendar-grid-header';
         calendarGrid.appendChild(headerRow);
@@ -69,7 +68,10 @@ export function handleSchedulingPage() {
             headerRow.appendChild(dayHeader);
         }
 
-        // Create Calendar Body
+        const bodyContainer = document.createElement('div');
+        bodyContainer.style.display = 'contents';
+        calendarGrid.appendChild(bodyContainer);
+
         const timeColumn = document.createElement('div');
         timeColumn.className = 'time-column';
         for (let hour = 0; hour < 24; hour++) {
@@ -80,11 +82,11 @@ export function handleSchedulingPage() {
             timeSlot.textContent = `${displayHour} ${ampm}`;
             timeColumn.appendChild(timeSlot);
         }
-        calendarGrid.appendChild(timeColumn);
+        bodyContainer.appendChild(timeColumn);
 
         const daysContainer = document.createElement('div');
         daysContainer.className = 'days-container';
-        calendarGrid.appendChild(daysContainer);
+        bodyContainer.appendChild(daysContainer);
 
         for (let i = 0; i < 7; i++) {
             const dayColumn = document.createElement('div');
