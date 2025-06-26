@@ -312,7 +312,7 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
             ...e,
             scheduled_hours: 0,
             daysWorked: 0, // Track days worked by each employee for the current week
-            scheduledForCurrentDay: false // Track if employee has been scheduled for the current day
+            // IMPORTANT: 'scheduledForCurrentDay' will be added/managed within the daily loop for cleaner reset
         }));
 
         const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -326,8 +326,9 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
             const dayName = daysOfWeek[currentDate.getDay()]; // Get day name (e.g., 'monday')
             let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); // Target hours for this specific day
             
-            // Reset scheduledForCurrentDay flag for all employees at the start of each new day
-            employeeScheduleData.forEach(emp => emp.scheduledForCurrentDay = false);
+            // Reset 'scheduledForCurrentDay' for all employees at the start of each new day
+            // Create a temporary daily state for employees to track who has been scheduled for *this specific day*
+            let currentDayEmployees = employeeScheduleData.map(emp => ({ ...emp, scheduledForCurrentDay: false }));
 
             // Create a coverage array for the current day, representing each hour (or half-hour)
             // Initialize with false (no coverage)
@@ -362,9 +363,11 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
                     continue; 
                 }
 
+                // Attempt to find an employee to cover this currentHour slot
+                let employeeAssignedThisHour = null;
+
                 // Step 1: Try to schedule a Full-time employee first
-                // Filter and sort eligible FT employees for this hour
-                const eligibleFTEmployees = employeeScheduleData.filter(emp => {
+                const eligibleFTEmployees = currentDayEmployees.filter(emp => { // Filter from currentDayEmployees
                     if (emp.employment_type !== 'Full-time') return false; 
                     if (emp.daysWorked >= 5) return false; 
                     if (emp.scheduled_hours >= 40) return false; 
@@ -383,22 +386,27 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
                 }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize FTs with fewer hours scheduled
 
                 if (eligibleFTEmployees.length > 0) {
-                    const employeeScheduled = eligibleFTEmployees[0]; 
+                    employeeAssignedThisHour = eligibleFTEmployees[0]; 
                     
-                    const shiftStartTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0); // Construct using local components
+                    const FULL_TIME_WORK_DURATION = 8;
+                    const FULL_TIME_BREAK_DURATION = 0.5;
+
+                    // Construct Date objects in terms of local time, then convert to ISO UTC for TIMESTAMPTZ
+                    const shiftStartTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0); 
                     const shiftEndTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + FULL_TIME_WORK_DURATION, FULL_TIME_BREAK_DURATION * 60, 0); 
                     
-                    // Convert to ISO string (UTC) before sending to TIMESTAMPTZ
-                    const shiftStartTimeISO = shiftStartTime.toISOString();
-                    const shiftEndTimeISO = shiftEndTime.toISOString();
-
                     await client.query(
                         'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                        [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated FT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                        [employeeAssignedThisHour.user_id, employeeAssignedThisHour.location_id, shiftStartTime.toISOString(), shiftEndTime.toISOString(), `Auto-generated FT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
                     );
-                    employeeScheduled.scheduled_hours += FULL_TIME_WORK_DURATION; 
-                    employeeScheduled.daysWorked++; 
-                    employeeScheduled.scheduledForCurrentDay = true; // Mark employee as scheduled for today
+                    
+                    // Update the global employeeScheduleData for persistent tracking across days
+                    const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeAssignedThisHour.user_id);
+                    if (globalEmpIndex !== -1) {
+                        employeeScheduleData[globalEmpIndex].scheduled_hours += FULL_TIME_WORK_DURATION; 
+                        employeeScheduleData[globalEmpIndex].daysWorked++; 
+                    }
+                    employeeAssignedThisHour.scheduledForCurrentDay = true; // Mark as scheduled for THIS day's current iteration
                     remainingDailyTargetHours -= FULL_TIME_WORK_DURATION; 
                     totalShiftsCreated++;
                     
@@ -407,54 +415,55 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
                         const idx = h - businessStartHour;
                         if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
                     }
-                    continue; // Continue to next currentHour in the for loop
+                    // No 'continue' here, just let the loop iterate to the next 'currentHour'
                 }
 
                 // Step 2: If no FT was scheduled for this slot, try to schedule a Part-time employee
-                const eligiblePTEmployees = employeeScheduleData.filter(emp => {
-                    if (emp.employment_type !== 'Part-time') return false; 
-                    if (emp.daysWorked >= 5) return false; 
-                    if (emp.scheduledForCurrentDay) return false; // Skip if already scheduled today
+                if (!employeeAssignedThisHour && remainingDailyTargetHours > 0) {
+                    const eligiblePTEmployees = currentDayEmployees.filter(emp => { // Filter from currentDayEmployees
+                        if (emp.employment_type !== 'Part-time') return false; 
+                        if (emp.daysWorked >= 5) return false; 
+                        if (emp.scheduledForCurrentDay) return false; // Skip if already scheduled today
 
-                    const dayAvail = emp.availability && emp.availability[dayName];
-                    const PART_TIME_SHIFT_LENGTH = 4; 
-                    
-                    // Check if availability covers the full shift starting from currentHour AND stays within business bounds
-                    return dayAvail && 
-                           parseInt(dayAvail.start.split(':')[0], 10) <= currentHour && 
-                           parseInt(dayAvail.end.split(':')[0], 10) >= (currentHour + PART_TIME_SHIFT_LENGTH) &&
-                           (currentHour + PART_TIME_SHIFT_LENGTH) <= businessEndHour;
-                }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize PTs with fewer hours scheduled
+                        const dayAvail = emp.availability && emp.availability[dayName];
+                        const PART_TIME_SHIFT_LENGTH = 4; 
+                        
+                        // Check if availability covers the full shift starting from currentHour AND stays within business bounds
+                        return dayAvail && 
+                               parseInt(dayAvail.start.split(':')[0], 10) <= currentHour && 
+                               parseInt(dayAvail.end.split(':')[0], 10) >= (currentHour + PART_TIME_SHIFT_LENGTH) &&
+                               (currentHour + PART_TIME_SHIFT_LENGTH) <= businessEndHour;
+                    }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize PTs with fewer hours scheduled
 
-                if (eligiblePTEmployees.length > 0) {
-                    const employeeScheduled = eligiblePTEmployees[0]; 
-                    
-                    const shiftStartTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0); // Construct using local components
-                    const shiftEndTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + PART_TIME_SHIFT_LENGTH, 0, 0); 
-                    
-                    // Convert to ISO string (UTC) before sending to TIMESTAMPTZ
-                    const shiftStartTimeISO = shiftStartTime.toISOString();
-                    const shiftEndTimeISO = shiftEndTime.toISOString();
-
-                    await client.query(
-                        'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                        [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated PT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
-                    );
-                    employeeScheduled.scheduled_hours += PART_TIME_SHIFT_LENGTH;
-                    employeeScheduled.daysWorked++;
-                    employeeScheduled.scheduledForCurrentDay = true; // Mark employee as scheduled for today
-                    remainingDailyTargetHours -= PART_TIME_SHIFT_LENGTH;
-                    totalShiftsCreated++;
-                    
-                    // Mark covered hours
-                    for (let h = currentHour; h < currentHour + PART_TIME_SHIFT_LENGTH; h++) {
-                        const idx = h - businessStartHour;
-                        if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
+                    if (eligiblePTEmployees.length > 0) {
+                        employeeAssignedThisHour = eligiblePTEmployees[0]; 
+                        
+                        const shiftStartTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0); // Construct using local components
+                        const shiftEndTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + PART_TIME_SHIFT_LENGTH, 0, 0); 
+                        
+                        await client.query(
+                            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+                            [employeeAssignedThisHour.user_id, employeeAssignedThisHour.location_id, shiftStartTime.toISOString(), shiftEndTime.toISOString(), `Auto-generated PT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                        );
+                        
+                        // Update the global employeeScheduleData for persistent tracking across days
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeAssignedThisHour.user_id);
+                        if (globalEmpIndex !== -1) {
+                            employeeScheduleData[globalEmpIndex].scheduled_hours += PART_TIME_SHIFT_LENGTH;
+                            employeeScheduleData[globalEmpIndex].daysWorked++;
+                        }
+                        employeeAssignedThisHour.scheduledForCurrentDay = true; // Mark as scheduled for THIS day's current iteration
+                        remainingDailyTargetHours -= PART_TIME_SHIFT_LENGTH;
+                        totalShiftsCreated++;
+                        
+                        // Mark covered hours
+                        for (let h = currentHour; h < currentHour + PART_TIME_SHIFT_LENGTH; h++) {
+                            const idx = h - businessStartHour;
+                            if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
+                        }
+                        // No 'continue' here, just let the loop iterate to the next 'currentHour'
                     }
-                    continue; // Skip to next currentHour in the for loop
                 }
-
-                // If this hour could not be scheduled by FT or PT, the loop will naturally advance to the next currentHour.
             }
         }
 
