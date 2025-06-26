@@ -200,7 +200,40 @@ app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
 // Onboarding & Checklist Routes
-// ... (rest of routes remain the same)
+app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
+    const { full_name, email, position_id } = req.body;
+    if (!full_name || !email || !position_id) return res.status(400).json({ error: 'Full name, email, and position are required.' });
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const tempPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        const userRes = await client.query(
+            `INSERT INTO users (full_name, email, password, role, position) VALUES ($1, $2, $3, 'employee', (SELECT position FROM checklists WHERE id = $4)) RETURNING user_id`,
+            [full_name, email, hashedPassword, position_id]
+        );
+        const newUserId = userRes.rows[0].user_id;
+        const checklistRes = await client.query('SELECT tasks FROM checklists WHERE id = $1', [position_id]);
+        if (checklistRes.rows.length === 0) throw new Error('Checklist not found.');
+        const tasks = checklistRes.rows[0].tasks;
+        const initialTasksStatus = tasks.map(task => ({ ...task, completed: false }));
+        await client.query(
+            `INSERT INTO onboarding_sessions (user_id, checklist_id, tasks_status) VALUES ($1, $2, $3)`,
+            [newUserId, position_id, JSON.stringify(initialTasksStatus)]
+        );
+        await client.query('COMMIT');
+        console.log(`Onboarding invite for ${email} complete. Temporary password: ${tempPassword}`);
+        res.status(201).json({ message: 'Onboarding started successfully.', tempPassword: tempPassword });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(400).json({ error: 'This email address is already in use.' });
+        res.status(500).json({ error: 'An error occurred during the onboarding process.' });
+    } finally {
+        client.release();
+    }
+});
+
+// ... (Other routes like /checklists, /job-postings, etc. remain here)
 
 
 // Scheduling Routes
@@ -219,7 +252,7 @@ app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate } = req.body;
     if (!startDate || !endDate) return res.status(400).json({ error: 'Start date and end date are required.' });
     const sql = `
         SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
@@ -237,7 +270,6 @@ app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// *** NEW: AUTO-SCHEDULING ENDPOINT ***
 app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
     const { weekStartDate } = req.body;
     if (!weekStartDate) {
@@ -248,7 +280,6 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
     try {
         await client.query('BEGIN');
 
-        // 1. Fetch all employees with their availability and location
         const { rows: employees } = await client.query(`
             SELECT user_id, availability, location_id FROM users 
             WHERE role = 'employee' AND availability IS NOT NULL
@@ -261,21 +292,17 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
         const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         let shiftsCreated = 0;
 
-        // 2. Loop through each day of the week
         for (let i = 0; i < 7; i++) {
             const currentDate = new Date(weekStartDate);
             currentDate.setDate(currentDate.getDate() + i);
             const dayName = daysOfWeek[currentDate.getDay()];
 
-            // 3. Find an available employee for a standard 9-5 shift on this day
             const availableEmployee = employees.find(emp => {
                 const dayAvail = emp.availability[dayName];
-                // Check if they are available for a full 9 AM to 5 PM shift
                 return dayAvail && parseFloat(dayAvail.start) <= 9 && parseFloat(dayAvail.end) >= 17;
             });
             
             if (availableEmployee) {
-                // 4. Create the shift if an employee is found
                 const shiftStartTime = new Date(currentDate);
                 shiftStartTime.setHours(9, 0, 0, 0);
 
@@ -304,4 +331,39 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
 
 
 // --- 7. Server Startup Logic ---
-// ... (this remains the same)
+const startServer = async () => {
+    let client;
+    try {
+        client = await pool.connect();
+        console.log('Connected to the PostgreSQL database.');
+        
+        // --- Schema Migrations ---
+        console.log("Checking for database migrations...");
+        const hasEmploymentType = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='employment_type'");
+        if (hasEmploymentType.rowCount === 0) {
+            await client.query("ALTER TABLE users ADD COLUMN employment_type VARCHAR(50)");
+            console.log("Migrated: Added 'employment_type' column to users table.");
+        }
+
+        const hasAvailability = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='availability'");
+        if (hasAvailability.rowCount === 0) {
+            await client.query("ALTER TABLE users ADD COLUMN availability JSONB");
+            console.log("Migrated: Added 'availability' column to users table.");
+        }
+        console.log("Database schema migrations complete.");
+
+        client.release();
+
+        // Start the server
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+
+    } catch (err) {
+        console.error('Failed to initialize database or start server:', err.stack);
+        if (client) client.release();
+        process.exit(1);
+    }
+};
+
+startServer();
