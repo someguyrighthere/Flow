@@ -59,7 +59,8 @@
             color: var(--text-light); box-sizing: border-box;
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
-        .modal-overlay {
+        .modal-overlay { /* NOTE: These modal-overlay styles might be from older code. 
+                           The current modals in scheduling.html and utils.js use .modal */
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
             justify-content: center; z-index: 1000; display: none;
@@ -103,6 +104,41 @@
         }
         .availability-day select {
             flex-grow: 1;
+        }
+
+        /* Standard Modal Styles (from scheduling.html for consistency) */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.6); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+
+        .modal-content {
+            background-color: var(--card-bg); 
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%; 
+            max-width: 500px; 
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; 
+            color: var(--text-light); 
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* Keyframe animation for modal fade-in */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
         }
     </style>
 </head>
@@ -229,20 +265,20 @@
         </div>
     </div>
     <!-- Modals -->
-    <div id="message-modal-overlay" class="modal-overlay">
+    <div id="modal-message" class="modal">
         <div class="modal-content">
-            <p id="modal-message-text"></p>
-            <div class="modal-buttons">
-                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
             </div>
         </div>
     </div>
-    <div id="confirm-modal-overlay" class="modal-overlay">
+    <div id="confirm-modal" class="modal">
         <div class="modal-content">
-            <p id="confirm-modal-message"></p>
-            <div class="modal-buttons">
-                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
-                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
             </div>
         </div>
     </div>

@@ -11,6 +11,8 @@ export function handleAdminPage() {
 
     // --- DOM Element Selection ---
     const businessSettingsForm = document.getElementById('business-settings-form');
+    const operatingHoursStartInput = document.getElementById('operating-hours-start');
+    const operatingHoursEndInput = document.getElementById('operating-hours-end');
     const locationListDiv = document.getElementById('location-list');
     const newLocationForm = document.getElementById('new-location-form');
     const newLocationNameInput = document.getElementById('new-location-name');
@@ -29,11 +31,11 @@ export function handleAdminPage() {
      * Loads and displays current business settings (operating hours).
      */
     async function loadBusinessSettings() {
-        if (!businessSettingsForm) return;
+        if (!businessSettingsForm || !operatingHoursStartInput || !operatingHoursEndInput) return;
         try {
             const settings = await apiRequest('GET', '/settings/business');
-            document.getElementById('operating-hours-start').value = settings.operating_hours_start || '09:00';
-            document.getElementById('operating-hours-end').value = settings.operating_hours_end || '17:00';
+            operatingHoursStartInput.value = settings.operating_hours_start || '09:00';
+            operatingHoursEndInput.value = settings.operating_hours_end || '17:00';
         } catch (error) {
             showModalMessage('Could not load business settings. Using defaults.', true);
             console.error('Error loading business settings:', error);
@@ -191,12 +193,14 @@ export function handleAdminPage() {
         businessSettingsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const settingsData = {
-                operating_hours_start: document.getElementById('operating-hours-start').value,
-                operating_hours_end: document.getElementById('operating-hours-end').value,
+                operating_hours_start: operatingHoursStartInput.value,
+                operating_hours_end: operatingHoursEndInput.value,
             };
             try {
                 await apiRequest('POST', '/settings/business', settingsData);
                 showModalMessage('Business settings saved successfully!', false);
+                // After saving, reload settings to ensure inputs reflect saved values
+                loadBusinessSettings(); 
             } catch (error) {
                 showModalMessage(`Error saving settings: ${error.message}`, true);
                 console.error('Error saving business settings:', error);
@@ -294,6 +298,7 @@ export function handleAdminPage() {
             try {
                 const response = await apiRequest('POST', '/invite-admin', adminData);
                 // Display the temporary password prominently for the admin to note down
+                // The tempPassword should be part of the response from the server-side invite-employee route
                 showModalMessage(`Admin invited successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new admin.`, false);
                 inviteAdminForm.reset(); // Clear the form
                 loadUsers(); // Refresh user list to show the new admin
@@ -341,6 +346,7 @@ export function handleAdminPage() {
             try {
                 const response = await apiRequest('POST', '/invite-employee', employeeData);
                 // Display the temporary password
+                // The tempPassword should be part of the response from the server-side invite-employee route
                 showModalMessage(`Employee invited successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new employee.`, false);
                 inviteEmployeeForm.reset(); // Clear form
                 // Reset availability inputs to "Not Available" after successful submission
