@@ -20,7 +20,7 @@ export function handleSchedulingPage() {
 
     const availabilityToggle = document.getElementById('toggle-availability');
     const autoGenerateBtn = document.getElementById('auto-generate-schedule-btn');
-    const dailyHoursContainer = document.getElementById('daily-hours-inputs');
+    const dailyHoursContainer = document = document.getElementById('daily-hours-inputs');
 
     // Initialize currentStartDate to the beginning of the current week (Sunday)
     let currentStartDate = new Date();
@@ -307,6 +307,7 @@ export function handleSchedulingPage() {
                 
                 // Show a confirmation modal before proceeding with deletion
                 const confirmed = await showConfirmModal('Are you sure you want to delete this shift?');
+                console.log("Confirmation modal resolved with:", confirmed); // DEBUG: Log confirmed value
                 
                 if (confirmed) {
                     try {
