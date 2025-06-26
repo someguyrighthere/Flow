@@ -2,6 +2,8 @@
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 export function handleSchedulingPage() {
+    console.log("handleSchedulingPage initialized."); // DEBUG: Confirm function starts
+
     // Redirect to login page if no authentication token is found in local storage
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
@@ -27,6 +29,9 @@ export function handleSchedulingPage() {
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
+
+    console.log("DOM elements retrieved:", { calendarGrid: !!calendarGrid, nextWeekBtn: !!nextWeekBtn }); // DEBUG: Check if elements are found
+
 
     /**
      * Dynamically creates input fields for setting target daily hours for each day of the week.
@@ -181,9 +186,7 @@ export function handleSchedulingPage() {
                             <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
                             <span style="color: #ddd;">${shift.location_name || ''}</span>
                             <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-                                </svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
                             </button>
                         `;
                         // Add a title attribute for tooltip on hover
@@ -262,7 +265,6 @@ export function handleSchedulingPage() {
                 apiRequest('GET', '/locations')
             ]);
             
-            // Populate Employee Select dropdown
             if (employeeSelect) {
                 employeeSelect.innerHTML = '<option value="">Select Employee</option>'; // Default option
                 const employees = users.filter(u => u.role === 'employee'); // Filter for employees only
@@ -294,23 +296,26 @@ export function handleSchedulingPage() {
      */
     if (calendarGrid) {
         calendarGrid.addEventListener('click', async (e) => {
-            // Use e.target.closest() to find the nearest ancestor with the class 'delete-shift-btn'
-            // This handles clicks on the SVG path inside the button.
+            // Log the element that was actually clicked
+            console.log("Calendar grid clicked on:", e.target); 
+            // Find the closest parent element with the class 'delete-shift-btn' starting from the clicked target
             const deleteButton = e.target.closest('.delete-shift-btn');
+            console.log("Delete button found by closest():", deleteButton); // Log what closest() found
 
             if (deleteButton) {
                 e.stopPropagation(); // Stop event propagation to prevent other calendar click handlers from firing
-                const shiftIdToDelete = deleteButton.dataset.shiftId; // Get the shift ID from the data attribute
+                const shiftIdToDelete = String(deleteButton.dataset.shiftId); // Get the shift ID from the data attribute
 
                 // Basic validation for shift ID
                 if (!shiftIdToDelete || shiftIdToDelete === "undefined" || shiftIdToDelete === "null") {
                     showModalMessage('Shift ID not found. Cannot delete.', true);
                     return;
                 }
-
+                
                 // Show confirmation modal to the user
                 const isConfirmed = await showConfirmModal('Are you sure you want to delete this shift? This action cannot be undone.');
-
+                console.log("Confirmation modal resolved with:", isConfirmed); // DEBUG: Log confirmed value
+                
                 if (isConfirmed) {
                     try {
                         // Call the API to delete the shift
@@ -393,8 +398,10 @@ export function handleSchedulingPage() {
      * Increments the current week's start date by 7 days and re-renders the calendar.
      */
     if (nextWeekBtn) {
-        currentStartDate.setDate(currentStartDate.getDate() + 7); // Move forward one week
-        renderCalendar(currentStartDate); // Re-render calendar for the new week
+        nextWeekBtn.addEventListener('click', () => { 
+            currentStartDate.setDate(currentStartDate.getDate() + 7); // Move forward one week
+            renderCalendar(currentStartDate); // Re-render calendar for the new week
+        });
     } 
     
     /**
