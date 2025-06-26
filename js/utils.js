@@ -41,7 +41,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         const modalCancelButton = document.getElementById("confirm-modal-cancel");   // Corrected ID
 
         if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
-            console.error("Confirmation modal elements not found.");
+            console.error("Confirmation modal elements not found. Falling back to browser's confirm.");
             // Fallback to the browser's confirm dialog if the custom modal isn't found
             resolve(window.confirm(message));
             return;
@@ -51,50 +51,27 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         modalConfirmButton.textContent = confirmButtonText;
         confirmModalOverlay.style.display = "flex";
 
+        // Define the response handler
         const handleResponse = (value) => {
+            // Remove the event listeners to prevent them from firing again
+            modalConfirmButton.removeEventListener("click", onConfirm);
+            modalCancelButton.removeEventListener("click", onCancel);
+            confirmModalOverlay.removeEventListener("click", onClickOutside); // Remove click outside listener
             confirmModalOverlay.style.display = "none";
-            // Important: Clone and replace nodes to remove all old event listeners
-            // This prevents multiple event listeners from stacking on subsequent calls
-            const newConfirm = modalConfirmButton.cloneNode(true);
-            const newCancel = modalCancelButton.cloneNode(true);
-            modalConfirmButton.parentNode.replaceChild(newConfirm, modalConfirmButton);
-            modalCancelButton.parentNode.replaceChild(newCancel, modalCancelButton);
             resolve(value);
         };
         
-        // Add event listeners using the new cloned buttons
-        newConfirm.addEventListener("click", onConfirm, { once: true });
-        newCancel.addEventListener("click", onCancel, { once: true });
-        
+        // Define click handlers
         const onConfirm = () => handleResponse(true);
         const onCancel = () => handleResponse(false);
-
-        // Attach listeners to the new cloned elements
-        // The previous lines using modalConfirmButton and modalCancelButton were attaching to old nodes.
-        // The correct approach is to attach to the `newConfirm` and `newCancel` if cloning is done inside handleResponse.
-        // If cloning is done outside, then the listeners should be re-attached after each modal show.
-        // Let's refine the logic for event listeners given the cloning.
-        // It's better to attach events AFTER the cloning, or clear them.
-        // The current cloning inside `handleResponse` makes adding `once: true` directly to `modalConfirmButton` complex.
-
-        // Re-attaching the event listeners to the *new* buttons after cloning them to clear previous listeners.
-        // This ensures `once: true` behaves as expected.
-        const addListeners = () => {
-            modalConfirmButton.addEventListener("click", onConfirm, { once: true });
-            modalCancelButton.addEventListener("click", onCancel, { once: true });
-            confirmModalOverlay.onclick = event => { 
-                if (event.target === confirmModalOverlay) onCancel(); 
-            };
+        const onClickOutside = (event) => {
+            if (event.target === confirmModalOverlay) onCancel();
         };
 
-        // Initially attach listeners or re-attach them if the modal is being reused.
-        // The original code was already attempting to do this with `once: true`.
-        // The issue was primarily the element selection.
-        modalConfirmButton.addEventListener("click", onConfirm, { once: true });
-        modalCancelButton.addEventListener("click", onCancel, { once: true });
-        confirmModalOverlay.onclick = event => { 
-            if (event.target === confirmModalOverlay) onCancel(); 
-        };
+        // Attach event listeners. `once: true` is not needed if we explicitly remove them in `handleResponse`.
+        modalConfirmButton.addEventListener("click", onConfirm);
+        modalCancelButton.addEventListener("click", onCancel);
+        confirmModalOverlay.addEventListener("click", onClickOutside);
     });
 }
 
