@@ -51,26 +51,28 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         modalConfirmButton.textContent = confirmButtonText;
         confirmModalOverlay.style.display = "flex";
 
-        // Define the response handler
+        // Define the response handler, which also cleans up event listeners
         const handleResponse = (value) => {
-            // Remove the event listeners to prevent them from firing again
-            modalConfirmButton.removeEventListener("click", onConfirm);
-            modalCancelButton.removeEventListener("click", onCancel);
-            confirmModalOverlay.removeEventListener("click", onClickOutside); // Remove click outside listener
-            confirmModalOverlay.style.display = "none";
-            resolve(value);
+            // Remove event listeners to prevent multiple firings on subsequent modal uses
+            modalConfirmButton.removeEventListener("click", onConfirmClick);
+            modalCancelButton.removeEventListener("click", onCancelClick);
+            confirmModalOverlay.removeEventListener("click", onClickOutside);
+            confirmModalOverlay.style.display = "none"; // Hide the modal
+            resolve(value); // Resolve the promise with true or false
         };
         
-        // Define click handlers
-        const onConfirm = () => handleResponse(true);
-        const onCancel = () => handleResponse(false);
+        // Define click handler functions (named functions for easier removal)
+        const onConfirmClick = () => handleResponse(true);
+        const onCancelClick = () => handleResponse(false);
         const onClickOutside = (event) => {
-            if (event.target === confirmModalOverlay) onCancel();
+            if (event.target === confirmModalOverlay) {
+                handleResponse(false); // Treat clicking outside as cancellation
+            }
         };
 
-        // Attach event listeners.
-        modalConfirmButton.addEventListener("click", onConfirm);
-        modalCancelButton.addEventListener("click", onCancel);
+        // Attach event listeners to the buttons and overlay
+        modalConfirmButton.addEventListener("click", onConfirmClick);
+        modalCancelButton.addEventListener("click", onCancelClick);
         confirmModalOverlay.addEventListener("click", onClickOutside);
     });
 }
@@ -89,8 +91,9 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
     const token = localStorage.getItem('authToken');
     const endpoint = `${API_BASE_URL}${path}`;
 
-    console.log(`[apiRequest] Attempting ${method} request to: ${endpoint}`); // DEBUG
-    console.log(`[apiRequest] Token present: ${!!token}`); // DEBUG
+    // Debugging logs - removed for production code, but helpful during development
+    // console.log(`[apiRequest] Attempting ${method} request to: ${endpoint}`); 
+    // console.log(`[apiRequest] Token present: ${!!token}`); 
 
     const handleAuthError = (errorMessage) => {
         localStorage.removeItem('authToken');
@@ -100,7 +103,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
     };
 
     if (isFormData) {
-        console.log("[apiRequest] Handling FormData request."); // DEBUG
+        // console.log("[apiRequest] Handling FormData request."); // Debugging log
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
@@ -108,7 +111,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
             if (onProgress && xhr.upload) xhr.upload.addEventListener('progress', onProgress);
             
             xhr.onload = function () {
-                console.log(`[apiRequest] XHR Load: Status ${xhr.status}`); // DEBUG
+                // console.log(`[apiRequest] XHR Load: Status ${xhr.status}`); // Debugging log
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try { resolve(JSON.parse(xhr.responseText || '{}')); } catch (e) { resolve({}); }
                 } else if (xhr.status === 401 || xhr.status === 403) {
@@ -123,7 +126,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
                 }
             };
             xhr.onerror = () => {
-                console.error("[apiRequest] XHR Error: Network issue."); // DEBUG
+                // console.error("[apiRequest] XHR Error: Network issue."); // Debugging log
                 reject(new Error('Network error. Check connection or CORS policy.'));
             };
             xhr.send(body);
@@ -138,11 +141,11 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         options.headers['Content-Type'] = 'application/json';
         options.body = JSON.stringify(body);
     }
-    console.log("[apiRequest] Fetch options:", options); // DEBUG
+    // console.log("[apiRequest] Fetch options:", options); // Debugging log
 
     try {
         const response = await fetch(endpoint, options);
-        console.log(`[apiRequest] Fetch Response Status: ${response.status}`); // DEBUG
+        // console.log(`[apiRequest] Fetch Response Status: ${response.status}`); // Debugging log
         
         if (response.status === 401 || response.status === 403) {
             handleAuthError('Your session has expired. Please log in again.');
@@ -157,26 +160,26 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
             } catch (e) {
                 errorMsg = response.statusText;
             }
-            console.error(`[apiRequest] Fetch not OK: ${errorMsg}`); // DEBUG
+            // console.error(`[apiRequest] Fetch not OK: ${errorMsg}`); // Debugging log
             throw new Error(errorMsg);
         }
 
         if (expectBlobResponse) {
-            console.log("[apiRequest] Expecting Blob response."); // DEBUG
+            // console.log("[apiRequest] Expecting Blob response."); // Debugging log
             return response.blob();
         }
 
         const contentLength = response.headers.get("content-length");
         if (response.status === 204 || contentLength === "0") {
-            console.log("[apiRequest] Returning null for 204 or empty content."); // DEBUG
+            // console.log("[apiRequest] Returning null for 204 or empty content."); // Debugging log
             return null;
         }
 
-        console.log("[apiRequest] Parsing JSON response."); // DEBUG
+        // console.log("[apiRequest] Parsing JSON response."); // Debugging log
         return response.json();
 
     } catch (error) {
-        console.error('[apiRequest] Caught error:', error); // DEBUG
+        // console.error('[apiRequest] Caught error:', error); // Debugging log
         showModalMessage(error.message, true);
         throw error;
     }
