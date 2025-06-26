@@ -52,7 +52,7 @@ export function handleSchedulingPage() {
 
         // Create Header Row
         const headerContainer = document.createElement('div');
-        headerContainer.className = 'calendar-grid-header';
+        headerContainer.className = 'header'; // CHANGE THIS LINE
         calendarGrid.appendChild(headerContainer);
         
         const timeHeader = document.createElement('div');
