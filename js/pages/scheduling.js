@@ -48,7 +48,7 @@ export function handleSchedulingPage() {
         const options = { month: 'short', day: 'numeric' };
         currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
         
-        calendarGrid.innerHTML = ''; // Clear the entire grid
+        calendarGrid.innerHTML = '';
 
         // Create Time Column
         const timeColumn = document.createElement('div');
@@ -68,7 +68,6 @@ export function handleSchedulingPage() {
         daysContainer.className = 'days-container';
         calendarGrid.appendChild(daysContainer);
 
-        // Create each Day Column
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startDate);
             dayDate.setDate(startDate.getDate() + i);
@@ -82,7 +81,6 @@ export function handleSchedulingPage() {
             dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
             dayColumn.appendChild(dayHeader);
 
-            // Add hour lines for background
             for (let j = 0; j < 24; j++) {
                 const hourLine = document.createElement('div');
                 hourLine.className = 'hour-line';
@@ -114,17 +112,18 @@ export function handleSchedulingPage() {
                     const dayColumn = document.getElementById(`day-column-${dayIndex}`);
 
                     if (dayColumn) {
+                        const totalMinutesInDay = 24 * 60;
                         const startMinutes = shiftStart.getHours() * 60 + shiftStart.getMinutes();
                         const endMinutes = shiftEnd.getHours() * 60 + shiftEnd.getMinutes();
                         const durationMinutes = endMinutes - startMinutes;
                         
-                        const topPosition = (startMinutes / (24*60)) * 100; // Position as a percentage
-                        const height = (durationMinutes / (24*60)) * 100; // Height as a percentage
+                        const topPosition = (startMinutes / totalMinutesInDay) * (24 * 60); // Position in pixels
+                        const height = (durationMinutes / totalMinutesInDay) * (24 * 60); // Height in pixels
                         
                         const shiftElement = document.createElement('div');
                         shiftElement.className = 'calendar-shift';
-                        shiftElement.style.top = `${topPosition}%`;
-                        shiftElement.style.height = `${height}%`;
+                        shiftElement.style.top = `${topPosition}px`;
+                        shiftElement.style.height = `${height}px`;
                         
                         const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
                         const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
@@ -171,8 +170,8 @@ export function handleSchedulingPage() {
                                 if (!availabilityToggle.checked) {
                                     availabilityBlock.classList.add('hidden');
                                 }
-                                availabilityBlock.style.top = `${(startHour / 24) * 100}%`;
-                                availabilityBlock.style.height = `${(duration / 24) * 100}%`;
+                                availabilityBlock.style.top = `${startHour * 60}px`;
+                                availabilityBlock.style.height = `${duration * 60}px`;
                                 dayColumn.appendChild(availabilityBlock);
                             }
                         }
