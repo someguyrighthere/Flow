@@ -14,12 +14,8 @@ export function showModalMessage(message, isError = false) {
     const modalOkButton = document.getElementById("modal-ok-button");
 
     if (modalOverlay && modalMessageText && modalOkButton) {
-        modalMessageText.textContent = message;
-        modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
-        
-        // Define hide function
+        // Define hide functions first, before attaching/removing listeners
         const hideModal = () => { modalOverlay.style.display = "none"; };
-        // Define click outside function
         const hideModalOutside = (event) => { 
             if (event.target === modalOverlay) hideModal(); 
         };
@@ -28,6 +24,8 @@ export function showModalMessage(message, isError = false) {
         modalOkButton.removeEventListener("click", hideModal);
         modalOverlay.removeEventListener("click", hideModalOutside);
 
+        modalMessageText.textContent = message;
+        modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
         modalOverlay.style.display = "flex"; // Show the modal
 
         // Add event listeners
@@ -36,7 +34,6 @@ export function showModalMessage(message, isError = false) {
 
     } else {
         console.error("Modal elements not found for showModalMessage:", message);
-        // Fallback to browser alert if modal elements are missing
         if (isError) {
             console.error(`ERROR: ${message}`);
         } else {
@@ -52,7 +49,6 @@ export function showModalMessage(message, isError = false) {
  * @returns {Promise<boolean>} A promise that resolves to true if confirmed, false otherwise.
  */
 export function showConfirmModal(message, confirmButtonText = "Confirm") {
-    // FIX: Using a new Promise for each call, and attaching/removing listeners within its scope
     return new Promise(resolve => {
         const confirmModalOverlay = document.getElementById("confirm-modal");
         const confirmModalMessage = document.getElementById("confirm-modal-text");
@@ -95,32 +91,13 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
             modalCancelButton.removeEventListener('click', handleCancel);
             confirmModalOverlay.removeEventListener('click', handleClickOutside);
             
-            // Remove the inline onclick attributes (if they were set for debugging)
-            modalConfirmButton.removeAttribute('onclick');
-            modalCancelButton.removeAttribute('onclick');
-            
             confirmModalOverlay.style.display = 'none'; // Hide the modal
         };
 
         // Attach listeners for this specific modal instance
-        // IMPORTANT: For debugging unresponsive buttons, we'll temporarily add inline onclick too.
-        // This bypasses potential z-index/overlay issues that block addEventListener clicks.
         modalConfirmButton.addEventListener('click', handleConfirm);
         modalCancelButton.addEventListener('click', handleCancel);
         confirmModalOverlay.addEventListener('click', handleClickOutside);
-
-        // TEMPORARY DEBUGGING: Add inline onclick for high precedence
-        // If these work, it confirms an overlay or subtle event listener block.
-        // These will be removed by cleanup()
-        modalConfirmButton.setAttribute('onclick', 'this._tempConfirmHandler();');
-        modalCancelButton.setAttribute('onclick', 'this._tempCancelHandler();');
-
-        // Attach temporary global functions for inline onclick to call
-        // This is a workaround for the isolated scope of handleConfirm/Cancel
-        window._tempConfirmHandler = handleConfirm;
-        window._tempCancelHandler = handleCancel;
-
-
     });
 }
 
