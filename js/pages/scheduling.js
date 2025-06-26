@@ -19,6 +19,7 @@ export function handleSchedulingPage() {
 
     const availabilityToggle = document.getElementById('toggle-availability');
     const autoGenerateBtn = document.getElementById('auto-generate-schedule-btn');
+    const dailyHoursContainer = document.getElementById('daily-hours-inputs');
 
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
@@ -36,6 +37,22 @@ export function handleSchedulingPage() {
             timeColumn.appendChild(timeSlot);
         }
     }
+    
+    function createDailyHoursInputs() {
+        if (!dailyHoursContainer) return;
+        dailyHoursContainer.innerHTML = '';
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        days.forEach(day => {
+            const dayId = day.toLowerCase();
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+            formGroup.innerHTML = `
+                <label for="hours-${dayId}">${day}</label>
+                <input type="number" id="hours-${dayId}" class="daily-hours-input" min="0" value="8" step="1" data-day="${dayId}">
+            `;
+            dailyHoursContainer.appendChild(formGroup);
+        });
+    }
 
     async function renderCalendar(startDate) {
         if (!calendarGrid || !currentWeekDisplay) return;
@@ -45,11 +62,15 @@ export function handleSchedulingPage() {
         const options = { month: 'short', day: 'numeric' };
         currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
         
+        // *** FIX: Correctly clear only the dynamic parts of the grid ***
         const oldDayHeaders = calendarGrid.querySelectorAll('.calendar-day-header:not(:first-child)');
         oldDayHeaders.forEach(header => header.remove());
         const oldDayCells = calendarGrid.querySelectorAll('.calendar-day-cell');
         oldDayCells.forEach(cell => cell.remove());
-
+        // Also remove the initial loading paragraph if it exists
+        const loadingPara = calendarGrid.querySelector('p');
+        if (loadingPara) loadingPara.remove();
+        
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startDate);
             dayDate.setDate(startDate.getDate() + i);
@@ -91,11 +112,11 @@ export function handleSchedulingPage() {
                     const dayCell = document.getElementById(`day-cell-${dayIndex}`);
 
                     if (dayCell) {
-                        const startHour = shiftStart.getHours();
-                        const startMinute = shiftStart.getMinutes();
+                        const startHour = shiftStart.getHours() + shiftStart.getMinutes() / 60;
+                        const endHour = shiftEnd.getHours() + shiftEnd.getMinutes() / 60;
                         
-                        const topPosition = (startHour + startMinute / 60) * 30;
-                        const durationHours = (shiftEnd - shiftStart) / (1000 * 60 * 60);
+                        const topPosition = startHour * 30;
+                        const durationHours = endHour - startHour;
                         const height = Math.max(15, durationHours * 30);
 
                         const shiftElement = document.createElement('div');
@@ -187,15 +208,21 @@ export function handleSchedulingPage() {
     // --- Event Handlers ---
     if (autoGenerateBtn) {
         autoGenerateBtn.addEventListener('click', async () => {
+            const dailyHours = {};
+            document.querySelectorAll('.daily-hours-input').forEach(input => {
+                dailyHours[input.dataset.day] = input.value;
+            });
+            
             const confirmed = await showConfirmModal(
-                `This will attempt to auto-generate shifts for the week of ${currentStartDate.toLocaleDateString()}. Existing shifts will not be affected. Do you want to continue?`,
+                `This will attempt to generate a schedule based on the specified daily hours. Do you want to continue?`,
                 'Generate'
             );
 
             if (confirmed) {
                 try {
                     const response = await apiRequest('POST', '/shifts/auto-generate', { 
-                        weekStartDate: currentStartDate.toISOString() 
+                        weekStartDate: currentStartDate.toISOString(),
+                        dailyHours: dailyHours
                     });
                     showModalMessage(response.message || 'Schedule generation complete!', false);
                     await renderCalendar(currentStartDate);
@@ -257,6 +284,7 @@ export function handleSchedulingPage() {
     }
     
     // --- Initial Page Load ---
+    createDailyHoursInputs();
     generateTimeSlots();
     renderCalendar(currentStartDate);
     populateDropdowns();
