@@ -90,16 +90,37 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
 
         // Function to clean up listeners and hide modal
         const cleanup = () => {
+            // Remove event listeners added by addEventListener
             modalConfirmButton.removeEventListener('click', handleConfirm);
             modalCancelButton.removeEventListener('click', handleCancel);
             confirmModalOverlay.removeEventListener('click', handleClickOutside);
+            
+            // Remove the inline onclick attributes (if they were set for debugging)
+            modalConfirmButton.removeAttribute('onclick');
+            modalCancelButton.removeAttribute('onclick');
+            
             confirmModalOverlay.style.display = 'none'; // Hide the modal
         };
 
         // Attach listeners for this specific modal instance
+        // IMPORTANT: For debugging unresponsive buttons, we'll temporarily add inline onclick too.
+        // This bypasses potential z-index/overlay issues that block addEventListener clicks.
         modalConfirmButton.addEventListener('click', handleConfirm);
         modalCancelButton.addEventListener('click', handleCancel);
         confirmModalOverlay.addEventListener('click', handleClickOutside);
+
+        // TEMPORARY DEBUGGING: Add inline onclick for high precedence
+        // If these work, it confirms an overlay or subtle event listener block.
+        // These will be removed by cleanup()
+        modalConfirmButton.setAttribute('onclick', 'this._tempConfirmHandler();');
+        modalCancelButton.setAttribute('onclick', 'this._tempCancelHandler();');
+
+        // Attach temporary global functions for inline onclick to call
+        // This is a workaround for the isolated scope of handleConfirm/Cancel
+        window._tempConfirmHandler = handleConfirm;
+        window._tempCancelHandler = handleCancel;
+
+
     });
 }
 
