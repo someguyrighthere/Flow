@@ -276,7 +276,6 @@ app.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// *** UPDATED ADVANCED AUTO-SCHEDULING LOGIC ***
 app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
     const { weekStartDate, dailyHours } = req.body;
     if (!weekStartDate || !dailyHours) {
