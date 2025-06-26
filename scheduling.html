@@ -72,6 +72,7 @@
             flex-shrink: 0;
         }
         
+        /* --- FINAL CALENDAR LAYOUT FIX --- */
         .calendar-grid-container {
             flex-grow: 1;
             overflow: auto;
@@ -81,8 +82,14 @@
         }
         .calendar-grid {
             display: grid;
-            grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
+            grid-template-columns: 80px repeat(7, 1fr);
             min-width: 1500px;
+            grid-template-rows: auto;
+        }
+        .calendar-grid > div {
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
         }
         .calendar-day-header {
             padding: 10px 0;
@@ -97,6 +104,7 @@
         
         .time-column {
             grid-column: 1 / 2;
+            grid-row: 1 / 26;
             position: sticky;
             left: 0;
             z-index: 5;
