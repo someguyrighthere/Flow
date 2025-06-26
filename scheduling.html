@@ -82,36 +82,39 @@
         }
         .calendar-grid {
             display: grid;
-            grid-template-columns: 80px 1fr;
+            grid-template-columns: 80px repeat(7, 1fr);
             min-width: 1500px;
         }
         .calendar-header-row {
-            grid-column: 2 / -1;
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            position: sticky;
-            top: 0;
-            z-index: 6;
-            background-color: #1a1a1a;
+            grid-column: 1 / -1;
+            grid-row: 1 / 2;
+            display: contents;
+        }
+        .calendar-body {
+            grid-column: 1 / -1;
+            grid-row: 2 / -1;
+            display: contents;
         }
         .calendar-day-header {
             padding: 10px 0;
             text-align: center;
             font-weight: 600;
             color: var(--text-light);
+            background-color: rgba(0,0,0,0.3);
+            position: sticky;
+            top: 0;
+            z-index: 6;
             border-bottom: 1px solid var(--border-color);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .time-column {
-            grid-column: 1 / 2;
-            grid-row: 1 / 3; /* Span header and content */
             position: sticky;
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
-            padding-top: 41px; /* Match header height */
-            box-sizing: border-box;
+            grid-column: 1 / 2;
+            grid-row: 1 / -1;
         }
         .time-slot {
             height: 60px;
@@ -123,15 +126,10 @@
             font-size: 0.8rem;
             color: var(--text-medium);
         }
-        .days-container {
-            grid-column: 2 / -1;
-            grid-row: 2 / 3;
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-        }
         .day-column {
             position: relative;
             border-right: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 1440px; /* 24 * 60px */
         }
         .day-column .hour-line {
             height: 60px;
@@ -202,7 +200,7 @@
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
             <div class="scheduling-layout">
                 <div class="sidebar">
-                    <!-- ... sidebar content remains the same ... -->
+                    <!-- ... sidebar content ... -->
                 </div>
 
                 <div class="calendar-main">
@@ -221,7 +219,7 @@
         </section>
     </div>
     
-    <!-- ... Modals remain the same ... -->
+    <!-- ... Modals ... -->
     
     <script type="module" src="js/app.js"></script>
 </body>
