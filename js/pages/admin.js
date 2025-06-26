@@ -34,6 +34,7 @@ export function handleAdminPage() {
         if (!businessSettingsForm || !operatingHoursStartInput || !operatingHoursEndInput) return;
         try {
             const settings = await apiRequest('GET', '/settings/business');
+            // Ensure values are set, providing defaults if null
             operatingHoursStartInput.value = settings.operating_hours_start || '09:00';
             operatingHoursEndInput.value = settings.operating_hours_end || '17:00';
         } catch (error) {
