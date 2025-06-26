@@ -190,7 +190,8 @@ export function handleSchedulingPage() {
                     }
                 });
             }
-        } catch (error) {
+        }
+        catch (error) {
             // Display an error message if shifts fail to load
             showModalMessage(`Error loading shifts: ${error.message}`, true);
         }
@@ -288,8 +289,12 @@ export function handleSchedulingPage() {
      */
     if (calendarGrid) {
         calendarGrid.addEventListener('click', async (e) => {
+            // Log the element that was actually clicked
+            console.log("Calendar grid clicked on:", e.target); 
             // Find the closest parent element with the class 'delete-shift-btn' starting from the clicked target
             const deleteBtn = e.target.closest('.delete-shift-btn');
+            console.log("Delete button found by closest():", deleteBtn); // Log what closest() found
+
             if (deleteBtn) {
                 e.stopPropagation(); // Prevent the click event from bubbling up to parent elements
                 const shiftId = String(deleteBtn.dataset.shiftId); // Get the shift ID from the data-shift-id attribute
