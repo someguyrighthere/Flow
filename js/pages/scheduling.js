@@ -177,7 +177,8 @@ export function handleSchedulingPage() {
                             if (duration > 0) {
                                 const availabilityBlock = document.createElement('div');
                                 availabilityBlock.className = 'availability-block';
-                                if (!availabilityToggle.checked) {
+                                // *** THIS IS THE FIX: Added a guard to ensure availabilityToggle exists ***
+                                if (availabilityToggle && !availabilityToggle.checked) {
                                     availabilityBlock.classList.add('hidden');
                                 }
                                 availabilityBlock.style.top = `${startHour * 60}px`;
