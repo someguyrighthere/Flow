@@ -9,9 +9,11 @@ const API_BASE_URL = 'https://flow-gz1r.onrender.com';
  * @param {boolean} [isError=false] Whether the message is an error.
  */
 export function showModalMessage(message, isError = false) {
-    const modalOverlay = document.getElementById("message-modal-overlay");
-    const modalMessage = document.getElementById("modal-message-text");
-    const modalCloseButton = document.getElementById("modal-close-button");
+    // Corrected IDs to match scheduling.html structure
+    const modalOverlay = document.getElementById("modal-message"); // Corrected ID
+    const modalMessage = document.getElementById("modal-text");     // Corrected ID
+    const modalCloseButton = modalOverlay ? modalOverlay.querySelector(".close-button") : null; // Select by class within the modal
+
     if (modalOverlay && modalMessage && modalCloseButton) {
         modalMessage.textContent = message;
         modalMessage.style.color = isError ? "#ff8a80" : "var(--text-light)";
@@ -32,10 +34,11 @@ export function showModalMessage(message, isError = false) {
  */
 export function showConfirmModal(message, confirmButtonText = "Confirm") {
     return new Promise(resolve => {
-        const confirmModalOverlay = document.getElementById("confirm-modal-overlay");
-        const confirmModalMessage = document.getElementById("confirm-modal-message");
-        const modalConfirmButton = document.getElementById("modal-confirm");
-        const modalCancelButton = document.getElementById("modal-cancel");
+        // Corrected IDs to match scheduling.html structure
+        const confirmModalOverlay = document.getElementById("confirm-modal");       // Corrected ID
+        const confirmModalMessage = document.getElementById("confirm-modal-text"); // Corrected ID
+        const modalConfirmButton = document.getElementById("confirm-modal-confirm"); // Corrected ID
+        const modalCancelButton = document.getElementById("confirm-modal-cancel");   // Corrected ID
 
         if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
             console.error("Confirmation modal elements not found.");
@@ -51,6 +54,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         const handleResponse = (value) => {
             confirmModalOverlay.style.display = "none";
             // Important: Clone and replace nodes to remove all old event listeners
+            // This prevents multiple event listeners from stacking on subsequent calls
             const newConfirm = modalConfirmButton.cloneNode(true);
             const newCancel = modalCancelButton.cloneNode(true);
             modalConfirmButton.parentNode.replaceChild(newConfirm, modalConfirmButton);
@@ -58,9 +62,34 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
             resolve(value);
         };
         
+        // Add event listeners using the new cloned buttons
+        newConfirm.addEventListener("click", onConfirm, { once: true });
+        newCancel.addEventListener("click", onCancel, { once: true });
+        
         const onConfirm = () => handleResponse(true);
         const onCancel = () => handleResponse(false);
 
+        // Attach listeners to the new cloned elements
+        // The previous lines using modalConfirmButton and modalCancelButton were attaching to old nodes.
+        // The correct approach is to attach to the `newConfirm` and `newCancel` if cloning is done inside handleResponse.
+        // If cloning is done outside, then the listeners should be re-attached after each modal show.
+        // Let's refine the logic for event listeners given the cloning.
+        // It's better to attach events AFTER the cloning, or clear them.
+        // The current cloning inside `handleResponse` makes adding `once: true` directly to `modalConfirmButton` complex.
+
+        // Re-attaching the event listeners to the *new* buttons after cloning them to clear previous listeners.
+        // This ensures `once: true` behaves as expected.
+        const addListeners = () => {
+            modalConfirmButton.addEventListener("click", onConfirm, { once: true });
+            modalCancelButton.addEventListener("click", onCancel, { once: true });
+            confirmModalOverlay.onclick = event => { 
+                if (event.target === confirmModalOverlay) onCancel(); 
+            };
+        };
+
+        // Initially attach listeners or re-attach them if the modal is being reused.
+        // The original code was already attempting to do this with `once: true`.
+        // The issue was primarily the element selection.
         modalConfirmButton.addEventListener("click", onConfirm, { once: true });
         modalCancelButton.addEventListener("click", onCancel, { once: true });
         confirmModalOverlay.onclick = event => { 
