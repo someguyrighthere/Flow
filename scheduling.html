@@ -245,7 +245,8 @@
             margin-top: 20px;
         }
 
-        .close-button {
+        /* Removed .close-button styles as the 'X' is being replaced by an OK button */
+        /* .close-button {
             color: var(--text-medium);
             font-size: 28px;
             font-weight: bold;
@@ -260,7 +261,7 @@
             color: var(--text-light);
             text-decoration: none;
             cursor: pointer;
-        }
+        } */
 
         /* Keyframe animation for modal fade-in */
         @keyframes fadeIn {
@@ -360,8 +361,10 @@
     <!-- Modals (message and confirmation) -->
     <div id="modal-message" class="modal">
         <div class="modal-content">
-            <span class="close-button">&times;</span>
             <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
         </div>
     </div>
     <div id="confirm-modal" class="modal">

@@ -10,16 +10,28 @@ const API_BASE_URL = 'https://flow-gz1r.onrender.com';
  */
 export function showModalMessage(message, isError = false) {
     // Corrected IDs to match scheduling.html structure
-    const modalOverlay = document.getElementById("modal-message"); // Corrected ID
-    const modalMessage = document.getElementById("modal-text");     // Corrected ID
-    const modalCloseButton = modalOverlay ? modalOverlay.querySelector(".close-button") : null; // Select by class within the modal
+    const modalOverlay = document.getElementById("modal-message"); // The main modal container
+    const modalMessageText = document.getElementById("modal-text");     // The paragraph for the message
+    const modalOkButton = document.getElementById("modal-ok-button"); // The new OK button
 
-    if (modalOverlay && modalMessage && modalCloseButton) {
-        modalMessage.textContent = message;
-        modalMessage.style.color = isError ? "#ff8a80" : "var(--text-light)";
-        modalOverlay.style.display = "flex";
-        modalCloseButton.onclick = () => { modalOverlay.style.display = "none"; };
-        modalOverlay.onclick = event => { if (event.target === modalOverlay) modalOverlay.style.display = "none"; };
+    if (modalOverlay && modalMessageText && modalOkButton) {
+        modalMessageText.textContent = message;
+        modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
+        modalOverlay.style.display = "flex"; // Show the modal
+
+        // Remove any previous listeners to prevent multiple firings
+        modalOkButton.removeEventListener("click", hideModal);
+        modalOverlay.removeEventListener("click", hideModalOutside);
+
+        // Define hide function
+        const hideModal = () => { modalOverlay.style.display = "none"; };
+        const hideModalOutside = (event) => { 
+            if (event.target === modalOverlay) hideModal(); 
+        };
+
+        // Add new listeners
+        modalOkButton.addEventListener("click", hideModal);
+        modalOverlay.addEventListener("click", hideModalOutside);
     } else {
         console.error("Modal elements not found for showModalMessage:", message);
         isError ? console.error(`ERROR: ${message}`) : console.log(`MESSAGE: ${message}`);
@@ -71,6 +83,9 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         };
 
         // Attach event listeners to the buttons and overlay
+        // Use { once: true } to automatically remove listener after first invocation if desired,
+        // but explicit removal is also fine if modal is frequently reused.
+        // For robustness, explicit removal is kept.
         modalConfirmButton.addEventListener("click", onConfirmClick);
         modalCancelButton.addEventListener("click", onCancelClick);
         confirmModalOverlay.addEventListener("click", onClickOutside);
