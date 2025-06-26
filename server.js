@@ -16,15 +16,6 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
 
-// --- Multer Setup ---
-const uploadDir = path.join(__dirname, 'uploads');
-fs.mkdirSync(uploadDir, { recursive: true });
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage: storage });
-
 // --- 3. Database Connection ---
 if (!DATABASE_URL) {
     throw new Error("DATABASE_URL environment variable is not set.");
@@ -38,7 +29,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(uploadDir));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 
@@ -68,7 +59,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-
 // User, Auth, and Account Routes
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -83,6 +73,7 @@ app.post('/login', async (req, res) => {
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ message: "Logged in successfully!", token: token, role: user.role });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "An internal server error occurred." });
     }
 });
@@ -93,6 +84,7 @@ app.get('/users/me', isAuthenticated, async (req, res) => {
         if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
         res.json(result.rows[0]);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
 });
@@ -113,12 +105,13 @@ app.put('/users/me', isAuthenticated, async (req, res) => {
         await pool.query('UPDATE users SET full_name = $1, email = $2 WHERE user_id = $3', [full_name, email, userId]);
         res.json({ message: 'Profile updated successfully.' });
     } catch (err) {
+        console.error(err);
         if (err.code === '23505') return res.status(400).json({ error: 'This email is already in use.' });
         res.status(500).json({ error: 'Failed to update profile.' });
     }
 });
 
-// Admin Routes
+// Admin & Business Settings Routes
 app.get('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM business_settings WHERE id = 1');
@@ -127,6 +120,7 @@ app.get('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
         }
         res.json(result.rows[0]);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Failed to retrieve business settings.' });
     }
 });
@@ -143,6 +137,7 @@ app.post('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
         await pool.query(query, [operating_hours_start, operating_hours_end]);
         res.json({ message: 'Business settings saved successfully.' });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Failed to save business settings.' });
     }
 });
@@ -152,7 +147,8 @@ app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
         const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: 'Failed to retrieve locations.' });
     }
 });
 
@@ -162,7 +158,8 @@ app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
         const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        res.status(400).json({ error: err.message });
+        console.error(err);
+        res.status(400).json({ error: 'Failed to create location.' });
     }
 });
 
@@ -172,7 +169,8 @@ app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
         if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
         res.status(204).send();
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: 'Failed to delete location.' });
     }
 });
 
@@ -182,16 +180,8 @@ app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         const result = await pool.query(sql);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query("SELECT user_id, full_name, availability FROM users WHERE role = 'employee' AND availability IS NOT NULL");
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve employee availability.' });
+        console.error(err);
+        res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
 
@@ -202,7 +192,8 @@ app.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
         if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
         res.status(204).send();
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: 'Failed to delete user.' });
     }
 });
 
@@ -211,11 +202,11 @@ const inviteUser = async (req, res, role) => {
     if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
     try {
         const hash = await bcrypt.hash(password, 10);
-        const result = await pool.query(
-            `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING user_id`,
+        await pool.query(
+            `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [full_name, email, hash, role, position || null, location_id || null, employment_type || null, JSON.stringify(availability) || null]
         );
-        res.status(201).json({ id: result.rows[0].user_id });
+        res.status(201).json({ message: `${role} invited successfully.` });
     } catch (err) {
         console.error('Invite user error:', err);
         if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
@@ -226,21 +217,13 @@ const inviteUser = async (req, res, role) => {
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
-// ... (Other routes: /onboard-employee, /checklists, /job-postings, etc. remain here)
-
-
 // Scheduling Routes
-app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { employee_id, location_id, start_time, end_time, notes } = req.body;
-    if (!employee_id || !location_id || !start_time || !end_time) return res.status(400).json({ error: 'Missing required shift information.' });
+app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        await pool.query(
-            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-            [employee_id, location_id, start_time, end_time, notes]
-        );
-        res.status(201).json({ message: 'Shift created successfully.' });
+        const result = await pool.query("SELECT user_id, full_name, availability FROM users WHERE role = 'employee' AND availability IS NOT NULL");
+        res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to create shift.' });
+        res.status(500).json({ error: 'Failed to retrieve employee availability.' });
     }
 });
 
@@ -251,15 +234,45 @@ app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
         FROM shifts s
         JOIN users u ON s.employee_id = u.user_id
-        JOIN locations l ON s.location_id = l.location_id
-        WHERE s.start_time >= $1 AND s.start_time <= $2
+        LEFT JOIN locations l ON s.location_id = l.location_id
+        WHERE s.start_time >= $1 AND s.start_time < $2
         ORDER BY s.start_time;
     `;
     try {
         const result = await pool.query(sql, [startDate, endDate]);
         res.json(result.rows);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Failed to retrieve shifts.' });
+    }
+});
+
+app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { employee_id, location_id, start_time, end_time, notes } = req.body;
+    if (!employee_id || !location_id || !start_time || !end_time) return res.status(400).json({ error: 'Missing required shift information.' });
+    try {
+        await pool.query(
+            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+            [employee_id, location_id, start_time, end_time, notes]
+        );
+        res.status(201).json({ message: 'Shift created successfully.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to create shift.' });
+    }
+});
+
+app.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM shifts WHERE id = $1', [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Shift not found.' });
+        }
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting shift:', err);
+        res.status(500).json({ error: 'Failed to delete shift.' });
     }
 });
 
@@ -276,25 +289,11 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
         const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
         const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
         const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
-        const businessEndHour = parseInt(settings.operating_hours_end.split(':')[0], 10);
-
-        const { rows: employees } = await client.query(`
-            SELECT 
-                u.user_id, u.availability, u.location_id, u.employment_type,
-                COALESCE(SUM(EXTRACT(EPOCH FROM (s.end_time - s.start_time))) / 3600, 0) as scheduled_hours
-            FROM users u
-            LEFT JOIN shifts s ON u.user_id = s.employee_id 
-                AND s.start_time >= $1::date 
-                AND s.start_time < ($1::date + '7 days'::interval)
-            WHERE u.role = 'employee' AND u.availability IS NOT NULL
-            GROUP BY u.user_id
-            ORDER BY u.employment_type DESC, RANDOM()
-        `, [weekStartDate]);
-
-        if (employees.length === 0) {
-            return res.status(400).json({ error: 'No employees with availability found.' });
-        }
         
+        const { rows: employees } = await client.query(`SELECT user_id, availability, location_id, employment_type FROM users WHERE role = 'employee' AND availability IS NOT NULL`);
+        
+        let employeeScheduleData = employees.map(e => ({...e, scheduled_hours: 0}));
+
         const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         let totalShiftsCreated = 0;
 
@@ -320,20 +319,20 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
                 totalShiftsCreated++;
             };
 
-            for (const emp of employees.filter(e => e.employment_type === 'Full-time')) {
+            for (const emp of employeeScheduleData.filter(e => e.employment_type === 'Full-time')) {
                 if (hoursToSchedule <= 0) break;
                 if (emp.scheduled_hours < 40) {
                     const dayAvail = emp.availability[dayName];
-                    if (dayAvail && parseInt(dayAvail.start.split(':')[0]) <= businessStartHour && parseInt(dayAvail.end.split(':')[0]) >= businessEndHour) {
+                    if (dayAvail && parseInt(dayAvail.start.split(':')[0]) <= businessStartHour && parseInt(dayAvail.end.split(':')[0]) >= (businessStartHour + 8)) {
                        await scheduleEmployee(emp, 8);
                     }
                 }
             }
 
-            for (const emp of employees.filter(e => e.employment_type === 'Part-time')) {
+            for (const emp of employeeScheduleData.filter(e => e.employment_type === 'Part-time')) {
                 if (hoursToSchedule <= 0) break;
-                const dayAvail = emp.availability[dayName];
-                if (dayAvail && parseInt(dayAvail.start.split(':')[0]) <= businessStartHour && parseInt(dayAvail.end.split(':')[0]) >= (businessStartHour + 4)) {
+                 const dayAvail = emp.availability[dayName];
+                 if (dayAvail && parseInt(dayAvail.start.split(':')[0]) <= businessStartHour && parseInt(dayAvail.end.split(':')[0]) >= (businessStartHour + 4)) {
                     await scheduleEmployee(emp, 4);
                 }
             }
@@ -392,7 +391,6 @@ const startServer = async () => {
                 operating_hours_start TIME,
                 operating_hours_end TIME
             );
-            -- ... (Other tables remain the same)
         `;
         
         await client.query(schemaQueries);
