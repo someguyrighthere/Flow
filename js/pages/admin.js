@@ -13,6 +13,7 @@ export function handleAdminPage() {
     const businessSettingsForm = document.getElementById('business-settings-form');
     const operatingHoursStartInput = document.getElementById('operating-hours-start');
     const operatingHoursEndInput = document.getElementById('operating-hours-end');
+    const operatingHoursStatusMessage = document.getElementById('operating-hours-status-message'); // NEW: Reference to status message element
     const locationListDiv = document.getElementById('location-list');
     const newLocationForm = document.getElementById('new-location-form');
     const newLocationNameInput = document.getElementById('new-location-name');
@@ -24,6 +25,19 @@ export function handleAdminPage() {
     const inviteEmployeeForm = document.getElementById('invite-employee-form');
     const employeeLocationSelect = document.getElementById('employee-location-select');
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
+
+    // --- Helper function to display local status messages ---
+    function displayStatusMessage(element, message, isError = false) {
+        if (!element) return;
+        element.textContent = message;
+        element.classList.remove('success', 'error'); // Clear previous states
+        element.classList.add(isError ? 'error' : 'success');
+        // Clear message after a few seconds
+        setTimeout(() => {
+            element.textContent = '';
+            element.classList.remove('success', 'error');
+        }, 5000); 
+    }
 
     // --- Data Loading Functions ---
 
@@ -37,9 +51,8 @@ export function handleAdminPage() {
             // Ensure values are set, providing defaults if null
             operatingHoursStartInput.value = settings.operating_hours_start || '09:00';
             operatingHoursEndInput.value = settings.operating_hours_end || '17:00';
-            console.log("Business settings loaded:", settings.operating_hours_start, settings.operating_hours_end); // DEBUG
         } catch (error) {
-            showModalMessage('Could not load business settings. Using defaults.', true);
+            displayStatusMessage(operatingHoursStatusMessage, 'Could not load business settings. Using defaults.', true); // Use local status message
             console.error('Error loading business settings:', error);
         }
     }
@@ -70,8 +83,7 @@ export function handleAdminPage() {
                 locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations added yet.</p>';
             }
         } catch (error) {
-            showModalMessage(`Error loading locations: ${error.message}`, true);
-            locationListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading locations.</p>`;
+            displayStatusMessage(locationListDiv, `Error loading locations: ${error.message}`, true); // Use local status message
             console.error('Error loading locations:', error);
         }
     }
@@ -101,7 +113,8 @@ export function handleAdminPage() {
             }
         } catch (error) {
             console.error("Failed to populate location dropdowns:", error);
-            showModalMessage("Could not load locations for user assignment.", true);
+            // Since this is a dropdown, not a primary status area, console.error is sufficient.
+            // showModalMessage("Could not load locations for user assignment.", true); // Removed showModalMessage for this case
         }
     }
 
@@ -136,8 +149,7 @@ export function handleAdminPage() {
                 userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users found.</p>';
             }
         } catch (error) {
-            showModalMessage(`Error loading users: ${error.message}`, true);
-            userListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading users.</p>`;
+            displayStatusMessage(userListDiv, `Error loading users: ${error.message}`, true); // Use local status message
             console.error('Error loading users:', error);
         }
     }
@@ -200,11 +212,11 @@ export function handleAdminPage() {
             };
             try {
                 await apiRequest('POST', '/settings/business', settingsData);
-                showModalMessage('Business settings saved successfully!', false);
-                // After saving, reload settings to ensure inputs reflect saved values
+                displayStatusMessage(operatingHoursStatusMessage, 'Business settings saved successfully!', false); // Use local status message
                 loadBusinessSettings(); 
-            } catch (error) {
-                showModalMessage(`Error saving settings: ${error.message}`, true);
+            }
+            catch (error) {
+                displayStatusMessage(operatingHoursStatusMessage, `Error saving settings: ${error.message}`, true); // Use local status message
                 console.error('Error saving business settings:', error);
             }
         });
@@ -241,19 +253,16 @@ export function handleAdminPage() {
             const deleteBtn = e.target.closest('.btn-delete');
             if (deleteBtn) {
                 const locationId = deleteBtn.dataset.id; // Get location ID from data attribute
-                // Removed showConfirmModal as per user request to streamline flow
-                // const confirmed = await showConfirmModal('Are you sure you want to delete this location? This cannot be undone and will affect associated users/shifts.', 'Delete');
-                // if (confirmed) {
-                    try {
-                        await apiRequest('DELETE', `/locations/${locationId}`);
-                        showModalMessage('Location deleted successfully!', false);
-                        loadLocations(); // Refresh the list of locations
-                        populateLocationDropdowns(); // Refresh location dropdowns
-                    } catch (error) {
-                        showModalMessage(`Error deleting location: ${error.message}`, true);
-                        console.error('Error deleting location:', error);
-                    }
-                // }
+                // Confirmation pop-up removed, deletion proceeds directly
+                try {
+                    await apiRequest('DELETE', `/locations/${locationId}`);
+                    showModalMessage('Location deleted successfully!', false); // Still uses showModalMessage for success
+                    loadLocations(); // Refresh the list of locations
+                    populateLocationDropdowns(); // Refresh location dropdowns
+                } catch (error) {
+                    showModalMessage(`Error deleting location: ${error.message}`, true);
+                    console.error('Error deleting location:', error);
+                }
             }
         });
     }
@@ -269,18 +278,15 @@ export function handleAdminPage() {
                     showModalMessage('You cannot delete your own account from here.', true);
                     return;
                 }
-                // Removed showConfirmModal as per user request to streamline flow
-                // const confirmed = await showConfirmModal('Are you sure you want to delete this user? This cannot be undone.', 'Delete');
-                // if (confirmed) {
-                    try {
-                        await apiRequest('DELETE', `/users/${userId}`);
-                        showModalMessage('User deleted successfully!', false);
-                        loadUsers(); // Refresh the user list
-                    } catch (error) {
-                        showModalMessage(`Error deleting user: ${error.message}`, true);
-                        console.error('Error deleting user:', error);
-                    }
-                // }
+                // Confirmation pop-up removed, deletion proceeds directly
+                try {
+                    await apiRequest('DELETE', `/users/${userId}`);
+                    showModalMessage('User deleted successfully!', false); // Still uses showModalMessage for success
+                    loadUsers(); // Refresh the user list
+                } catch (error) {
+                    showModalMessage(`Error deleting user: ${error.message}`, true);
+                    console.error('Error deleting user:', error);
+                }
             }
         });
     }
