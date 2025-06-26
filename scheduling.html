@@ -203,6 +203,48 @@
             box-sizing: border-box;
         }
         .availability-block.hidden { display: none; }
+
+        /* Styles for modal overlays - Critical for correct positioning */
+        .modal-overlay {
+            position: fixed; /* Fixed position relative to the viewport */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7); /* Dark semi-transparent background */
+            display: flex; /* Use flexbox to center content */
+            align-items: center; /* Center vertically */
+            justify-content: center; /* Center horizontally */
+            z-index: 1000; /* Ensure it's above other page content */
+            display: none; /* Hidden by default, shown by JS */
+        }
+        .modal-content {
+            background-color: rgba(26, 26, 26, 0.95); /* Darker, slightly transparent background */
+            backdrop-filter: blur(15px); /* Blurred background effect */
+            border: 1px solid rgba(255, 255, 255, 0.2); /* Light border */
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%; /* Fluid width on smaller screens */
+            max-width: 400px; /* Max width for larger screens */
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); /* Subtle shadow */
+            position: relative; /* For z-index or other positioned children */
+        }
+        .modal-content p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            color: var(--text-light); /* Ensure text is visible */
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px; /* Space above buttons */
+        }
+        .modal-buttons .btn {
+            padding: 10px 25px;
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>
