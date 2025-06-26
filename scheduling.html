@@ -72,32 +72,27 @@
             flex-shrink: 0;
         }
         
-        /* --- CALENDAR LAYOUT FIXES --- */
+        /* --- CALENDAR LAYOUT FIXES (REVISED) --- */
         .calendar-grid-container {
-            flex-grow: 1; /* Allows the container to fill available vertical space */
-            overflow: auto; /* Enables scrolling for content that overflows */
+            flex-grow: 1;
+            overflow: auto; 
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background-color: rgba(0,0,0,0.1);
         }
         .calendar-grid {
             display: grid;
-            /* Defines 8 columns: 
-               - 80px for the fixed time column
-               - 7 equal-width columns (1fr each) for the days of the week */
+            /* 1st column for time, 7 equal-width columns for days. */
             grid-template-columns: 80px repeat(7, 1fr); 
-            /* Defines 2 rows:
-               - 'auto' height for the first row (day headers), adjusts to content
-               - '1fr' for the second row (main calendar body), takes remaining space */
-            grid-template-rows: auto 1fr; 
-            min-width: 1500px; /* Ensures a minimum width for the grid, allowing horizontal scroll if needed */
-            height: 100%; /* Ensures the grid takes full height of its container, making the vertical scroll work */
+            /* 1st row for day headers (auto height), then 24 rows for each hour (fixed 60px height). */
+            grid-template-rows: auto repeat(24, 60px); 
+            min-width: 1500px; /* Ensures horizontal scroll if needed */
         }
         
-        /* Styles for the top-left corner header (empty cell) */
+        /* Position elements within the calendar-grid using grid-area properties */
         .calendar-corner-header {
-            grid-column: 1 / 2; /* Positions it in the first column */
-            grid-row: 1 / 2;    /* Positions it in the first row */
+            grid-column: 1 / 2; /* Spans the first column */
+            grid-row: 1 / 2;    /* Stays in the first row */
             padding: 10px 0;
             text-align: center;
             font-weight: 600;
@@ -105,41 +100,51 @@
             background-color: rgba(0,0,0,0.3);
             border-bottom: 1px solid var(--border-color);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-            position: sticky; /* Makes it sticky when scrolling */
-            top: 0; /* Sticks to the top */
-            left: 0; /* Sticks to the left */
-            z-index: 7; /* Higher z-index to stay on top of other sticky elements */
+            position: sticky; /* Sticky header for top-left corner */
+            top: 0;
+            left: 0;
+            z-index: 7; /* Higher z-index to stay on top */
         }
 
-        /* Styles for the day headers (Mon, Tue, etc.) */
         .calendar-day-header {
             padding: 10px 0;
             text-align: center;
             font-weight: 600;
             color: var(--text-light);
             background-color: rgba(0,0,0,0.3);
-            position: sticky; /* Makes headers sticky when scrolling horizontally */
-            top: 0; /* Sticks to the top */
-            z-index: 6; /* Stays on top of content below it */
+            position: sticky;
+            top: 0;
+            z-index: 6;
             border-bottom: 1px solid var(--border-color);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
-        /* Make the last day header not have a right border for a cleaner look */
+        /* Make the last day header not have a right border */
         .calendar-grid .calendar-day-header:last-of-type {
             border-right: none;
         }
         
-        /* Styles for the fixed time column (12 AM, 1 AM, etc.) */
-        .time-column {
-            grid-column: 1 / 2; /* Positions it in the first column */
-            grid-row: 2 / -1;   /* Starts from the second row and spans to the end of the grid */
-            position: sticky; /* Makes it sticky when scrolling vertically */
-            left: 0; /* Sticks to the left */
-            z-index: 5; /* Stays on top of day columns and shifts */
-            background-color: #2a2a2e;
-            height: 100%; /* Ensures it fills the entire height of the second grid row */
-            border-right: 1px solid rgba(255, 255, 255, 0.1); /* Keep right border */
+        /* Time column styling - it now just holds the time slots, not a separate grid cell */
+        /* Removed time-column wrapper, individual time-slots are direct grid children */
+        /* This style block now largely redundant, as each time-slot is positioned by JS */
+
+
+        /* Day column styling - these now span all 24 hour rows */
+        .day-column {
+            position: relative; /* Needed for absolute positioning of shifts/availability */
+            /* These will be assigned grid-column dynamically in JS */
+            grid-row: 2 / -1;   /* Spans from row 2 to the end (all 24 hour rows) */
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
+            /* Add hour lines as background or using pseudo-elements */
+            background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 100% 60px; /* Repeat every 60px for hour lines */
         }
+        /* Remove right border from the last day column */
+        .calendar-grid .day-column:last-of-type {
+            border-right: none;
+        }
+
+        /* Time slot styling: these are now direct children of calendar-grid */
         .time-slot {
             height: 60px; /* Each hour slot is 60px tall */
             line-height: 60px; /* Vertically center text */
@@ -148,33 +153,14 @@
             box-sizing: border-box;
             font-size: 0.8rem;
             color: var(--text-medium);
+            position: sticky; /* Make time slots sticky when scrolling horizontally */
+            left: 0;
+            background-color: #2a2a2e; /* Ensure background matches time column */
+            z-index: 5; /* Keep on top of day columns */
+            border-right: 1px solid var(--border-color); /* Separator line */
         }
-        /* Remove bottom border from the last time slot for a cleaner look */
-        .time-column .time-slot:last-of-type {
-            border-bottom: none;
-        }
-
-        /* Styles for individual day columns (where shifts/availability are placed) */
-        .day-column {
-            position: relative; /* Needed for absolute positioning of shifts/availability */
-            /* Each day column will automatically occupy its respective grid column from the second column onwards,
-               and start from the second row spanning to the end */
-            grid-row: 2 / -1; 
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
-            min-height: 1440px; /* 24 hours * 60px/hour = 1440px, ensures vertical scrollability */
-            box-sizing: border-box; /* Includes padding/border in total size */
-        }
-        /* Remove right border from the last day column for a cleaner look */
-        .calendar-grid .day-column:last-of-type {
-            border-right: none;
-        }
-        .day-column .hour-line {
-            height: 60px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            box-sizing: border-box;
-        }
-        /* Remove bottom border from the last hour line in each column for a cleaner look */
-        .day-column .hour-line:last-of-type {
+        /* Remove bottom border from the last time slot */
+        .time-slot:last-of-type {
             border-bottom: none;
         }
 

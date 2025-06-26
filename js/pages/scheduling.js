@@ -80,30 +80,29 @@ export function handleSchedulingPage() {
         }
 
         // Create Time Column (for hours of the day)
-        const timeColumn = document.createElement('div');
-        timeColumn.className = 'time-column';
+        // Now, we create 24 individual time slot divs that will naturally flow
+        // into the grid cells defined by grid-template-rows
         for (let hour = 0; hour < 24; hour++) {
             const timeSlot = document.createElement('div');
             timeSlot.className = 'time-slot';
             const displayHour = hour % 12 === 0 ? 12 : hour % 12; // Convert to 12-hour format
             const ampm = hour < 12 ? 'AM' : 'PM';
             timeSlot.textContent = `${displayHour} ${ampm}`;
-            timeColumn.appendChild(timeSlot);
+            // IMPORTANT: Assign grid row for each time slot
+            timeSlot.style.gridRow = `${hour + 2} / span 1`; // +2 because first row is header, second is 12AM, 1AM etc
+            timeSlot.style.gridColumn = '1 / 2'; // Ensure it stays in the first column
+            calendarGrid.appendChild(timeSlot);
         }
-        calendarGrid.appendChild(timeColumn); // Append directly to calendarGrid
 
         // Create Day Columns (where shifts will be placed)
+        // These will now represent the full 24-hour vertical space for each day
         for (let i = 0; i < 7; i++) {
             const dayColumn = document.createElement('div');
             dayColumn.className = 'day-column';
             dayColumn.id = `day-column-${i}`; // Assign a unique ID for easy access
-            // Add 24 hour-line divs for visual grid
-            for (let j = 0; j < 24; j++) {
-                const hourLine = document.createElement('div');
-                hourLine.className = 'hour-line';
-                dayColumn.appendChild(hourLine);
-            }
-            calendarGrid.appendChild(dayColumn); // Append directly to calendarGrid
+            dayColumn.style.gridColumn = `${i + 2} / span 1`; // +2 because first column is time, second is Day 0, etc.
+            dayColumn.style.gridRow = '2 / -1'; // Spans from row 2 to the end (all 24 hour rows)
+            calendarGrid.appendChild(dayColumn);
         }
 
         // Load and display shifts and availability concurrently for better performance
@@ -140,14 +139,14 @@ export function handleSchedulingPage() {
 
                     if (dayColumn) {
                         // Calculate pixel positioning for the shift
-                        const startPixels = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
-                        const endPixels = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
-                        const heightPixels = endPixels - startPixels;
+                        const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
+                        const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
+                        const heightMinutes = endMinutes - startMinutes;
                         
                         const shiftElement = document.createElement('div');
                         shiftElement.className = 'calendar-shift';
-                        shiftElement.style.top = `${startPixels}px`;
-                        shiftElement.style.height = `${heightPixels}px`;
+                        shiftElement.style.top = `${startMinutes}px`; // Position from top of the day column
+                        shiftElement.style.height = `${heightMinutes}px`; // Height of the shift
                         
                         const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
                         const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
@@ -194,18 +193,23 @@ export function handleSchedulingPage() {
                         if(dayColumn) {
                             // Parse start and end hours
                             const startHour = parseInt(dayAvailability.start.split(':')[0], 10);
+                            const startMinute = parseInt(dayAvailability.start.split(':')[1], 10) || 0;
                             const endHour = parseInt(dayAvailability.end.split(':')[0], 10);
-                            const duration = endHour - startHour;
+                            const endMinute = parseInt(dayAvailability.end.split(':')[1], 10) || 0;
                             
-                            if (duration > 0) {
+                            const startPixels = (startHour * 60) + startMinute;
+                            const endPixels = (endHour * 60) + endMinute;
+                            const heightPixels = endPixels - startPixels;
+                            
+                            if (heightPixels > 0) {
                                 const availabilityBlock = document.createElement('div');
                                 availabilityBlock.className = 'availability-block';
                                 // FIX: Check if availabilityToggle exists before accessing its 'checked' property
                                 if (availabilityToggle && !availabilityToggle.checked) {
                                     availabilityBlock.classList.add('hidden'); // Hide if toggle is off
                                 }
-                                availabilityBlock.style.top = `${startHour * 60}px`; // Convert hours to pixels (1 hour = 60px)
-                                availabilityBlock.style.height = `${duration * 60}px`; // Convert duration to pixels
+                                availabilityBlock.style.top = `${startPixels}px`; // Position from top of the day column
+                                availabilityBlock.style.height = `${heightPixels}px`; // Height of the availability block
                                 dayColumn.appendChild(availabilityBlock);
                             }
                         }
