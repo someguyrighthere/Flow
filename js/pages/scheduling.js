@@ -1,594 +1,483 @@
-// server.js
+// js/pages/scheduling.js
+import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
-// --- 1. Imports and Setup ---
-const express = require('express');
-const { Pool } = require('pg');
-const cors =require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
-
-// --- 2. Initialize Express App ---
-const app = express();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
-const DATABASE_URL = process.env.DATABASE_URL;
-
-// --- 3. Database Connection ---
-if (!DATABASE_URL) {
-    throw new Error("DATABASE_URL environment variable is not set.");
-}
-const pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
-
-// --- 4. Middleware ---
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/css', express.static(path.join(__dirname, 'css')));
-app.use('/js', express.static(path.join(__dirname, 'js')));
-
-
-// --- 5. Authentication Middleware ---
-const isAuthenticated = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
-        next();
-    });
-};
-
-const isAdmin = (req, res, next) => {
-    if (req.user.role !== 'super_admin' && req.user.role !== 'location_admin') {
-        return res.status(403).json({ error: 'Access denied.' });
+export function handleSchedulingPage() {
+    // Redirect to login page if no authentication token is found in local storage
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
     }
-    next();
-};
 
-// --- 6. API Routes ---
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// User, Auth, and Account Routes
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
-    try {
-        const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
-        const user = result.rows[0];
-        if (!user || !user.password) return res.status(401).json({ error: "Invalid credentials." });
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
-        const payload = { id: user.user_id, role: user.role };
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ message: "Logged in successfully!", token: token, role: user.role });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "An internal server error occurred." });
-    }
-});
-
-app.get('/users/me', isAuthenticated, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to retrieve user profile.' });
-    }
-});
-
-app.put('/users/me', isAuthenticated, async (req, res) => {
-    const { full_name, email, current_password, new_password } = req.body;
-    const userId = req.user.id;
-    try {
-        if (new_password) {
-            if (!current_password) return res.status(400).json({ error: 'Current password is required.' });
-            const userRes = await pool.query('SELECT password FROM users WHERE user_id = $1', [userId]);
-            const user = userRes.rows[0];
-            const isMatch = await bcrypt.compare(current_password, user.password);
-            if (!isMatch) return res.status(401).json({ error: 'Incorrect current password.' });
-            const newHashedPassword = await bcrypt.hash(new_password, 10);
-            await pool.query('UPDATE users SET password = $1 WHERE user_id = $2', [newHashedPassword, userId]);
-        }
-        await pool.query('UPDATE users SET full_name = $1, email = $2 WHERE user_id = $3', [full_name, email, userId]);
-        res.json({ message: 'Profile updated successfully.' });
-    } catch (err) {
-        console.error(err);
-        if (err.code === '23505') return res.status(400).json({ error: 'This email is already in use.' });
-        res.status(500).json({ error: 'Failed to update profile.' });
-    }
-});
-
-// Admin & Business Settings Routes
-app.get('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM business_settings WHERE id = 1');
-        if (result.rows.length === 0) {
-            return res.json({ operating_hours_start: '09:00', operating_hours_end: '17:00' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to retrieve business settings.' });
-    }
-});
-
-app.post('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
-    const { operating_hours_start, operating_hours_end } = req.body;
-    try {
-        const query = `
-            INSERT INTO business_settings (id, operating_hours_start, operating_hours_end) 
-            VALUES (1, $1, $2)
-            ON CONFLICT (id) 
-            DO UPDATE SET operating_hours_start = $1, operating_hours_end = $2;
-        `;
-        await pool.query(query, [operating_hours_start, operating_hours_end]);
-        res.json({ message: 'Business settings saved successfully.' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to save business settings.' });
-    }
-});
-
-app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to retrieve locations.' });
-    }
-});
-
-app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_name, location_address } = req.body;
-    try {
-        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(400).json({ error: 'Failed to create location.' });
-    }
-});
-
-app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to delete location.' });
-    }
-});
-
-app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
-    try {
-        const result = await pool.query(sql);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to retrieve users.' });
-    }
-});
-
-app.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    if (req.user.id == req.params.id) return res.status(403).json({ error: "You cannot delete your own account." });
-    try {
-        const result = await pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to delete user.' });
-    }
-});
-
-const inviteUser = async (req, res, role) => {
-    const { full_name, email, password, location_id, position, employment_type, availability } = req.body;
-    if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
-    try {
-        const hash = await bcrypt.hash(password, 10);
-        await pool.query(
-            `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [full_name, email, hash, role, position || null, location_id || null, employment_type || null, JSON.stringify(availability) || null]
-        );
-        res.status(201).json({ message: `${role} invited successfully.` });
-    } catch (err) {
-        console.error('Invite user error:', err);
-        if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
-        res.status(500).json({ error: "An internal server error occurred." });
-    }
-};
-
-app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
-app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
-
-// Scheduling Routes
-app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query("SELECT user_id, full_name, availability FROM users WHERE role = 'employee' AND availability IS NOT NULL");
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve employee availability.' });
-    }
-});
-
-app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate } = req.query;
-    if (!startDate || !endDate) return res.status(400).json({ error: 'Start date and end date are required.' });
-    const sql = `
-        SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
-        FROM shifts s
-        JOIN users u ON s.employee_id = u.user_id
-        LEFT JOIN locations l ON s.location_id = l.location_id
-        WHERE s.start_time >= $1 AND s.start_time < $2
-        ORDER BY s.start_time;
-    `;
-    try {
-        const result = await pool.query(sql, [startDate, endDate]);
-        res.json(result.rows);
-    }  catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to retrieve shifts.' });
-    }
-});
-
-app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { employee_id, location_id, start_time, end_time, notes } = req.body;
-    if (!employee_id || !location_id || !start_time || !end_time) return res.status(400).json({ error: 'Missing required shift information.' });
+    // Get references to key DOM elements for the scheduling page
+    const calendarGrid = document.getElementById('calendar-grid');
+    const currentWeekDisplay = document.getElementById('current-week-display');
+    const prevWeekBtn = document.getElementById('prev-week-btn');
+    const nextWeekBtn = document.getElementById('next-week-btn');
+    const createShiftForm = document.getElementById('create-shift-form');
     
-    // DEBUG: Log received start_time and end_time
-    console.log("Server received start_time:", start_time);
-    console.log("Server received end_time:", end_time);
+    const employeeSelect = document.getElementById('employee-select');
+    const locationSelect = document.getElementById('location-select');
 
-    try {
-        await pool.query(
-            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-            [employee_id, location_id, start_time, end_time, notes]
-        );
-        res.status(201).json({ message: 'Shift created successfully.' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to create shift.' });
-    }
-});
+    const availabilityToggle = document.getElementById('toggle-availability');
+    const autoGenerateBtn = document.getElementById('auto-generate-schedule-btn');
+    const dailyHoursContainer = document.getElementById('daily-hours-inputs'); 
 
-app.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM shifts WHERE id = $1', [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Shift not found.' });
-        }
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting shift:', err);
-        res.status(500).json({ error: 'Failed to delete shift.' });
-    }
-});
+    // Initialize currentStartDate to the beginning of the current week (Sunday)
+    let currentStartDate = new Date();
+    currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
+    currentStartDate.setHours(0, 0, 0, 0);
 
-app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
-    const { weekStartDate, dailyHours } = req.body;
-    if (!weekStartDate || !dailyHours) {
-        return res.status(400).json({ error: 'Week start date and daily hours are required.' });
+    /**
+     * Dynamically creates input fields for setting target daily hours for each day of the week.
+     * These inputs are used in the auto-scheduling feature.
+     */
+    function createDailyHoursInputs() {
+        if (!dailyHoursContainer) return; // Exit if the container element is not found
+        dailyHoursContainer.innerHTML = ''; // Clear existing content
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        days.forEach(day => {
+            const dayId = day.toLowerCase(); // Create a lowercase ID for each day
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+            formGroup.innerHTML = `
+                <label for="hours-${dayId}">${day}</label>
+                <input type="number" id="hours-${dayId}" class="daily-hours-input" min="0" value="8" step="1" data-day="${dayId}">
+            `;
+            dailyHoursContainer.appendChild(formGroup);
+        });
     }
 
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        // Clear existing shifts for the target week before auto-generating new ones
-        const currentWeekStart = new Date(weekStartDate);
-        const nextWeekStart = new Date(currentWeekStart);
-        nextWeekStart.setDate(currentWeekStart.getDate() + 7);
-        await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2', [currentWeekStart, nextWeekStart]);
-
-
-        // Fetch business operating hours
-        const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
-        const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
-        const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
-        const businessEndHour = parseInt(settings.operating_hours_end.split(':')[0], 10); // Added businessEndHour
-
-        // Fetch all employees with their availability and type
-        const { rows: employees } = await client.query(`SELECT user_id, full_name, availability, location_id, employment_type FROM users WHERE role = 'employee' AND availability IS NOT NULL`);
+    /**
+     * Renders the calendar grid for a given week.
+     * This involves creating the day headers, time column, and individual day columns.
+     * It also triggers fetching and displaying shifts and employee availability for the week.
+     * @param {Date} startDate - The Date object representing the first day (Sunday) of the week to render.
+     */
+    async function renderCalendar(startDate) {
+        if (!calendarGrid || !currentWeekDisplay) return; // Exit if essential elements are missing
         
-        // Initialize employee data for scheduling, including days worked and scheduled hours
-        let employeeScheduleData = employees.map(e => ({
-            ...e,
-            scheduled_hours: 0,
-            daysWorked: 0, // Track days worked by each employee for the current week
-            scheduledToday: false // NEW: Track if employee has been scheduled for the current day
-        }));
+        // Calculate the end date for the current week (6 days after the start date)
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 6);
+        // Format options for displaying the date range
+        const options = { month: 'short', day: 'numeric' };
+        // Update the display to show the current week's date range (e.g., "Jun 22 - Jun 28")
+        currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
+        
+        calendarGrid.innerHTML = ''; // Clear any existing content in the calendar grid
 
-        const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        let totalShiftsCreated = 0;
+        // Create the header row container for day names
+        const headerContainer = document.createElement('div');
+        headerContainer.className = 'calendar-grid-header'; // Apply CSS class for grid header styling
+        calendarGrid.appendChild(headerContainer); // Append to the main calendar grid element
 
-        // Iterate through each day of the week (Sunday to Saturday)
+        // Create an empty cell in the top-left corner of the header (for alignment with time column)
+        const timeHeader = document.createElement('div');
+        timeHeader.className = 'calendar-day-header';
+        timeHeader.innerHTML = `&nbsp;`; // Use a non-breaking space for an empty but styled cell
+        headerContainer.appendChild(timeHeader);
+
+        // Create individual day headers (e.g., "Sun 23", "Mon 24")
         for (let i = 0; i < 7; i++) {
-            const currentDate = new Date(weekStartDate);
-            currentDate.setDate(currentDate.getDate() + i);
-            currentDate.setHours(0,0,0,0); // Ensure current date starts at midnight for consistent time calculations
-            const dayName = daysOfWeek[currentDate.getDay()]; // Get day name (e.g., 'monday')
-            let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); // Target hours for this specific day
+            const dayDate = new Date(startDate);
+            dayDate.setDate(startDate.getDate() + i); // Increment date for each day of the week
+            const dayHeader = document.createElement('div');
+            dayHeader.className = 'calendar-day-header';
+            dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+            headerContainer.appendChild(dayHeader);
+        }
+
+        // Create the main body container for time column and daily shift columns
+        const calendarBody = document.createElement('div');
+        calendarBody.className = 'calendar-body'; // Apply CSS class for calendar body styling
+        calendarGrid.appendChild(calendarBody); // Append to the main calendar grid element
+
+        // Create the time column (vertical list of hours: 12 AM, 1 AM, etc.)
+        const timeColumn = document.createElement('div');
+        timeColumn.className = 'time-column'; // Apply CSS class for time column styling
+        for (let hour = 0; hour < 24; hour++) {
+            const timeSlot = document.createElement('div');
+            timeSlot.className = 'time-slot'; // Apply CSS class for individual time slots
+            const displayHour = hour % 12 === 0 ? 12 : hour % 12; // Convert 24-hour to 12-hour format
+            const ampm = hour < 12 ? 'AM' : 'PM'; // Determine AM/PM
+            timeSlot.textContent = `${displayHour} ${ampm}`;
+            timeColumn.appendChild(timeSlot);
+        }
+        calendarBody.appendChild(timeColumn); // Append time column to the calendar body
+
+        // Create individual day columns where shifts and availability blocks will be rendered
+        for (let i = 0; i < 7; i++) {
+            const dayColumn = document.createElement('div');
+            dayColumn.className = 'day-column'; // Apply CSS class for day column styling
+            dayColumn.id = `day-column-${i}`; // Assign a unique ID (0 for Sunday, 6 for Saturday)
+            // Create 24 hour lines within each day column for visual separation
+            for (let j = 0; j < 24; j++) {
+                const hourLine = document.createElement('div');
+                hourLine.className = 'hour-line';
+                dayColumn.appendChild(hourLine);
+            }
+            calendarBody.appendChild(dayColumn); // Append day column to the calendar body
+        }
+
+        // Concurrently load and display shifts, employee availability, and business operating hours
+        await Promise.all([
+            loadAndDisplayShifts(startDate, endDate),
+            loadAndRenderAvailability(),
+            loadAndRenderBusinessHours() // NEW: Call to render business hours
+        ]);
+    }
+
+    /**
+     * Fetches shift data from the backend API and renders each shift as a visual block
+     * on the calendar grid in its corresponding day and time slot.
+     * @param {Date} start - The start date for fetching shifts.
+     * @param {Date} end - The end date for fetching shifts.
+     */
+    async function loadAndDisplayShifts(start, end) {
+        // Remove all existing shift elements from the DOM before rendering new ones
+        document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
+        
+        // Helper function to format a Date object to "YYYY-MM-DD" string
+        const formatDate = (d) => d.toISOString().split('T')[0];
+        
+        // Adjust end date to fetch shifts up to the end of the last day in the week
+        let endOfDay = new Date(end);
+        endOfDay.setDate(endOfDay.getDate() + 1); // Go to the next day's start to include current end day's shifts
+
+        try {
+            // Fetch shifts from the API for the specified date range
+            const shifts = await apiRequest('GET', `/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
             
-            // Reset scheduledToday flag for all employees at the start of each new day
-            employeeScheduleData.forEach(emp => emp.scheduledToday = false);
-
-            // Create a coverage array for the current day, representing each hour (or half-hour)
-            // Initialize with false (no coverage)
-            const dailyCoverage = Array(businessEndHour - businessStartHour).fill(false); 
-
-            // First, load existing shifts to mark occupied time slots
-            const existingShiftsRes = await client.query(`
-                SELECT start_time, end_time FROM shifts
-                WHERE DATE(start_time) = $1 AND DATE(end_time) = $1;
-            `, [currentDate.toISOString().split('T')[0]]);
-
-            existingShiftsRes.rows.forEach(shift => {
-                const shiftStartHour = new Date(shift.start_time).getHours();
-                const shiftEndHour = new Date(shift.end_time).getHours(); 
-                
-                for (let h = shiftStartHour; h < shiftEndHour; h++) {
-                    const coverageIndex = h - businessStartHour;
-                    if (coverageIndex >= 0 && coverageIndex < dailyCoverage.length) {
-                        dailyCoverage[coverageIndex] = true;
-                    }
-                }
-            });
-
-
-            // Iterate through each hour within business hours to ensure coverage
-            for (let currentHour = businessStartHour; currentHour < businessEndHour; currentHour++) {
-                const coverageIndex = currentHour - businessStartHour;
-                if (remainingDailyTargetHours <= 0) break; // Daily target met
-
-                // If this hour is already covered by an existing shift or previously scheduled shift in this run
-                if (dailyCoverage[coverageIndex]) {
-                    continue; 
-                }
-
-                let scheduledForThisHour = false; // Flag to know if a shift was scheduled for this specific currentHour slot
-
-                // Step 1: Try to schedule a Full-time employee first
-                const eligibleFTEmployees = employeeScheduleData.filter(emp => {
-                    if (emp.employment_type !== 'Full-time') return false; 
-                    if (emp.daysWorked >= 5) return false; 
-                    if (emp.scheduled_hours >= 40) return false; 
-                    if (emp.scheduledToday) return false; // NEW: Skip if already scheduled today
-
-                    const dayAvail = emp.availability && emp.availability[dayName];
-                    const FULL_TIME_WORK_DURATION = 8;
-                    const FULL_TIME_BREAK_DURATION = 0.5;
-                    const FULL_TIME_SHIFT_LENGTH_TOTAL = FULL_TIME_WORK_DURATION + FULL_TIME_BREAK_DURATION;
-
-                    // Check if availability covers the full shift starting from currentHour AND stays within business bounds
-                    return dayAvail && 
-                           parseInt(dayAvail.start.split(':')[0], 10) <= currentHour && 
-                           parseInt(dayAvail.end.split(':')[0], 10) >= (currentHour + FULL_TIME_SHIFT_LENGTH_TOTAL) &&
-                           (currentHour + FULL_TIME_SHIFT_LENGTH_TOTAL) <= businessEndHour;
-                }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize FTs with fewer hours scheduled
-
-                if (eligibleFTEmployees.length > 0) {
-                    const employeeScheduled = eligibleFTEmployees[0]; 
+            // If shifts are returned, iterate and create elements for each
+            if (shifts && shifts.length > 0) {
+                shifts.forEach(shift => {
+                    const shiftStart = new Date(shift.start_time);
+                    const shiftEnd = new Date(shift.end_time);
                     
-                    const shiftStartTime = new Date(currentDate);
-                    shiftStartTime.setHours(currentHour, 0, 0, 0); 
+                    // Determine which day column the shift belongs to (0=Sunday, 6=Saturday)
+                    const dayIndex = shiftStart.getDay();
+                    const dayColumn = document.getElementById(`day-column-${dayIndex}`);
 
-                    const shiftEndTime = new Date(currentDate);
-                    shiftEndTime.setHours(currentHour + FULL_TIME_WORK_DURATION, FULL_TIME_BREAK_DURATION * 60, 0, 0); 
+                    if (dayColumn) {
+                        // Calculate the top position and height of the shift element in pixels
+                        // (assuming 1 minute = 1 pixel for positioning within a 60px/hour slot)
+                        const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
+                        const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
+                        const heightMinutes = endMinutes - startMinutes;
+                        
+                        const shiftElement = document.createElement('div');
+                        shiftElement.className = 'calendar-shift'; // Apply CSS class for shift styling
+                        shiftElement.style.top = `${startMinutes}px`; // Set vertical position
+                        shiftElement.style.height = `${heightMinutes}px`; // Set height based on duration
+                        
+                        // Format start and end times for display within the shift element
+                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
+                        const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
+                        const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
 
-                    await client.query(
-                        'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                        [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTime, shiftEndTime, `Auto-generated FT - Covers ${currentHour}-${currentHour + FULL_TIME_WORK_DURATION} + Break`]
-                    );
-                    employeeScheduled.scheduled_hours += FULL_TIME_WORK_DURATION; 
-                    employeeScheduled.daysWorked++; 
-                    employeeScheduled.scheduledToday = true; // NEW: Mark employee as scheduled for today
-                    remainingDailyTargetHours -= FULL_TIME_WORK_DURATION; 
-                    totalShiftsCreated++;
-                    scheduledForThisHour = true;
-
-                    // Mark covered hours
-                    for (let h = currentHour; h < currentHour + FULL_TIME_WORK_DURATION; h++) { // Mark work duration as covered
-                        const idx = h - businessStartHour;
-                        if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
+                        // Populate the shift element with shift details and a delete button
+                        shiftElement.innerHTML = `
+                            <strong>${shift.employee_name}</strong><br>
+                            <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
+                            <span style="color: #ddd;">${shift.location_name || ''}</span>
+                            <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                            </button>
+                        `;
+                        // Add a title attribute for tooltip on hover
+                        shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
+                        
+                        dayColumn.appendChild(shiftElement); // Append the shift element to its day column
                     }
-                    // Continue to next hour, as this employee covers a block, and others might overlap to fill.
-                    continue; // Skip to next currentHour in the for loop
-                }
-
-                // Step 2: If no FT was scheduled for this slot, try to schedule a Part-time employee
-                const eligiblePTEmployees = employeeScheduleData.filter(emp => {
-                    if (emp.employment_type !== 'Part-time') return false; 
-                    if (emp.daysWorked >= 5) return false; 
-                    if (emp.scheduledToday) return false; // NEW: Skip if already scheduled today
-
-                    const dayAvail = emp.availability && emp.availability[dayName];
-                    const PART_TIME_SHIFT_LENGTH = 4; 
-                    
-                    // Check if availability covers the full shift starting from currentHour AND stays within business bounds
-                    return dayAvail && 
-                           parseInt(dayAvail.start.split(':')[0], 10) <= currentHour && 
-                           parseInt(dayAvail.end.split(':')[0], 10) >= (currentHour + PART_TIME_SHIFT_LENGTH) &&
-                           (currentHour + PART_TIME_SHIFT_LENGTH) <= businessEndHour;
-                }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize PTs with fewer hours scheduled
-
-                if (eligiblePTEmployees.length > 0) {
-                    const employeeScheduled = eligiblePTEmployees[0]; 
-                    
-                    const shiftStartTime = new Date(currentDate);
-                    shiftStartTime.setHours(currentHour, 0, 0, 0);
-
-                    const shiftEndTime = new Date(currentDate);
-                    shiftEndTime.setHours(currentHour + PART_TIME_SHIFT_LENGTH, 0, 0, 0);
-
-                    await client.query(
-                        'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                        [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTime, shiftEndTime, `Auto-generated PT - Covers ${currentHour}-${currentHour + PART_TIME_SHIFT_LENGTH}`]
-                    );
-                    employeeScheduled.scheduled_hours += PART_TIME_SHIFT_LENGTH;
-                    employeeScheduled.daysWorked++;
-                    employeeScheduled.scheduledToday = true; // NEW: Mark employee as scheduled for today
-                    remainingDailyTargetHours -= PART_TIME_SHIFT_LENGTH;
-                    totalShiftsCreated++;
-                    scheduledForThisHour = true;
-
-                    // Mark covered hours
-                    for (let h = currentHour; h < currentHour + PART_TIME_SHIFT_LENGTH; h++) {
-                        const idx = h - businessStartHour;
-                        if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
-                    }
-                    // Continue to next hour
-                    continue; // Skip to next currentHour in the for loop
-                }
-
-                // If this hour could not be scheduled by FT or PT, try next hour.
-                // The loop naturally advances currentHour += 1;
+                });
             }
         }
-
-        await client.query('COMMIT'); // Commit the transaction if all operations succeed
-        res.status(201).json({ message: `Successfully auto-generated ${totalShiftsCreated} shifts.` });
-
-    } catch (error) {
-        await client.query('ROLLBACK'); // Rollback the transaction if any error occurs
-        console.error('Auto-scheduling failed:', error);
-        res.status(500).json({ error: 'An error occurred during auto-scheduling.' });
-    } finally {
-        client.release(); // Release the database client back to the pool
+        catch (error) {
+            // Display an error message if shifts fail to load
+            showModalMessage(`Error loading shifts: ${error.message}`, true);
+        }
     }
-});
-
-
-// --- 7. Server Startup Logic ---
-const startServer = async () => {
-    let client;
-    try {
-        client = await pool.connect();
-        console.log('Connected to the PostgreSQL database.');
+    
+    /**
+     * Fetches employee availability data and renders it as semi-transparent overlay blocks
+     * on the calendar, indicating when employees are available to work.
+     */
+    async function loadAndRenderAvailability() {
+        // Remove all existing availability blocks from the DOM
+        document.querySelectorAll('.availability-block').forEach(el => el.remove());
         
-        const schemaQueries = `
-            CREATE TABLE IF NOT EXISTS locations (
-                location_id SERIAL PRIMARY KEY,
-                location_name VARCHAR(255) NOT NULL UNIQUE,
-                location_address TEXT
-            );
-            CREATE TABLE IF NOT EXISTS users (
-                user_id SERIAL PRIMARY KEY,
-                full_name VARCHAR(255) NOT NULL,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL,
-                role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'location_admin', 'employee')),
-                position VARCHAR(255),
-                employee_id VARCHAR(255) UNIQUE,
-                location_id INT,
-                employment_type VARCHAR(50),
-                availability JSONB,
-                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
-            );
-            CREATE TABLE IF NOT EXISTS shifts (
-                id SERIAL PRIMARY KEY,
-                employee_id INT NOT NULL,
-                location_id INT NOT NULL,
-                start_time TIMESTAMPTZ NOT NULL,
-                end_time TIMESTAMPTZ NOT NULL,
-                notes TEXT,
-                FOREIGN KEY (employee_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS business_settings (
-                id INT PRIMARY KEY,
-                operating_hours_start TIME,
-                operating_hours_end TIME
-            );
-            CREATE TABLE IF NOT EXISTS checklists (
-                id SERIAL PRIMARY KEY,
-                position VARCHAR(255) NOT NULL,
-                title VARCHAR(255) NOT NULL,
-                tasks JSONB NOT NULL,
-                structure_type VARCHAR(50) NOT NULL DEFAULT 'single_list',
-                time_group_count INT
-            );
-            CREATE TABLE IF NOT EXISTS onboarding_tasks (
-                id SERIAL PRIMARY KEY,
-                user_id INT NOT NULL,
-                checklist_id INT,
-                description TEXT NOT NULL,
-                completed BOOLEAN DEFAULT FALSE,
-                document_id INT,
-                document_name VARCHAR(255),
-                task_order INT,
-                group_index INT,
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE SET NULL,
-                FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE SET NULL
-            );
-            CREATE TABLE IF NOT EXISTS job_postings (
-                id SERIAL PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                description TEXT NOT NULL,
-                requirements TEXT,
-                location_id INT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
-            );
-            CREATE TABLE IF NOT EXISTS applicants (
-                id SERIAL PRIMARY KEY,
-                job_posting_id INT NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                email VARCHAR(255) NOT NULL,
-                phone VARCHAR(50),
-                address TEXT,
-                date_of_birth DATE,
-                availability VARCHAR(255),
-                is_authorized BOOLEAN,
-                status VARCHAR(50) DEFAULT 'pending',
-                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (job_posting_id) REFERENCES job_postings(id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS documents (
-                document_id SERIAL PRIMARY KEY,
-                user_id INT NOT NULL,
-                title VARCHAR(255) NOT NULL,
-                description TEXT,
-                file_name VARCHAR(255) NOT NULL,
-                file_path TEXT NOT NULL,
-                mime_type VARCHAR(255),
-                size BIGINT,
-                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-            );
-        `;
-        
-        await client.query(schemaQueries);
-        console.log("Database schema verified/created.");
+        try {
+            // Fetch employee availability from the API
+            const employees = await apiRequest('GET', '/users/availability');
+            const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-        client.release();
+            employees.forEach(employee => {
+                if (!employee.availability) return; // Skip employees without availability data
 
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Server is running on port ${PORT}`);
+                daysOfWeek.forEach((day, index) => {
+                    const dayAvailability = employee.availability[day];
+                    // Check if availability data exists for the current day and has start/end times
+                    if (dayAvailability && dayAvailability.start && dayAvailability.end) {
+                        const dayColumn = document.getElementById(`day-column-${index}`);
+                        if(dayColumn) {
+                            // Parse start and end hours from "HH:MM" format
+                            const startHour = parseInt(dayAvailability.start.split(':')[0], 10);
+                            const endHour = parseInt(dayAvailability.end.split(':')[0], 10);
+                            const duration = endHour - startHour; // Calculate duration in hours
+                            
+                            if (duration > 0) {
+                                const availabilityBlock = document.createElement('div');
+                                availabilityBlock.className = 'availability-block'; // Apply CSS class
+                                // Hide the block if the availability toggle switch is unchecked
+                                if (availabilityToggle && !availabilityToggle.checked) {
+                                    availabilityBlock.classList.add('hidden');
+                                }
+                                // Set vertical position and height based on availability times
+                                availabilityBlock.style.top = `${startHour * 60}px`; // Convert hours to pixels
+                                availabilityBlock.style.height = `${duration * 60}px`;
+                                dayColumn.appendChild(availabilityBlock); // Append to the respective day column
+                            }
+                        }
+                    }
+                });
+            });
+        } catch (error) {
+            console.error("Failed to load availability:", error);
+            // Optionally, show a modal message to the user:
+            // showModalMessage(`Error loading availability: ${error.message}`, true);
+        }
+    }
+
+    /**
+     * NEW FUNCTION: Fetches and renders the business operating hours as a subtle background.
+     */
+    async function loadAndRenderBusinessHours() {
+        // Remove any existing business hours blocks from the DOM
+        document.querySelectorAll('.business-hours-block').forEach(el => el.remove());
+
+        try {
+            const settings = await apiRequest('GET', '/settings/business');
+            // Ensure settings.operating_hours_start is not null before splitting
+            // If settings.operating_hours_start is null, default to '00:00' to prevent errors.
+            const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
+            const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
+            const durationHours = businessEndHour - businessStartHour;
+
+            if (durationHours > 0) {
+                // For each day column, create a business hours block
+                for (let i = 0; i < 7; i++) {
+                    const dayColumn = document.getElementById(`day-column-${i}`);
+                    if (dayColumn) {
+                        const businessHoursBlock = document.createElement('div');
+                        businessHoursBlock.className = 'business-hours-block'; // New CSS class for styling
+                        businessHoursBlock.style.top = `${businessStartHour * 60}px`; // Position from top
+                        businessHoursBlock.style.height = `${durationHours * 60}px`; // Height based on duration
+                        dayColumn.appendChild(businessHoursBlock);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Failed to load or render business operating hours:", error);
+        }
+    }
+
+    /**
+     * Populates the employee and location dropdowns in the shift creation form
+     * by fetching user and location data from the API.
+     */
+    async function populateDropdowns() {
+        try {
+            // Fetch users and locations concurrently
+            const [users, locations] = await Promise.all([
+                apiRequest('GET', '/users'),
+                apiRequest('GET', '/locations')
+            ]);
+            
+            if (employeeSelect) {
+                employeeSelect.innerHTML = '<option value="">Select Employee</option>'; // Default option
+                const employees = users.filter(u => u.role === 'employee'); // Filter for employees only
+                employees.forEach(user => {
+                    const option = new Option(user.full_name, user.user_id);
+                    employeeSelect.add(option);
+                });
+            }
+
+            if (locationSelect) {
+                locationSelect.innerHTML = '<option value="">Select Location</option>'; // Default option
+                locations.forEach(loc => {
+                    const option = new Option(loc.location_name, loc.location_id);
+                    locationSelect.add(option);
+                });
+            }
+        } catch (error) {
+            showModalMessage('Failed to load data for form dropdowns.', true);
+        }
+    }
+
+    // --- Event Handlers ---
+
+    /**
+     * Completely re-implemented delete shift functionality.
+     * Handles click events on the calendar grid via event delegation.
+     * When a delete button is clicked, it extracts the shift ID,
+     * prompts for confirmation, calls the delete API, and re-renders the calendar.
+     */
+    if (calendarGrid) {
+        calendarGrid.addEventListener('click', async (e) => {
+            // Log the element that was actually clicked
+            // console.log("Calendar grid clicked on:", e.target); 
+            // Find the closest parent element with the class 'delete-shift-btn' starting from the clicked target
+            const deleteButton = e.target.closest('.delete-shift-btn');
+            // console.log("Delete button found by closest():", deleteButton); // Log what closest() found
+
+            if (deleteButton) {
+                e.stopPropagation(); // Prevent the click event from bubbling up to parent elements
+                const shiftIdToDelete = String(deleteButton.dataset.shiftId); // Get the shift ID from the data attribute
+
+                // Basic validation for shift ID
+                if (!shiftIdToDelete || shiftIdToDelete === "undefined" || shiftIdToDelete === "null") {
+                    showModalMessage('Shift ID not found. Cannot delete.', true);
+                    return;
+                }
+                
+                // Show confirmation modal to the user
+                const isConfirmed = await showConfirmModal('Are you sure you want to delete this shift? This action cannot be undone.');
+                // console.log("Confirmation modal resolved with:", isConfirmed); // DEBUG: Log confirmed value
+                
+                if (isConfirmed) {
+                    try {
+                        // Call the API to delete the shift
+                        await apiRequest('DELETE', `/shifts/${shiftIdToDelete}`);
+                        showModalMessage('Shift deleted successfully!', false); // Show success message
+                        renderCalendar(currentStartDate); // Re-render the calendar to show the updated shifts
+                    } catch (error) {
+                        // Display an error message if the API call fails
+                        showModalMessage(`Error deleting shift: ${error.message}`, true);
+                    }
+                } else {
+                    // User cancelled the deletion
+                    showModalMessage('Shift deletion cancelled.', false);
+                }
+            }
         });
-
-    } catch (err) {
-        console.error('Failed to initialize database or start server:', err.stack);
-        if (client) client.release();
-        process.exit(1);
     }
-};
 
-startServer();
+    /**
+     * Handles the click event for the "Auto-Generate Schedule" button.
+     * Collects daily hour targets and sends a request to the backend to generate shifts.
+     */
+    if (autoGenerateBtn) {
+        autoGenerateBtn.addEventListener('click', async () => {
+            const dailyHours = {};
+            // Collect the target daily hours for each day from the input fields
+            document.querySelectorAll('.daily-hours-input').forEach(input => {
+                dailyHours[input.dataset.day] = input.value;
+            });
+            
+            // Show a confirmation modal for auto-scheduling
+            const confirmed = await showConfirmModal(
+                `This will attempt to generate a schedule based on the specified daily hours. Do you want to continue?`,
+                'Generate'
+            );
+
+            if (confirmed) {
+                try {
+                    const response = await apiRequest('POST', '/shifts/auto-generate', { 
+                        weekStartDate: currentStartDate.toISOString(), // Pass the current week's start date
+                        dailyHours: dailyHours // Pass the target daily hours
+                    });
+                    showModalMessage(response.message || 'Schedule generation complete!', false);
+                    await renderCalendar(currentStartDate); // Re-render calendar to show newly generated shifts
+                } catch (error) {
+                    showModalMessage(`Auto-scheduling failed: ${error.message}`, true);
+                }
+            }
+        });
+    }
+
+    /**
+     * Handles the change event for the availability toggle switch.
+     * Toggles the visibility of availability blocks on the calendar.
+     */
+    if (availabilityToggle) {
+        availabilityToggle.addEventListener('change', () => {
+            const blocks = document.querySelectorAll('.availability-block');
+            blocks.forEach(block => {
+                // Toggle the 'hidden' CSS class based on whether the checkbox is checked
+                block.classList.toggle('hidden', !availabilityToggle.checked);
+            });
+        });
+    }
+    
+    /**
+     * Handles the click event for the "Previous Week" button.
+     * Decrements the current week's start date by 7 days and re-renders the calendar.
+     */
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener('click', () => {
+            currentStartDate.setDate(currentStartDate.getDate() - 7); // Move back one week
+            renderCalendar(currentStartDate); // Re-render calendar for the new week
+        });
+    }
+
+    /**
+     * Handles the click event for the "Next Week" button.
+     * Increments the current week's start date by 7 days and re-renders the calendar.
+     */
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener('click', () => { 
+            currentStartDate.setDate(currentStartDate.getDate() + 7); // Move forward one week
+            renderCalendar(currentStartDate); // Re-render calendar for the new week
+        });
+    } 
+    
+    /**
+     * Handles the submission of the "Create New Shift" form.
+     * Collects shift data from form inputs, validates it, and sends it to the backend API.
+     */
+    if (createShiftForm) {
+        createShiftForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission behavior (page reload)
+            // Get raw datetime-local values
+            const rawStartTime = document.getElementById('start-time-input').value;
+            const rawEndTime = document.getElementById('end-time-input').value;
+
+            // FIX: Convert raw datetime-local string to Date objects then to ISO strings
+            // This handles local timezone interpretation and sends clear UTC to TIMESTAMPTZ
+            const shiftData = {
+                employee_id: document.getElementById('employee-select').value,
+                location_id: document.getElementById('location-select').value,
+                start_time: new Date(rawStartTime).toISOString(), // Convert local input to ISO UTC
+                end_time: new Date(rawEndTime).toISOString(),     // Convert local input to ISO UTC
+                notes: document.getElementById('notes-input').value
+            };
+
+            // Client-side validation: Check if required fields are filled
+            if (!shiftData.employee_id || !shiftData.location_id || !rawStartTime || !rawEndTime) { // Check raw inputs for emptiness
+                showModalMessage('Please fill all required fields.', true);
+                return;
+            }
+
+            // DEBUG: Log the ISO strings being sent
+            console.log("Client sending start_time (ISO):", shiftData.start_time);
+            console.log("Client sending end_time (ISO):", shiftData.end_time);
+
+            try {
+                // Send a POST request to create the new shift
+                await apiRequest('POST', '/shifts', shiftData);
+                showModalMessage('Shift created successfully!', false); // Show success message
+                createShiftForm.reset(); // Clear the form fields
+                renderCalendar(currentStartDate); // Re-render the calendar to display the new shift
+            } catch (error) {
+                // Display an error message if shift creation fails
+                showModalMessage(`Error creating shift: ${error.message}`, true);
+            }
+        });
+    }
+    
+    // --- Initial Page Load Actions ---
+    // These functions are called when the page loads to set up the UI
+    createDailyHoursInputs(); // Populate the daily hours input fields
+    renderCalendar(currentStartDate); // Render the calendar for the initial week
+    populateDropdowns(); // Populate the employee and location dropdowns
+}
