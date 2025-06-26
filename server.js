@@ -245,7 +245,8 @@ app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
         );
         await client.query('COMMIT');
         console.log(`Onboarding invite for ${email} complete. Temporary password: ${tempPassword}`);
-        res.status(201).json({ message: 'Onboarding started successfully.' });
+        // *** FIX: Return the temporary password in the response ***
+        res.status(201).json({ message: 'Onboarding started successfully.', tempPassword: tempPassword });
     } catch (err) {
         await client.query('ROLLBACK');
         if (err.code === '23505') return res.status(400).json({ error: 'This email address is already in use.' });
@@ -388,7 +389,7 @@ app.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query('DELETE FROM applicants WHERE id = $1', [id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Applicant not found.' });
+        if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
         res.status(204).send();
     } catch (err) {
         res.status(500).json({ error: 'Failed to delete applicant.' });

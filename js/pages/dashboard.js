@@ -59,13 +59,21 @@ export function handleDashboardPage() {
             }
             try {
                 // API call to start the onboarding process
-                await apiRequest("POST", "/onboard-employee", { 
+                // *** FIX: Capture the response from the API call ***
+                const response = await apiRequest("POST", "/onboard-employee", { 
                     full_name: newHireName, 
                     email: newHireEmail, 
                     position_id: newHirePosition, 
                     employee_id: newHireId || null 
                 });
-                showModalMessage(`Onboarding invite sent successfully.`, false);
+
+                // *** FIX: Display the temporary password from the response ***
+                let successMessage = `Onboarding invite sent successfully.`;
+                if (response && response.tempPassword) {
+                    successMessage += ` The new employee's temporary password is: ${response.tempPassword}`;
+                }
+                showModalMessage(successMessage, false);
+
                 onboardUserForm.reset();
                 if (onboardUserModal) onboardUserModal.style.display = "none";
                 loadOnboardingSessions(); // Refresh the list of sessions
