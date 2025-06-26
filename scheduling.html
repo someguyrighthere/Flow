@@ -24,7 +24,19 @@
             gap: 20px;
             margin-top: 30px;
         }
-        /* ... existing sidebar styles ... */
+        .sidebar {
+            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15); padding: 20px; border-radius: 8px;
+        }
+        .sidebar h3 {
+            margin-top: 0;
+            color: var(--text-light);
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+        .sidebar .form-group {
+            margin-bottom: 15px;
+        }
 
         .calendar-main {
             background-color: rgba(255, 255, 255, 0.15);
@@ -38,12 +50,12 @@
             margin-bottom: 15px;
             color: var(--text-light);
         }
-        /* ... existing calendar grid styles ... */
+        
         .calendar-day-cell {
             position: relative;
             border-right: 1px solid rgba(255, 255, 255, 0.2);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            min-height: 720px; /* (30px * 24 hours) */
+            min-height: 720px;
         }
         .calendar-shift {
             background-color: var(--primary-accent);
@@ -55,27 +67,26 @@
             width: calc(100% - 10px);
             left: 5px;
             opacity: 0.9;
-            z-index: 3; /* Above availability */
+            z-index: 3;
             cursor: pointer;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        /* --- NEW AVAILABILITY BLOCK STYLES --- */
+        
         .availability-block {
-            background-color: rgba(76, 175, 80, 0.2); /* Semi-transparent green */
+            background-color: rgba(76, 175, 80, 0.2);
             border-left: 3px solid rgba(76, 175, 80, 0.5);
             position: absolute;
-            width: calc(100% - 3px); /* Adjust width for border */
+            width: calc(100% - 3px);
             left: 0;
-            z-index: 1; /* Behind shifts */
-            pointer-events: none; /* Make it non-interactive */
+            z-index: 1;
+            pointer-events: none;
         }
         .availability-block.hidden {
             display: none;
         }
 
-        /* --- NEW AVAILABILITY TOGGLE STYLES --- */
         .availability-toggle {
             display: flex;
             align-items: center;
@@ -86,36 +97,64 @@
             padding: 5px 10px;
             border-radius: 5px;
             background-color: rgba(0,0,0,0.2);
-            margin-bottom: 10px;
+            margin-bottom: 20px; /* Add margin to separate from filters */
         }
-
-        /* [ ... rest of your existing CSS ... ] */
     </style>
 </head>
 <body>
     <div class="background-animation"></div>
     <div class="container">
-        <!-- [ ... Header and Nav ... ] -->
+        <!-- Header and Nav -->
+        <header class="dashboard-header">
+             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+             <div class="settings-menu">
+                <button id="settings-button" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                </button>
+             <div id="settings-dropdown" class="settings-dropdown">
+                    <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <a href="pricing.html">Upgrade Plan</a>
+                    <button id="logout-button">Logout</button>
+                </div>
+            </div>
+        </header>
+        <nav class="main-nav">
+            <a href="suite-hub.html">App Hub</a>
+            <a href="scheduling.html" class="active">Scheduling</a>
+        </nav>
         <section>
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
 
             <div class="scheduling-layout">
                 <div class="sidebar">
-                    <!-- [ ... Sidebar content (filters, create shift form) ... ] -->
-                     <!-- --- NEW AVAILABILITY TOGGLE --- -->
                     <div class="availability-toggle">
                         <input type="checkbox" id="toggle-availability" checked>
                         <label for="toggle-availability">Show Availability</label>
                     </div>
+                    
+                    <hr style="border-color: var(--border-color); margin: 30px 0;">
+
+                    <!-- *** NEW: Auto-Scheduling Section *** -->
+                    <h3>Auto-Scheduling</h3>
+                    <p style="font-size: 0.9em; color: var(--text-medium);">Generate a schedule for the currently displayed week based on employee availability.</p>
+                    <button id="auto-generate-schedule-btn" class="btn btn-primary" style="width: 100%;">Auto-Generate</button>
+
+                    <hr style="border-color: var(--border-color); margin: 30px 0;">
+
+                    <h3>Create New Shift</h3>
+                    <form id="create-shift-form">
+                        <!-- ... existing form ... -->
+                    </form>
                 </div>
 
                 <div class="calendar-main">
-                    <!-- [ ... calendar content ... ] -->
+                    <!-- ... existing calendar ... -->
                 </div>
             </div>
         </section>
     </div>
-    <!-- [ ... Modals ... ] -->
+    <!-- ... Modals ... -->
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
