@@ -460,7 +460,7 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
     } finally {
         client.release(); // Release the database client back to the pool
     }
-};
+});
 
 
 // --- 7. Server Startup Logic ---
