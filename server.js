@@ -318,61 +318,70 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
             while (remainingDailyTargetHours > 0 && currentSchedulingTime < businessEndHour) {
                 let scheduledThisIteration = false; // Flag to check if a shift was scheduled in this iteration
 
-                // Prioritize Full-time employees
-                for (const emp of employeeScheduleData.filter(e => e.employment_type === 'Full-time')) {
-                    if (emp.daysWorked >= 5) continue; // Skip if already worked 5 days this week (2 days off rule)
-                    if (emp.scheduled_hours >= 40) continue; // Skip if already worked 40 hours this week (for FT)
-
-                    const FULL_TIME_WORK_DURATION = 8; // Actual work hours for FT
-                    const FULL_TIME_BREAK_DURATION = 0.5; // Lunch break
-                    const FULL_TIME_SHIFT_LENGTH_TOTAL = FULL_TIME_WORK_DURATION + FULL_TIME_BREAK_DURATION; // Total shift length 8.5 hours
+                // Step 1: Try to schedule a Full-time employee first
+                const eligibleFTEmployees = employeeScheduleData.filter(emp => {
+                    if (emp.employment_type !== 'Full-time') return false; // Only FT
+                    if (emp.daysWorked >= 5) return false; // Max days worked (2 days off rule)
+                    if (emp.scheduled_hours >= 40) return false; // Max weekly hours for FT (40 hours)
 
                     const dayAvail = emp.availability && emp.availability[dayName];
+                    const FULL_TIME_WORK_DURATION = 8;
+                    const FULL_TIME_BREAK_DURATION = 0.5;
+                    const FULL_TIME_SHIFT_LENGTH_TOTAL = FULL_TIME_WORK_DURATION + FULL_TIME_BREAK_DURATION;
+
                     // Check if employee's availability covers the full shift starting from currentSchedulingTime
                     // And if the shift would end within business hours
-                    if (dayAvail && 
-                        parseInt(dayAvail.start.split(':')[0], 10) <= currentSchedulingTime && 
-                        parseInt(dayAvail.end.split(':')[0], 10) >= (currentSchedulingTime + FULL_TIME_SHIFT_LENGTH_TOTAL) &&
-                        (currentSchedulingTime + FULL_TIME_SHIFT_LENGTH_TOTAL) <= businessEndHour // Ensure shift does not extend beyond business operating end hour
-                    ) {
-                        // Calculate shift times
-                        const shiftStartTime = new Date(currentDate);
-                        shiftStartTime.setHours(currentSchedulingTime, 0, 0, 0);
+                    return dayAvail && 
+                           parseInt(dayAvail.start.split(':')[0], 10) <= currentSchedulingTime && 
+                           parseInt(dayAvail.end.split(':')[0], 10) >= (currentSchedulingTime + FULL_TIME_SHIFT_LENGTH_TOTAL) &&
+                           (currentSchedulingTime + FULL_TIME_SHIFT_LENGTH_TOTAL) <= businessEndHour;
+                }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize FTs with fewer hours scheduled
 
-                        const shiftEndTime = new Date(currentDate);
-                        // Shift ends after actual work duration + break duration (e.g., 8 hours work + 30 min lunch)
-                        shiftEndTime.setHours(currentSchedulingTime + FULL_TIME_WORK_DURATION, FULL_TIME_BREAK_DURATION * 60, 0, 0); 
+                if (eligibleFTEmployees.length > 0) {
+                    const employeeScheduled = eligibleFTEmployees[0]; // Take the first eligible FT
+                    const FULL_TIME_WORK_DURATION = 8;
+                    const FULL_TIME_BREAK_DURATION = 0.5;
 
-                        await client.query(
-                            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                            [emp.user_id, emp.location_id, shiftStartTime, shiftEndTime, 'Auto-generated FT'] // Added note for FT
-                        );
-                        emp.scheduled_hours += FULL_TIME_WORK_DURATION; // Add actual work hours to weekly total
-                        emp.daysWorked++; // Increment days worked
-                        remainingDailyTargetHours -= FULL_TIME_WORK_DURATION; // Reduce remaining target for the day
-                        currentSchedulingTime += FULL_TIME_WORK_DURATION; // Advance time pointer by actual work duration (8 hours)
-                        totalShiftsCreated++;
-                        scheduledThisIteration = true;
-                        break; // Move to next time slot after scheduling one FT
-                    }
+                    const shiftStartTime = new Date(currentDate);
+                    shiftStartTime.setHours(currentSchedulingTime, 0, 0, 0);
+
+                    const shiftEndTime = new Date(currentDate);
+                    // Shift ends after actual work duration + break duration (e.g., 8 hours work + 30 min lunch)
+                    shiftEndTime.setHours(currentSchedulingTime + FULL_TIME_WORK_DURATION, FULL_TIME_BREAK_DURATION * 60, 0, 0); 
+
+                    await client.query(
+                        'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+                        [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTime, shiftEndTime, 'Auto-generated FT'] // Added note for FT
+                    );
+                    employeeScheduled.scheduled_hours += FULL_TIME_WORK_DURATION; // Add actual work hours to weekly total
+                    employeeScheduled.daysWorked++; // Increment days worked
+                    remainingDailyTargetHours -= FULL_TIME_WORK_DURATION; // Reduce remaining target for the day
+                    currentSchedulingTime += FULL_TIME_WORK_DURATION; // Advance time pointer by actual work duration (8 hours)
+                    totalShiftsCreated++;
+                    scheduledThisIteration = true;
                 }
 
-                if (scheduledThisIteration) continue; // If an FT employee was scheduled, continue to next iteration of while loop
+                // Step 2: If no FT was scheduled for this slot, try to schedule a Part-time employee
+                if (!scheduledThisIteration && remainingDailyTargetHours > 0) {
+                    const eligiblePTEmployees = employeeScheduleData.filter(emp => {
+                        if (emp.employment_type !== 'Part-time') return false; // Only PT
+                        if (emp.daysWorked >= 5) return false; // Max days worked (2 days off rule)
 
-                // Then try to schedule Part-time employees
-                for (const emp of employeeScheduleData.filter(e => e.employment_type === 'Part-time')) {
-                    if (emp.daysWorked >= 5) continue; // Skip if already worked 5 days this week (2 days off rule)
+                        const dayAvail = emp.availability && emp.availability[dayName];
+                        const PART_TIME_SHIFT_LENGTH = 4; // Hours
+                        
+                        // Check if employee's availability covers the full shift starting from currentSchedulingTime
+                        // And if the shift would end within business hours
+                        return dayAvail && 
+                               parseInt(dayAvail.start.split(':')[0], 10) <= currentSchedulingTime && 
+                               parseInt(dayAvail.end.split(':')[0], 10) >= (currentSchedulingTime + PART_TIME_SHIFT_LENGTH) &&
+                               (currentSchedulingTime + PART_TIME_SHIFT_LENGTH) <= businessEndHour;
+                    }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize PTs with fewer hours scheduled
 
-                    const PART_TIME_SHIFT_LENGTH = 4; // Hours
+                    if (eligiblePTEmployees.length > 0) {
+                        const employeeScheduled = eligiblePTEmployees[0]; // Take the first eligible PT
+                        const PART_TIME_SHIFT_LENGTH = 4; // Hours
 
-                    const dayAvail = emp.availability && emp.availability[dayName];
-                    // Check if employee's availability covers the full shift starting from currentSchedulingTime
-                    // And if the shift would end within business hours
-                    if (dayAvail && 
-                        parseInt(dayAvail.start.split(':')[0], 10) <= currentSchedulingTime && 
-                        parseInt(dayAvail.end.split(':')[0], 10) >= (currentSchedulingTime + PART_TIME_SHIFT_LENGTH) &&
-                        (currentSchedulingTime + PART_TIME_SHIFT_LENGTH) <= businessEndHour // Ensure shift does not extend beyond business operating end hour
-                    ) {
                         const shiftStartTime = new Date(currentDate);
                         shiftStartTime.setHours(currentSchedulingTime, 0, 0, 0);
 
@@ -381,15 +390,14 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
 
                         await client.query(
                             'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                            [emp.user_id, emp.location_id, shiftStartTime, shiftEndTime, 'Auto-generated PT'] // Added note for PT
+                            [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTime, shiftEndTime, 'Auto-generated PT'] // Added note for PT
                         );
-                        emp.scheduled_hours += PART_TIME_SHIFT_LENGTH;
-                        emp.daysWorked++;
+                        employeeScheduled.scheduled_hours += PART_TIME_SHIFT_LENGTH;
+                        employeeScheduled.daysWorked++;
                         remainingDailyTargetHours -= PART_TIME_SHIFT_LENGTH;
                         currentSchedulingTime += PART_TIME_SHIFT_LENGTH; // Advance time pointer
                         totalShiftsCreated++;
                         scheduledThisIteration = true;
-                        break; // Move to next time slot after scheduling one PT
                     }
                 }
 
