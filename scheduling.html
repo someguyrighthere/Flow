@@ -29,15 +29,16 @@
         }
         .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
         
+        /* --- FINAL LAYOUT FIX --- */
         .scheduling-layout {
             display: grid;
-            grid-template-columns: 300px 1fr;
+            grid-template-columns: 320px 1fr; /* Wider, fixed sidebar */
             gap: 30px;
             margin-top: 30px;
         }
         @media (max-width: 1200px) {
             .scheduling-layout {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr; /* Stack on smaller screens */
             }
         }
 
@@ -61,7 +62,7 @@
             border-radius: 8px;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow: hidden; /* Important for containing the scrollable grid */
         }
         .calendar-header {
             display: flex;
@@ -72,23 +73,43 @@
             flex-shrink: 0;
         }
         
-        /* --- FINAL CALENDAR LAYOUT FIX --- */
         .calendar-grid-container {
             flex-grow: 1;
-            overflow: auto;
+            overflow: auto; /* Enable scrolling in all directions */
             border: 1px solid var(--border-color);
             border-radius: 8px;
         }
         .calendar-grid {
             display: grid;
-            grid-template-columns: 80px 1fr; /* Time column and content area */
-            min-height: 100%;
+            grid-template-columns: 80px repeat(7, 1fr); /* 1fr makes columns expand */
+            min-width: 1500px; /* Force a large minimum width */
+            grid-auto-rows: 60px; /* Each hour slot is 60px tall */
         }
+
+        .calendar-header-row {
+            display: contents; /* Allows direct grid item placement */
+        }
+        .calendar-day-header {
+            padding: 10px 0;
+            text-align: center;
+            font-weight: 600;
+            color: var(--text-light);
+            background-color: rgba(0,0,0,0.2);
+            position: sticky;
+            top: 0;
+            z-index: 6;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
         .time-column {
             position: sticky;
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
+            grid-column: 1 / 2;
+            grid-row: 2 / 26; /* Span all 24 hour rows */
+            display: flex;
+            flex-direction: column;
         }
         .time-slot {
             height: 60px;
@@ -100,40 +121,28 @@
             font-size: 0.8rem;
             color: var(--text-medium);
         }
-        .days-container {
-            display: grid;
-            grid-template-columns: repeat(7, minmax(200px, 1fr));
-            position: relative;
-        }
         .day-column {
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
-        }
-        .day-header {
-            text-align: center;
-            padding: 10px 0;
-            font-weight: 600;
-            background-color: rgba(0,0,0,0.2);
-            position: sticky;
-            top: 0;
-            z-index: 4;
-            border-bottom: 1px solid var(--border-color);
+            grid-row: 2 / 26; /* Span all 24 hour rows */
+            display: grid;
+            grid-template-rows: repeat(24, 60px);
         }
         .hour-line {
-            height: 60px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
         }
 
         .calendar-shift {
             background-color: var(--primary-accent);
             color: #fff;
+            border: 1px solid rgba(255,255,255,0.3);
             border-radius: 4px;
             padding: 5px 8px;
             font-size: 0.85rem;
             position: absolute;
-            width: calc(100% - 10px);
-            left: 5px;
+            width: calc(100% - 4px);
+            left: 2px;
             opacity: 0.9;
             z-index: 3;
             cursor: pointer;
@@ -145,12 +154,8 @@
         
         .availability-block {
             background-color: rgba(76, 175, 80, 0.2);
-            border-left: 3px solid rgba(76, 175, 80, 0.5);
             position: absolute;
             width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
             z-index: 1;
             pointer-events: none;
             box-sizing: border-box;
@@ -216,7 +221,7 @@
              <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
              <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c-1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
              <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
