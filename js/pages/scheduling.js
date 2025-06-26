@@ -55,6 +55,11 @@ export function handleSchedulingPage() {
         headerContainer.className = 'calendar-grid-header';
         calendarGrid.appendChild(headerContainer);
         
+        const timeHeader = document.createElement('div');
+        timeHeader.className = 'calendar-day-header';
+        timeHeader.innerHTML = `&nbsp;`;
+        headerContainer.appendChild(timeHeader);
+
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startDate);
             dayDate.setDate(startDate.getDate() + i);

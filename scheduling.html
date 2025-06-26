@@ -76,40 +76,31 @@
         .calendar-grid-container {
             flex-grow: 1;
             overflow: auto;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
         }
         .calendar-grid {
             display: grid;
-            grid-template-columns: 80px repeat(7, 1fr);
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
+            grid-template-rows: auto 1fr;
             min-width: 1500px;
-            grid-template-rows: auto; /* Header row auto-sizes */
         }
-        .calendar-grid > div {
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
-            box-sizing: border-box;
-        }
-        .calendar-header-row {
+        .calendar-grid .header {
             grid-column: 1 / -1;
-            grid-row: 1 / 2;
-            display: contents;
-        }
-        .calendar-body-row {
-            grid-column: 1 / -1;
-            grid-row: 2 / -1;
-            display: contents;
+            display: grid;
+            grid-template-columns: subgrid;
+            position: sticky;
+            top: 0;
+            z-index: 6;
+            background-color: #1a1a1a;
         }
         .calendar-day-header {
             padding: 10px 0;
             text-align: center;
             font-weight: 600;
             color: var(--text-light);
-            background-color: rgba(0,0,0,0.3);
-            position: sticky;
-            top: 0;
-            z-index: 6;
             border-bottom: 1px solid var(--border-color);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
+        
         .time-column {
             position: sticky;
             left: 0;
@@ -119,6 +110,7 @@
         .time-slot {
             height: 60px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -127,12 +119,14 @@
         }
         .day-column {
             position: relative;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
         .hour-line {
             height: 60px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
         }
+
         .calendar-shift {
             background-color: var(--primary-accent);
             color: #fff;
@@ -174,11 +168,13 @@
 <body>
     <div class="background-animation"></div>
     <div class="container">
+        <!-- ... Header and Nav ... -->
         <section>
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
             <div class="scheduling-layout">
                 <div class="sidebar">
-                    </div>
+                    <!-- ... sidebar content ... -->
+                </div>
 
                 <div class="calendar-main">
                     <div class="calendar-header">
@@ -188,12 +184,15 @@
                     </div>
                     <div class="calendar-grid-container">
                         <div id="calendar-grid">
-                            </div>
+                            <!-- JS will build the calendar here -->
+                        </div>
                     </div>
                 </div>
             </div>
         </section>
     </div>
+    
+    <!-- ... Modals ... -->
     
     <script type="module" src="js/app.js"></script>
 </body>
