@@ -385,7 +385,7 @@ export function handleSchedulingPage() {
     if (nextWeekBtn) {
         currentStartDate.setDate(currentStartDate.getDate() + 7); // Move forward one week
         renderCalendar(currentStartDate); // Re-render calendar for the new week
-    });
+    };
     }
     
     /**
