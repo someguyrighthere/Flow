@@ -23,7 +23,7 @@ export function handleAdminPage() {
     const inviteAdminForm = document.getElementById('invite-admin-form');
     const adminLocationSelect = document.getElementById('admin-location-select');
     const inviteEmployeeForm = document.getElementById('invite-employee-form');
-    const employeeLocationSelect = document.getElementById('employee-location-select');
+    const employeeLocationSelect = document.getElementById('employee-location-select'); // CORRECTED: Removed erroneous 'document ='
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
 
     // --- Helper function to display local status messages ---
@@ -49,9 +49,13 @@ export function handleAdminPage() {
         try {
             const settings = await apiRequest('GET', '/settings/business');
             console.log("Fetched business settings:", settings); // DEBUG: Log the fetched settings object
-            // Ensure values are set, providing defaults if null
-            operatingHoursStartInput.value = settings.operating_hours_start || '09:00';
-            operatingHoursEndInput.value = settings.operating_hours_end || '17:00';
+            
+            // FIX: Format time strings from "HH:MM:SS" to "HH:MM" for input type="time"
+            const formattedStartTime = settings.operating_hours_start ? settings.operating_hours_start.substring(0, 5) : '09:00';
+            const formattedEndTime = settings.operating_hours_end ? settings.operating_hours_end.substring(0, 5) : '17:00';
+
+            operatingHoursStartInput.value = formattedStartTime;
+            operatingHoursEndInput.value = formattedEndTime;
         } catch (error) {
             displayStatusMessage(operatingHoursStatusMessage, 'Could not load business settings. Using defaults.', true); // Use local status message
             console.error('Error loading business settings:', error);
@@ -311,7 +315,7 @@ export function handleAdminPage() {
                 // Display the temporary password prominently for the admin to note down
                 // The tempPassword should be part of the response from the server-side invite-employee route
                 showModalMessage(`Admin invited successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new admin.`, false);
-                inviteAdminForm.reset(); // Clear the form
+                inviteAdminForm.reset(); // Clear form
                 loadUsers(); // Refresh user list to show the new admin
             } catch (error) {
                 showModalMessage(`Error inviting admin: ${error.message}`, true);
