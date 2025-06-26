@@ -140,7 +140,8 @@ app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 
 app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        await pool.query(`DELETE FROM users WHERE location_id = $1`, [req.params.id]);
+        // This will cascade and delete users associated with the location if ON DELETE CASCADE is set up
+        // Or set their location_id to NULL if ON DELETE SET NULL is used.
         const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
         if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
         res.status(204).send();
@@ -148,6 +149,7 @@ app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
@@ -493,7 +495,7 @@ const startServer = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
 
-        // Full schema initialization
+        // Initial table creation
         const schemaQueries = `
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
@@ -508,8 +510,6 @@ const startServer = async () => {
                 role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'location_admin', 'employee')),
                 position VARCHAR(255),
                 location_id INT,
-                employment_type VARCHAR(50),
-                availability JSONB,
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS shifts (
@@ -572,9 +572,25 @@ const startServer = async () => {
                 FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE RESTRICT
             );
         `;
-        
         await client.query(schemaQueries);
-        console.log("Database schema verified/created.");
+        console.log("Initial database schema verified.");
+
+        // --- Schema Migrations ---
+        // Add employment_type column to users table if it doesn't exist
+        const hasEmploymentType = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='employment_type'");
+        if (hasEmploymentType.rowCount === 0) {
+            await client.query("ALTER TABLE users ADD COLUMN employment_type VARCHAR(50)");
+            console.log("Migrated: Added 'employment_type' column to users table.");
+        }
+
+        // Add availability column to users table if it doesn't exist
+        const hasAvailability = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='availability'");
+        if (hasAvailability.rowCount === 0) {
+            await client.query("ALTER TABLE users ADD COLUMN availability JSONB");
+            console.log("Migrated: Added 'availability' column to users table.");
+        }
+
+        console.log("Database schema migrations complete.");
         client.release();
 
         app.listen(PORT, () => {
