@@ -70,8 +70,53 @@ app.get('/', (req, res) => {
 
 
 // User, Auth, and Account Routes
-// ... (These routes remain the same)
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
+    try {
+        const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
+        const user = result.rows[0];
+        if (!user || !user.password) return res.status(401).json({ error: "Invalid credentials." });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
+        const payload = { id: user.user_id, role: user.role };
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+        res.json({ message: "Logged in successfully!", token: token, role: user.role });
+    } catch (err) {
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
+});
 
+app.get('/users/me', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
+    }
+});
+
+app.put('/users/me', isAuthenticated, async (req, res) => {
+    const { full_name, email, current_password, new_password } = req.body;
+    const userId = req.user.id;
+    try {
+        if (new_password) {
+            if (!current_password) return res.status(400).json({ error: 'Current password is required.' });
+            const userRes = await pool.query('SELECT password FROM users WHERE user_id = $1', [userId]);
+            const user = userRes.rows[0];
+            const isMatch = await bcrypt.compare(current_password, user.password);
+            if (!isMatch) return res.status(401).json({ error: 'Incorrect current password.' });
+            const newHashedPassword = await bcrypt.hash(new_password, 10);
+            await pool.query('UPDATE users SET password = $1 WHERE user_id = $2', [newHashedPassword, userId]);
+        }
+        await pool.query('UPDATE users SET full_name = $1, email = $2 WHERE user_id = $3', [full_name, email, userId]);
+        res.json({ message: 'Profile updated successfully.' });
+    } catch (err) {
+        if (err.code === '23505') return res.status(400).json({ error: 'This email is already in use.' });
+        res.status(500).json({ error: 'Failed to update profile.' });
+    }
+});
 
 // Admin Routes
 app.get('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
@@ -102,13 +147,157 @@ app.post('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// ... (Other admin routes remain the same)
+app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_name, location_address } = req.body;
+    try {
+        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+    const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
+    try {
+        const result = await pool.query(sql);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT user_id, full_name, availability FROM users WHERE role = 'employee' AND availability IS NOT NULL");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve employee availability.' });
+    }
+});
+
+app.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
+    if (req.user.id == req.params.id) return res.status(403).json({ error: "You cannot delete your own account." });
+    try {
+        const result = await pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+const inviteUser = async (req, res, role) => {
+    const { full_name, email, password, location_id, position, employment_type, availability } = req.body;
+    if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
+    try {
+        const hash = await bcrypt.hash(password, 10);
+        const result = await pool.query(
+            `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING user_id`,
+            [full_name, email, hash, role, position || null, location_id || null, employment_type || null, JSON.stringify(availability) || null]
+        );
+        res.status(201).json({ id: result.rows[0].user_id });
+    } catch (err) {
+        console.error('Invite user error:', err);
+        if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
+};
+
+app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
+app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
+
+// Onboarding & Checklist Routes
+app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
+    const { full_name, email, position_id } = req.body;
+    if (!full_name || !email || !position_id) return res.status(400).json({ error: 'Full name, email, and position are required.' });
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const tempPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        const userRes = await client.query(
+            `INSERT INTO users (full_name, email, password, role, position) VALUES ($1, $2, $3, 'employee', (SELECT position FROM checklists WHERE id = $4)) RETURNING user_id`,
+            [full_name, email, hashedPassword, position_id]
+        );
+        const newUserId = userRes.rows[0].user_id;
+        const checklistRes = await client.query('SELECT tasks FROM checklists WHERE id = $1', [position_id]);
+        if (checklistRes.rows.length === 0) throw new Error('Checklist not found.');
+        const tasks = checklistRes.rows[0].tasks;
+        const initialTasksStatus = tasks.map(task => ({ ...task, completed: false }));
+        await client.query(
+            `INSERT INTO onboarding_sessions (user_id, checklist_id, tasks_status) VALUES ($1, $2, $3)`,
+            [newUserId, position_id, JSON.stringify(initialTasksStatus)]
+        );
+        await client.query('COMMIT');
+        console.log(`Onboarding invite for ${email} complete. Temporary password: ${tempPassword}`);
+        res.status(201).json({ message: 'Onboarding started successfully.', tempPassword: tempPassword });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(400).json({ error: 'This email address is already in use.' });
+        res.status(500).json({ error: 'An error occurred during the onboarding process.' });
+    } finally {
+        client.release();
+    }
+});
+
+// ... (Other routes like /checklists, /job-postings, etc. remain here)
 
 
 // Scheduling Routes
-// ... (GET /shifts and POST /shifts remain the same)
+app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { employee_id, location_id, start_time, end_time, notes } = req.body;
+    if (!employee_id || !location_id || !start_time || !end_time) return res.status(400).json({ error: 'Missing required shift information.' });
+    try {
+        await pool.query(
+            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+            [employee_id, location_id, start_time, end_time, notes]
+        );
+        res.status(201).json({ message: 'Shift created successfully.' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to create shift.' });
+    }
+});
 
-// *** NEW ADVANCED AUTO-SCHEDULING ENDPOINT ***
+app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate) return res.status(400).json({ error: 'Start date and end date are required.' });
+    const sql = `
+        SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
+        FROM shifts s
+        JOIN users u ON s.employee_id = u.user_id
+        JOIN locations l ON s.location_id = l.location_id
+        WHERE s.start_time >= $1 AND s.start_time <= $2
+        ORDER BY s.start_time;
+    `;
+    try {
+        const result = await pool.query(sql, [startDate, endDate]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve shifts.' });
+    }
+});
+
 app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
     const { weekStartDate, dailyHours } = req.body;
     if (!weekStartDate || !dailyHours) {
@@ -119,13 +308,11 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
     try {
         await client.query('BEGIN');
 
-        // 1. Get business settings
         const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
         const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
         const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
         const businessEndHour = parseInt(settings.operating_hours_end.split(':')[0], 10);
 
-        // 2. Get all employees and their existing scheduled hours for the week
         const { rows: employees } = await client.query(`
             SELECT 
                 u.user_id, u.availability, u.location_id, u.employment_type,
@@ -152,7 +339,6 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
             const dayName = daysOfWeek[currentDate.getDay()];
             let hoursToSchedule = parseFloat(dailyHours[dayName] || 0);
 
-            // Function to find and schedule an employee
             const scheduleEmployee = async (employee, shiftLength) => {
                 const shiftStartTime = new Date(currentDate);
                 shiftStartTime.setHours(businessStartHour, 0, 0, 0);
@@ -169,7 +355,6 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
                 totalShiftsCreated++;
             };
 
-            // Prioritize Full-time employees
             for (const emp of employees.filter(e => e.employment_type === 'Full-time')) {
                 if (hoursToSchedule <= 0) break;
                 if (emp.scheduled_hours < 40) {
@@ -180,7 +365,6 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
                 }
             }
 
-            // Fill remaining hours with Part-time employees
             for (const emp of employees.filter(e => e.employment_type === 'Part-time')) {
                 if (hoursToSchedule <= 0) break;
                 const dayAvail = emp.availability[dayName];
