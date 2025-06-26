@@ -50,16 +50,12 @@ export function handleSchedulingPage() {
         
         calendarGrid.innerHTML = '';
 
-        // Create Header Row
         const headerRow = document.createElement('div');
-        headerRow.style.display = 'contents';
+        headerRow.className = 'calendar-header-row';
         calendarGrid.appendChild(headerRow);
         
         const timeHeader = document.createElement('div');
         timeHeader.className = 'calendar-day-header';
-        timeHeader.style.gridColumn = '1';
-        timeHeader.style.position = 'sticky';
-        timeHeader.style.left = '0';
         timeHeader.innerHTML = `&nbsp;`;
         headerRow.appendChild(timeHeader);
 
@@ -72,7 +68,6 @@ export function handleSchedulingPage() {
             headerRow.appendChild(dayHeader);
         }
 
-        // Create Time Column
         const timeColumn = document.createElement('div');
         timeColumn.className = 'time-column';
         for (let hour = 0; hour < 24; hour++) {
@@ -85,7 +80,6 @@ export function handleSchedulingPage() {
         }
         calendarGrid.appendChild(timeColumn);
 
-        // Create Day Columns wrapper
         const daysContainer = document.createElement('div');
         daysContainer.className = 'days-container';
         calendarGrid.appendChild(daysContainer);
@@ -112,7 +106,7 @@ export function handleSchedulingPage() {
         document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
         const formatDate = (d) => d.toISOString().split('T')[0];
         let endOfDay = new Date(end);
-        endOfDay.setDate(endOfDay.getDate() + 1); // To include the full end day
+        endOfDay.setDate(endOfDay.getDate() + 1);
         
         try {
             const shifts = await apiRequest('GET', `/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
