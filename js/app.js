@@ -2,7 +2,7 @@
 import { handleLoginPage } from './pages/login.js';
 import { handleDashboardPage } from './pages/dashboard.js';
 import { handleChecklistsPage } from './pages/checklists.js';
-import { handleAdminPage } from './pages/admin.js'; // Corrected path
+import { handleAdminPage } from './pages/admin.js';
 import { handleAccountPage } from './pages/account.js';
 import { handleDocumentsPage } from './pages/documents.js';
 import { handleHiringPage } from './pages/hiring.js';
@@ -48,6 +48,3 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (path.includes("scheduling.html")) handleSchedulingPage();
     else if (path.includes("apply.html")) handleApplyPage();
 });
-```
-
-I have corrected the typo in the import statement. Once you deploy this updated `app.js` file, the JavaScript should load correctly, and the login functionality will be restor
