@@ -176,7 +176,6 @@ app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-
 app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
     try {
@@ -227,41 +226,7 @@ const inviteUser = async (req, res, role) => {
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
-// Onboarding & Checklist Routes
-app.post('/onboard-employee', isAuthenticated, isAdmin, async (req, res) => {
-    const { full_name, email, position_id } = req.body;
-    if (!full_name || !email || !position_id) return res.status(400).json({ error: 'Full name, email, and position are required.' });
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        const tempPassword = Math.random().toString(36).slice(-8);
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-        const userRes = await client.query(
-            `INSERT INTO users (full_name, email, password, role, position) VALUES ($1, $2, $3, 'employee', (SELECT position FROM checklists WHERE id = $4)) RETURNING user_id`,
-            [full_name, email, hashedPassword, position_id]
-        );
-        const newUserId = userRes.rows[0].user_id;
-        const checklistRes = await client.query('SELECT tasks FROM checklists WHERE id = $1', [position_id]);
-        if (checklistRes.rows.length === 0) throw new Error('Checklist not found.');
-        const tasks = checklistRes.rows[0].tasks;
-        const initialTasksStatus = tasks.map(task => ({ ...task, completed: false }));
-        await client.query(
-            `INSERT INTO onboarding_sessions (user_id, checklist_id, tasks_status) VALUES ($1, $2, $3)`,
-            [newUserId, position_id, JSON.stringify(initialTasksStatus)]
-        );
-        await client.query('COMMIT');
-        console.log(`Onboarding invite for ${email} complete. Temporary password: ${tempPassword}`);
-        res.status(201).json({ message: 'Onboarding started successfully.', tempPassword: tempPassword });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        if (err.code === '23505') return res.status(400).json({ error: 'This email address is already in use.' });
-        res.status(500).json({ error: 'An error occurred during the onboarding process.' });
-    } finally {
-        client.release();
-    }
-});
-
-// ... (Other routes like /checklists, /job-postings, etc. remain here)
+// ... (Other routes: /onboard-employee, /checklists, /job-postings, etc. remain here)
 
 
 // Scheduling Routes
