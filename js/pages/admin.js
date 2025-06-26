@@ -18,15 +18,18 @@ export function handleAdminPage() {
     const newLocationForm = document.getElementById('new-location-form');
     const newLocationNameInput = document.getElementById('new-location-name');
     const newLocationAddressInput = document.getElementById('new-location-address');
-
+    const newLocationStatusMessage = document.getElementById('new-location-status-message'); // NEW: Status message for new location
     const userListDiv = document.getElementById('user-list');
     const inviteAdminForm = document.getElementById('invite-admin-form');
     const adminLocationSelect = document.getElementById('admin-location-select');
+    const inviteAdminStatusMessage = document.getElementById('invite-admin-status-message'); // NEW: Status message for invite admin
     const inviteEmployeeForm = document.getElementById('invite-employee-form');
-    const employeeLocationSelect = document.getElementById('employee-location-select'); // CORRECTED: Removed erroneous 'document ='
+    const employeeLocationSelect = document.getElementById('employee-location-select'); 
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
+    const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message'); // NEW: Status message for invite employee
 
     // --- Helper function to display local status messages ---
+    // This function is now used consistently instead of showModalMessage for internal admin page notifications
     function displayStatusMessage(element, message, isError = false) {
         if (!element) return;
         element.textContent = message;
@@ -48,8 +51,6 @@ export function handleAdminPage() {
         if (!businessSettingsForm || !operatingHoursStartInput || !operatingHoursEndInput) return;
         try {
             const settings = await apiRequest('GET', '/settings/business');
-            console.log("Fetched business settings:", settings); // DEBUG: Log the fetched settings object
-            
             // FIX: Format time strings from "HH:MM:SS" to "HH:MM" for input type="time"
             const formattedStartTime = settings.operating_hours_start ? settings.operating_hours_start.substring(0, 5) : '09:00';
             const formattedEndTime = settings.operating_hours_end ? settings.operating_hours_end.substring(0, 5) : '17:00';
@@ -76,10 +77,14 @@ export function handleAdminPage() {
                 locations.forEach(loc => {
                     const listItem = document.createElement('div');
                     listItem.className = 'list-item';
+                    // Add a delete button with a unique SVG for better click targeting
                     listItem.innerHTML = `
                         <span><strong>${loc.location_name}</strong> (${loc.location_address})</span>
-                        <button class="btn-delete" data-id="${loc.location_id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                        <button class="btn-delete" data-id="${loc.location_id}" data-type="location">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                            </svg>
                         </button>
                     `;
                     locationListDiv.appendChild(listItem);
@@ -88,7 +93,9 @@ export function handleAdminPage() {
                 locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations added yet.</p>';
             }
         } catch (error) {
-            displayStatusMessage(locationListDiv, `Error loading locations: ${error.message}`, true); // Use local status message
+            // Using showModalMessage here as a fallback for initial load errors
+            showModalMessage(`Error loading locations: ${error.message}`, true); 
+            locationListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading locations.</p>`;
             console.error('Error loading locations:', error);
         }
     }
@@ -118,8 +125,8 @@ export function handleAdminPage() {
             }
         } catch (error) {
             console.error("Failed to populate location dropdowns:", error);
-            // Since this is a dropdown, not a primary status area, console.error is sufficient.
-            // showModalMessage("Could not load locations for user assignment.", true); // Removed showModalMessage for this case
+            // Using console.error here as it's a non-critical UI update.
+            // showModalMessage("Could not load locations for user assignment.", true); 
         }
     }
 
@@ -142,10 +149,14 @@ export function handleAdminPage() {
                     if (user.location_name) userInfo += ` at ${user.location_name}`;
                     userInfo += `</span>`;
 
+                    // Add a delete button with a unique SVG for better click targeting
                     listItem.innerHTML = `
                         ${userInfo}
-                        <button class="btn-delete" data-id="${user.user_id}">
-                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                        <button class="btn-delete" data-id="${user.user_id}" data-type="user">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                            </svg>
                         </button>
                     `;
                     userListDiv.appendChild(listItem);
@@ -236,17 +247,17 @@ export function handleAdminPage() {
                 location_address: newLocationAddressInput.value.trim()
             };
             if (!locationData.location_name || !locationData.location_address) {
-                showModalMessage('Location name and address are required.', true);
+                displayStatusMessage(newLocationStatusMessage, 'Location name and address are required.', true); // Use local status message
                 return;
             }
             try {
                 await apiRequest('POST', '/locations', locationData);
-                showModalMessage('Location created successfully!', false);
+                displayStatusMessage(newLocationStatusMessage, 'Location created successfully!', false); // Use local status message
                 newLocationForm.reset();
                 loadLocations(); // Refresh the list of locations
                 populateLocationDropdowns(); // Refresh location dropdowns in invite forms
             } catch (error) {
-                showModalMessage(`Error creating location: ${error.message}`, true);
+                displayStatusMessage(newLocationStatusMessage, `Error creating location: ${error.message}`, true); // Use local status message
                 console.error('Error creating location:', error);
             }
         });
@@ -261,11 +272,12 @@ export function handleAdminPage() {
                 // Confirmation pop-up removed, deletion proceeds directly
                 try {
                     await apiRequest('DELETE', `/locations/${locationId}`);
-                    showModalMessage('Location deleted successfully!', false); // Still uses showModalMessage for success
+                    // Replaced showModalMessage with displayStatusMessage
+                    displayStatusMessage(locationListDiv.querySelector('p'), 'Location deleted successfully!', false); 
                     loadLocations(); // Refresh the list of locations
                     populateLocationDropdowns(); // Refresh location dropdowns
                 } catch (error) {
-                    showModalMessage(`Error deleting location: ${error.message}`, true);
+                    displayStatusMessage(locationListDiv.querySelector('p'), `Error deleting location: ${error.message}`, true);
                     console.error('Error deleting location:', error);
                 }
             }
@@ -280,16 +292,16 @@ export function handleAdminPage() {
                 const userId = deleteBtn.dataset.id; // Get user ID from data attribute
                 // Client-side check to prevent an admin from deleting their own account
                 if (userId == localStorage.getItem('userId')) { 
-                    showModalMessage('You cannot delete your own account from here.', true);
+                    displayStatusMessage(userListDiv.querySelector('p'), 'You cannot delete your own account from here.', true); // Use local status message
                     return;
                 }
                 // Confirmation pop-up removed, deletion proceeds directly
                 try {
                     await apiRequest('DELETE', `/users/${userId}`);
-                    showModalMessage('User deleted successfully!', false); // Still uses showModalMessage for success
+                    displayStatusMessage(userListDiv.querySelector('p'), 'User deleted successfully!', false); // Use local status message
                     loadUsers(); // Refresh the user list
                 } catch (error) {
-                    showModalMessage(`Error deleting user: ${error.message}`, true);
+                    displayStatusMessage(userListDiv.querySelector('p'), `Error deleting user: ${error.message}`, true); // Use local status message
                     console.error('Error deleting user:', error);
                 }
             }
@@ -307,18 +319,18 @@ export function handleAdminPage() {
                 location_id: document.getElementById('admin-location-select').value || null // Location is optional for super_admin
             };
             if (!adminData.full_name || !adminData.email || !adminData.password) {
-                showModalMessage('Full name, email, and temporary password are required for new admin.', true);
+                displayStatusMessage(inviteAdminStatusMessage, 'Full name, email, and temporary password are required for new admin.', true); // Use local status message
                 return;
             }
             try {
                 const response = await apiRequest('POST', '/invite-admin', adminData);
                 // Display the temporary password prominently for the admin to note down
                 // The tempPassword should be part of the response from the server-side invite-employee route
-                showModalMessage(`Admin invited successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new admin.`, false);
-                inviteAdminForm.reset(); // Clear form
+                displayStatusMessage(inviteAdminStatusMessage, `Admin invited successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new admin.`, false); // Use local status message
+                inviteAdminForm.reset(); // Clear the form
                 loadUsers(); // Refresh user list to show the new admin
             } catch (error) {
-                showModalMessage(`Error inviting admin: ${error.message}`, true);
+                displayStatusMessage(inviteAdminStatusMessage, `Error inviting admin: ${error.message}`, true); // Use local status message
                 console.error('Error inviting admin:', error);
             }
         });
@@ -355,20 +367,20 @@ export function handleAdminPage() {
 
             // Basic validation for required fields
             if (!employeeData.full_name || !employeeData.email || !employeeData.password || !employeeData.location_id) {
-                showModalMessage('Full name, email, temporary password, and a location are required for new employee.', true);
+                displayStatusMessage(inviteEmployeeStatusMessage, 'Full name, email, temporary password, and a location are required for new employee.', true); // Use local status message
                 return;
             }
             try {
                 const response = await apiRequest('POST', '/invite-employee', employeeData);
                 // Display the temporary password
                 // The tempPassword should be part of the response from the server-side invite-employee route
-                showModalMessage(`Employee invited successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new employee.`, false);
+                displayStatusMessage(inviteEmployeeStatusMessage, `Employee invited successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new employee.`, false); // Use local status message
                 inviteEmployeeForm.reset(); // Clear form
                 // Reset availability inputs to "Not Available" after successful submission
                 document.querySelectorAll('.availability-day select').forEach(select => select.value = '');
                 loadUsers(); // Refresh user list to show the new employee
             } catch (error) {
-                showModalMessage(`Error inviting employee: ${error.message}`, true);
+                displayStatusMessage(inviteEmployeeStatusMessage, `Error inviting employee: ${error.message}`, true); // Use local status message
                 console.error('Error inviting employee:', error);
             }
         });
