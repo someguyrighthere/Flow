@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
+        /* General layout styles */
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
         .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
         .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
@@ -72,27 +73,29 @@
             flex-shrink: 0;
         }
         
-        /* --- CALENDAR LAYOUT FIXES (REVISED) --- */
+        /* --- CALENDAR GRID STYLES --- */
         .calendar-grid-container {
-            flex-grow: 1;
-            overflow: auto; 
+            flex-grow: 1; /* Allows the container to fill available vertical space */
+            overflow: auto; /* Enables scrolling for content that overflows */
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background-color: rgba(0,0,0,0.1);
         }
         .calendar-grid {
             display: grid;
-            /* 1st column for time (fixed 80px), 7 equal-width columns for days (1fr each) */
+            /* Defines 8 columns: 
+               - 80px for the fixed time column
+               - 7 equal-width columns (1fr each) for the days of the week */
             grid-template-columns: 80px repeat(7, 1fr); 
-            /* 1st row for day headers (auto height), then 24 rows for each hour (fixed 60px height). */
+            /* Defines 25 rows:
+               - 'auto' height for the first row (day headers), adjusts to content
+               - 24 rows for each hour (fixed 60px height). */
             grid-template-rows: auto repeat(24, 60px); 
-            min-width: 1500px; /* Ensures horizontal scroll if needed */
+            min-width: 1500px; /* Ensures a minimum width for the grid, allowing horizontal scroll if needed */
         }
         
-        /* Position elements within the calendar-grid using grid-area properties */
+        /* Styles for the top-left corner header (empty cell) */
         .calendar-corner-header {
-            grid-column: 1 / 2; /* Positions it in the first column */
-            grid-row: 1 / 2;    /* Stays in the first row */
             padding: 10px 0;
             text-align: center;
             font-weight: 600;
@@ -100,10 +103,11 @@
             background-color: rgba(0,0,0,0.3);
             border-bottom: 1px solid var(--border-color);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-            position: sticky; /* Sticky header for top-left corner */
+            position: sticky; /* Makes it sticky when scrolling */
             top: 0;
             left: 0;
             z-index: 7; /* Higher z-index to stay on top */
+            box-sizing: border-box; /* Include padding/border in total size */
         }
 
         /* Styles for the day headers (Mon, Tue, etc.) */
@@ -118,6 +122,7 @@
             z-index: 6;
             border-bottom: 1px solid var(--border-color);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
         }
         /* Make the last day header not have a right border */
         .calendar-grid .calendar-day-header:last-of-type {
@@ -147,8 +152,7 @@
         /* Day column styling - these now span all 24 hour rows */
         .day-column {
             position: relative; /* Needed for absolute positioning of shifts/availability */
-            /* These will be assigned grid-column dynamically in JS */
-            grid-row: 2 / -1;   /* Spans from row 2 to the end (all 24 hour rows) */
+            /* grid-column and grid-row will be assigned dynamically in JS */
             border-right: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
             /* Add hour lines as background or using pseudo-elements */
@@ -161,7 +165,7 @@
             border-right: none;
         }
 
-
+        /* Styles for individual calendar shifts */
         .calendar-shift {
             background-color: var(--primary-accent);
             color: #fff;
@@ -169,7 +173,7 @@
             border-radius: 4px;
             padding: 5px 8px;
             font-size: 0.85rem;
-            position: absolute;
+            position: absolute; /* Positioned within its day-column parent */
             width: calc(100% - 4px); /* Full width minus a small margin on each side */
             left: 2px; /* Small left margin */
             opacity: 0.9;
@@ -194,9 +198,10 @@
         .calendar-shift:hover .delete-shift-btn { opacity: 1; }
         .delete-shift-btn:hover { background: #e74c3c; }
 
+        /* Styles for availability blocks */
         .availability-block {
             background-color: rgba(76, 175, 80, 0.2);
-            position: absolute;
+            position: absolute; /* Positioned within its day-column parent */
             width: 100%;
             z-index: 1; /* Lower z-index to stay behind shifts */
             pointer-events: none; /* Prevents interaction with availability blocks */
@@ -204,7 +209,7 @@
         }
         .availability-block.hidden { display: none; }
 
-        /* Styles for modal overlays - Critical for correct positioning */
+        /* Modal overlay styles - MUST BE DEFINED GLOBALLY OR INCLUDED IN ALL HTML FILES */
         .modal-overlay {
             position: fixed; /* Fixed position relative to the viewport */
             top: 0;
