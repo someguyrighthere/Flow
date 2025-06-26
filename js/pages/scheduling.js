@@ -20,7 +20,8 @@ export function handleSchedulingPage() {
 
     const availabilityToggle = document.getElementById('toggle-availability');
     const autoGenerateBtn = document.getElementById('auto-generate-schedule-btn');
-    const dailyHoursContainer = document = document.getElementById('daily-hours-inputs');
+    // FIX: Corrected assignment for dailyHoursContainer. Removed 'document ='.
+    const dailyHoursContainer = document.getElementById('daily-hours-inputs'); 
 
     // Initialize currentStartDate to the beginning of the current week (Sunday)
     let currentStartDate = new Date();
