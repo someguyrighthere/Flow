@@ -138,7 +138,7 @@ export function handleSchedulingPage() {
     async function loadAndDisplayShifts(start, end) {
         // Remove any existing shifts before rendering new ones
         document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
-        // Helper function to format date to YYYY-MM-DD
+        // Helper function to format date to ISO-MM-DD
         const formatDate = (d) => d.toISOString().split('T')[0];
         let endOfDay = new Date(end);
         endOfDay.setDate(endOfDay.getDate() + 1); // Fetch shifts up to the end of the last day
@@ -147,7 +147,7 @@ export function handleSchedulingPage() {
             const shifts = await apiRequest('GET', `/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    console.log("Shift ID being rendered:", shift.id); // DEBUG: Log shift ID
+                    // console.log("Shift ID being rendered:", shift.id); // DEBUG: Removed debug log
                     const shiftStart = new Date(shift.start_time);
                     const shiftEnd = new Date(shift.end_time);
                     
@@ -276,7 +276,7 @@ export function handleSchedulingPage() {
             if (deleteBtn) {
                 e.stopPropagation(); // Prevent other click events on the grid
                 const shiftId = String(deleteBtn.dataset.shiftId); // Ensure shiftId is a string
-                console.log("Attempting to delete shift with ID:", shiftId); // DEBUG: Log captured shift ID
+                // console.log("Attempting to delete shift with ID:", shiftId); // DEBUG: Removed debug log
                 if (!shiftId || shiftId === "undefined" || shiftId === "null") { // Added checks for "undefined" or "null" strings
                     showModalMessage('Shift ID not found. Cannot delete.', true);
                     return;
@@ -284,32 +284,12 @@ export function handleSchedulingPage() {
                 const confirmed = await showConfirmModal('Are you sure you want to delete this shift?');
                 if (confirmed) {
                     try {
-                        // Removed apiRequest and using direct fetch for testing
-                        console.log("Attempting direct fetch DELETE for:", `/shifts/${shiftId}`); // Debugging
-                        const token = localStorage.getItem('authToken');
-                        const API_BASE_URL = 'https://flow-gz1r.onrender.com'; // Make sure this is defined
-                        const endpoint = `${API_BASE_URL}/shifts/${shiftId}`;
-
-                        const response = await fetch(endpoint, {
-                            method: 'DELETE',
-                            headers: {
-                                'Authorization': `Bearer ${token}`
-                            }
-                        });
-
-                        if (response.status === 204) {
-                            showModalMessage('Shift deleted successfully (Direct Fetch).', false);
-                            renderCalendar(currentStartDate);
-                        } else if (response.status === 401 || response.status === 403) {
-                            showModalMessage('Authentication failed for deletion. Please log in again.', true);
-                            setTimeout(() => { window.location.href = 'login.html?sessionExpired=true'; }, 1500);
-                        } else {
-                            const errorData = await response.json().catch(() => ({}));
-                            showModalMessage(`Error deleting shift (Direct Fetch): ${errorData.error || response.statusText}`, true);
-                        }
+                        // Reverted to using apiRequest
+                        await apiRequest('DELETE', `/shifts/${shiftId}`);
+                        showModalMessage('Shift deleted successfully!', false);
+                        renderCalendar(currentStartDate); // Re-render calendar after deletion
                     } catch (error) {
-                        console.error("Direct fetch DELETE failed:", error); // Debugging
-                        showModalMessage(`Network or unexpected error during deletion (Direct Fetch): ${error.message}`, true);
+                        showModalMessage(`Error deleting shift: ${error.message}`, true);
                     }
                 }
             }
