@@ -75,15 +75,15 @@
         /* --- FINAL CALENDAR LAYOUT FIX --- */
         .calendar-grid-container {
             flex-grow: 1;
-            overflow: auto; /* Allow both horizontal and vertical scrolling */
+            overflow: auto;
             border: 1px solid var(--border-color);
             border-radius: 8px;
         }
         .calendar-grid {
             display: grid;
             grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
-            grid-template-rows: auto repeat(24, 60px); /* Header + 24 hour slots */
-            min-width: 1480px; /* Force minimum width to prevent collapse */
+            grid-template-rows: auto; /* Rows will be added dynamically */
+            min-width: 1480px;
         }
         .calendar-grid > div {
             border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -105,13 +105,11 @@
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
-            grid-column: 1 / 2;
-            grid-row: 2 / -1;
             display: flex;
             flex-direction: column;
         }
         .calendar-time-slot {
-            height: 100%;
+            height: 60px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -145,7 +143,7 @@
             border-left: 3px solid rgba(76, 175, 80, 0.5);
             position: absolute;
             width: 100%;
-            height: 100%; /* Fill the entire cell */
+            height: 100%;
             top: 0;
             left: 0;
             z-index: 1;
