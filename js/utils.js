@@ -17,17 +17,19 @@ export function showModalMessage(message, isError = false) {
     if (modalOverlay && modalMessageText && modalOkButton) {
         modalMessageText.textContent = message;
         modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
-        modalOverlay.style.display = "flex"; // Show the modal
-
-        // Remove any previous listeners to prevent multiple firings
-        modalOkButton.removeEventListener("click", hideModal);
-        modalOverlay.removeEventListener("click", hideModalOutside);
-
-        // Define hide function
+        
+        // Define hide functions first, before attaching/removing listeners
         const hideModal = () => { modalOverlay.style.display = "none"; };
         const hideModalOutside = (event) => { 
             if (event.target === modalOverlay) hideModal(); 
         };
+
+        // Remove any previous listeners to prevent multiple firings
+        // These must be called after the functions are defined
+        modalOkButton.removeEventListener("click", hideModal);
+        modalOverlay.removeEventListener("click", hideModalOutside);
+
+        modalOverlay.style.display = "flex"; // Show the modal
 
         // Add new listeners
         modalOkButton.addEventListener("click", hideModal);
