@@ -72,29 +72,41 @@
             flex-shrink: 0;
         }
         
-        /* --- FINAL CALENDAR LAYOUT FIX --- */
+        /* --- CALENDAR LAYOUT FIXES --- */
         .calendar-grid-container {
             flex-grow: 1;
-            overflow: auto;
+            overflow: auto; /* Allows scrolling if content exceeds container */
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background-color: rgba(0,0,0,0.1);
         }
         .calendar-grid {
             display: grid;
-            grid-template-columns: 80px repeat(7, 1fr);
-            min-width: 1500px;
+            /* 1st column for time, 7 columns for days */
+            grid-template-columns: 80px repeat(7, 1fr); 
+            /* 1st row for day headers, 2nd row for time slots/day content */
+            grid-template-rows: auto 1fr; 
+            min-width: 1500px; /* Ensures horizontal scroll if needed */
+            height: 100%; /* Ensures the grid takes full height of its container */
         }
-        .calendar-header-row {
-            grid-column: 1 / -1;
-            grid-row: 1 / 2;
-            display: contents;
+        
+        /* Position elements within the calendar-grid using grid-area properties */
+        .calendar-corner-header {
+            grid-column: 1 / 2; /* Spans the first column */
+            grid-row: 1 / 2;    /* Stays in the first row */
+            padding: 10px 0;
+            text-align: center;
+            font-weight: 600;
+            color: var(--text-light);
+            background-color: rgba(0,0,0,0.3);
+            border-bottom: 1px solid var(--border-color);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky; /* Sticky header for top-left corner */
+            top: 0;
+            left: 0;
+            z-index: 7; /* Higher z-index to stay on top */
         }
-        .calendar-body {
-            grid-column: 1 / -1;
-            grid-row: 2 / -1;
-            display: contents;
-        }
+
         .calendar-day-header {
             padding: 10px 0;
             text-align: center;
@@ -107,35 +119,58 @@
             border-bottom: 1px solid var(--border-color);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
+        /* Make the last day header not have a right border */
+        .calendar-grid .calendar-day-header:last-of-type {
+            border-right: none;
+        }
         
         .time-column {
+            grid-column: 1 / 2; /* Stays in the first column */
+            grid-row: 2 / -1;   /* Starts from the second row and spans to the end */
             position: sticky;
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
-            grid-column: 1 / 2;
-            grid-row: 1 / -1;
+            /* Adjust height to match the content of day-columns */
+            height: 100%; /* Ensures it fills the grid cell vertically */
+            border-right: 1px solid rgba(255, 255, 255, 0.1); /* Keep right border */
         }
         .time-slot {
-            height: 60px;
+            height: 60px; /* Each hour slot is 60px tall */
+            line-height: 60px; /* Vertically center text */
+            text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             font-size: 0.8rem;
             color: var(--text-medium);
         }
+        /* Remove bottom border from the last time slot */
+        .time-column .time-slot:last-of-type {
+            border-bottom: none;
+        }
+
         .day-column {
             position: relative;
+            /* Each day column will occupy its respective grid column and start from the second row */
+            grid-row: 2 / -1; 
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-            min-height: 1440px; /* 24 * 60px */
+            min-height: 1440px; /* 24 hours * 60px/hour = 1440px */
+            box-sizing: border-box; /* Include padding/border in total size */
+        }
+        /* Remove right border from the last day column */
+        .calendar-grid .day-column:last-of-type {
+            border-right: none;
         }
         .day-column .hour-line {
             height: 60px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
         }
+        /* Remove bottom border from the last hour line in each column */
+        .day-column .hour-line:last-of-type {
+            border-bottom: none;
+        }
+
 
         .calendar-shift {
             background-color: var(--primary-accent);
@@ -200,7 +235,45 @@
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
             <div class="scheduling-layout">
                 <div class="sidebar">
-                    <!-- ... sidebar content ... -->
+                    <h3>Create New Shift</h3>
+                    <form id="create-shift-form">
+                        <div class="form-group">
+                            <label for="employee-select">Employee</label>
+                            <select id="employee-select" required>
+                                <option value="">Select Employee</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="location-select">Location</label>
+                            <select id="location-select" required>
+                                <option value="">Select Location</option>
+                            </select>
+                        </div>
+                         <div class="form-group">
+                            <label for="start-time-input">Start Date & Time</label>
+                            <input type="datetime-local" id="start-time-input" required>
+                        </div>
+                         <div class="form-group">
+                            <label for="end-time-input">End Date & Time</label>
+                            <input type="datetime-local" id="end-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes-input">Notes (Optional)</label>
+                            <input type="text" id="notes-input" placeholder="e.g., Training shift">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Create Shift</button>
+                    </form>
+                    <hr style="border-color: rgba(255,255,255,0.1); margin: 30px 0;">
+                    <h3>Auto-Generate Schedule</h3>
+                    <div id="daily-hours-inputs">
+                        <!-- Daily hour inputs will be generated by JS here -->
+                    </div>
+                    <button id="auto-generate-schedule-btn" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Generate Schedule</button>
+                    <hr style="border-color: rgba(255,255,255,0.1); margin: 30px 0;">
+                    <div class="form-group">
+                        <input type="checkbox" id="toggle-availability" checked>
+                        <label for="toggle-availability" style="display: inline; margin-left: 10px;">Show Employee Availability</label>
+                    </div>
                 </div>
 
                 <div class="calendar-main">
@@ -219,7 +292,26 @@
         </section>
     </div>
     
-    <!-- ... Modals ... -->
+    <!-- Message Modal Overlay -->
+    <div id="message-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Confirmation Modal Overlay -->
+    <div id="confirm-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="confirm-modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
     
     <script type="module" src="js/app.js"></script>
 </body>
