@@ -8,7 +8,6 @@ export function handleSchedulingPage() {
     }
 
     const calendarGrid = document.getElementById('calendar-grid');
-    const timeColumn = document.getElementById('time-column');
     const currentWeekDisplay = document.getElementById('current-week-display');
     const prevWeekBtn = document.getElementById('prev-week-btn');
     const nextWeekBtn = document.getElementById('next-week-btn');
@@ -25,19 +24,6 @@ export function handleSchedulingPage() {
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
 
-    function generateTimeSlots() {
-        if (!timeColumn) return;
-        timeColumn.innerHTML = '';
-        for (let i = 0; i < 24; i++) {
-            const timeSlot = document.createElement('div');
-            timeSlot.className = 'calendar-time-slot';
-            const hour = i % 12 === 0 ? 12 : i % 12;
-            const ampm = i < 12 ? 'AM' : 'PM';
-            timeSlot.textContent = `${hour} ${ampm}`;
-            timeColumn.appendChild(timeSlot);
-        }
-    }
-    
     function createDailyHoursInputs() {
         if (!dailyHoursContainer) return;
         dailyHoursContainer.innerHTML = '';
@@ -62,31 +48,52 @@ export function handleSchedulingPage() {
         const options = { month: 'short', day: 'numeric' };
         currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
         
-        // *** FIX: Correctly clear only the dynamic parts of the grid ***
-        const oldDayHeaders = calendarGrid.querySelectorAll('.calendar-day-header:not(:first-child)');
-        oldDayHeaders.forEach(header => header.remove());
-        const oldDayCells = calendarGrid.querySelectorAll('.calendar-day-cell');
-        oldDayCells.forEach(cell => cell.remove());
-        // Also remove the initial loading paragraph if it exists
-        const loadingPara = calendarGrid.querySelector('p');
-        if (loadingPara) loadingPara.remove();
-        
+        calendarGrid.innerHTML = '';
+
+        // 1. Add time column header
+        const timeHeader = document.createElement('div');
+        timeHeader.className = 'calendar-day-header';
+        timeHeader.textContent = 'Time';
+        timeHeader.style.gridColumn = '1 / 2';
+        timeHeader.style.position = 'sticky';
+        timeHeader.style.left = '0';
+        timeHeader.style.zIndex = '7';
+        calendarGrid.appendChild(timeHeader);
+
+        // 2. Add day headers
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startDate);
             dayDate.setDate(startDate.getDate() + i);
-
             const dayHeader = document.createElement('div');
             dayHeader.className = 'calendar-day-header';
             dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
-            dayHeader.style.gridColumn = i + 2;
+            dayHeader.style.gridColumn = `${i + 2} / ${i + 3}`;
             calendarGrid.appendChild(dayHeader);
+        }
 
-            const dayCell = document.createElement('div');
-            dayCell.className = 'calendar-day-cell';
-            dayCell.id = `day-cell-${i}`;
-            dayCell.style.gridColumn = i + 2;
-            dayCell.style.gridRow = `2 / span 24`;
-            calendarGrid.appendChild(dayCell);
+        // 3. Add time slots and day cells
+        for (let hour = 0; hour < 24; hour++) {
+            const timeSlot = document.createElement('div');
+            timeSlot.className = 'calendar-time-slot';
+            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+            const ampm = hour < 12 ? 'AM' : 'PM';
+            timeSlot.textContent = `${displayHour} ${ampm}`;
+            timeSlot.style.gridColumn = '1 / 2';
+            timeSlot.style.gridRow = `${hour + 2} / ${hour + 3}`;
+            timeSlot.style.position = 'sticky';
+            timeSlot.style.left = '0';
+            timeSlot.style.zIndex = '5';
+            timeSlot.style.backgroundColor = '#2a2a2e';
+            calendarGrid.appendChild(timeSlot);
+
+            for (let day = 0; day < 7; day++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'calendar-day-cell';
+                dayCell.id = `cell-${day}-${hour}`;
+                dayCell.style.gridColumn = `${day + 2} / ${day + 3}`;
+                dayCell.style.gridRow = `${hour + 2} / ${hour + 3}`;
+                calendarGrid.appendChild(dayCell);
+            }
         }
         
         await Promise.all([
@@ -109,24 +116,30 @@ export function handleSchedulingPage() {
                     const shiftEnd = new Date(shift.end_time);
                     
                     const dayIndex = shiftStart.getDay();
-                    const dayCell = document.getElementById(`day-cell-${dayIndex}`);
+                    const startHour = shiftStart.getHours() + shiftStart.getMinutes() / 60;
+                    const endHour = shiftEnd.getHours() + shiftEnd.getMinutes() / 60;
+                    const durationHours = endHour - startHour;
 
-                    if (dayCell) {
-                        const startHour = shiftStart.getHours() + shiftStart.getMinutes() / 60;
-                        const endHour = shiftEnd.getHours() + shiftEnd.getMinutes() / 60;
-                        
-                        const topPosition = startHour * 30;
-                        const durationHours = endHour - startHour;
-                        const height = Math.max(15, durationHours * 30);
-
+                    const parentCell = document.getElementById(`cell-${dayIndex}-${shiftStart.getHours()}`);
+                    if(parentCell) {
                         const shiftElement = document.createElement('div');
                         shiftElement.className = 'calendar-shift';
-                        shiftElement.style.top = `${topPosition}px`;
-                        shiftElement.style.height = `${height}px`;
-                        shiftElement.innerHTML = `<strong>${shift.employee_name}</strong><br>${shift.location_name}`;
+                        shiftElement.style.top = `${(startHour % 1) * 60}px`;
+                        shiftElement.style.height = `${durationHours * 60}px`;
+                        
+                        // *** FIX: Display formatted times on the shift block ***
+                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
+                        const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
+                        const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
+
+                        shiftElement.innerHTML = `
+                            <strong>${shift.employee_name}</strong><br>
+                            <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
+                            <span style="color: #ddd;">${shift.location_name}</span>
+                        `;
                         shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
                         
-                        dayCell.appendChild(shiftElement);
+                        parentCell.appendChild(shiftElement);
                     }
                 });
             }
@@ -148,25 +161,18 @@ export function handleSchedulingPage() {
                 daysOfWeek.forEach((day, index) => {
                     const dayAvailability = employee.availability[day];
                     if (dayAvailability && dayAvailability.start && dayAvailability.end) {
-                        const dayCell = document.getElementById(`day-cell-${index}`);
-                        if (dayCell) {
-                            const startHour = parseFloat(dayAvailability.start.split(':')[0]);
-                            const endHour = parseFloat(dayAvailability.end.split(':')[0]);
+                        const startHour = parseInt(dayAvailability.start.split(':')[0], 10);
+                        const endHour = parseInt(dayAvailability.end.split(':')[0], 10);
 
-                            if (endHour > startHour) {
-                                const topPosition = startHour * 30;
-                                const durationHours = endHour - startHour;
-                                const height = durationHours * 30;
-
+                        for (let hour = startHour; hour < endHour; hour++) {
+                            const cell = document.getElementById(`cell-${index}-${hour}`);
+                            if (cell) {
                                 const availabilityBlock = document.createElement('div');
                                 availabilityBlock.className = 'availability-block';
                                 if (!availabilityToggle.checked) {
                                     availabilityBlock.classList.add('hidden');
                                 }
-                                availabilityBlock.style.top = `${topPosition}px`;
-                                availabilityBlock.style.height = `${height}px`;
-                                availabilityBlock.title = `${employee.full_name} is available`;
-                                dayCell.appendChild(availabilityBlock);
+                                cell.appendChild(availabilityBlock);
                             }
                         }
                     }
@@ -285,7 +291,6 @@ export function handleSchedulingPage() {
     
     // --- Initial Page Load ---
     createDailyHoursInputs();
-    generateTimeSlots();
     renderCalendar(currentStartDate);
     populateDropdowns();
 }
