@@ -439,8 +439,9 @@ export function handleSchedulingPage() {
             const shiftData = {
                 employee_id: document.getElementById('employee-select').value,
                 location_id: document.getElementById('location-select').value,
-                start_time: document.getElementById('start-time-input').value,
-                end_time: document.getElementById('end-time-input').value,
+                // FIX: Convert datetime-local input values to ISO strings for TIMESTAMPTZ compatibility
+                start_time: new Date(document.getElementById('start-time-input').value).toISOString(),
+                end_time: new Date(document.getElementById('end-time-input').value).toISOString(),
                 notes: document.getElementById('notes-input').value
             };
 
