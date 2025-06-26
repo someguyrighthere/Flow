@@ -2,12 +2,9 @@
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 export function handleAdminPage() {
-    // ... (existing element selections) ...
     const businessSettingsForm = document.getElementById('business-settings-form');
+    // ... (other element selections)
 
-    // --- Data Loading and Rendering Functions ---
-
-    // *** NEW: Function to load business settings ***
     async function loadBusinessSettings() {
         if (!businessSettingsForm) return;
         try {
@@ -19,11 +16,8 @@ export function handleAdminPage() {
         }
     }
 
-    // ... (loadLocations, loadUsers) ...
+    // ... (other functions)
 
-    // --- Event Listeners ---
-
-    // *** NEW: Event listener for business settings form ***
     if (businessSettingsForm) {
         businessSettingsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -39,11 +33,12 @@ export function handleAdminPage() {
             }
         });
     }
+    
+    // ... (other event listeners)
 
-    // ... (rest of event listeners) ...
-
-    // --- Initial page load ---
-    loadBusinessSettings(); // Call the new function
+    // Initial page load
+    loadBusinessSettings();
+    generateAvailabilityInputs();
     loadLocations();
     loadUsers();
 }

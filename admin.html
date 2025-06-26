@@ -20,7 +20,7 @@
         }
         .account-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 30px;
         }
         .list-item {
@@ -60,48 +60,49 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
         .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000; display: none;
         }
         .modal-content {
-            background-color: rgba(26, 26, 26, 0.95);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 30px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            position: relative;
+            background-color: rgba(26, 26, 26, 0.95); backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 400px; text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); position: relative;
         }
-        .modal-content p {
-            margin-bottom: 20px;
-            font-size: 1.1rem;
-        }
-        .modal-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .modal-buttons .btn {
-            padding: 10px 25px;
-            font-size: 1rem;
-        }
-        /* --- NEW: Business Hours Styles --- */
+        .modal-content p { margin-bottom: 20px; font-size: 1.1rem; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; }
+        .modal-buttons .btn { padding: 10px 25px; font-size: 1rem; }
+        
+        /* Business Hours Styles */
         .business-hours-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
+        }
+        .availability-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+        .availability-day {
+            display: contents;
+        }
+        .availability-day label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            grid-column: 1 / 2;
+        }
+        .availability-day .time-range {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            grid-column: 2 / 3;
+        }
+        .availability-day select {
+            flex-grow: 1;
         }
     </style>
 </head>
@@ -130,7 +131,6 @@
         <div id="admin-settings-content">
              <h2 style="color: var(--text-light);">Admin Settings</h2>
              <div class="account-grid">
-                <!-- *** NEW: Business Settings Card *** -->
                 <div class="card">
                     <h3>Business Settings</h3>
                     <form id="business-settings-form">
@@ -167,29 +167,84 @@
                         <button type="submit" class="btn btn-primary">Create Location</button>
                     </form>
                 </div>
-             </div>
-             <div class="card" style="margin-top: 30px;">
-                <h3>Manage Users</h3>
-                <div id="user-list"></div>
-                <hr style="border-color: var(--border-color); margin: 30px 0;">
-                <h4>Invite New Admin</h4>
-                <form id="invite-admin-form">
-                    <!-- ... existing form ... -->
-                </form>
-                <hr style="border-color: var(--border-color); margin: 30px 0;">
-                <h4>Invite New Employee</h4>
-                <form id="invite-employee-form">
-                    <!-- ... existing form ... -->
-                </form>
+                
+                <div class="card">
+                    <h3>Manage Users</h3>
+                    <div id="user-list"></div>
+                    <hr style="border-color: var(--border-color); margin: 30px 0;">
+                    <h4>Invite New Admin</h4>
+                    <form id="invite-admin-form">
+                        <div class="form-group"><label for="admin-name">Full Name</label><input type="text" id="admin-name" required></div>
+                        <div class="form-group"><label for="admin-email">Email</label><input type="email" id="admin-email" required></div>
+                        <div class="form-group">
+                            <label for="admin-password">Temporary Password</label>
+                            <input type="password" id="admin-password" placeholder="Enter temporary password" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="admin-location-select">Assign to Location</label>
+                            <select id="admin-location-select" required></select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Invite</button>
+                    </form>
+
+                    <hr style="border-color: var(--border-color); margin: 30px 0;">
+                    <h4>Invite New Employee</h4>
+                    <form id="invite-employee-form">
+                        <div class="form-group"><label for="employee-name">Full Name</label><input type="text" id="employee-name" required></div>
+                        <div class="form-group"><label for="employee-email">Email</label><input type="email" id="employee-email" required></div>
+                        <div class="form-group">
+                            <label for="employee-password">Temporary Password</label>
+                            <input type="password" id="employee-password" placeholder="Enter temporary password" required>
+                        </div>
+                         <div class="form-group">
+                            <label for="employee-position">Position</label>
+                            <input type="text" id="employee-position" placeholder="e.g., Sales Associate, Jr. Developer">
+                        </div>
+                         <div class="form-group">
+                            <label for="employee-id">Employee ID (Optional)</label>
+                            <input type="text" id="employee-id" placeholder="e.g., EMP001">
+                        </div>
+                        <div class="form-group">
+                            <label for="employee-type">Employment Type</label>
+                            <select id="employee-type">
+                                <option value="Full-time">Full-time</option>
+                                <option value="Part-time">Part-time</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Weekly Availability</label>
+                            <div class="availability-grid" id="employee-availability-grid">
+                                <!-- Availability slots will be generated by JS -->
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="employee-location-select">Assign to Location</label>
+                            <select id="employee-location-select" required>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Invite</button>
+                    </form>
+                </div>
              </div>
         </div>
     </div>
     <!-- Modals -->
     <div id="message-modal-overlay" class="modal-overlay">
-        <!-- ... existing modal ... -->
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
     </div>
     <div id="confirm-modal-overlay" class="modal-overlay">
-        <!-- ... existing modal ... -->
+        <div class="modal-content">
+            <p id="confirm-modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
     </div>
     <script type="module" src="js/app.js"></script>
 </body>
