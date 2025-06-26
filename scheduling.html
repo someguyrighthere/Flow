@@ -60,8 +60,8 @@
             padding: 20px;
             border-radius: 8px;
             display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            flex-direction: column; /* Changed to column to stack header and body */
+            overflow: hidden; /* Important for internal scrolling */
         }
         .calendar-header {
             display: flex;
@@ -72,33 +72,51 @@
             flex-shrink: 0;
         }
         
-        /* --- FINAL CALENDAR LAYOUT FIX --- */
+        /* --- UPDATED CALENDAR LAYOUT CSS --- */
         .calendar-grid-container {
-            flex-grow: 1;
-            overflow: auto;
+            flex-grow: 1; /* Allows the container to fill available space */
+            overflow: hidden; /* Contains internal scrolling */
+            display: flex; /* Use flex to manage inner grid content */
+            flex-direction: column; /* Stack the header and body */
         }
+
         .calendar-grid {
-            display: grid;
-            grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
-            grid-template-rows: auto 1fr;
-            min-width: 1500px;
+            /* Removed grid properties from here, now a flex container for header and body */
+            display: flex;
+            flex-direction: column;
+            width: 100%; /* Ensure it takes full width */
+            min-width: 1500px; /* Keep min-width for calendar content */
+            height: 100%; /* Ensure it fills parent height */
         }
-        .calendar-grid .header {
-            grid-column: 1 / -1;
+
+        .calendar-grid-header { /* This class is now used by JS for the header row */
             display: grid;
-            grid-template-columns: subgrid;
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Define 8 columns */
             position: sticky;
             top: 0;
             z-index: 6;
             background-color: #1a1a1a;
+            border-bottom: 1px solid var(--border-color); /* Add border for separation */
         }
+
+        .calendar-body { /* New wrapper for time column and day columns */
+            display: grid;
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Define 8 columns */
+            flex-grow: 1; /* Allows the body to take remaining vertical space */
+            overflow: auto; /* Enables scrolling for the main calendar content */
+            position: relative; /* For absolute positioning of shifts/availability */
+        }
+
         .calendar-day-header {
             padding: 10px 0;
             text-align: center;
             font-weight: 600;
             color: var(--text-light);
-            border-bottom: 1px solid var(--border-color);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* No border-bottom here, as it's on .calendar-grid-header now */
+        .calendar-day-header:last-child {
+            border-right: none; /* Remove right border for the last header */
         }
         
         .time-column {
@@ -106,9 +124,14 @@
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
+            /* Ensure it spans the full height of the body content */
+            grid-column: 1; /* Explicitly place in the first column */
+            height: 100%; /* Span full height of its grid cell */
+            display: flex;
+            flex-direction: column;
         }
         .time-slot {
-            height: 60px;
+            height: 60px; /* Fixed height for each hour slot */
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
             display: flex;
@@ -116,15 +139,30 @@
             justify-content: center;
             font-size: 0.8rem;
             color: var(--text-medium);
+            flex-shrink: 0; /* Prevent shrinking */
         }
+        .time-slot:last-child {
+            border-bottom: none; /* Remove border from the last time slot */
+        }
+
         .day-column {
             position: relative;
             border-right: 1px solid rgba(255, 255, 255, 0.1);
+            /* Day columns will automatically be placed in grid-column 2 to 8 */
+            height: 1440px; /* 24 hours * 60 minutes/hour * 1px/minute = 1440px. This makes the column tall enough for absolute positioning */
+            min-height: 100%; /* Ensure it expands to at least the grid height */
         }
+        .day-column:last-child {
+            border-right: none; /* Remove right border for the last day column */
+        }
+
         .hour-line {
-            height: 60px;
+            height: 60px; /* Represents one hour height */
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
+        }
+        .hour-line:last-child {
+            border-bottom: none; /* Remove border from the last hour line */
         }
 
         .calendar-shift {
@@ -135,7 +173,7 @@
             padding: 5px 8px;
             font-size: 0.85rem;
             position: absolute;
-            width: calc(100% - 4px);
+            width: calc(100% - 4px); /* Full width minus padding/border */
             left: 2px;
             opacity: 0.9;
             z-index: 3;
@@ -159,7 +197,7 @@
             position: absolute;
             width: 100%;
             z-index: 1;
-            pointer-events: none;
+            pointer-events: none; /* Allows clicks to pass through to elements below */
             box-sizing: border-box;
         }
         .availability-block.hidden { display: none; }
@@ -168,23 +206,84 @@
 <body>
     <div class="background-animation"></div>
     <div class="container">
-        <!-- ... Header and Nav ... -->
+        <!-- Main Navigation (assuming it exists from other pages) -->
+        <header class="dashboard-header">
+            <h1 class="app-title">Flow Business Suite</h1>
+            <nav class="main-nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="checklists.html">Checklists</a>
+                <a href="hiring.html">Hiring</a>
+                <a href="scheduling.html" class="active">Scheduling</a>
+                <a href="documents.html">Documents</a>
+                <a href="admin.html">Admin</a>
+            </nav>
+            <div class="settings-menu">
+                <button id="settings-button" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 0-1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 0 1-1.73V4a2 2 0 0 0-2-2z"/><path d="M17.41 6.36l.4.24a2 2 0 0 0 2.22 0l.4-.24a2 2 0 0 1 1-1.73V4a2 2 0 0 0-2-2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l.43.25a2 2 0 0 0 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l-.43-.25a2 2 0 0 0-1-1.73V4a2 2 0 0 0-2-2zM4.59 6.36l-.4.24a2 2 0 0 1-2.22 0l-.4-.24a2 2 0 0 0-1-1.73V4a2 2 0 0 1 2-2h.44a2 2 0 0 1 2 2v.18a2 2 0 0 0 1 1.73l-.43.25a2 2 0 0 1-1 1.73V20a2 2 0 0 1-2 2h-.44a2 2 0 0 1-2-2v-.18a2 2 0 0 0-1-1.73l.43-.25a2 2 0 0 1 1-1.73V4a2 2 0 0 1 2-2z"/></svg>
+                </button>
+                <div id="settings-dropdown" class="settings-dropdown">
+                    <a href="account.html">Account</a>
+                    <button id="logout-button">Logout</button>
+                </div>
+            </div>
+        </header>
+
         <section>
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
             <div class="scheduling-layout">
                 <div class="sidebar">
-                    <!-- ... sidebar content ... -->
+                    <h3>Create New Shift</h3>
+                    <form id="create-shift-form">
+                        <div class="form-group">
+                            <label for="employee-select">Employee</label>
+                            <select id="employee-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="location-select">Location</label>
+                            <select id="location-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="start-time-input">Start Time</label>
+                            <input type="datetime-local" id="start-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-time-input">End Time</label>
+                            <input type="datetime-local" id="end-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes-input">Notes (Optional)</label>
+                            <textarea id="notes-input" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Shift</button>
+                    </form>
+
+                    <h3 style="margin-top: 30px;">Auto-Scheduling Settings</h3>
+                    <div class="form-group">
+                        <label>Target Daily Hours:</label>
+                        <div id="daily-hours-inputs">
+                            <!-- Daily hour inputs will be created here by JS -->
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-availability" checked>
+                            <span class="slider round"></span>
+                            Show Availability
+                        </label>
+                    </div>
+                    <button id="auto-generate-schedule-btn" class="btn btn-secondary">Auto-Generate Schedule</button>
                 </div>
 
                 <div class="calendar-main">
                     <div class="calendar-header">
-                        <button id="prev-week-btn">◀ Previous</button>
+                        <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
                         <h3 id="current-week-display">Loading...</h3>
-                        <button id="next-week-btn">Next ▶</button>
+                        <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
                     </div>
                     <div class="calendar-grid-container">
                         <div id="calendar-grid">
-                            <!-- JS will build the calendar here -->
+                            <!-- JS will build the header (.calendar-grid-header) 
+                                 and body (.calendar-body) with time/day columns here -->
                         </div>
                     </div>
                 </div>
@@ -192,7 +291,22 @@
         </section>
     </div>
     
-    <!-- ... Modals ... -->
+    <!-- Modals (assuming these are defined in utils.js or elsewhere) -->
+    <div id="modal-message" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <p id="modal-text"></p>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
     
     <script type="module" src="js/app.js"></script>
 </body>
