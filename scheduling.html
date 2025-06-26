@@ -202,6 +202,18 @@
         }
         .availability-block.hidden { display: none; }
 
+        /* --- Business Hours Background Block --- */
+        .business-hours-block {
+            background-color: rgba(100, 100, 100, 0.1); /* Changed opacity to 0.1 (10%) */
+            position: absolute;
+            width: 100%;
+            z-index: 0; /* Place behind availability and shifts */
+            pointer-events: none; /* Ensure clicks pass through */
+            box-sizing: border-box;
+            border-radius: 4px; /* Match other blocks */
+        }
+
+
         /* --- CORRECTED Modal Styles to ensure pop-up behavior --- */
         .modal {
             /* Keep hidden by default; JS will set display to 'flex' */
@@ -245,8 +257,7 @@
             margin-top: 20px;
         }
 
-        /* Removed .close-button styles as the 'X' is being replaced by an OK button */
-        /* .close-button {
+        .close-button {
             color: var(--text-medium);
             font-size: 28px;
             font-weight: bold;
@@ -261,7 +272,7 @@
             color: var(--text-light);
             text-decoration: none;
             cursor: pointer;
-        } */
+        }
 
         /* Keyframe animation for modal fade-in */
         @keyframes fadeIn {
@@ -289,7 +300,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 0-1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 0 1-1.73V4a2 2 0 0 0-2-2z"/><path d="M17.41 6.36l.4.24a2 2 0 0 0 2.22 0l.4-.24a2 2 0 0 1 1-1.73V4a2 2 0 0 0-2-2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l.43.25a2 2 0 0 0 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l-.43-.25a2 2 0 0 0-1-1.73V4a2 2 0 0 0-2-2zM4.59 6.36l-.4.24a2 2 0 0 1-2.22 0l-.4-.24a2 2 0 0 0-1-1.73V4a2 2 0 0 1 2-2h.44a2 2 0 0 1 2 2v.18a2 2 0 0 0 1 1.73l-.43.25a2 2 0 0 1 1-1.73V20a2 2 0 0 1-2 2h-.44a2 2 0 0 1-2-2v-.18a2 2 0 0 0-1-1.73l.43-.25a2 2 0 0 1 1-1.73V4a2 2 0 0 1 2-2z"/></svg>
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
-                    <a href="account.html">Account</a>
+                    <a href="account.html">My Account</a>
                     <button id="logout-button">Logout</button>
                 </div>
             </div>

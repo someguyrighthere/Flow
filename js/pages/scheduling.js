@@ -2,8 +2,6 @@
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 export function handleSchedulingPage() {
-    console.log("handleSchedulingPage initialized."); // DEBUG: Confirm function starts
-
     // Redirect to login page if no authentication token is found in local storage
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
@@ -22,16 +20,12 @@ export function handleSchedulingPage() {
 
     const availabilityToggle = document.getElementById('toggle-availability');
     const autoGenerateBtn = document.getElementById('auto-generate-schedule-btn');
-    // FIX: Corrected assignment for dailyHoursContainer. Removed 'document ='.
     const dailyHoursContainer = document.getElementById('daily-hours-inputs'); 
 
     // Initialize currentStartDate to the beginning of the current week (Sunday)
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
-
-    console.log("DOM elements retrieved:", { calendarGrid: !!calendarGrid, nextWeekBtn: !!nextWeekBtn }); // DEBUG: Check if elements are found
-
 
     /**
      * Dynamically creates input fields for setting target daily hours for each day of the week.
@@ -125,10 +119,11 @@ export function handleSchedulingPage() {
             calendarBody.appendChild(dayColumn); // Append day column to the calendar body
         }
 
-        // Concurrently load and display shifts and employee availability for the current week
+        // Concurrently load and display shifts, employee availability, and business operating hours
         await Promise.all([
             loadAndDisplayShifts(startDate, endDate),
-            loadAndRenderAvailability()
+            loadAndRenderAvailability(),
+            loadAndRenderBusinessHours() // NEW: Call to render business hours
         ]);
     }
 
@@ -254,6 +249,37 @@ export function handleSchedulingPage() {
     }
 
     /**
+     * NEW FUNCTION: Fetches and renders the business operating hours as a subtle background.
+     */
+    async function loadAndRenderBusinessHours() {
+        // Remove any existing business hours blocks from the DOM
+        document.querySelectorAll('.business-hours-block').forEach(el => el.remove());
+
+        try {
+            const settings = await apiRequest('GET', '/settings/business');
+            const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
+            const businessEndHour = parseInt(settings.operating_hours_end.split(':')[0], 10);
+            const durationHours = businessEndHour - businessStartHour;
+
+            if (durationHours > 0) {
+                // For each day column, create a business hours block
+                for (let i = 0; i < 7; i++) {
+                    const dayColumn = document.getElementById(`day-column-${i}`);
+                    if (dayColumn) {
+                        const businessHoursBlock = document.createElement('div');
+                        businessHoursBlock.className = 'business-hours-block'; // New CSS class for styling
+                        businessHoursBlock.style.top = `${businessStartHour * 60}px`; // Position from top
+                        businessHoursBlock.style.height = `${durationHours * 60}px`; // Height based on duration
+                        dayColumn.appendChild(businessHoursBlock);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Failed to load or render business operating hours:", error);
+        }
+    }
+
+    /**
      * Populates the employee and location dropdowns in the shift creation form
      * by fetching user and location data from the API.
      */
@@ -297,13 +323,13 @@ export function handleSchedulingPage() {
     if (calendarGrid) {
         calendarGrid.addEventListener('click', async (e) => {
             // Log the element that was actually clicked
-            console.log("Calendar grid clicked on:", e.target); 
+            // console.log("Calendar grid clicked on:", e.target); 
             // Find the closest parent element with the class 'delete-shift-btn' starting from the clicked target
             const deleteButton = e.target.closest('.delete-shift-btn');
-            console.log("Delete button found by closest():", deleteButton); // Log what closest() found
+            // console.log("Delete button found by closest():", deleteButton); // Log what closest() found
 
             if (deleteButton) {
-                e.stopPropagation(); // Stop event propagation to prevent other calendar click handlers from firing
+                e.stopPropagation(); // Prevent the click event from bubbling up to parent elements
                 const shiftIdToDelete = String(deleteButton.dataset.shiftId); // Get the shift ID from the data attribute
 
                 // Basic validation for shift ID
@@ -314,7 +340,7 @@ export function handleSchedulingPage() {
                 
                 // Show confirmation modal to the user
                 const isConfirmed = await showConfirmModal('Are you sure you want to delete this shift? This action cannot be undone.');
-                console.log("Confirmation modal resolved with:", isConfirmed); // DEBUG: Log confirmed value
+                // console.log("Confirmation modal resolved with:", isConfirmed); // DEBUG: Log confirmed value
                 
                 if (isConfirmed) {
                     try {
@@ -354,7 +380,6 @@ export function handleSchedulingPage() {
 
             if (confirmed) {
                 try {
-                    // Send a POST request to auto-generate the schedule
                     const response = await apiRequest('POST', '/shifts/auto-generate', { 
                         weekStartDate: currentStartDate.toISOString(), // Pass the current week's start date
                         dailyHours: dailyHours // Pass the target daily hours
@@ -439,7 +464,7 @@ export function handleSchedulingPage() {
     }
     
     // --- Initial Page Load Actions ---
-    // These functions are called when the scheduling page is first loaded
+    // These functions are called when the page loads to set up the UI
     createDailyHoursInputs(); // Populate the daily hours input fields
     renderCalendar(currentStartDate); // Render the calendar for the initial week
     populateDropdowns(); // Populate the employee and location dropdowns
