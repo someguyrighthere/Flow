@@ -39,10 +39,8 @@ export function showModalMessage(message, isError = false) {
         // Fallback to browser alert if modal elements are missing
         if (isError) {
             console.error(`ERROR: ${message}`);
-            // alert(`ERROR: ${message}`); // Removed alert as per instruction, relying on console.error
         } else {
             console.log(`MESSAGE: ${message}`);
-            // alert(`MESSAGE: ${message}`); // Removed alert as per instruction, relying on console.log
         }
     }
 }
@@ -54,7 +52,7 @@ export function showModalMessage(message, isError = false) {
  * @returns {Promise<boolean>} A promise that resolves to true if confirmed, false otherwise.
  */
 export function showConfirmModal(message, confirmButtonText = "Confirm") {
-    console.log("showConfirmModal called."); // DEBUG: Confirm function entry
+    // FIX: Using a new Promise for each call, and attaching/removing listeners within its scope
     return new Promise(resolve => {
         const confirmModalOverlay = document.getElementById("confirm-modal");
         const confirmModalMessage = document.getElementById("confirm-modal-text");
@@ -62,8 +60,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         const modalCancelButton = document.getElementById("confirm-modal-cancel");
 
         if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
-            console.error("Confirmation modal elements not found in showConfirmModal."); // DEBUG: More specific error log
-            // Fallback to the browser's confirm dialog if the custom modal isn't found
+            console.error("Confirmation modal elements not found in showConfirmModal. Falling back to browser's confirm.");
             resolve(window.confirm(message));
             return;
         }
@@ -72,40 +69,37 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         modalConfirmButton.textContent = confirmButtonText;
         confirmModalOverlay.style.display = "flex"; // Show the modal
 
-        // Define the handlers as new functions for each promise invocation
-        // This ensures removeEventListener works correctly with the same function reference.
-        const onConfirmClick = () => {
-            console.log("Confirm button clicked - resolving true."); // DEBUG: Confirm handler fired
-            cleanupListeners();
+        // Define event handlers right inside this Promise's scope
+        // This ensures unique references for add/removeEventListener for each modal instance
+        const handleConfirm = () => {
+            cleanup();
             resolve(true);
         };
-        const onCancelClick = () => {
-            console.log("Cancel button clicked - resolving false."); // DEBUG: Confirm handler fired
-            cleanupListeners();
+
+        const handleCancel = () => {
+            cleanup();
             resolve(false);
         };
-        const onClickOutside = (event) => {
+
+        const handleClickOutside = (event) => {
             if (event.target === confirmModalOverlay) {
-                console.log("Clicked outside modal - resolving false."); // DEBUG: Confirm handler fired
-                cleanupListeners();
+                cleanup();
                 resolve(false); // Treat clicking outside as cancellation
             }
         };
 
-        // Function to remove all attached listeners
-        const cleanupListeners = () => {
-            console.log("Cleaning up confirm modal listeners."); // DEBUG: Confirm cleanup
-            modalConfirmButton.removeEventListener("click", onConfirmClick);
-            modalCancelButton.removeEventListener("click", onCancelClick);
-            confirmModalOverlay.removeEventListener("click", onClickOutside);
-            confirmModalOverlay.style.display = "none"; // Hide the modal
+        // Function to clean up listeners and hide modal
+        const cleanup = () => {
+            modalConfirmButton.removeEventListener('click', handleConfirm);
+            modalCancelButton.removeEventListener('click', handleCancel);
+            confirmModalOverlay.removeEventListener('click', handleClickOutside);
+            confirmModalOverlay.style.display = 'none'; // Hide the modal
         };
 
-        // Attach event listeners
-        modalConfirmButton.addEventListener("click", onConfirmClick);
-        modalCancelButton.addEventListener("click", onCancelClick);
-        confirmModalOverlay.addEventListener("click", onClickOutside);
-        console.log("Confirm modal listeners attached."); // DEBUG: Confirm listeners attached
+        // Attach listeners for this specific modal instance
+        modalConfirmButton.addEventListener('click', handleConfirm);
+        modalCancelButton.addEventListener('click', handleCancel);
+        confirmModalOverlay.addEventListener('click', handleClickOutside);
     });
 }
 
