@@ -286,67 +286,120 @@ app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => 
     try {
         await client.query('BEGIN');
 
+        // Fetch business operating hours
         const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
         const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
         const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
         
+        // Fetch all employees with their availability and type
         const { rows: employees } = await client.query(`SELECT user_id, availability, location_id, employment_type FROM users WHERE role = 'employee' AND availability IS NOT NULL`);
         
-        let employeeScheduleData = employees.map(e => ({...e, scheduled_hours: 0}));
+        // Initialize employee data for scheduling, including days worked and scheduled hours
+        let employeeScheduleData = employees.map(e => ({
+            ...e,
+            scheduled_hours: 0,
+            daysWorked: 0 // Track days worked by each employee for the current week
+        }));
 
         const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         let totalShiftsCreated = 0;
 
+        // Iterate through each day of the week (Sunday to Saturday)
         for (let i = 0; i < 7; i++) {
             const currentDate = new Date(weekStartDate);
             currentDate.setDate(currentDate.getDate() + i);
-            const dayName = daysOfWeek[currentDate.getDay()];
-            let hoursToSchedule = parseFloat(dailyHours[dayName] || 0);
+            const dayName = daysOfWeek[currentDate.getDay()]; // Get day name (e.g., 'monday')
+            let hoursToSchedule = parseFloat(dailyHours[dayName] || 0); // Target hours for this specific day
 
-            const scheduleEmployee = async (employee, shiftLength) => {
-                const shiftStartTime = new Date(currentDate);
-                shiftStartTime.setHours(businessStartHour, 0, 0, 0);
-
-                const shiftEndTime = new Date(currentDate);
-                shiftEndTime.setHours(businessStartHour + shiftLength, 0, 0, 0);
-
-                await client.query(
-                    'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                    [employee.user_id, employee.location_id, shiftStartTime, shiftEndTime, 'Auto-generated']
-                );
-                employee.scheduled_hours += shiftLength;
-                hoursToSchedule -= shiftLength;
-                totalShiftsCreated++;
-            };
-
-            for (const emp of employeeScheduleData.filter(e => e.employment_type === 'Full-time')) {
-                if (hoursToSchedule <= 0) break;
-                if (emp.scheduled_hours < 40) {
-                    const dayAvail = emp.availability[dayName];
-                    if (dayAvail && parseInt(dayAvail.start.split(':')[0]) <= businessStartHour && parseInt(dayAvail.end.split(':')[0]) >= (businessStartHour + 8)) {
-                       await scheduleEmployee(emp, 8);
+            // Filter employees who are available and haven't worked their maximum days (5 days off rule)
+            // Sort to prioritize full-time employees for scheduling first
+            const availableEmployees = employeeScheduleData
+                .filter(emp => {
+                    // Rule: Employee must have worked less than 5 days this week to be considered
+                    if (emp.daysWorked >= 5) {
+                        return false; 
                     }
+                    const dayAvail = emp.availability && emp.availability[dayName];
+                    // Rule: Employee must have availability set for this specific day
+                    return dayAvail && dayAvail.start && dayAvail.end;
+                })
+                .sort((a, b) => {
+                    // Prioritize Full-time employees over Part-time
+                    if (a.employment_type === 'Full-time' && b.employment_type !== 'Full-time') return -1;
+                    if (a.employment_type !== 'Full-time' && b.employment_type === 'Full-time') return 1;
+                    return 0; 
+                });
+
+            // Schedule Full-time employees (8.5 hours including 0.5hr lunch)
+            const FULL_TIME_SHIFT_LENGTH = 8.5; // Hours
+            const FULL_TIME_WEEKLY_MAX = 40; // Hours
+            const FULL_TIME_DAILY_WORK_HOURS = 8; // Actual working hours excluding lunch
+            const LUNCH_BREAK_DURATION = 0.5; // Hours
+
+            for (const emp of availableEmployees.filter(e => e.employment_type === 'Full-time')) {
+                if (hoursToSchedule <= 0) break; // If daily target is met, stop scheduling for this day
+                if (emp.scheduled_hours >= FULL_TIME_WEEKLY_MAX) continue; // If weekly max reached, skip employee
+
+                const dayAvail = emp.availability[dayName];
+                // Check if employee's availability covers the full 8.5 hour shift starting from business open
+                if (parseInt(dayAvail.start.split(':')[0], 10) <= businessStartHour && 
+                    parseInt(dayAvail.end.split(':')[0], 10) >= (businessStartHour + FULL_TIME_SHIFT_LENGTH)) {
+                    
+                    const shiftStartTime = new Date(currentDate);
+                    shiftStartTime.setHours(businessStartHour, 0, 0, 0); // Shift starts at business opening
+
+                    const shiftEndTime = new Date(currentDate);
+                    shiftEndTime.setHours(businessStartHour + FULL_TIME_DAILY_WORK_HOURS, LUNCH_BREAK_DURATION * 60, 0, 0); // Shift ends after 8 hours work + 0.5 hr lunch
+
+                    await client.query(
+                        'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+                        [emp.user_id, emp.location_id, shiftStartTime, shiftEndTime, 'Auto-generated']
+                    );
+                    emp.scheduled_hours += FULL_TIME_SHIFT_LENGTH; // Add 8.5 hours to their weekly total
+                    emp.daysWorked++; // Increment days worked for the employee
+                    hoursToSchedule -= FULL_TIME_SHIFT_LENGTH; // Reduce remaining hours needed for the day
+                    totalShiftsCreated++;
                 }
             }
 
-            for (const emp of employeeScheduleData.filter(e => e.employment_type === 'Part-time')) {
-                if (hoursToSchedule <= 0) break;
-                 const dayAvail = emp.availability[dayName];
-                 if (dayAvail && parseInt(dayAvail.start.split(':')[0]) <= businessStartHour && parseInt(dayAvail.end.split(':')[0]) >= (businessStartHour + 4)) {
-                    await scheduleEmployee(emp, 4);
+            // Schedule Part-time employees (4 hours)
+            const PART_TIME_SHIFT_LENGTH = 4; // Hours
+            for (const emp of availableEmployees.filter(e => e.employment_type === 'Part-time')) {
+                if (hoursToSchedule <= 0) break; // If daily target is met, stop scheduling for this day
+                if (emp.daysWorked >= 5) continue; // If weekly days worked limit reached, skip employee
+
+                const dayAvail = emp.availability[dayName];
+                // Check if employee's availability covers the 4 hour shift starting from business open
+                if (parseInt(dayAvail.start.split(':')[0], 10) <= businessStartHour && 
+                    parseInt(dayAvail.end.split(':')[0], 10) >= (businessStartHour + PART_TIME_SHIFT_LENGTH)) {
+                    
+                    const shiftStartTime = new Date(currentDate);
+                    shiftStartTime.setHours(businessStartHour, 0, 0, 0);
+
+                    const shiftEndTime = new Date(currentDate);
+                    shiftEndTime.setHours(businessStartHour + PART_TIME_SHIFT_LENGTH, 0, 0, 0);
+
+                    await client.query(
+                        'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+                        [emp.user_id, emp.location_id, shiftStartTime, shiftEndTime, 'Auto-generated']
+                    );
+                    emp.scheduled_hours += PART_TIME_SHIFT_LENGTH;
+                    emp.daysWorked++; // Increment days worked for the employee
+                    hoursToSchedule -= PART_TIME_SHIFT_LENGTH;
+                    totalShiftsCreated++;
                 }
             }
         }
 
-        await client.query('COMMIT');
+        await client.query('COMMIT'); // Commit the transaction if all operations succeed
         res.status(201).json({ message: `Successfully auto-generated ${totalShiftsCreated} shifts.` });
 
     } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query('ROLLBACK'); // Rollback the transaction if any error occurs
         console.error('Auto-scheduling failed:', error);
         res.status(500).json({ error: 'An error occurred during auto-scheduling.' });
     } finally {
-        client.release();
+        client.release(); // Release the database client back to the pool
     }
 });
 
