@@ -147,6 +147,7 @@ export function handleSchedulingPage() {
             const shifts = await apiRequest('GET', `/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
+                    console.log("Shift ID being rendered:", shift.id); // DEBUG: Log shift ID
                     const shiftStart = new Date(shift.start_time);
                     const shiftEnd = new Date(shift.end_time);
                     
@@ -162,8 +163,8 @@ export function handleSchedulingPage() {
                         
                         const shiftElement = document.createElement('div');
                         shiftElement.className = 'calendar-shift';
-                        shiftElement.style.top = `${startMinutes}px`;
-                        shiftElement.style.height = `${heightMinutes}px`;
+                        shiftElement.style.top = `${startMinutes}px`; // Position from top of the day column
+                        shiftElement.style.height = `${heightMinutes}px`; // Height of the shift block
                         
                         const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
                         const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
@@ -275,10 +276,15 @@ export function handleSchedulingPage() {
             if (deleteBtn) {
                 e.stopPropagation(); // Prevent other click events on the grid
                 const shiftId = deleteBtn.dataset.shiftId; // Get the shift ID from data attribute
+                console.log("Attempting to delete shift with ID:", shiftId); // DEBUG: Log captured shift ID
+                if (!shiftId) {
+                    showModalMessage('Shift ID not found. Cannot delete.', true);
+                    return;
+                }
                 const confirmed = await showConfirmModal('Are you sure you want to delete this shift?');
                 if (confirmed) {
                     try {
-                        await apiRequest('DELETE', `/shifts/${shiftId}`);
+                        await apiRequest('DELETE', `/shifts/${shiftId}`); // This call returns null for 204
                         showModalMessage('Shift deleted successfully.', false);
                         renderCalendar(currentStartDate); // Re-render calendar after deletion
                     } catch (error) {
@@ -337,7 +343,6 @@ export function handleSchedulingPage() {
         });
     }
 
-    // Event listener for the "Next Week" button
     if (nextWeekBtn) {
         nextWeekBtn.addEventListener('click', () => {
             currentStartDate.setDate(currentStartDate.getDate() + 7); // Go forward one week
