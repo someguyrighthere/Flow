@@ -333,8 +333,7 @@ export function handleSchedulingPage() {
             
             // Show a confirmation modal for auto-scheduling
             const confirmed = await showConfirmModal(
-                `This will attempt to generate a schedule based on the specified daily hours. Do you want to continue?`,
-                'Generate'
+                
             );
 
             if (confirmed) {
@@ -427,4 +426,4 @@ export function handleSchedulingPage() {
     createDailyHoursInputs(); // Populate the daily hours input fields
     renderCalendar(currentStartDate); // Render the calendar for the initial week
     populateDropdowns(); // Populate the employee and location dropdowns
-}
+
