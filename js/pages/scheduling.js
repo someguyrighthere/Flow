@@ -180,7 +180,7 @@ export function handleSchedulingPage() {
                             <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
                             <span style="color: #ddd;">${shift.location_name || ''}</span>
                             <button class="delete-shift-btn" data-shift-id="${shift.id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                                <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
                             </button>
                         `;
                         // Add a title attribute for tooltip on hover
@@ -268,7 +268,6 @@ export function handleSchedulingPage() {
                 });
             }
 
-            // Populate Location Select dropdown
             if (locationSelect) {
                 locationSelect.innerHTML = '<option value="">Select Location</option>'; // Default option
                 locations.forEach(loc => {
@@ -333,7 +332,8 @@ export function handleSchedulingPage() {
             
             // Show a confirmation modal for auto-scheduling
             const confirmed = await showConfirmModal(
-                
+                `This will attempt to generate a schedule based on the specified daily hours. Do you want to continue?`,
+                'Generate'
             );
 
             if (confirmed) {
@@ -384,8 +384,7 @@ export function handleSchedulingPage() {
     if (nextWeekBtn) {
         currentStartDate.setDate(currentStartDate.getDate() + 7); // Move forward one week
         renderCalendar(currentStartDate); // Re-render calendar for the new week
-    };
-    }
+    } 
     
     /**
      * Handles the submission of the "Create New Shift" form.
