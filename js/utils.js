@@ -68,7 +68,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
             if (event.target === confirmModalOverlay) onCancel();
         };
 
-        // Attach event listeners. `once: true` is not needed if we explicitly remove them in `handleResponse`.
+        // Attach event listeners.
         modalConfirmButton.addEventListener("click", onConfirm);
         modalCancelButton.addEventListener("click", onCancel);
         confirmModalOverlay.addEventListener("click", onClickOutside);
@@ -89,6 +89,9 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
     const token = localStorage.getItem('authToken');
     const endpoint = `${API_BASE_URL}${path}`;
 
+    console.log(`[apiRequest] Attempting ${method} request to: ${endpoint}`); // DEBUG
+    console.log(`[apiRequest] Token present: ${!!token}`); // DEBUG
+
     const handleAuthError = (errorMessage) => {
         localStorage.removeItem('authToken');
         localStorage.removeItem('userRole');
@@ -97,6 +100,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
     };
 
     if (isFormData) {
+        console.log("[apiRequest] Handling FormData request."); // DEBUG
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open(method, endpoint);
@@ -104,6 +108,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
             if (onProgress && xhr.upload) xhr.upload.addEventListener('progress', onProgress);
             
             xhr.onload = function () {
+                console.log(`[apiRequest] XHR Load: Status ${xhr.status}`); // DEBUG
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try { resolve(JSON.parse(xhr.responseText || '{}')); } catch (e) { resolve({}); }
                 } else if (xhr.status === 401 || xhr.status === 403) {
@@ -117,7 +122,10 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
                     }
                 }
             };
-            xhr.onerror = () => reject(new Error('Network error. Check connection or CORS policy.'));
+            xhr.onerror = () => {
+                console.error("[apiRequest] XHR Error: Network issue."); // DEBUG
+                reject(new Error('Network error. Check connection or CORS policy.'));
+            };
             xhr.send(body);
         });
     }
@@ -130,9 +138,11 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         options.headers['Content-Type'] = 'application/json';
         options.body = JSON.stringify(body);
     }
+    console.log("[apiRequest] Fetch options:", options); // DEBUG
 
     try {
         const response = await fetch(endpoint, options);
+        console.log(`[apiRequest] Fetch Response Status: ${response.status}`); // DEBUG
         
         if (response.status === 401 || response.status === 403) {
             handleAuthError('Your session has expired. Please log in again.');
@@ -142,33 +152,32 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         if (!response.ok) {
             let errorMsg = `HTTP error! Status: ${response.status}`;
             try {
-                // Try to parse the error message from the response body
                 const errorData = await response.json();
                 errorMsg = errorData.error || errorMsg;
             } catch (e) {
-                // If parsing fails, use the status text
                 errorMsg = response.statusText;
             }
+            console.error(`[apiRequest] Fetch not OK: ${errorMsg}`); // DEBUG
             throw new Error(errorMsg);
         }
 
         if (expectBlobResponse) {
+            console.log("[apiRequest] Expecting Blob response."); // DEBUG
             return response.blob();
         }
 
-        // Handle cases where the response might be empty (e.g., 204 No Content)
         const contentLength = response.headers.get("content-length");
         if (response.status === 204 || contentLength === "0") {
+            console.log("[apiRequest] Returning null for 204 or empty content."); // DEBUG
             return null;
         }
 
-        // Otherwise, parse the JSON body
+        console.log("[apiRequest] Parsing JSON response."); // DEBUG
         return response.json();
 
     } catch (error) {
-        // This catches network errors (e.g., DNS, CORS) and thrown errors from above
-        console.error('API Request Failed:', error);
+        console.error('[apiRequest] Caught error:', error); // DEBUG
         showModalMessage(error.message, true);
-        throw error; // Re-throw the error so the calling function can handle it
+        throw error;
     }
 }
