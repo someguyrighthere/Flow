@@ -54,6 +54,7 @@ export function showModalMessage(message, isError = false) {
  * @returns {Promise<boolean>} A promise that resolves to true if confirmed, false otherwise.
  */
 export function showConfirmModal(message, confirmButtonText = "Confirm") {
+    console.log("showConfirmModal called."); // DEBUG: Confirm function entry
     return new Promise(resolve => {
         const confirmModalOverlay = document.getElementById("confirm-modal");
         const confirmModalMessage = document.getElementById("confirm-modal-text");
@@ -61,7 +62,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         const modalCancelButton = document.getElementById("confirm-modal-cancel");
 
         if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
-            console.error("Confirmation modal elements not found. Falling back to browser's confirm.");
+            console.error("Confirmation modal elements not found in showConfirmModal."); // DEBUG: More specific error log
             // Fallback to the browser's confirm dialog if the custom modal isn't found
             resolve(window.confirm(message));
             return;
@@ -74,15 +75,18 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         // Define the handlers as new functions for each promise invocation
         // This ensures removeEventListener works correctly with the same function reference.
         const onConfirmClick = () => {
+            console.log("Confirm button clicked - resolving true."); // DEBUG: Confirm handler fired
             cleanupListeners();
             resolve(true);
         };
         const onCancelClick = () => {
+            console.log("Cancel button clicked - resolving false."); // DEBUG: Confirm handler fired
             cleanupListeners();
             resolve(false);
         };
         const onClickOutside = (event) => {
             if (event.target === confirmModalOverlay) {
+                console.log("Clicked outside modal - resolving false."); // DEBUG: Confirm handler fired
                 cleanupListeners();
                 resolve(false); // Treat clicking outside as cancellation
             }
@@ -90,6 +94,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
 
         // Function to remove all attached listeners
         const cleanupListeners = () => {
+            console.log("Cleaning up confirm modal listeners."); // DEBUG: Confirm cleanup
             modalConfirmButton.removeEventListener("click", onConfirmClick);
             modalCancelButton.removeEventListener("click", onCancelClick);
             confirmModalOverlay.removeEventListener("click", onClickOutside);
@@ -100,6 +105,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         modalConfirmButton.addEventListener("click", onConfirmClick);
         modalCancelButton.addEventListener("click", onCancelClick);
         confirmModalOverlay.addEventListener("click", onClickOutside);
+        console.log("Confirm modal listeners attached."); // DEBUG: Confirm listeners attached
     });
 }
 
