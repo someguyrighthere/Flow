@@ -63,15 +63,11 @@ export function handleSchedulingPage() {
         calendarGrid.innerHTML = ''; // Clear existing calendar content
 
         // Create Header Row (empty corner + 7 days)
-        const headerRow = document.createElement('div');
-        headerRow.className = 'calendar-header-row';
-        calendarGrid.appendChild(headerRow);
-        
-        // Add an empty header for the time column
-        const timeHeader = document.createElement('div');
-        timeHeader.className = 'calendar-day-header';
-        timeHeader.innerHTML = `&nbsp;`; // Non-breaking space for visual spacing
-        headerRow.appendChild(timeHeader);
+        // This element is now simply a placeholder for the top-left corner
+        const cornerHeader = document.createElement('div');
+        cornerHeader.className = 'calendar-corner-header';
+        cornerHeader.innerHTML = `&nbsp;`;
+        calendarGrid.appendChild(cornerHeader);
 
         // Add headers for each day of the week
         for (let i = 0; i < 7; i++) {
@@ -80,7 +76,7 @@ export function handleSchedulingPage() {
             const dayHeader = document.createElement('div');
             dayHeader.className = 'calendar-day-header';
             dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
-            headerRow.appendChild(dayHeader);
+            calendarGrid.appendChild(dayHeader); // Append directly to calendarGrid
         }
 
         // Create Time Column (for hours of the day)
@@ -94,13 +90,9 @@ export function handleSchedulingPage() {
             timeSlot.textContent = `${displayHour} ${ampm}`;
             timeColumn.appendChild(timeSlot);
         }
-        calendarGrid.appendChild(timeColumn);
+        calendarGrid.appendChild(timeColumn); // Append directly to calendarGrid
 
         // Create Day Columns (where shifts will be placed)
-        const daysContainer = document.createElement('div');
-        daysContainer.className = 'days-container';
-        calendarGrid.appendChild(daysContainer);
-
         for (let i = 0; i < 7; i++) {
             const dayColumn = document.createElement('div');
             dayColumn.className = 'day-column';
@@ -111,7 +103,7 @@ export function handleSchedulingPage() {
                 hourLine.className = 'hour-line';
                 dayColumn.appendChild(hourLine);
             }
-            daysContainer.appendChild(dayColumn);
+            calendarGrid.appendChild(dayColumn); // Append directly to calendarGrid
         }
 
         // Load and display shifts and availability concurrently for better performance
@@ -248,7 +240,6 @@ export function handleSchedulingPage() {
                 });
             }
 
-            // Populate location select dropdown
             if (locationSelect) {
                 locationSelect.innerHTML = '<option value="">Select Location</option>'; // Default option
                 locations.forEach(loc => {
@@ -325,7 +316,6 @@ export function handleSchedulingPage() {
         });
     }
     
-    // Event listener for the "Previous Week" button
     if (prevWeekBtn) {
         prevWeekBtn.addEventListener('click', () => {
             currentStartDate.setDate(currentStartDate.getDate() - 7); // Go back one week
@@ -333,7 +323,6 @@ export function handleSchedulingPage() {
         });
     }
 
-    // Event listener for the "Next Week" button
     if (nextWeekBtn) {
         nextWeekBtn.addEventListener('click', () => {
             currentStartDate.setDate(currentStartDate.getDate() + 7); // Go forward one week
