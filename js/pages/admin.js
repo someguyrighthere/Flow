@@ -37,6 +37,7 @@ export function handleAdminPage() {
             // Ensure values are set, providing defaults if null
             operatingHoursStartInput.value = settings.operating_hours_start || '09:00';
             operatingHoursEndInput.value = settings.operating_hours_end || '17:00';
+            console.log("Business settings loaded:", settings.operating_hours_start, settings.operating_hours_end); // DEBUG
         } catch (error) {
             showModalMessage('Could not load business settings. Using defaults.', true);
             console.error('Error loading business settings:', error);
@@ -240,8 +241,9 @@ export function handleAdminPage() {
             const deleteBtn = e.target.closest('.btn-delete');
             if (deleteBtn) {
                 const locationId = deleteBtn.dataset.id; // Get location ID from data attribute
-                const confirmed = await showConfirmModal('Are you sure you want to delete this location? This cannot be undone and will affect associated users/shifts.', 'Delete');
-                if (confirmed) {
+                // Removed showConfirmModal as per user request to streamline flow
+                // const confirmed = await showConfirmModal('Are you sure you want to delete this location? This cannot be undone and will affect associated users/shifts.', 'Delete');
+                // if (confirmed) {
                     try {
                         await apiRequest('DELETE', `/locations/${locationId}`);
                         showModalMessage('Location deleted successfully!', false);
@@ -251,7 +253,7 @@ export function handleAdminPage() {
                         showModalMessage(`Error deleting location: ${error.message}`, true);
                         console.error('Error deleting location:', error);
                     }
-                }
+                // }
             }
         });
     }
@@ -267,8 +269,9 @@ export function handleAdminPage() {
                     showModalMessage('You cannot delete your own account from here.', true);
                     return;
                 }
-                const confirmed = await showConfirmModal('Are you sure you want to delete this user? This cannot be undone.', 'Delete');
-                if (confirmed) {
+                // Removed showConfirmModal as per user request to streamline flow
+                // const confirmed = await showConfirmModal('Are you sure you want to delete this user? This cannot be undone.', 'Delete');
+                // if (confirmed) {
                     try {
                         await apiRequest('DELETE', `/users/${userId}`);
                         showModalMessage('User deleted successfully!', false);
@@ -277,7 +280,7 @@ export function handleAdminPage() {
                         showModalMessage(`Error deleting user: ${error.message}`, true);
                         console.error('Error deleting user:', error);
                     }
-                }
+                // }
             }
         });
     }
