@@ -138,7 +138,7 @@ export function handleAdminPage() {
     }
 
     /**
-     * Loads and displays all users (admins and employees).
+     * Loads and displays all users (admins and employees), sorted by role.
      */
     async function loadUsers() {
         if (!userListDiv) return;
@@ -148,24 +148,56 @@ export function handleAdminPage() {
             userListDiv.innerHTML = ''; // Clear loading message
 
             if (users && users.length > 0) {
-                users.forEach(user => {
-                    const listItem = document.createElement('div');
-                    listItem.className = 'list-item';
-                    let userInfo = `<span><strong>${user.full_name}</strong> (${user.email}) - ${user.role}`;
-                    if (user.position) userInfo += ` (${user.position})`;
-                    if (user.location_name) userInfo += ` at ${user.location_name}`;
-                    userInfo += `</span>`;
+                // Group users by role
+                const superAdmins = users.filter(user => user.role === 'super_admin');
+                const locationAdmins = users.filter(user => user.role === 'location_admin');
+                const employees = users.filter(user => user.role === 'employee');
 
-                    // Add a delete button with a unique SVG for better click targeting
-                    listItem.innerHTML = `
-                        ${userInfo}
-                        <button class="btn-delete" data-id="${user.user_id}" data-type="user">
-                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                        </button>
-                    `;
-                    userListDiv.appendChild(listItem);
+                // Sort users within each group by full_name
+                superAdmins.sort((a, b) => a.full_name.localeCompare(b.full_name));
+                locationAdmins.sort((a, b) => a.full_name.localeCompare(b.full_name));
+                employees.sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+                // Define rendering order and headers
+                const userGroups = [
+                    { title: 'Super Admins', users: superAdmins, id: 'super-admins-list' },
+                    { title: 'Location Admins', users: locationAdmins, id: 'location-admins-list' },
+                    { title: 'Employees', users: employees, id: 'employees-list' }
+                ];
+
+                userGroups.forEach(group => {
+                    if (group.users.length > 0) {
+                        const groupHeader = document.createElement('h4');
+                        groupHeader.textContent = group.title;
+                        groupHeader.style.marginTop = '20px';
+                        groupHeader.style.marginBottom = '10px';
+                        groupHeader.style.color = 'var(--text-light)';
+                        userListDiv.appendChild(groupHeader);
+
+                        const groupContainer = document.createElement('div');
+                        groupContainer.id = group.id;
+                        userListDiv.appendChild(groupContainer);
+
+                        group.users.forEach(user => {
+                            const listItem = document.createElement('div');
+                            listItem.className = 'list-item';
+                            let userInfo = `<span><strong>${user.full_name}</strong> (${user.email}) - ${user.role}`;
+                            if (user.position) userInfo += ` (${user.position})`;
+                            if (user.location_name) userInfo += ` at ${user.location_name}`;
+                            userInfo += `</span>`;
+
+                            listItem.innerHTML = `
+                                ${userInfo}
+                                <button class="btn-delete" data-id="${user.user_id}" data-type="user">
+                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                        <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                    </svg>
+                                </button>
+                            `;
+                            groupContainer.appendChild(listItem);
+                        });
+                    }
                 });
             } else {
                 userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users found.</p>';
