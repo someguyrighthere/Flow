@@ -181,7 +181,7 @@ export function handleSchedulingPage() {
                             <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
                             <span style="color: #ddd;">${shift.location_name || ''}</span>
                             <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1 0-.708z"/></svg>
                             </button>
                         `;
                         // Add a title attribute for tooltip on hover
@@ -222,10 +222,15 @@ export function handleSchedulingPage() {
                         if(dayColumn) {
                             // Parse start and end hours from "HH:MM" format
                             const startHour = parseInt(dayAvailability.start.split(':')[0], 10);
+                            const startMinute = parseInt(dayAvailability.start.split(':')[1], 10);
                             const endHour = parseInt(dayAvailability.end.split(':')[0], 10);
-                            const duration = endHour - startHour; // Calculate duration in hours
+                            const endMinute = parseInt(dayAvailability.end.split(':')[1], 10);
+
+                            const startTotalMinutes = startHour * 60 + startMinute;
+                            const endTotalMinutes = endHour * 60 + endMinute;
+                            const durationMinutes = endTotalMinutes - startTotalMinutes;
                             
-                            if (duration > 0) {
+                            if (durationMinutes > 0) {
                                 const availabilityBlock = document.createElement('div');
                                 availabilityBlock.className = 'availability-block'; // Apply CSS class
                                 // Hide the block if the availability toggle switch is unchecked
@@ -233,8 +238,8 @@ export function handleSchedulingPage() {
                                     availabilityBlock.classList.add('hidden');
                                 }
                                 // Set vertical position and height based on availability times
-                                availabilityBlock.style.top = `${startHour * 60}px`; // Convert hours to pixels
-                                availabilityBlock.style.height = `${duration * 60}px`;
+                                availabilityBlock.style.top = `${startTotalMinutes}px`; // Convert total minutes to pixels
+                                availabilityBlock.style.height = `${durationMinutes}px`;
                                 dayColumn.appendChild(availabilityBlock); // Append to the respective day column
                             }
                         }
@@ -258,20 +263,25 @@ export function handleSchedulingPage() {
         try {
             const settings = await apiRequest('GET', '/settings/business');
             // Ensure settings.operating_hours_start is not null before splitting
-            // If settings.operating_hours_start is null, default to '00:00' to prevent errors.
             const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
+            const businessStartMinute = parseInt((settings.operating_hours_start || '00:00').split(':')[1], 10);
             const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
-            const durationHours = businessEndHour - businessStartHour;
+            const businessEndMinute = parseInt((settings.operating_hours_end || '00:00').split(':')[1], 10);
 
-            if (durationHours > 0) {
+            const startTotalMinutes = businessStartHour * 60 + businessStartMinute;
+            const endTotalMinutes = businessEndHour * 60 + businessEndMinute;
+            const durationMinutes = endTotalMinutes - startTotalMinutes;
+
+
+            if (durationMinutes > 0) {
                 // For each day column, create a business hours block
                 for (let i = 0; i < 7; i++) {
                     const dayColumn = document.getElementById(`day-column-${i}`);
                     if (dayColumn) {
                         const businessHoursBlock = document.createElement('div');
                         businessHoursBlock.className = 'business-hours-block'; // New CSS class for styling
-                        businessHoursBlock.style.top = `${businessStartHour * 60}px`; // Position from top
-                        businessHoursBlock.style.height = `${durationHours * 60}px`; // Height based on duration
+                        businessHoursBlock.style.top = `${startTotalMinutes}px`; // Position from top
+                        businessHoursBlock.style.height = `${durationMinutes}px`; // Height based on duration
                         dayColumn.appendChild(businessHoursBlock);
                     }
                 }
@@ -475,6 +485,26 @@ export function handleSchedulingPage() {
         });
     }
     
+    /**
+     * Helper function to generate <option> tags for time select inputs.
+     * Generates options in 15-minute intervals.
+     * @param {number} startHour - The starting hour for options (inclusive).
+     * @param {number} endHour - The ending hour for options (exclusive).
+     * @returns {string} HTML string of time options.
+     */
+    function generateTimeOptions(startHour = 0, endHour = 24) { // Default to 0-24 if hours not set
+        let options = '<option value="">Not Available</option>'; // Default empty option
+        for (let i = startHour; i < endHour; i++) {
+            const hour = i < 10 ? '0' + i : '' + i; // Format as HH (e.g., 01, 10)
+            options += `<option value="${hour}:00">${hour}:00</option>`;
+            options += `<option value="${hour}:15">${hour}:15</option>`;
+            options += `<option value="${hour}:30">${hour}:30</option>`;
+            options += `<option value="${hour}:45">${hour}:45</option>`;
+        }
+        return options;
+    }
+
+
     // --- Initial Page Load Actions ---
     // These functions are called when the page loads to set up the UI
     createDailyHoursInputs(); // Populate the daily hours input fields
