@@ -1,379 +1,282 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scheduling - Flow Business Suite</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/Theme.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
-    <style>
-        .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
-        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
-        .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
-        .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
-        .settings-menu { position: relative; }
-        .settings-dropdown {
-            display: none; position: absolute; top: 55px; right: 0;
-            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color); border-radius: 8px;
-            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 10; padding: 10px 0;
+// routes/autoScheduleRoutes.js
+
+// This module will contain the auto-scheduling route logic.
+// It receives 'app', 'pool', 'isAuthenticated', and 'isAdmin' from server.js
+// to register the route and utilize middleware and database connection.
+
+module.exports = (app, pool, isAuthenticated, isAdmin) => {
+
+    // Auto-generate shifts route
+    app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
+        const { weekStartDate, dailyHours } = req.body;
+        if (!weekStartDate || !dailyHours) {
+            return res.status(400).json({ error: 'Week start date and daily hours are required.' });
         }
-        .settings-dropdown a, .settings-dropdown button {
-            color: var(--text-light); padding: 12px 16px; text-decoration: none;
-            display: block; width: 100%; text-align: left; background: none;
-            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
-        }
-        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
-        
-        .scheduling-layout {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 30px;
-            margin-top: 30px;
-        }
-        @media (max-width: 1200px) {
-            .scheduling-layout {
-                grid-template-columns: 1fr;
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Clear existing shifts for the target week before auto-generating new ones
+            const currentWeekStart = new Date(weekStartDate);
+            const nextWeekStart = new Date(currentWeekStart);
+            nextWeekStart.setDate(currentWeekStart.getDate() + 7);
+            await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2', [currentWeekStart, nextWeekStart]);
+
+
+            // Fetch business operating hours
+            const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
+            const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
+            const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
+            const businessEndHour = parseInt(settings.operating_hours_end.split(':')[0], 10); 
+            
+            // --- DEBUG LOGS: Business Hours ---
+            console.log(`[AUTO-SCHEDULE-LOG] Fetched Business Start Time: ${settings.operating_hours_start}`);
+            console.log(`[AUTO-SCHEDULE-LOG] Fetched Business End Time: ${settings.operating_hours_end}`);
+            console.log(`[AUTO-SCHEDULE-LOG] Parsed Business Start Hour: ${businessStartHour}`);
+            console.log(`[AUTO-SCHEDULE-LOG] Parsed Business End Hour: ${businessEndHour}`);
+            // --- END DEBUG LOGS ---
+
+
+            // Fetch all employees with their availability and type
+            const { rows: employees } = await client.query(`SELECT user_id, full_name, availability, location_id, employment_type FROM users WHERE role = 'employee' AND availability IS NOT NULL`);
+            
+            // Initialize employee data for scheduling, including days worked and scheduled hours
+            let employeeScheduleData = employees.map(e => ({
+                ...e,
+                scheduled_hours: 0, // Total hours scheduled for the employee this week
+                daysWorked: 0,      // Total days worked by this employee this week
+            }));
+
+            const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            let totalShiftsCreated = 0;
+
+            // Define constants for shift lengths and breaks at a higher scope
+            const FULL_TIME_WORK_DURATION = 8;
+            const FULL_TIME_BREAK_DURATION = 0.5;
+            const FULL_TIME_SHIFT_LENGTH_TOTAL = FULL_TIME_WORK_DURATION + FULL_TIME_BREAK_DURATION; // 8.5 hours
+            const PART_TIME_SHIFT_LENGTH = 4;
+
+
+            // Iterate through each day of the week (Sunday to Saturday)
+            for (let i = 0; i < 7; i++) {
+                const currentDate = new Date(weekStartDate);
+                currentDate.setDate(currentDate.getDate() + i);
+                currentDate.setHours(0,0,0,0); // Ensure current date starts at midnight for consistent time calculations
+                const dayName = daysOfWeek[currentDate.getDay()]; 
+                let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); 
+                
+                // Track employees already assigned a shift for *this specific day*
+                const employeesScheduledTodayIds = new Set(); 
+
+                // Create a coverage array for the current day, representing each hour within business hours.
+                // Assuming hourly blocks for dailyCoverage tracking
+                const dailyCoverage = Array(businessEndHour - businessStartHour).fill(false); 
+
+                // Mark existing shifts (from manual entries or prior auto-runs in the transaction) as covered.
+                // This part ensures that auto-scheduler respects manual shifts or prior runs within the same day.
+                const existingShiftsRes = await client.query(`
+                    SELECT start_time, end_time FROM shifts
+                    WHERE DATE(start_time) = $1 AND DATE(end_time) = $1;
+                `, [currentDate.toISOString().split('T')[0]]);
+
+                existingShiftsRes.rows.forEach(shift => {
+                    const shiftStartLocalHour = new Date(shift.start_time).getHours(); 
+                    const shiftEndLocalHour = new Date(shift.end_time).getHours(); 
+                    
+                    for (let h = shiftStartLocalHour; h < shiftEndLocalHour; h++) {
+                        const coverageIndex = h - businessStartHour;
+                        if (coverageIndex >= 0 && coverageIndex < dailyCoverage.length) {
+                            dailyCoverage[coverageIndex] = true;
+                        }
+                    }
+                });
+
+                // --- DEBUG LOGS: Daily Status ---
+                console.log(`\n--- [AUTO-SCHEDULE-LOG] Processing Day: ${dayName} (${currentDate.toISOString().split('T')[0]}) ---`);
+                console.log(`[AUTO-SCHEDULE-LOG] Initial Remaining Daily Target Hours: ${remainingDailyTargetHours}`);
+                console.log(`[AUTO-SCHEDULE-LOG] Daily Coverage after existing shifts: ${dailyCoverage}`);
+                // --- END DEBUG LOGS ---
+
+
+                // Iterate through each hour within business hours to ensure full coverage
+                for (let currentHour = businessStartHour; currentHour < businessEndHour; currentHour++) {
+                    const coverageIndex = currentHour - businessStartHour;
+
+                    // Skip if target hours are met and current hour is already covered
+                    if (remainingDailyTargetHours <= 0 && dailyCoverage[coverageIndex]) {
+                        // console.log(`[AUTO-SCHEDULE-LOG] Hour ${currentHour}: Target met and already covered.`);
+                        continue; 
+                    }
+                    // Break if target hours are met and current hour is not covered (no more need to schedule for this day)
+                    if (remainingDailyTargetHours <= 0 && !dailyCoverage[coverageIndex]) {
+                         // console.log(`[AUTO-SCHEDULE-LOG] Hour ${currentHour}: Target met, breaking daily loop.`);
+                         break;
+                    }
+
+                    // --- Attempt to schedule a Full-time employee ---
+                    const eligibleFTEmployees = employeeScheduleData.filter(emp => {
+                        // Global weekly limits
+                        if (emp.daysWorked >= 5) {
+                            // console.log(`[AUTO-SCHEDULE-LOG] FT Emp ${emp.user_id}: Exceeds 5 days worked.`);
+                            return false; 
+                        }
+                        if (emp.scheduled_hours >= 40) {
+                            // console.log(`[AUTO-SCHEDULE-LOG] FT Emp ${emp.user_id}: Exceeds 40 hours scheduled.`);
+                            return false; 
+                        }
+                        // Per-day limit (one shift per employee per day)
+                        if (employeesScheduledTodayIds.has(emp.user_id)) {
+                            // console.log(`[AUTO-SCHEDULE-LOG] FT Emp ${emp.user_id}: Already scheduled today.`);
+                            return false; 
+                        }
+
+                        const dayAvail = emp.availability && emp.availability[dayName];
+                        if (!dayAvail) {
+                            // console.log(`[AUTO-SCHEDULE-LOG] FT Emp ${emp.user_id}: Not available on ${dayName}.`);
+                            return false;
+                        }
+                        
+                        // Parse availability start/end hours from their string format
+                        const availStartHour = parseInt(dayAvail.start.split(':')[0], 10);
+                        const availEndHour = parseInt(dayAvail.end.split(':')[0], 10);
+
+                        // Check if employee's availability actually starts at or before currentHour
+                        // and ends at or after the required shift end time (including break for FT)
+                        const requiredShiftEndHourTotal = currentHour + FULL_TIME_SHIFT_LENGTH_TOTAL; // e.g., 9 + 8.5 = 17.5
+
+                        // --- DEBUG LOGS: FT Eligibility Checks ---
+                        // console.log(`[AUTO-SCHEDULE-LOG] FT Check for Emp ${emp.user_id} at Hour ${currentHour}:`);
+                        // console.log(`  Avail: ${dayAvail.start}-${dayAvail.end} (${availStartHour}-${availEndHour})`);
+                        // console.log(`  Req Shift End Total: ${requiredShiftEndHourTotal}`);
+                        // console.log(`  Business End Hour: ${businessEndHour}`);
+                        // console.log(`  Check 1 (Avail Start <= Current): ${availStartHour <= currentHour}`);
+                        // console.log(`  Check 2 (Avail End >= Req End Total): ${availEndHour >= requiredShiftEndHourTotal}`);
+                        // console.log(`  Check 3 (Req End Total <= Business End): ${requiredShiftEndHourTotal <= businessEndHour}`);
+                        // --- END DEBUG LOGS ---
+
+                        return availStartHour <= currentHour && 
+                               availEndHour >= requiredShiftEndHourTotal &&
+                               requiredShiftEndHourTotal <= businessEndHour; // Ensure shift ends within business hours
+                    }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize FTs with fewer hours scheduled
+
+                    if (eligibleFTEmployees.length > 0) {
+                        const employeeScheduled = eligibleFTEmployees[0]; 
+                        
+                        // Construct Date objects representing the intended local time, then convert to ISO UTC for TIMESTAMPTZ
+                        // Use Date.UTC to explicitly construct UTC time based on intended local components
+                        const shiftStartTime = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0)); 
+                        const shiftEndTime = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + FULL_TIME_WORK_DURATION, FULL_TIME_BREAK_DURATION * 60, 0)); 
+                        
+                        const shiftStartTimeISO = shiftStartTime.toISOString();
+                        const shiftEndTimeISO = shiftEndTime.toISOString();
+
+                        await client.query(
+                            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+                            [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated FT for ${employeeScheduled.full_name}. Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                        );
+                        
+                        // Update the global employeeScheduleData for persistent tracking across days
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduled.user_id);
+                        if (globalEmpIndex !== -1) {
+                            employeeScheduleData[globalEmpIndex].scheduled_hours += FULL_TIME_WORK_DURATION; 
+                            employeeScheduleData[globalEmpIndex].daysWorked++; 
+                        }
+                        employeesScheduledTodayIds.add(employeeScheduled.user_id); // Mark employee as scheduled for this day
+                        remainingDailyTargetHours -= FULL_TIME_WORK_DURATION; 
+                        totalShiftsCreated++;
+                        
+                        // Mark covered hours (assuming hourly blocks)
+                        for (let h = currentHour; h < currentHour + FULL_TIME_WORK_DURATION; h++) { 
+                            const idx = h - businessStartHour;
+                            if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
+                        }
+                        // --- DEBUG LOGS: FT Shift Created ---
+                        console.log(`[AUTO-SCHEDULE-LOG] FT Shift Created for ${employeeScheduled.full_name} (${employeeScheduled.user_id}) on ${dayName} at ${currentHour}:00. End: ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}. Remaining Daily Target: ${remainingDailyTargetHours}`);
+                        // --- END DEBUG LOGS ---
+                        continue; 
+                    }
+
+                    // --- If no FT was scheduled, try to schedule a Part-time employee ---
+                    const eligiblePTEmployees = employeeScheduleData.filter(emp => {
+                        if (emp.employment_type !== 'Part-time') return false; 
+                        if (emp.daysWorked >= 5) return false; 
+                        if (employeesScheduledTodayIds.has(emp.user_id)) return false; // Exclude if already assigned a shift today
+
+                        const dayAvail = emp.availability && emp.availability[dayName];
+                        if (!dayAvail) return false;
+
+                        const availStartHour = parseInt(dayAvail.start.split(':')[0], 10);
+                        const availEndHour = parseInt(dayAvail.end.split(':')[0], 10);
+
+                        const requiredShiftEndHour = currentHour + PART_TIME_SHIFT_LENGTH; // e.g., 9 + 4 = 13
+
+                        // --- DEBUG LOGS: PT Eligibility Checks ---
+                        // console.log(`[AUTO-SCHEDULE-LOG] PT Check for Emp ${emp.user_id} at Hour ${currentHour}:`);
+                        // console.log(`  Avail: ${dayAvail.start}-${dayAvail.end} (${availStartHour}-${availEndHour})`);
+                        // console.log(`  Req Shift End: ${requiredShiftEndHour}`);
+                        // console.log(`  Business End Hour: ${businessEndHour}`);
+                        // console.log(`  Check 1 (Avail Start <= Current): ${availStartHour <= currentHour}`);
+                        // console.log(`  Check 2 (Avail End >= Req End): ${availEndHour >= requiredShiftEndHour}`);
+                        // console.log(`  Check 3 (Req End <= Business End): ${requiredShiftEndHour <= businessEndHour}`);
+                        // --- END DEBUG LOGS ---
+                        
+                        return availStartHour <= currentHour && 
+                               availEndHour >= requiredShiftEndHour &&
+                               requiredShiftEndHour <= businessEndHour;
+                    }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
+
+                    if (eligiblePTEmployees.length > 0) {
+                        const employeeScheduled = eligiblePTEmployees[0]; 
+                        
+                        // Construct Date objects representing the intended local time, then convert to ISO UTC for TIMESTAMPTZ
+                        // Use Date.UTC to explicitly construct UTC time based on intended local components
+                        const shiftStartTime = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0)); 
+                        const shiftEndTime = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + PART_TIME_SHIFT_LENGTH, 0, 0)); 
+                        
+                        const shiftStartTimeISO = shiftStartTime.toISOString();
+                        const shiftEndTimeISO = shiftEndTime.toISOString();
+
+                        await client.query(
+                            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+                            [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated PT for ${employeeScheduled.full_name}. Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                        );
+                        
+                        // Update the global employeeScheduleData
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduled.user_id);
+                        if (globalEmpIndex !== -1) {
+                            employeeScheduleData[globalEmpIndex].scheduled_hours += PART_TIME_SHIFT_LENGTH;
+                            employeeScheduleData[globalEmpIndex].daysWorked++;
+                        }
+                        employeesScheduledTodayIds.add(employeeScheduled.user_id); // Mark employee as scheduled for this day
+                        remainingDailyTargetHours -= PART_TIME_SHIFT_LENGTH;
+                        totalShiftsCreated++;
+                        
+                        // Mark covered hours (assuming hourly blocks)
+                        for (let h = currentHour; h < currentHour + PART_TIME_SHIFT_LENGTH; h++) {
+                            const idx = h - businessStartHour;
+                            if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
+                        }
+                        // --- DEBUG LOGS: PT Shift Created ---
+                        console.log(`[AUTO-SCHEDULE-LOG] PT Shift Created for ${employeeScheduled.full_name} (${employeeScheduled.user_id}) on ${dayName} at ${currentHour}:00. End: ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}. Remaining Daily Target: ${remainingDailyTargetHours}`);
+                        // --- END DEBUG LOGS ---
+                        continue; 
+                    }
+                    // --- DEBUG LOGS: No Eligible Employee ---
+                    // console.log(`[AUTO-SCHEDULE-LOG] Hour ${currentHour}: No eligible FT/PT employee found.`);
+                    // --- END DEBUG LOGS ---
+                }
             }
-        }
 
-        .sidebar {
-            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
-        }
-        .sidebar h3 {
-            margin-top: 0;
-            color: var(--text-light);
-            font-size: 1.3rem;
-            margin-bottom: 20px;
-        }
-        .sidebar .form-group {
-            margin-bottom: 15px;
-        }
+            await client.query('COMMIT'); 
+            res.status(201).json({ message: `Successfully auto-generated ${totalShiftsCreated} shifts.` });
 
-        .calendar-main {
-            background-color: rgba(255, 255, 255, 0.15);
-            padding: 20px;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column; /* Changed to column to stack header and body */
-            overflow: hidden; /* Important for internal scrolling */
+        } catch (error) {
+            await client.query('ROLLBACK'); 
+            console.error('Auto-scheduling failed:', error);
+            res.status(500).json({ error: 'An error occurred during auto-scheduling.' });
+        } finally {
+            client.release(); 
         }
-        .calendar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            color: var(--text-light);
-            flex-shrink: 0;
-        }
-        
-        /* --- UPDATED CALENDAR LAYOUT CSS --- */
-        .calendar-grid-container {
-            flex-grow: 1; /* Allows the container to fill available space */
-            overflow: hidden; /* Contains internal scrolling */
-            display: flex; /* Use flex to manage inner grid content */
-            flex-direction: column; /* Stack the header and body */
-        }
-
-        .calendar-grid {
-            /* Removed grid properties from here, now a flex container for header and body */
-            display: flex;
-            flex-direction: column;
-            width: 100%; /* Ensure it takes full width */
-            min-width: 1500px; /* Keep min-width for calendar content */
-            height: 100%; /* Ensure it fills parent height */
-        }
-
-        .calendar-grid-header { /* This class is now used by JS for the header row */
-            display: grid;
-            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Define 8 columns */
-            position: sticky;
-            top: 0;
-            z-index: 6;
-            background-color: #1a1a1a;
-            border-bottom: 1px solid var(--border-color); /* Add border for separation */
-        }
-
-        .calendar-body { /* New wrapper for time column and day columns */
-            display: grid;
-            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Define 8 columns */
-            flex-grow: 1; /* Allows the body to take remaining vertical space */
-            overflow: auto; /* Enables scrolling for the main calendar content */
-            position: relative; /* For absolute positioning of shifts/availability */
-        }
-
-        .calendar-day-header {
-            padding: 10px 0;
-            text-align: center;
-            font-weight: 600;
-            color: var(--text-light);
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        /* No border-bottom here, as it's on .calendar-grid-header now */
-        .calendar-day-header:last-child {
-            border-right: none; /* Remove right border for the last header */
-        }
-        
-        .time-column {
-            position: sticky;
-            left: 0;
-            z-index: 5;
-            background-color: #2a2a2e;
-            /* Ensure it spans the full height of the body content */
-            grid-column: 1; /* Explicitly place in the first column */
-            height: 100%; /* Span full height of its grid cell */
-            display: flex;
-            flex-direction: column;
-        }
-        .time-slot {
-            height: 60px; /* Fixed height for each hour slot */
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-            color: var(--text-medium);
-            flex-shrink: 0; /* Prevent shrinking */
-        }
-        .time-slot:last-child {
-            border-bottom: none; /* Remove border from the last time slot */
-        }
-
-        .day-column {
-            position: relative;
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
-            /* Day columns will automatically be placed in grid-column 2 to 8 */
-            height: 1440px; /* 24 hours * 60 minutes/hour * 1px/minute = 1440px. This makes the column tall enough for absolute positioning */
-            min-height: 100%; /* Ensure it expands to at least the grid height */
-        }
-        .day-column:last-child {
-            border-right: none; /* Remove right border for the last day column */
-        }
-
-        .calendar-shift {
-            background-color: var(--primary-accent);
-            color: #fff;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 4px;
-            padding: 5px 8px;
-            font-size: 0.85rem;
-            position: absolute;
-            width: calc(100% - 4px); /* Full width minus padding/border */
-            left: 2px;
-            opacity: 0.9;
-            z-index: 3;
-            cursor: pointer;
-            overflow: hidden;
-            box-sizing: border-box;
-        }
-        .delete-shift-btn {
-            position: absolute; top: 2px; right: 2px;
-            background: rgba(0,0,0,0.3); border: none;
-            color: white; cursor: pointer; opacity: 0;
-            transition: opacity 0.2s; padding: 2px; border-radius: 50%;
-            width: 18px; height: 18px; display: flex;
-            align-items: center; justify-content: center;
-        }
-        .calendar-shift:hover .delete-shift-btn { opacity: 1; }
-        .delete-shift-btn:hover { background: #e74c3c; }
-
-        .availability-block {
-            background-color: rgba(76, 175, 80, 0.2);
-            position: absolute;
-            width: 100%;
-            z-index: 1;
-            pointer-events: none; /* Allows clicks to pass through to elements below */
-            box-sizing: border-box;
-        }
-        .availability-block.hidden { display: none; }
-
-        /* --- Business Hours Background Block (Glass Effect) --- */
-        .business-hours-block {
-            background-color: rgba(100, 100, 100, 0.5); /* Changed opacity to 0.5 (50%) */
-            backdrop-filter: blur(3px); /* Add blur for glass effect */
-            -webkit-backdrop-filter: blur(3px); /* Safari support */
-            border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle white border */
-            position: absolute;
-            width: 100%;
-            z-index: 0; /* Place behind availability and shifts */
-            pointer-events: none; /* Ensure clicks pass through */
-            box-sizing: border-box;
-            border-radius: 4px; /* Match other blocks */
-        }
-
-
-        /* --- CORRECTED Modal Styles to ensure pop-up behavior --- */
-        .modal {
-            /* Keep hidden by default; JS will set display to 'flex' */
-            display: none; 
-            position: fixed; /* Fixes it relative to the viewport */
-            z-index: 1000; /* High z-index to appear on top of other content */
-            left: 0;
-            top: 0;
-            width: 100%; /* Full width of viewport */
-            height: 100%; /* Full height of viewport */
-            overflow: auto; /* Enable scroll if modal content exceeds viewport */
-            background-color: rgba(0,0,0,0.6); /* Semi-transparent black background overlay */
-            /* Flexbox properties to center the modal-content */
-            align-items: center; /* Vertically center */
-            justify-content: center; /* Horizontally center */
-        }
-
-        .modal-content {
-            background-color: var(--card-bg); /* Use your theme's background color */
-            padding: 20px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            width: 80%; /* Responsive width */
-            max-width: 500px; /* Maximum width for larger screens */
-            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
-            position: relative; /* Needed for close button positioning */
-            color: var(--text-light); /* Text color */
-            animation: fadeIn 0.3s ease-out; /* Simple fade-in animation */
-        }
-
-        .modal-content p {
-            margin-bottom: 20px;
-            text-align: center;
-            font-size: 1.1rem;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .close-button {
-            color: var(--text-medium);
-            font-size: 28px;
-            font-weight: bold;
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            cursor: pointer;
-        }
-
-        .close-button:hover,
-        .close-button:focus {
-            color: var(--text-light);
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        /* Keyframe animation for modal fade-in */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-    </style>
-</head>
-<body>
-    <div class="background-animation"></div>
-    <div class="container">
-        <header class="dashboard-header">
-            <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
-            <div class="settings-menu">
-                <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
-                </button>
-                <div id="settings-dropdown" class="settings-dropdown">
-                    <a href="account.html">My Account</a>
-                    <a href="admin.html">Admin Settings</a>
-                    <a href="pricing.html">Upgrade Plan</a>
-                    <button id="logout-button">Logout</button>
-                </div>
-            </div>
-        </header>
-        <nav class="main-nav">
-            <a href="suite-hub.html">App Hub</a>
-            <a href="scheduling.html" class="active">Scheduling</a>
-     </nav>
-        <section>
-            <h2 style="color: var(--text-light);">Employee Scheduling</h2>
-            <div class="scheduling-layout">
-                <div class="sidebar">
-                    <h3>Create New Shift</h3>
-                    <form id="create-shift-form">
-                        <div class="form-group">
-                            <label for="employee-select">Employee</label>
-                            <select id="employee-select" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="location-select">Location</label>
-                            <select id="location-select" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="start-time-input">Start Time</label>
-                            <input type="datetime-local" id="start-time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="end-time-input">End Time</label>
-                            <input type="datetime-local" id="end-time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="notes-input">Notes (Optional)</label>
-                            <textarea id="notes-input" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Add Shift</button>
-                    </form>
-
-                    <h3 style="margin-top: 30px;">Auto-Scheduling Settings</h3>
-                    <div class="form-group">
-                        <label>Target Daily Hours:</label>
-                        <div id="daily-hours-inputs">
-                            </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-availability" checked>
-                            <span class="slider round"></span>
-                            Show Availability
-                        </label>
-                    </div>
-                    <button id="auto-generate-schedule-btn" class="btn btn-secondary">Auto-Generate Schedule</button>
-                </div>
-
-                <div class="calendar-main">
-                    <div class="calendar-header">
-                        <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
-                        <h3 id="current-week-display">Loading...</h3>
-                        <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
-                    </div>
-                    <div class="calendar-grid-container">
-                        <div id="calendar-grid">
-                            </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </div>
-    
-    <div id="modal-message" class="modal">
-        <div class="modal-content">
-            <p id="modal-text"></p>
-            <div class="modal-actions">
-                <button id="modal-ok-button" class="btn btn-primary">OK</button>
-            </div>
-        </div>
-    </div>
-    <div id="confirm-modal" class="modal">
-        <div class="modal-content">
-            <p id="confirm-modal-text"></p>
-            <div class="modal-actions">
-                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
-                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
-            </div>
-        </div>
-    </div>
-    
-    <script type="module" src="js/app.js"></script>
-</body>
-</html>
+    });
+};
