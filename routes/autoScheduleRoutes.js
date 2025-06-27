@@ -18,7 +18,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             await client.query('BEGIN');
 
             // Clear existing shifts for the target week before auto-generating new ones
-            const currentWeekStart = new Date(weekStartDate);
+            const currentWeekStart = new Date(weekStartDate); // This date is in client's local timezone
             const nextWeekStart = new Date(currentWeekStart);
             nextWeekStart.setDate(currentWeekStart.getDate() + 7);
             await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2', [currentWeekStart, nextWeekStart]);
@@ -37,11 +37,9 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             const businessStartTotalMinutes = businessStartHour * 60 + businessStartMinute;
             const businessEndTotalMinutes = businessEndHour * 60 + businessEndMinute;
             
-            // --- DEBUG LOGS: Business Hours (Backend Scheduler's view) ---
-            console.log(`[AUTO-SCHEDULE-DEBUG] Fetched Business Start Time (Raw): ${settings.operating_hours_start}`);
-            console.log(`[AUTO-SCHEDULE-DEBUG] Fetched Business End Time (Raw): ${settings.operating_hours_end}`);
-            console.log(`[AUTO-SCHEDULE-DEBUG] Parsed Business Start Total Minutes: ${businessStartTotalMinutes}`);
-            console.log(`[AUTO-SCHEDULE-DEBUG] Parsed Business End Total Minutes: ${businessEndTotalMinutes}`);
+            // --- DEBUG LOGS (AUTO-SCHEDULE: BUSINESS HOURS) ---
+            console.log(`[AUTO-SCHEDULE-DEBUG] Business Hours (from DB): Raw Start=${settings.operating_hours_start}, Raw End=${settings.operating_hours_end}`);
+            console.log(`[AUTO-SCHEDULE-DEBUG] Business Hours (Parsed Minutes): Start=${businessStartTotalMinutes}, End=${businessEndTotalMinutes}`);
             // --- END DEBUG LOGS ---
 
 
@@ -70,9 +68,9 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
             // Iterate through each day of the week (Sunday to Saturday)
             for (let i = 0; i < 7; i++) {
-                const currentDayStart = new Date(weekStartDate); // This is a Date object in client's local timezone
-                currentDayStart.setHours(0, 0, 0, 0); // Set to midnight of the week's start day, local time
-                currentDayStart.setDate(currentDayStart.getDate() + i); // Advance to the current day, still local time
+                // currentDayStart is a Date object representing midnight of the current day,
+                // in the server's LOCAL timezone. This is crucial for consistent Date construction.
+                const currentDayStart = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + i, 0, 0, 0, 0); 
 
                 const dayName = daysOfWeek[currentDayStart.getDay()]; 
                 let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); 
@@ -86,21 +84,21 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 const dailyCoverageSlots = Array(Math.ceil(totalBusinessMinutesDuration / SCHEDULING_INTERVAL_MINUTES)).fill(false); 
 
                 // Mark existing shifts (from manual entries or prior auto-runs in the transaction) as covered.
-                // Fetch shifts for the *local date* of currentDayStart
-                // We're casting TIMESTAMPTZ to TEXT and then to DATE to perform a date-only comparison in PostgreSQL.
-                // This is a common way to compare just the date part of TIMESTAMPTZ against a local date.
+                // Convert stored TIMESTAMPTZ (UTC) to LOCAL time for accurate coverage calculation.
+                // We use EXTRACT from PostgreSQL to get local hour/minute from TIMESTAMPTZ assuming default server TIMEZONE
                 const existingShiftsRes = await client.query(`
-                    SELECT start_time, end_time FROM shifts
+                    SELECT 
+                        EXTRACT(HOUR FROM start_time AT TIME ZONE (SELECT current_setting('TIMEZONE'))) AS start_hour,
+                        EXTRACT(MINUTE FROM start_time AT TIME ZONE (SELECT current_setting('TIMEZONE'))) AS start_minute,
+                        EXTRACT(HOUR FROM end_time AT TIME ZONE (SELECT current_setting('TIMEZONE'))) AS end_hour,
+                        EXTRACT(MINUTE FROM end_time AT TIME ZONE (SELECT current_setting('TIMEZONE'))) AS end_minute
+                    FROM shifts
                     WHERE TO_CHAR(start_time AT TIME ZONE (SELECT current_setting('TIMEZONE')), 'YYYY-MM-DD') = TO_CHAR($1::timestamp, 'YYYY-MM-DD');
-                `, [currentDayStart.toISOString()]); // Pass ISO string, let PG convert to its local for comparison
+                `, [currentDayStart.toISOString()]); // Pass ISO string for the specific local date
 
                 existingShiftsRes.rows.forEach(shift => {
-                    // Convert stored TIMESTAMPTZ (UTC) to LOCAL time minutes for accurate coverage calculation
-                    const shiftStartLocal = new Date(shift.start_time); // This will be in local timezone of the Node.js server
-                    const shiftEndLocal = new Date(shift.end_time);     
-                    
-                    const shiftStartTotalMinutes = shiftStartLocal.getHours() * 60 + shiftStartLocal.getMinutes(); 
-                    const shiftEndTotalMinutes = shiftEndLocal.getHours() * 60 + shiftEndLocal.getMinutes(); 
+                    const shiftStartTotalMinutes = shift.start_hour * 60 + shift.start_minute; 
+                    const shiftEndTotalMinutes = shift.end_hour * 60 + shift.end_minute;     
                     
                     for (let m = shiftStartTotalMinutes; m < shiftEndTotalMinutes; m += SCHEDULING_INTERVAL_MINUTES) {
                         const coverageIndex = Math.floor((m - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES);
@@ -110,17 +108,17 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     }
                 });
 
-                // --- DEBUG LOGS: Daily Status ---
+                // --- DEBUG LOGS (AUTO-SCHEDULE: DAILY STATUS) ---
                 console.log(`\n--- [AUTO-SCHEDULE-DEBUG] Processing Day: ${dayName} (Local Date: ${currentDayStart.toLocaleDateString()}) ---`);
                 console.log(`[AUTO-SCHEDULE-DEBUG] Initial Remaining Daily Target Minutes: ${remainingDailyTargetMinutes}`);
-                console.log(`[AUTO-SCHEDULE-DEBUG] Daily Coverage Slots after existing shifts (false = uncovered, true = covered):`);
-                console.log(dailyCoverageSlots); // Log the array directly for visual inspection
+                console.log(`[AUTO-SCHEDULE-DEBUG] Daily Coverage Slots (false = uncovered, true = covered):`);
+                console.log(dailyCoverageSlots); 
                 // --- END DEBUG LOGS ---
 
 
                 // Iterate through 15-minute intervals within business hours
                 for (let currentMinute = businessStartTotalMinutes; currentMinute < businessEndTotalMinutes; currentMinute += SCHEDULING_INTERVAL_MINUTES) {
-                    const coverageIndex = Math.floor((currentMinute - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES); // Ensure integer index
+                    const coverageIndex = Math.floor((currentMinute - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES); 
 
                     // If current slot is already covered, skip it
                     if (dailyCoverageSlots[coverageIndex]) {
@@ -153,7 +151,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                         const isEligible = availStartTotalMinutes <= currentMinute && 
                                            availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
-                                           requiredShiftEndTotalMinutes <= businessEndTotalMinutes; // Ensure shift ends within business hours
+                                           requiredShiftEndTotalMinutes <= businessEndTotalMinutes; 
 
                         console.log(`[AUTO-SCHEDULE-DEBUG] FT Check for Emp ${emp.full_name} (${emp.user_id}, Type: ${emp.employment_type}) at Local Minute ${currentMinute}:`);
                         console.log(`  Avail: ${dayAvail.start}-${dayAvail.end} (${availStartTotalMinutes}-${availEndTotalMinutes})`);
@@ -167,10 +165,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     if (eligibleFTEmployees.length > 0) {
                         const employeeScheduled = eligibleFTEmployees[0]; 
                         
-                        // FIX: Construct Date object in LOCAL time, then convert to ISO.
-                        // This uses the currentDayStart's date component (which is local midnight)
-                        // and the calculated minutes to form a local date-time, which .toISOString()
-                        // then converts to the equivalent UTC for database storage.
+                        // FIX: Construct Date object in LOCAL time using currentDayStart.
+                        // .toISOString() will then correctly convert this local time to UTC for storage.
                         const shiftStartTimeLocal = new Date(currentDayStart.getFullYear(), currentDayStart.getMonth(), currentDayStart.getDate(), Math.floor(currentMinute / 60), currentMinute % 60, 0); 
                         const shiftEndTimeLocal = new Date(currentDayStart.getFullYear(), currentDayStart.getMonth(), currentDayStart.getDate(), Math.floor((currentMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES) / 60), (currentMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES) % 60, 0); 
                         
