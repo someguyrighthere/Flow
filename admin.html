@@ -112,11 +112,17 @@
             border-radius: 6px;
             margin-bottom: 10px; /* Reduced as gap is handled by column */
         }
-        .list-item .btn-delete {
+        .list-item .btn-delete,
+        .list-item .btn-edit { /* Apply common styles to both buttons */
             background: none; border: none; color: var(--text-medium);
             cursor: pointer; opacity: 0.5; transition: all 0.3s ease;
         }
+        .list-item .btn-edit {
+            margin-right: 10px; /* Space between edit and delete buttons */
+        }
         .list-item:hover .btn-delete { opacity: 1; color: #e74c3c; }
+        .list-item:hover .btn-edit { opacity: 1; color: var(--primary-accent); } /* Color for edit button on hover */
+
         .settings-menu { position: relative; }
         .settings-dropdown {
             display: none; position: absolute; top: 55px; right: 0;
