@@ -234,14 +234,13 @@ app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
 app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ error: 'Start date and end date are required.' });
-    // FIX: Removed AT TIME ZONE from here. PostgreSQL will return TIMESTAMPTZ in UTC.
-    // Frontend will interpret it as local time.
+    // FIX: Select start_time and end_time as TEXT directly from TIMESTAMP WITHOUT TIME ZONE
     const sql = `
-        SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
+        SELECT s.id, s.start_time::text as start_time, s.end_time::text as end_time, s.notes, u.full_name as employee_name, l.location_name
         FROM shifts s
         JOIN users u ON s.employee_id = u.user_id
         LEFT JOIN locations l ON s.location_id = l.location_id
-        WHERE s.start_time >= $1 AND s.start_time < $2
+        WHERE s.start_time::date >= $1::date AND s.start_time::date < $2::date
         ORDER BY s.start_time;
     `;
     try {
@@ -257,23 +256,21 @@ app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { employee_id, location_id, start_time, end_time, notes } = req.body;
     if (!employee_id || !location_id || !start_time || !end_time) return res.status(400).json({ error: 'Missing required shift information.' });
     
-    // DEBUG: Log received start_time and end_time
-    console.log("Server received start_time:", start_time);
-    console.log("Server received end_time:", end_time);
+    // DEBUG: Log received start_time and end_time (these are now YYYY-MM-DD HH:MM:SS strings)
+    console.log("Server received start_time (TEXT):", start_time);
+    console.log("Server received end_time (TEXT):", end_time);
 
     try {
-        // FIX: Remove AT TIME ZONE from INSERT. Rely on Node.js Date.toISOString() to send UTC.
-        // The previous attempt added AT TIME ZONE which could convert it multiple times or based on server timezone.
-        // TIMESTAMPTZ always stores UTC. Node.js Date.toISOString() converts local time to UTC automatically.
-        // We ensure Node.js is creating Dates in intended local time in autoScheduleRoutes.js.
+        // FIX: Insert into TIMESTAMP WITHOUT TIME ZONE columns as text. PostgreSQL will parse.
+        // The cast '::timestamp without time zone' is often implicit but good for clarity.
         await pool.query(
-            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
+            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3::timestamp without time zone, $4::timestamp without time zone, $5)',
             [employee_id, location_id, start_time, end_time, notes]
         );
         res.status(201).json({ message: 'Shift created successfully.' });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Failed to create shift.' });
+        res.status(500).json({ error: 'An error occurred during auto-scheduling.' });
     }
 });
 
@@ -291,7 +288,7 @@ app.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// RE-ADDED: Use the modular autoScheduleRoutes
+// NEW: Use the modular autoScheduleRoutes
 autoScheduleRoutes(app, pool, isAuthenticated, isAdmin);
 
 
