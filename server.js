@@ -6,12 +6,12 @@ const { Pool } = require('pg');
 const cors =require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const multer = require('multer');
-const fs = require('fs');
+const multer = require('multer'); // Keep multer as it might be used by core features, or remove if not.
+const fs = require('fs'); // Keep fs as it might be used by core features, or remove if not.
 const path = require('path');
 
 // Import new modular routes
-const autoScheduleRoutes = require('./routes/autoScheduleRoutes');
+const autoScheduleRoutes = require('./routes/autoScheduleRoutes'); // RE-ADDED: Import auto-scheduling routes
 
 // --- 2. Initialize Express App ---
 const app = express();
@@ -32,7 +32,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Keep if general file serving is needed
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 
@@ -62,7 +62,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// User, Auth, and Account Routes
+// User, Auth, and Account Routes (These should always exist for login/profile management)
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
@@ -286,8 +286,8 @@ app.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// Reverted: Removed autoScheduleRoutes import as it was causing issues and needs full re-evaluation.
-// autoScheduleRoutes(app, pool, isAuthenticated, isAdmin);
+// RE-ADDED: Use the modular autoScheduleRoutes
+autoScheduleRoutes(app, pool, isAuthenticated, isAdmin);
 
 
 // Job Posting and Applicant Routes (Hiring Module)
@@ -321,7 +321,7 @@ app.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
                 COUNT(a.id) AS applicant_count
             FROM job_postings jp
             LEFT JOIN locations l ON jp.location_id = l.location_id
-            LEFT JOIN applicants a ON jp.id = a.job_id  -- FIX: Changed a.job_posting_id to a.job_id
+            LEFT JOIN applicants a ON jp.id = a.job_id
             GROUP BY jp.id, jp.title, jp.description, jp.requirements, jp.location_id, l.location_name
             ORDER BY jp.created_at DESC;
         `);
@@ -404,7 +404,7 @@ app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
             jp.title AS job_title,
             l.location_name
         FROM applicants a
-        JOIN job_postings jp ON a.job_id = jp.id  -- FIX: Changed a.job_posting_id to a.job_id
+        JOIN job_postings jp ON a.job_id = jp.id
         LEFT JOIN locations l ON jp.location_id = l.location_id
         WHERE 1=1
     `;
@@ -412,7 +412,7 @@ app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     let paramIndex = 1;
 
     if (jobId) {
-        sql += ` AND a.job_id = $${paramIndex++}`; // FIX: Changed a.job_posting_id to a.job_id
+        sql += ` AND a.job_id = $${paramIndex++}`;
         params.push(jobId);
     }
     if (status) {
@@ -452,7 +452,7 @@ app.get('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
                 jp.title AS job_title,
                 l.location_name
             FROM applicants a
-            JOIN job_postings jp ON a.job_id = jp.id  -- FIX: Changed a.job_posting_id to a.job_id
+            JOIN job_postings jp ON a.job_id = jp.id
             LEFT JOIN locations l ON jp.location_id = l.location_id
             WHERE a.id = $1;
         `, [id]);
@@ -616,7 +616,7 @@ const startServer = async () => {
             );
             CREATE TABLE IF NOT EXISTS applicants (
                 id SERIAL PRIMARY KEY,
-                job_id INT NOT NULL, -- FIX: Changed column name to job_id
+                job_id INT NOT NULL,
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) NOT NULL,
                 phone VARCHAR(50),
@@ -626,10 +626,44 @@ const startServer = async () => {
                 is_authorized BOOLEAN,
                 status VARCHAR(50) DEFAULT 'pending',
                 applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE -- FIX: Changed FK to job_id
+                FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE
             );
             -- Other tables (checklists, onboarding_tasks, documents) schema still need to be added
             -- for their respective functionalities to work if they are desired in the future.
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                file_name VARCHAR(255) NOT NULL,
+                file_path TEXT NOT NULL,
+                mime_type VARCHAR(255),
+                size BIGINT,
+                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position VARCHAR(255) NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type VARCHAR(50) NOT NULL DEFAULT 'single_list',
+                time_group_count INT
+            );
+            CREATE TABLE IF NOT EXISTS onboarding_tasks (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                checklist_id INT,
+                description TEXT NOT NULL,
+                completed BOOLEAN DEFAULT FALSE,
+                document_id INT,
+                document_name VARCHAR(255),
+                task_order INT,
+                group_index INT,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE SET NULL,
+                FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE SET NULL
+            );
         `;
         
         await client.query(schemaQueries);
