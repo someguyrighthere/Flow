@@ -139,6 +139,13 @@ export function handleSchedulingPage() {
                     const dayColumn = document.getElementById(`day-column-${dayIndex}`);
 
                     if (dayColumn) {
+                        // --- DEBUG LOGS: Shift Rendering ---
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Raw Start: ${shift.start_time}, Raw End: ${shift.end_time}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local Start Hour: ${shiftStart.getHours()}, Minute: ${shiftStart.getMinutes()}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local End Hour: ${shiftEnd.getHours()}, Minute: ${shiftEnd.getMinutes()}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes: ${shiftStart.getHours() * 60 + shiftStart.getMinutes()}, End Minutes: ${shiftEnd.getHours() * 60 + shiftEnd.getMinutes()}`);
+                        // --- END DEBUG LOGS ---
+
                         const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
                         const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
                         const heightMinutes = endMinutes - startMinutes;
@@ -227,11 +234,11 @@ export function handleSchedulingPage() {
             const durationMinutes = businessEndMinute - businessStartMinute;
 
             // --- DEBUG LOG: Verify fetched and parsed business hours in scheduling.js ---
-            console.log(`[SCHEDULING-LOG] Fetched Business Start Time (Raw): ${settings.operating_hours_start}`);
-            console.log(`[SCHEDULING-LOG] Fetched Business End Time (Raw): ${settings.operating_hours_end}`);
-            console.log(`[SCHEDULING-LOG] Parsed Business Start Minutes for Rendering: ${businessStartMinute}`);
-            console.log(`[SCHEDULING-LOG] Parsed Business End Minutes for Rendering: ${businessEndMinute}`);
-            console.log(`[SCHEDULING-LOG] Duration Minutes for Rendering: ${durationMinutes}`);
+            console.log(`[SCHEDULING-DEBUG] Fetched Business Start Time (Raw): ${settings.operating_hours_start}`);
+            console.log(`[SCHEDULING-DEBUG] Fetched Business End Time (Raw): ${settings.operating_hours_end}`);
+            console.log(`[SCHEDULING-DEBUG] Parsed Business Start Minutes for Rendering: ${businessStartMinute}`);
+            console.log(`[SCHEDULING-DEBUG] Parsed Business End Minutes for Rendering: ${businessEndMinute}`);
+            console.log(`[SCHEDULING-DEBUG] Duration Minutes for Rendering: ${durationMinutes}`);
             // --- END DEBUG LOG ---
 
 
