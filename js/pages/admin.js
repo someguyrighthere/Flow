@@ -28,6 +28,28 @@ export function handleAdminPage() {
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
     const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message'); // Status message for invite employee
 
+    // Edit User Modal Elements
+    const editUserModal = document.getElementById('edit-user-modal');
+    const editUserModalCloseBtn = document.getElementById('edit-user-modal-close');
+    const editUserForm = document.getElementById('edit-user-form');
+    const editUserIdInput = document.getElementById('edit-user-id');
+    const editFullNameInput = document.getElementById('edit-full-name');
+    const editEmailInput = document.getElementById('edit-email');
+    const editPositionInput = document.getElementById('edit-position');
+    const editEmployeeIdInput = document.getElementById('edit-employee-id');
+    const editEmploymentTypeSelect = document.getElementById('edit-employment-type');
+    const editLocationSelect = document.getElementById('edit-location-select');
+    const editEmployeeAvailabilityGrid = document.getElementById('edit-employee-availability-grid');
+    const editUserStatusMessage = document.getElementById('edit-user-status-message');
+    const editUserCancelBtn = document.getElementById('edit-user-cancel-btn');
+
+    // Groups for conditional visibility in edit modal
+    const editPositionGroup = document.getElementById('edit-position-group');
+    const editEmployeeIdGroup = document.getElementById('edit-employee-id-group');
+    const editEmploymentTypeGroup = document.getElementById('edit-employment-type-group');
+    const editAvailabilityGroup = document.getElementById('edit-availability-group');
+
+
     let businessOperatingStartHour = 0; // Will store fetched business start hour for availability inputs
     let businessOperatingEndHour = 24; // Will store fetched business end hour for availability inputs
 
@@ -43,6 +65,26 @@ export function handleAdminPage() {
             element.textContent = ''; // Use textContent to clear, removes inner HTML
             element.classList.remove('success', 'error');
         }, 5000); 
+    }
+
+    /**
+     * Shows a modal.
+     * @param {HTMLElement} modalElement - The modal element to show.
+     */
+    function showModal(modalElement) {
+        if (modalElement) {
+            modalElement.style.display = 'flex';
+        }
+    }
+
+    /**
+     * Hides a modal.
+     * @param {HTMLElement} modalElement - The modal element to hide.
+     */
+    function hideModal(modalElement) {
+        if (modalElement) {
+            modalElement.style.display = 'none';
+        }
     }
 
     // --- Data Loading Functions ---
@@ -65,8 +107,9 @@ export function handleAdminPage() {
             businessOperatingStartHour = parseInt(formattedStartTime.split(':')[0], 10);
             businessOperatingEndHour = parseInt(formattedEndTime.split(':')[0], 10);
             
-            // Regenerate availability inputs with updated business hours
-            generateAvailabilityInputs(); 
+            // Regenerate availability inputs with updated business hours for both invite and edit forms
+            generateAvailabilityInputs(employeeAvailabilityGrid); 
+            generateAvailabilityInputs(editEmployeeAvailabilityGrid);
         } catch (error) {
             displayStatusMessage(operatingHoursStatusMessage, 'Could not load business settings. Using defaults.', true); // Use local status message
             console.error('Error loading business settings:', error);
@@ -108,27 +151,24 @@ export function handleAdminPage() {
     }
 
     /**
-     * Populates location dropdowns for inviting users.
+     * Populates location dropdowns for inviting users and the edit modal.
+     * @param {HTMLElement} selectElement - The select element to populate.
      */
-    async function populateLocationDropdowns() {
-        if (!adminLocationSelect || !employeeLocationSelect) return;
+    async function populateLocationDropdown(selectElement) {
+        if (!selectElement) return;
         try {
             const locations = await apiRequest('GET', '/locations');
             
             // Clear existing options, keep default "Select Location" or similar
-            adminLocationSelect.innerHTML = '<option value="">Select Location</option>';
-            employeeLocationSelect.innerHTML = '<option value="">Select Location</option>';
+            selectElement.innerHTML = '<option value="">Select Location</option>';
 
             if (locations && locations.length > 0) {
                 locations.forEach(loc => {
-                    const adminOption = new Option(loc.location_name, loc.location_id);
-                    const employeeOption = new Option(loc.location_name, loc.location_id);
-                    adminLocationSelect.add(adminOption);
-                    employeeLocationSelect.add(employeeOption);
+                    const option = new Option(loc.location_name, loc.location_id);
+                    selectElement.add(option);
                 });
             } else {
-                adminLocationSelect.innerHTML = '<option value="">No locations available</option>';
-                employeeLocationSelect.innerHTML = '<option value="">No locations available</option>';
+                selectElement.innerHTML = '<option value="">No locations available</option>';
             }
         } catch (error) {
             console.error("Failed to populate location dropdowns:", error);
@@ -188,8 +228,8 @@ export function handleAdminPage() {
 
                             listItem.innerHTML = `
                                 ${userInfo}
-                                <div class="list-item-buttons"> <!-- THIS IS THE NEW CONTAINER -->
-                                    <button class="btn-edit" data-id="${user.user_id}" data-type="user">
+                                <div class="list-item-buttons">
+                                    <button class="btn-edit" data-id="${user.user_id}" data-role="${user.role}" data-type="user">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                                             <path d="M15.5 2.5a2.5 2.5 0 0 1-3.5 0l-9 9a2.5 2.5 0 0 0 0 3.5c1 1 2.5 1 3.5 0l9-9a2.5 2.5 0 0 0 0-3.5zm-1 2.5l-9 9a1.5 1.5 0 0 1-2.12-2.12l9-9a1.5 1.5 0 0 1 2.12 2.12zM12 5l2 2-9 9-2-2 9-9z"/>
                                         </svg>
@@ -220,22 +260,23 @@ export function handleAdminPage() {
      * This creates a grid of select inputs for each day of the week,
      * allowing admins to set start and end availability times for employees.
      * Options are restricted to business operating hours.
+     * @param {HTMLElement} targetGridElement - The div element where availability inputs should be generated.
      */
-    function generateAvailabilityInputs() {
-        if (!employeeAvailabilityGrid) return;
-        employeeAvailabilityGrid.innerHTML = ''; // Clear previous inputs
+    function generateAvailabilityInputs(targetGridElement) {
+        if (!targetGridElement) return;
+        targetGridElement.innerHTML = ''; // Clear previous inputs
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         
         days.forEach(day => {
             const dayId = day.toLowerCase();
             const availabilityHtml = `
-                <label for="avail-${dayId}-start">${day}</label>
+                <label for="edit-avail-${dayId}-start">${day}</label>
                 <div class="time-range">
-                    <select id="avail-${dayId}-start" data-day="${dayId}" data-type="start">
+                    <select id="edit-avail-${dayId}-start" data-day="${dayId}" data-type="start">
                         ${generateTimeOptions(businessOperatingStartHour, businessOperatingEndHour)}
                     </select>
                     <span>-</span>
-                    <select id="avail-${dayId}-end" data-day="${dayId}" data-type="end">
+                    <select id="edit-avail-${dayId}-end" data-day="${dayId}" data-type="end">
                         ${generateTimeOptions(businessOperatingStartHour, businessOperatingEndHour)}
                     </select>
                 </div>
@@ -243,7 +284,7 @@ export function handleAdminPage() {
             const div = document.createElement('div');
             div.className = 'availability-day'; // Used for CSS grid alignment
             div.innerHTML = availabilityHtml;
-            employeeAvailabilityGrid.appendChild(div);
+            targetGridElement.appendChild(div);
         });
     }
 
@@ -263,6 +304,85 @@ export function handleAdminPage() {
         }
         return options;
     }
+
+    /**
+     * Populates the availability selects for a given user in the edit modal.
+     * @param {Object} userAvailability - The availability object from the user data.
+     */
+    function populateEditUserAvailability(userAvailability) {
+        const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        daysOfWeek.forEach(day => {
+            const startSelect = document.getElementById(`edit-avail-${day}-start`); // Corrected ID prefix
+            const endSelect = document.getElementById(`edit-avail-${day}-end`);     // Corrected ID prefix
+
+            if (startSelect && endSelect) {
+                // Reset to "Not Available" first
+                startSelect.value = '';
+                endSelect.value = '';
+
+                if (userAvailability && userAvailability[day]) {
+                    startSelect.value = userAvailability[day].start || '';
+                    endSelect.value = userAvailability[day].end || '';
+                }
+            }
+        });
+    }
+
+    /**
+     * Handles opening and populating the edit user modal.
+     * @param {string} userId - The ID of the user to edit.
+     * @param {string} userRole - The role of the user ('employee', 'super_admin', 'location_admin').
+     */
+    async function handleEditUser(userId, userRole) {
+        try {
+            // Fetch the specific user's data
+            const user = await apiRequest('GET', `/users/${userId}`); 
+            
+            // Populate basic user fields
+            editUserIdInput.value = user.user_id;
+            editFullNameInput.value = user.full_name;
+            editEmailInput.value = user.email; // Email is readonly in the form
+
+            // Populate location dropdown
+            await populateLocationDropdown(editLocationSelect);
+            if (user.location_id) {
+                editLocationSelect.value = user.location_id;
+            } else {
+                editLocationSelect.value = ''; // Ensure "Select Location" or empty is chosen if no location
+            }
+
+            // Show/hide fields and populate employee-specific data based on role
+            if (user.role === 'employee') {
+                editPositionGroup.style.display = 'block';
+                editEmployeeIdGroup.style.display = 'block';
+                editEmploymentTypeGroup.style.display = 'block';
+                editAvailabilityGroup.style.display = 'grid'; // Use grid for availability
+
+                editPositionInput.value = user.position || '';
+                editEmployeeIdInput.value = user.employee_id || '';
+                editEmploymentTypeSelect.value = user.employment_type || 'Full-time';
+                populateEditUserAvailability(user.availability); // Populate availability inputs
+            } else {
+                // Hide employee-specific fields for admins
+                editPositionGroup.style.display = 'none';
+                editEmployeeIdGroup.style.display = 'none';
+                editEmploymentTypeGroup.style.display = 'none';
+                editAvailabilityGroup.style.display = 'none';
+                // Clear values if previously set to avoid stale data from a previous edit
+                editPositionInput.value = '';
+                editEmployeeIdInput.value = '';
+                editEmploymentTypeSelect.value = 'Full-time';
+                populateEditUserAvailability(null); // Clear availability (reset selects)
+            }
+
+            displayStatusMessage(editUserStatusMessage, ''); // Clear any previous messages
+            showModal(editUserModal); // Display the modal
+        } catch (error) {
+            console.error('Error fetching user for edit:', error);
+            showModalMessage(`Failed to load user details for editing: ${error.message}`, true);
+        }
+    }
+
 
     // --- Event Listeners ---
 
@@ -303,7 +423,9 @@ export function handleAdminPage() {
                 displayStatusMessage(newLocationStatusMessage, 'Location created successfully!', false); // Use local status message
                 newLocationForm.reset();
                 loadLocations(); // Refresh the list of locations
-                populateLocationDropdowns(); // Refresh location dropdowns in invite forms
+                populateLocationDropdown(adminLocationSelect); // Refresh location dropdowns in invite forms
+                populateLocationDropdown(employeeLocationSelect); // Refresh location dropdowns in invite forms
+                populateLocationDropdown(editLocationSelect); // Refresh location dropdowns in edit form
             } catch (error) {
                 displayStatusMessage(newLocationStatusMessage, `Error creating location: ${error.message}`, true); // Use local status message
                 console.error('Error creating location:', error);
@@ -323,7 +445,9 @@ export function handleAdminPage() {
                     // Replaced showModalMessage with displayStatusMessage
                     displayStatusMessage(locationListDiv.querySelector('.status-message'), 'Location deleted successfully!', false); 
                     loadLocations(); // Refresh the list of locations
-                    populateLocationDropdowns(); // Refresh location dropdowns
+                    populateLocationDropdown(adminLocationSelect); // Refresh location dropdowns in invite forms
+                    populateLocationDropdown(employeeLocationSelect); // Refresh location dropdowns in invite forms
+                    populateLocationDropdown(editLocationSelect); // Refresh location dropdowns in edit form
                 } catch (error) {
                     displayStatusMessage(locationListDiv.querySelector('.status-message'), `Error deleting location: ${error.message}`, true);
                     console.error('Error deleting location:', error);
@@ -356,10 +480,8 @@ export function handleAdminPage() {
                 }
             } else if (editBtn) { // Add a new condition for the edit button
                 const userId = editBtn.dataset.id;
-                // For now, let's just log the ID and show a message.
-                // You will need to implement the full edit functionality here.
-                console.log('Edit button clicked for user ID:', userId);
-                alert('Edit functionality is not yet implemented for user ID: ' + userId);
+                const userRole = editBtn.dataset.role; // Get the user's role from data-role attribute
+                handleEditUser(userId, userRole);
             }
         });
     }
@@ -442,11 +564,63 @@ export function handleAdminPage() {
         });
     }
 
+    // Event listeners for Edit User Modal
+    if (editUserModal) {
+        editUserModalCloseBtn.addEventListener('click', () => hideModal(editUserModal));
+        editUserModal.addEventListener('click', (e) => {
+            if (e.target === editUserModal) { // Clicked outside the modal content
+                hideModal(editUserModal);
+            }
+        });
+        editUserCancelBtn.addEventListener('click', () => hideModal(editUserModal));
+
+        editUserForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = editUserIdInput.value;
+            const updatedData = {
+                full_name: editFullNameInput.value.trim(),
+                email: editEmailInput.value.trim(), // Email is readonly, but include for consistency
+                position: editPositionInput.value.trim(),
+                employee_id: editEmployeeIdInput.value.trim(),
+                employment_type: editEmploymentTypeSelect.value,
+                location_id: editLocationSelect.value || null,
+            };
+
+            // Collect updated availability data from the edit modal's availability inputs
+            const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            const updatedAvailability = {};
+            daysOfWeek.forEach(day => {
+                const startInput = document.getElementById(`edit-avail-${day}-start`);
+                const endInput = document.getElementById(`edit-avail-${day}-end`);
+                if (startInput && endInput && startInput.value && endInput.value) {
+                    updatedAvailability[day] = {
+                        start: startInput.value,
+                        end: endInput.value
+                    };
+                }
+            });
+            updatedData.availability = Object.keys(updatedAvailability).length > 0 ? updatedAvailability : null;
+
+            try {
+                await apiRequest('PUT', `/users/${userId}`, updatedData);
+                displayStatusMessage(editUserStatusMessage, 'User updated successfully!', false);
+                hideModal(editUserModal);
+                loadUsers(); // Refresh user list
+            } catch (error) {
+                displayStatusMessage(editUserStatusMessage, `Error updating user: ${error.message}`, true);
+                console.error('Error updating user:', error);
+            }
+        });
+    }
+
+
     // --- Initial Page Load ---
     // These functions are called when the page loads to set up the UI
-    loadBusinessSettings(); // Load business operating hours
+    loadBusinessSettings(); // Load business operating hours. This also calls generateAvailabilityInputs for both invite and edit forms.
     loadLocations(); // Load existing locations and display them
-    populateLocationDropdowns(); // Populate location dropdowns in invitation forms
+    populateLocationDropdown(adminLocationSelect); // Populate location dropdown for inviting admins
+    populateLocationDropdown(employeeLocationSelect); // Populate location dropdown for inviting employees
+    // Note: populateLocationDropdown for editLocationSelect will be called when modal opens in handleEditUser
     loadUsers(); // Load existing users (admins and employees) and display them
-    generateAvailabilityInputs(); // Generate the availability time selection fields for new employees
+    // Note: Availability inputs for invite employee form are generated by loadBusinessSettings.
 }
