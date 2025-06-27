@@ -27,6 +27,9 @@ export function handleSchedulingPage() {
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0); // Ensure it's local midnight for consistency
 
+    // Define the constant offset for visual alignment (30 minutes = 30 pixels)
+    const VISUAL_OFFSET_MINUTES = 30; // Matches the half-hour misalignment
+
     /**
      * Dynamically creates input fields for setting target daily hours for each day of the week.
      * These inputs are used in the auto-scheduling feature.
@@ -132,10 +135,9 @@ export function handleSchedulingPage() {
             
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    // FIX: Parse raw TIMESTAMP WITHOUT TIME ZONE string directly
-                    // This is for positional time, not global timezone.
-                    const shiftStartParts = shift.start_time.match(/(\d{2}):(\d{2})/);
-                    const shiftEndParts = shift.end_time.match(/(\d{2}):(\d{2})/);
+                    // Raw start/end are now 'YYYY-MM-DD HH:MM:SS' strings from TIMESTAMP WITHOUT TIME ZONE
+                    const shiftStartParts = shift.start_time.match(/(\d{2}):(\d{2}):(\d{2})$/); // Match HH:MM:SS at end
+                    const shiftEndParts = shift.end_time.match(/(\d{2}):(\d{2}):(\d{2})$/);
                     
                     const shiftStartHour = parseInt(shiftStartParts[1], 10);
                     const shiftStartMinute = parseInt(shiftStartParts[2], 10);
@@ -146,25 +148,28 @@ export function handleSchedulingPage() {
                     const shiftEndTotalMinutes = (shiftEndHour * 60) + shiftEndMinute;
                     const heightMinutes = shiftEndTotalMinutes - shiftStartTotalMinutes;
                     
-                    const dayIndex = new Date(shift.start_time).getDay(); // Still rely on Date object for day of week
+                    // Get the day of the week from the full date string, which is now consistently local from backend
+                    const dayIndex = new Date(shift.start_time).getDay(); 
                     const dayColumn = document.getElementById(`day-column-${dayIndex}`);
 
                     if (dayColumn) {
                         const shiftElement = document.createElement('div');
                         shiftElement.className = 'calendar-shift';
-                        shiftElement.style.top = `${shiftStartTotalMinutes}px`;
+                        // FIX: Add the visual offset to the top position
+                        shiftElement.style.top = `${shiftStartTotalMinutes + VISUAL_OFFSET_MINUTES}px`;
                         shiftElement.style.height = `${heightMinutes}px`;
                         
                         const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                        // To display time, we create a temporary Date object at a fixed day
-                        // This allows toLocaleTimeString to format it nicely without timezone shift.
-                        const tempStartDate = new Date();
-                        tempStartDate.setHours(shiftStartHour, shiftStartMinute, 0, 0);
-                        const startTimeString = tempStartDate.toLocaleTimeString('en-US', timeFormatOptions);
-                        
-                        const tempEndDate = new Date();
-                        tempEndDate.setHours(shiftEndHour, shiftEndMinute, 0, 0);
-                        const endTimeString = tempEndDate.toLocaleTimeString('en-US', timeFormatOptions);
+                        // To display time, create a temporary Date object *just for formatting*.
+                        // Use a fixed date like epoch + minutes to avoid local timezone quirks for formatting.
+                        const formatTimeForDisplay = (totalMinutes) => {
+                            const tempDate = new Date(0); // Epoch
+                            tempDate.setMinutes(totalMinutes); // Set minutes from epoch
+                            return tempDate.toLocaleTimeString('en-US', timeFormatOptions);
+                        };
+
+                        const startTimeString = formatTimeForDisplay(shiftStartTotalMinutes);
+                        const endTimeString = formatTimeForDisplay(shiftEndTotalMinutes);
 
                         shiftElement.innerHTML = `
                             <strong>${shift.employee_name}</strong><br>
@@ -214,7 +219,8 @@ export function handleSchedulingPage() {
                                 if (availabilityToggle && !availabilityToggle.checked) {
                                     availabilityBlock.classList.add('hidden');
                                 }
-                                availabilityBlock.style.top = `${startTotalMinutes}px`;
+                                // FIX: Add the visual offset to the top position
+                                availabilityBlock.style.top = `${startTotalMinutes + VISUAL_OFFSET_MINUTES}px`;
                                 availabilityBlock.style.height = `${durationMinutes}px`;
                                 dayColumn.appendChild(availabilityBlock);
                             }
@@ -235,23 +241,15 @@ export function handleSchedulingPage() {
 
         try {
             const settings = await apiRequest('GET', '/settings/business');
-            // Ensure settings.operating_hours_start is not null before parsing
             const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
             const businessStartMinute = parseInt((settings.operating_hours_start || '00:00').split(':')[1], 10);
             const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
             const businessEndMinute = parseInt((settings.operating_hours_end || '00:00').split(':')[1], 10);
 
-            // FIX: Calculate total minutes for rendering based on fetched business hours
+            // Calculate total minutes for rendering based on fetched business hours
             const businessStartTotalMinutes = businessStartHour * 60 + businessStartMinute;
             const businessEndTotalMinutes = businessEndHour * 60 + businessEndMinute;
             const durationMinutes = businessEndTotalMinutes - businessStartTotalMinutes;
-
-            // --- DEBUG LOGS (SCHEDULING: BUSINESS HOURS RENDERING) ---
-            console.log(`[SCHEDULING-DEBUG] Business Hours Rendering: Raw Start=${settings.operating_hours_start}, Raw End=${settings.operating_hours_end}`);
-            console.log(`[SCHEDULING-DEBUG] Business Hours Rendering: Parsed Start Minutes=${businessStartTotalMinutes}, Parsed End Minutes=${businessEndTotalMinutes}`);
-            console.log(`[SCHEDULING-DEBUG] Business Hours Rendering: Duration Minutes=${durationMinutes}`);
-            // --- END DEBUG LOGS ---
-
 
             if (durationMinutes > 0) {
                 for (let i = 0; i < 7; i++) {
@@ -259,8 +257,8 @@ export function handleSchedulingPage() {
                     if (dayColumn) {
                         const businessHoursBlock = document.createElement('div');
                         businessHoursBlock.className = 'business-hours-block';
-                        // FIX: Use calculated total minutes for top and height for precise rendering
-                        businessHoursBlock.style.top = `${businessStartTotalMinutes}px`;
+                        // FIX: Add the visual offset to the top position
+                        businessHoursBlock.style.top = `${businessStartTotalMinutes + VISUAL_OFFSET_MINUTES}px`;
                         businessHoursBlock.style.height = `${durationMinutes}px`;
                         dayColumn.appendChild(businessHoursBlock);
                     }
@@ -389,7 +387,7 @@ export function handleSchedulingPage() {
             const shiftData = {
                 employee_id: document.getElementById('employee-select').value,
                 location_id: document.getElementById('location-select').value,
-                // FIX: Use a custom format for TIMESTAMP WITHOUT TIME ZONE
+                // Use a custom format for TIMESTAMP WITHOUT TIME ZONE
                 start_time: `${rawStartTime.split('T')[0]} ${rawStartTime.split('T')[1]}:00`,
                 end_time: `${rawEndTime.split('T')[0]} ${rawEndTime.split('T')[1]}:00`,
                 notes: document.getElementById('notes-input').value
