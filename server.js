@@ -321,7 +321,7 @@ app.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
                 COUNT(a.id) AS applicant_count
             FROM job_postings jp
             LEFT JOIN locations l ON jp.location_id = l.location_id
-            LEFT JOIN applicants a ON jp.id = a.job_posting_id
+            LEFT JOIN applicants a ON jp.id = a.job_id  -- FIX: Changed a.job_posting_id to a.job_id
             GROUP BY jp.id, jp.title, jp.description, jp.requirements, jp.location_id, l.location_name
             ORDER BY jp.created_at DESC;
         `);
@@ -376,8 +376,9 @@ app.post('/apply/:jobId', async (req, res) => {
     }
 
     try {
+        // FIX: Changed job_posting_id to job_id in INSERT statement
         await pool.query(
-            `INSERT INTO applicants (job_posting_id, name, email, phone, address, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            `INSERT INTO applicants (job_id, name, email, phone, address, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [jobId, name, email, phone || null, address || null, date_of_birth || null, availability || null, is_authorized || false]
         );
         res.status(201).json({ message: 'Application submitted successfully!' });
@@ -403,7 +404,7 @@ app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
             jp.title AS job_title,
             l.location_name
         FROM applicants a
-        JOIN job_postings jp ON a.job_posting_id = jp.id
+        JOIN job_postings jp ON a.job_id = jp.id  -- FIX: Changed a.job_posting_id to a.job_id
         LEFT JOIN locations l ON jp.location_id = l.location_id
         WHERE 1=1
     `;
@@ -411,7 +412,7 @@ app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     let paramIndex = 1;
 
     if (jobId) {
-        sql += ` AND a.job_posting_id = $${paramIndex++}`;
+        sql += ` AND a.job_id = $${paramIndex++}`; // FIX: Changed a.job_posting_id to a.job_id
         params.push(jobId);
     }
     if (status) {
@@ -451,7 +452,7 @@ app.get('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
                 jp.title AS job_title,
                 l.location_name
             FROM applicants a
-            JOIN job_postings jp ON a.job_posting_id = jp.id
+            JOIN job_postings jp ON a.job_id = jp.id  -- FIX: Changed a.job_posting_id to a.job_id
             LEFT JOIN locations l ON jp.location_id = l.location_id
             WHERE a.id = $1;
         `, [id]);
@@ -602,9 +603,32 @@ const startServer = async () => {
                 operating_hours_start TIME,
                 operating_hours_end TIME
             );
-            -- Note: Other tables (checklists, onboarding_tasks, job_postings, applicants, documents)
-            -- are expected to be created/managed by your full application's deployment
-            -- or directly in your database. This schema focuses on core features.
+            -- Schema for job_postings and applicants tables
+            CREATE TABLE IF NOT EXISTS job_postings (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                description TEXT NOT NULL,
+                requirements TEXT,
+                location_id INT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
+            );
+            CREATE TABLE IF NOT EXISTS applicants (
+                id SERIAL PRIMARY KEY,
+                job_id INT NOT NULL, -- FIX: Changed column name to job_id
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                phone VARCHAR(50),
+                address TEXT,
+                date_of_birth DATE,
+                availability VARCHAR(255),
+                is_authorized BOOLEAN,
+                status VARCHAR(50) DEFAULT 'pending',
+                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE -- FIX: Changed FK to job_id
+            );
+            -- Other tables (checklists, onboarding_tasks, documents) schema still need to be added
+            -- for their respective functionalities to work if they are desired in the future.
         `;
         
         await client.query(schemaQueries);
