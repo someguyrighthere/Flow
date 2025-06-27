@@ -214,13 +214,14 @@ export function handleSchedulingPage() {
     }
 
     /**
-     * Fetches and renders the business operating hours as a subtle background.
+     * NEW FUNCTION: Fetches and renders the business operating hours as a subtle background.
      */
     async function loadAndRenderBusinessHours() {
         document.querySelectorAll('.business-hours-block').forEach(el => el.remove());
 
         try {
             const settings = await apiRequest('GET', '/settings/business');
+            // Ensure settings.operating_hours_start is not null before parsing
             const businessStartMinute = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10) * 60 + parseInt((settings.operating_hours_start || '00:00').split(':')[1], 10);
             const businessEndMinute = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10) * 60 + parseInt((settings.operating_hours_end || '00:00').split(':')[1], 10);
             const durationMinutes = businessEndMinute - businessStartMinute;
@@ -228,8 +229,9 @@ export function handleSchedulingPage() {
             // --- DEBUG LOG: Verify fetched and parsed business hours in scheduling.js ---
             console.log(`[SCHEDULING-LOG] Fetched Business Start Time (Raw): ${settings.operating_hours_start}`);
             console.log(`[SCHEDULING-LOG] Fetched Business End Time (Raw): ${settings.operating_hours_end}`);
-            console.log(`[SCHEDULING-LOG] Parsed Business Start Minutes: ${businessStartMinute}`);
-            console.log(`[SCHEDULING-LOG] Parsed Business End Minutes: ${businessEndMinute}`);
+            console.log(`[SCHEDULING-LOG] Parsed Business Start Minutes for Rendering: ${businessStartMinute}`);
+            console.log(`[SCHEDULING-LOG] Parsed Business End Minutes for Rendering: ${businessEndMinute}`);
+            console.log(`[SCHEDULING-LOG] Duration Minutes for Rendering: ${durationMinutes}`);
             // --- END DEBUG LOG ---
 
 
