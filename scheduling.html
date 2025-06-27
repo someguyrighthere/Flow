@@ -72,13 +72,13 @@
             flex-shrink: 0;
         }
         
-        /* --- UPDATED CALENDAR LAYOUT CSS for Alignment --- */
+        /* --- CALENDAR LAYOUT & ALIGNMENT FIXES --- */
         .calendar-grid-container {
-            flex-grow: 1;
+            flex-grow: 1; 
             overflow: hidden; 
             display: flex;
             flex-direction: column;
-            position: relative; /* Ensure this is relative for nested absolute positioning */
+            position: relative; 
         }
 
         .calendar-grid {
@@ -103,10 +103,10 @@
             display: grid;
             grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
             flex-grow: 1;
-            overflow-y: auto; /* Enable vertical scrolling only for the body */
-            position: relative; /* Essential for absolute positioning of shifts/blocks */
-            /* Set explicit height to align 24 hours = 1440px */
-            height: 1440px; /* 24 hours * 60 minutes/hour * 1px/minute = 1440px */
+            overflow-y: scroll; /* Enable vertical scrolling only for the body */
+            position: relative; 
+            height: 1440px; /* Force 24 hours * 60px/hour = 1440px */
+            min-height: 1440px; /* Ensure it doesn't shrink below this */
         }
 
         .calendar-day-header {
@@ -126,18 +126,19 @@
             z-index: 5;
             background-color: #2a2a2e;
             grid-column: 1;
-            /* No fixed height here, let it stretch to content (1440px from .calendar-body) */
-            height: 100%; 
+            /* Match the height of the calendar-body's vertical content */
+            height: 1440px; /* Explicitly set to match total calendar height */
             display: flex;
             flex-direction: column;
         }
         .time-slot {
             height: 60px; /* Each time slot represents one hour, 60px height */
+            line-height: 60px; /* Vertically center text */
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; /* Use flex to align content if needed */
+            align-items: center; /* Vertically center content */
+            justify-content: center; /* Horizontally center content */
             font-size: 0.8rem;
             color: var(--text-medium);
             flex-shrink: 0;
@@ -147,10 +148,10 @@
         }
 
         .day-column {
-            position: relative; /* Crucial for absolute positioning of shifts/blocks */
+            position: relative; /* CRUCIAL for absolute positioning of shifts/blocks */
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-            /* Inherit height from .calendar-body or its parent */
-            height: 100%; /* Will take the 1440px from calendar-body */
+            height: 100%; /* Will inherit the 1440px from calendar-body for positioning context */
+            overflow: hidden; /* Prevent content from spilling outside */
         }
         .day-column:last-child {
             border-right: none;
