@@ -77,9 +77,10 @@
         #confirm-modal-overlay {
             z-index: 1001;
         }
-        #edit-checklist-modal-overlay, #attach-document-modal-overlay {
+        /* Reverted: Removed edit-checklist-modal-overlay and attach-document-modal-overlay z-index */
+        /* #edit-checklist-modal-overlay, #attach-document-modal-overlay {
             z-index: 1002;
-        }
+        } */
         .task-input-container {
             display: flex;
             align-items: flex-end;
@@ -104,7 +105,7 @@
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
@@ -121,7 +122,7 @@
         </nav>
         <section id="checklists-section">
             <h2 style="color: var(--text-light);">Your Task Lists</h2>
-            <div id="checklist-list" style="margin-bottom: 40px;"></div>
+            <div id="checklist-list" style="margin-bottom: 40px;"><p style="color: var(--text-medium);">Task list functionality temporarily disabled.</p></div>
             <div class="card" style="margin-top: 30px;">
                 <h3>Create New Task List</h3>
                 <form id="new-checklist-form">
@@ -146,7 +147,23 @@
                         <input type="number" id="time-group-count" min="1" value="1">
                     </div>
                     <hr style="border-color: var(--border-color); margin: 20px 0;">
-                    <div id="tasks-input-area"></div>
+                    <div id="tasks-input-area">
+                        <!-- Initial task input for new checklist -->
+                        <div class="form-group task-input-group">
+                            <div class="task-input-container">
+                                <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
+                                    <label for="task-input-0">Task Description</label>
+                                    <input type="text" id="task-input-0" class="task-description-input" placeholder="e.g., Complete HR paperwork" required>
+                                </div>
+                                <div class="task-actions" style="display: flex; align-items: flex-end; gap: 5px; margin-bottom: 0;">
+                                    <button type="button" class="btn btn-secondary btn-sm attach-file-btn" style="display:none;">Attach</button> <!-- Temporarily hide attach button -->
+                                    <button type="button" class="btn btn-secondary btn-sm remove-task-btn">Remove</button>
+                                </div>
+                            </div>
+                            <div class="attached-document-info" style="font-size: 0.8rem; color: var(--text-medium); margin-top: 5px; height: 1.2em;"></div>
+                        </div>
+                        <button type="button" id="add-task-btn" class="btn btn-secondary" style="margin-top: 10px;">Add Another Task</button>
+                    </div>
                     <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Create Task List</button>
                 </form>
             </div>
@@ -171,28 +188,27 @@
             </div>
         </div>
     </div>
-    <div id="edit-checklist-modal-overlay" class="modal-overlay">
+    <!-- Reverted: Removed Edit Checklist Modal -->
+    <!-- <div id="edit-checklist-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <h3 id="edit-checklist-modal-title">Edit Task List</h3>
             <form id="edit-checklist-form">
-                <!-- Form fields will be populated by JS -->
             </form>
         </div>
-    </div>
-    <!-- NEW: Attach Document Modal -->
-    <div id="attach-document-modal-overlay" class="modal-overlay">
+    </div> -->
+    <!-- Reverted: Removed Attach Document Modal -->
+    <!-- <div id="attach-document-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <h3>Attach a Document</h3>
             <p>Select a document from your library to attach to this task.</p>
             <div id="attach-document-list" style="max-height: 300px; overflow-y: auto; text-align: left;">
-                <!-- Document list will be populated by JS -->
                 <p>Loading documents...</p>
             </div>
             <div class="modal-buttons" style="margin-top: 20px;">
                  <button id="attach-document-cancel-btn" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
-    </div>
+    </div> -->
 
     <script type="module" src="js/app.js"></script>
 </body>
