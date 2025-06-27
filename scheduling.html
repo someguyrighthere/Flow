@@ -10,6 +10,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
+        /* General reset for consistent spacing */
+        body, html {
+            margin: 0;
+            padding: 0;
+        }
+
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
         .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
         .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
@@ -72,23 +78,29 @@
             flex-shrink: 0;
         }
         
-        /* --- CALENDAR LAYOUT & ALIGNMENT FIXES (REFINED) --- */
+        /* --- CALENDAR LAYOUT & ALIGNMENT FIXES (DEFINITIVE) --- */
+        /* Ensure no extra spacing pushes the calendar content down */
+        section {
+            padding: 0; /* Remove default section padding */
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
         .calendar-grid-container {
             flex-grow: 1; 
             overflow: hidden; 
             display: flex;
             flex-direction: column;
             position: relative; 
-            /* Remove fixed height to let content control scrollable area */
-            /* height: calc(100% - 70px); */ 
+            /* No fixed height here, let calendar-body define scrollable area */
         }
 
         .calendar-grid {
             display: flex;
             flex-direction: column;
             width: 100%;
-            min-width: 1500px; /* Keep min-width for overall calendar content */
-            height: auto; /* Let content define height for scrolling */
+            min-width: 1500px; 
+            height: auto; /* Allow height to expand for scrolling */
         }
 
         .calendar-grid-header {
@@ -107,11 +119,11 @@
             flex-grow: 1;
             overflow-y: scroll; 
             position: relative; 
-            height: 1440px; /* Force 24 hours * 60px/hour = 1440px */
+            height: 1440px; /* Force 24 hours * 60px/hour = 1440px total height */
             min-height: 1440px; 
-            box-sizing: content-box; 
-            padding-top: 0; /* Ensure no top padding */
-            margin-top: 0; /* Ensure no top margin */
+            box-sizing: content-box; /* Crucial for pixel-perfect top/height calculations */
+            padding: 0; /* Remove any default padding */
+            margin: 0; /* Remove any default margin */
         }
 
         .calendar-day-header {
@@ -136,8 +148,8 @@
             display: flex;
             flex-direction: column;
             box-sizing: content-box; 
-            padding-top: 0; /* Ensure no top padding */
-            margin-top: 0; /* Ensure no top margin */
+            padding: 0; /* Remove default padding */
+            margin: 0; /* Remove default margin */
         }
         .time-slot {
             height: 60px; /* Each time slot represents one hour, 60px height */
@@ -150,6 +162,9 @@
             font-size: 0.8rem;
             color: var(--text-medium);
             flex-shrink: 0;
+            /* Ensure no extra space inside time slots */
+            padding: 0;
+            margin: 0;
         }
         .time-slot:last-child {
             border-bottom: none;
@@ -161,8 +176,8 @@
             height: 100%; /* Will inherit the 1440px from calendar-body for positioning context */
             overflow: hidden; 
             box-sizing: content-box; 
-            padding-top: 0; /* Ensure no top padding */
-            margin-top: 0; /* Ensure no top margin */
+            padding: 0; /* Ensure no padding */
+            margin: 0; /* Ensure no margin */
         }
         .day-column:last-child {
             border-right: none;
@@ -172,6 +187,8 @@
             height: 60px; /* Should match time-slot height for alignment */
             border-bottom: 1px dashed rgba(255, 255, 255, 0.1); 
             box-sizing: content-box; 
+            padding: 0; /* Ensure no padding */
+            margin: 0; /* Ensure no margin */
         }
         .hour-line:last-child {
             border-bottom: none;
