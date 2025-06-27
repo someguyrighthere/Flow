@@ -136,24 +136,20 @@ export function handleSchedulingPage() {
             
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    // FIX: Create Date objects directly from the ISO string.
-                    // The Date object constructor handles ISO 8601 strings (with 'T' and 'Z') correctly.
+                    // FIX: Create Date objects directly from the raw string.
+                    // The Date object constructor handles ISO 8601 strings (like "2025-06-23T09:00:00.000Z") correctly.
+                    // This will create a Date object in the browser's local timezone.
                     const shiftStartDateTime = new Date(shift.start_time); 
                     const shiftEndDateTime = new Date(shift.end_time);     
                     
-                    // FIX: Get hours and minutes using UTC methods to treat them as positional time
-                    // This is because the server is sending them as UTC, and we want to map UTC hours to the grid
-                    const shiftStartHour = shiftStartDateTime.getUTCHours();
-                    const shiftStartMinute = shiftStartDateTime.getUTCMinutes();
-                    const shiftEndHour = shiftEndDateTime.getUTCHours();
-                    const shiftEndMinute = shiftEndDateTime.getUTCMinutes();
-
-                    const shiftStartTotalMinutes = (shiftStartHour * 60) + shiftStartMinute;
-                    const shiftEndTotalMinutes = (shiftEndHour * 60) + shiftEndMinute;
+                    // FIX: Get hours and minutes using LOCAL methods (getHours, getMinutes)
+                    // since the Date object is now in the browser's local timezone.
+                    const shiftStartTotalMinutes = (shiftStartDateTime.getHours() * 60) + shiftStartDateTime.getMinutes();
+                    const shiftEndTotalMinutes = (shiftEndDateTime.getHours() * 60) + shiftEndDateTime.getMinutes();
                     const heightMinutes = shiftEndTotalMinutes - shiftStartTotalMinutes;
                     
-                    // To get the day index (0-6 for Sun-Sat), use getUTCDay() for consistency with UTC times
-                    const shiftDayOfWeek = shiftStartDateTime.getUTCDay(); 
+                    // To get the day index (0-6 for Sun-Sat), use getDay() for consistency with local time.
+                    const shiftDayOfWeek = shiftStartDateTime.getDay(); 
                     const dayColumn = document.getElementById(`day-column-${shiftDayOfWeek}`);
 
                     if (dayColumn) {
@@ -162,16 +158,10 @@ export function handleSchedulingPage() {
                         shiftElement.style.top = `${shiftStartTotalMinutes + VISUAL_OFFSET_MINUTES}px`; // Add offset
                         shiftElement.style.height = `${heightMinutes}px`;
                         
-                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true, timeZone: 'UTC' }; // Force UTC for display
-                        // Use the new fixed-timezone-for-display method
-                        const formatTimeForDisplay = (hour, minute) => {
-                            const tempDate = new Date();
-                            tempDate.setUTCHours(hour, minute, 0, 0); // Set UTC hours/minutes
-                            return tempDate.toLocaleTimeString('en-US', timeFormatOptions);
-                        };
-
-                        const startTimeString = formatTimeForDisplay(shiftStartHour, shiftStartMinute);
-                        const endTimeString = formatTimeForDisplay(shiftEndHour, shiftEndMinute);
+                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true }; 
+                        // Now, toLocaleTimeString will correctly format the local time from shiftStartDateTime.
+                        const startTimeString = shiftStartDateTime.toLocaleTimeString('en-US', timeFormatOptions);
+                        const endTimeString = shiftEndDateTime.toLocaleTimeString('en-US', timeFormatOptions);
 
                         shiftElement.innerHTML = `
                             <strong>${shift.employee_name}</strong><br>
@@ -187,9 +177,9 @@ export function handleSchedulingPage() {
 
                         // --- DEBUG LOGS (SCHEDULING: SHIFT RENDERING) ---
                         console.log(`[SCHEDULING-DEBUG] Shift Render: Raw Start: ${shift.start_time}, Raw End: ${shift.end_time}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: UTC Start Hour: ${shiftStartHour}, Minute: ${shiftStartMinute}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: UTC End Hour: ${shiftEndHour}, Minute: ${shiftEndMinute}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes for TOP (UTC): ${shiftStartTotalMinutes}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local Start Hour: ${shiftStartDateTime.getHours()}, Minute: ${shiftStartDateTime.getMinutes()}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local End Hour: ${shiftEndDateTime.getHours()}, Minute: ${shiftEndDateTime.getMinutes()}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes for TOP: ${shiftStartTotalMinutes}`);
                         console.log(`[SCHEDULING-DEBUG] Shift Render: Height Minutes: ${heightMinutes}`);
                         // --- END DEBUG LOGS ---
                     }
