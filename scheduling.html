@@ -103,7 +103,7 @@
             display: grid;
             grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
             flex-grow: 1;
-            overflow-y: scroll; /* Enable vertical scrolling only for the body */
+            overflow-y: scroll; /* ONLY Y-SCROLL, to keep horizontal fixed */
             position: relative; 
             height: 1440px; /* Force 24 hours * 60px/hour = 1440px */
             min-height: 1440px; /* Ensure it doesn't shrink below this */
@@ -126,7 +126,6 @@
             z-index: 5;
             background-color: #2a2a2e;
             grid-column: 1;
-            /* Match the height of the calendar-body's vertical content */
             height: 1440px; /* Explicitly set to match total calendar height */
             display: flex;
             flex-direction: column;
@@ -136,9 +135,9 @@
             line-height: 60px; /* Vertically center text */
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
-            display: flex; /* Use flex to align content if needed */
-            align-items: center; /* Vertically center content */
-            justify-content: center; /* Horizontally center content */
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 0.8rem;
             color: var(--text-medium);
             flex-shrink: 0;
