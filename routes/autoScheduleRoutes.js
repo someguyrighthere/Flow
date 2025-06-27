@@ -211,30 +211,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
         }
     });
 };
-```
-I understand. You're reporting that the auto-scheduler is still not filling the schedule correctly, specifically that it's not scheduling for the entire operating hours, and it's not utilizing all full-timers as needed, with the implication that overlaps are necessary for full coverage.
 
-My apologies that this complex aspect of the auto-scheduler is still not functioning as intended. You've been very clear about the need for overlapping full-timers to achieve both their 40 hours and full business coverage.
-
-The previous logic likely had a conflict in how `dailyCoverage` was used and how `employeesScheduledTodayIds` prevented overlaps.
-
-**Here's the refined strategy to fix this and ensure the auto-scheduler correctly handles overlaps for full coverage:**
-
-1.  **Remove `employeesScheduledTodayIds` from the `currentHour` loop's filters:** This is the most crucial change. This Set was preventing a single employee from being scheduled for *any* additional shift on the same day once their first shift started. Removing this from the filters will now allow the algorithm to consider the same employee for overlapping shifts, enabling true parallel coverage by full-timers.
-2.  **Rely on `dailyCoverage` to ensure *at least one person* covers an hour, and `remainingDailyTargetHours` for total *man-hours needed*:**
-    * The `dailyCoverage[coverageIndex]` check will continue to ensure we don't unnecessarily schedule another person if the hour is already covered *and* we've met our total `remainingDailyTargetHours` target.
-    * However, if `dailyCoverage[coverageIndex]` is `true` but `remainingDailyTargetHours` is still `> 0`, the algorithm should continue trying to schedule more employees (overlapping) to meet the total man-hour demand.
-3.  **Strict Boundary Checks Maintained:** The `currentHour` loop boundaries (`businessStartHour`, `businessEndHour`) and the checks `availStartHour <= currentHour`, `availEndHour >= requiredShiftEndHourTotal`, and `requiredShiftEndHourTotal <= businessEndHour` will continue to enforce scheduling strictly within business hours and employee availability.
-4.  **No `continue` after scheduling:** The `continue` statement that was present after scheduling a full-timer or part-timer within the `currentHour` loop will be removed. This ensures that after one employee is scheduled for an hour, the loop doesn't immediately skip to the next `currentHour`. Instead, it will allow the algorithm to continue searching for *another* eligible employee (if `remainingDailyTargetHours` warrants it and `dailyCoverage` indicates the hour needs more manpower) to create overlapping coverage.
-
-This refined logic focuses on filling the total man-hours required for each day while explicitly allowing for multiple employees to cover the same time slots, thereby solving the overlapping problem and ensuring the entire operating window is covered.
-
-**I am providing the completely revised `routes/autoScheduleRoutes.js` file below. Please replace the entire content of your local `routes/autoScheduleRoutes.js` file with this code.**
-
-After updating, **remember to restart your Node.js server** for the changes to take effect. Then, **clear any existing shifts in your database** (if you've already run auto-schedule with errors) using `DELETE FROM shifts;` in your PostgreSQL client. Finally, try running the auto-scheduler again from your scheduling page and observe the calendar for correct overlapping coverage that meets operating hours.
-
-
-```javascript
 // routes/autoScheduleRoutes.js
 
 // This module will contain the auto-scheduling route logic.
