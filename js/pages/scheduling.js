@@ -132,28 +132,39 @@ export function handleSchedulingPage() {
             
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    // FIX: Parse raw TIMESTAMP WITHOUT TIME ZONE string into a Date object
-                    // This creates a Date object in the browser's local timezone.
-                    const shiftStart = new Date(shift.start_time); 
-                    const shiftEnd = new Date(shift.end_time);     
+                    // FIX: Parse raw TIMESTAMP WITHOUT TIME ZONE string directly
+                    // This is for positional time, not global timezone.
+                    const shiftStartParts = shift.start_time.match(/(\d{2}):(\d{2})/);
+                    const shiftEndParts = shift.end_time.match(/(\d{2}):(\d{2})/);
                     
-                    const dayIndex = shiftStart.getDay();
+                    const shiftStartHour = parseInt(shiftStartParts[1], 10);
+                    const shiftStartMinute = parseInt(shiftStartParts[2], 10);
+                    const shiftEndHour = parseInt(shiftEndParts[1], 10);
+                    const shiftEndMinute = parseInt(shiftEndParts[2], 10);
+                    
+                    const shiftStartTotalMinutes = (shiftStartHour * 60) + shiftStartMinute;
+                    const shiftEndTotalMinutes = (shiftEndHour * 60) + shiftEndMinute;
+                    const heightMinutes = shiftEndTotalMinutes - shiftStartTotalMinutes;
+                    
+                    const dayIndex = new Date(shift.start_time).getDay(); // Still rely on Date object for day of week
                     const dayColumn = document.getElementById(`day-column-${dayIndex}`);
 
                     if (dayColumn) {
-                        // FIX: Ensure calculation for positioning is based on local time minutes from midnight
-                        const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
-                        const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
-                        const heightMinutes = endMinutes - startMinutes;
-                        
                         const shiftElement = document.createElement('div');
                         shiftElement.className = 'calendar-shift';
-                        shiftElement.style.top = `${startMinutes}px`;
+                        shiftElement.style.top = `${shiftStartTotalMinutes}px`;
                         shiftElement.style.height = `${heightMinutes}px`;
                         
                         const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                        const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
-                        const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
+                        // To display time, we create a temporary Date object at a fixed day
+                        // This allows toLocaleTimeString to format it nicely without timezone shift.
+                        const tempStartDate = new Date();
+                        tempStartDate.setHours(shiftStartHour, shiftStartMinute, 0, 0);
+                        const startTimeString = tempStartDate.toLocaleTimeString('en-US', timeFormatOptions);
+                        
+                        const tempEndDate = new Date();
+                        tempEndDate.setHours(shiftEndHour, shiftEndMinute, 0, 0);
+                        const endTimeString = tempEndDate.toLocaleTimeString('en-US', timeFormatOptions);
 
                         shiftElement.innerHTML = `
                             <strong>${shift.employee_name}</strong><br>
@@ -166,14 +177,6 @@ export function handleSchedulingPage() {
                         shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
                         
                         dayColumn.appendChild(shiftElement);
-
-                        // --- DEBUG LOGS (SCHEDULING: SHIFT RENDERING) ---
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Raw Start: ${shift.start_time}, Raw End: ${shift.end_time}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local Start Hour: ${shiftStart.getHours()}, Minute: ${shiftStart.getMinutes()}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local End Hour: ${shiftEnd.getHours()}, Minute: ${shiftEnd.getMinutes()}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes for TOP: ${startMinutes}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Height Minutes: ${heightMinutes}`);
-                        // --- END DEBUG LOGS ---
                     }
                 });
             }
@@ -386,8 +389,9 @@ export function handleSchedulingPage() {
             const shiftData = {
                 employee_id: document.getElementById('employee-select').value,
                 location_id: document.getElementById('location-select').value,
-                start_time: new Date(rawStartTime).toISOString(), // Convert local input to ISO UTC
-                end_time: new Date(rawEndTime).toISOString(),     // Convert local input to ISO UTC
+                // FIX: Use a custom format for TIMESTAMP WITHOUT TIME ZONE
+                start_time: `${rawStartTime.split('T')[0]} ${rawStartTime.split('T')[1]}:00`,
+                end_time: `${rawEndTime.split('T')[0]} ${rawEndTime.split('T')[1]}:00`,
                 notes: document.getElementById('notes-input').value
             };
 
@@ -396,8 +400,8 @@ export function handleSchedulingPage() {
                 return;
             }
 
-            console.log("Client sending start_time (ISO):", shiftData.start_time);
-            console.log("Client sending end_time (ISO):", shiftData.end_time);
+            console.log("Client sending start_time (formatted for TIMESTAMP):", shiftData.start_time);
+            console.log("Client sending end_time (formatted for TIMESTAMP):", shiftData.end_time);
 
             try {
                 await apiRequest('POST', '/shifts', shiftData);
