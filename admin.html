@@ -87,16 +87,15 @@
         }
         .account-grid {
             display: grid;
-            /* FIX: Always use a single column to stack items as requested */
-            grid-template-columns: 1fr; /* Ensures cards stack vertically on all screen sizes */
+            /* REVERTED: Original flexible column definition */
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 30px;
         }
-        /* REMOVED: Media query that would re-enable columns on larger screens */
-        /* @media (min-width: 900px) { 
+        @media (max-width: 1200px) { /* This media query was already in your Theme.css or original admin.html for responsiveness */
             .account-grid {
-                grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+                grid-template-columns: 1fr; /* Stacks on smaller screens */
             }
-        } */
+        }
         .list-item {
             display: flex;
             justify-content: space-between;
@@ -227,7 +226,7 @@
                     </form>
                 </div>
 
-                <!-- Moved Manage Locations card here -->
+                <!-- Manage Locations card (Original position) -->
                 <div class="card">
                     <h3>Manage Locations</h3>
                     <div id="location-list"></div>
