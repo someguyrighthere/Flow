@@ -112,14 +112,17 @@
             border-radius: 6px;
             margin-bottom: 10px; /* Reduced as gap is handled by column */
         }
+        /* New container for buttons within list-item */
+        .list-item-buttons {
+            display: flex;
+            gap: 10px; /* Space between the edit and delete buttons */
+        }
         .list-item .btn-delete,
         .list-item .btn-edit { /* Apply common styles to both buttons */
             background: none; border: none; color: var(--text-medium);
             cursor: pointer; opacity: 0.5; transition: all 0.3s ease;
         }
-        .list-item .btn-edit {
-            margin-right: 10px; /* Space between edit and delete buttons */
-        }
+        /* Removed margin-right from btn-edit as gap handles spacing now */
         .list-item:hover .btn-delete { opacity: 1; color: #e74c3c; }
         .list-item:hover .btn-edit { opacity: 1; color: var(--primary-accent); } /* Color for edit button on hover */
 
