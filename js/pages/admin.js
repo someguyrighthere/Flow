@@ -13,31 +13,34 @@ export function handleAdminPage() {
     const businessSettingsForm = document.getElementById('business-settings-form');
     const operatingHoursStartInput = document.getElementById('operating-hours-start');
     const operatingHoursEndInput = document.getElementById('operating-hours-end');
-    const operatingHoursStatusMessage = document.getElementById('operating-hours-status-message'); // NEW: Reference to status message element
+    const operatingHoursStatusMessage = document.getElementById('operating-hours-status-message'); // Reference to status message element
     const locationListDiv = document.getElementById('location-list');
     const newLocationForm = document.getElementById('new-location-form');
     const newLocationNameInput = document.getElementById('new-location-name');
     const newLocationAddressInput = document.getElementById('new-location-address');
-    const newLocationStatusMessage = document.getElementById('new-location-status-message'); // NEW: Status message for new location
+    const newLocationStatusMessage = document.getElementById('new-location-status-message'); // Status message for new location
     const userListDiv = document.getElementById('user-list');
     const inviteAdminForm = document.getElementById('invite-admin-form');
     const adminLocationSelect = document.getElementById('admin-location-select');
-    const inviteAdminStatusMessage = document.getElementById('invite-admin-status-message'); // NEW: Status message for invite admin
+    const inviteAdminStatusMessage = document.getElementById('invite-admin-status-message'); // Status message for invite admin
     const inviteEmployeeForm = document.getElementById('invite-employee-form');
     const employeeLocationSelect = document.getElementById('employee-location-select'); 
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
-    const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message'); // NEW: Status message for invite employee
+    const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message'); // Status message for invite employee
+
+    let businessOperatingStartHour = 0; // Will store fetched business start hour for availability inputs
+    let businessOperatingEndHour = 24; // Will store fetched business end hour for availability inputs
 
     // --- Helper function to display local status messages ---
     // This function is now used consistently instead of showModalMessage for internal admin page notifications
     function displayStatusMessage(element, message, isError = false) {
         if (!element) return;
-        element.textContent = message;
+        element.innerHTML = message; // Use innerHTML to support span tags for bold/color
         element.classList.remove('success', 'error'); // Clear previous states
         element.classList.add(isError ? 'error' : 'success');
         // Clear message after a few seconds
         setTimeout(() => {
-            element.textContent = '';
+            element.textContent = ''; // Use textContent to clear, removes inner HTML
             element.classList.remove('success', 'error');
         }, 5000); 
     }
@@ -51,12 +54,19 @@ export function handleAdminPage() {
         if (!businessSettingsForm || !operatingHoursStartInput || !operatingHoursEndInput) return;
         try {
             const settings = await apiRequest('GET', '/settings/business');
-            // FIX: Format time strings from "HH:MM:SS" to "HH:MM" for input type="time"
+            // Format time strings from "HH:MM:SS" to "HH:MM" for input type="time"
             const formattedStartTime = settings.operating_hours_start ? settings.operating_hours_start.substring(0, 5) : '09:00';
             const formattedEndTime = settings.operating_hours_end ? settings.operating_hours_end.substring(0, 5) : '17:00';
 
             operatingHoursStartInput.value = formattedStartTime;
             operatingHoursEndInput.value = formattedEndTime;
+
+            // Store operating hours globally for availability input generation
+            businessOperatingStartHour = parseInt(formattedStartTime.split(':')[0], 10);
+            businessOperatingEndHour = parseInt(formattedEndTime.split(':')[0], 10);
+            
+            // Regenerate availability inputs with updated business hours
+            generateAvailabilityInputs(); 
         } catch (error) {
             displayStatusMessage(operatingHoursStatusMessage, 'Could not load business settings. Using defaults.', true); // Use local status message
             console.error('Error loading business settings:', error);
@@ -81,10 +91,7 @@ export function handleAdminPage() {
                     listItem.innerHTML = `
                         <span><strong>${loc.location_name}</strong> (${loc.location_address})</span>
                         <button class="btn-delete" data-id="${loc.location_id}" data-type="location">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                         </button>
                     `;
                     locationListDiv.appendChild(listItem);
@@ -155,8 +162,7 @@ export function handleAdminPage() {
                         <button class="btn-delete" data-id="${user.user_id}" data-type="user">
                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                                 <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                            </svg>
+                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                         </button>
                     `;
                     userListDiv.appendChild(listItem);
@@ -174,6 +180,7 @@ export function handleAdminPage() {
      * Generates time input fields for employee weekly availability.
      * This creates a grid of select inputs for each day of the week,
      * allowing admins to set start and end availability times for employees.
+     * Options are restricted to business operating hours.
      */
     function generateAvailabilityInputs() {
         if (!employeeAvailabilityGrid) return;
@@ -186,11 +193,11 @@ export function handleAdminPage() {
                 <label for="avail-${dayId}-start">${day}</label>
                 <div class="time-range">
                     <select id="avail-${dayId}-start" data-day="${dayId}" data-type="start">
-                        ${generateTimeOptions()}
+                        ${generateTimeOptions(businessOperatingStartHour, businessOperatingEndHour)}
                     </select>
                     <span>-</span>
                     <select id="avail-${dayId}-end" data-day="${dayId}" data-type="end">
-                        ${generateTimeOptions()}
+                        ${generateTimeOptions(businessOperatingStartHour, businessOperatingEndHour)}
                     </select>
                 </div>
             `;
@@ -204,11 +211,13 @@ export function handleAdminPage() {
     /**
      * Helper function to generate <option> tags for time select inputs (hourly).
      * Provides options from "Not Available" to "23:00".
+     * @param {number} startHour - The starting hour for options (inclusive).
+     * @param {number} endHour - The ending hour for options (exclusive).
      * @returns {string} HTML string of time options.
      */
-    function generateTimeOptions() {
+    function generateTimeOptions(startHour = 0, endHour = 24) { // Default to 0-24 if hours not set
         let options = '<option value="">Not Available</option>'; // Default empty option
-        for (let i = 0; i < 24; i++) {
+        for (let i = startHour; i < endHour; i++) {
             const hour = i < 10 ? '0' + i : '' + i; // Format as HH (e.g., 01, 10)
             options += `<option value="${hour}:00">${hour}:00</option>`;
             // options += `<option value="${hour}:30">${hour}:30</option>`; // Optional: add half-hour slots
@@ -229,7 +238,7 @@ export function handleAdminPage() {
             try {
                 await apiRequest('POST', '/settings/business', settingsData);
                 displayStatusMessage(operatingHoursStatusMessage, 'Business settings saved successfully!', false); // Use local status message
-                loadBusinessSettings(); 
+                loadBusinessSettings(); // Reload settings to ensure inputs reflect saved values
             }
             catch (error) {
                 displayStatusMessage(operatingHoursStatusMessage, `Error saving settings: ${error.message}`, true); // Use local status message
@@ -273,11 +282,11 @@ export function handleAdminPage() {
                 try {
                     await apiRequest('DELETE', `/locations/${locationId}`);
                     // Replaced showModalMessage with displayStatusMessage
-                    displayStatusMessage(locationListDiv.querySelector('p'), 'Location deleted successfully!', false); 
+                    displayStatusMessage(locationListDiv.querySelector('.status-message'), 'Location deleted successfully!', false); 
                     loadLocations(); // Refresh the list of locations
                     populateLocationDropdowns(); // Refresh location dropdowns
                 } catch (error) {
-                    displayStatusMessage(locationListDiv.querySelector('p'), `Error deleting location: ${error.message}`, true);
+                    displayStatusMessage(locationListDiv.querySelector('.status-message'), `Error deleting location: ${error.message}`, true);
                     console.error('Error deleting location:', error);
                 }
             }
@@ -292,16 +301,16 @@ export function handleAdminPage() {
                 const userId = deleteBtn.dataset.id; // Get user ID from data attribute
                 // Client-side check to prevent an admin from deleting their own account
                 if (userId == localStorage.getItem('userId')) { 
-                    displayStatusMessage(userListDiv.querySelector('p'), 'You cannot delete your own account from here.', true); // Use local status message
+                    displayStatusMessage(userListDiv.querySelector('.status-message'), 'You cannot delete your own account from here.', true); // Use local status message
                     return;
                 }
                 // Confirmation pop-up removed, deletion proceeds directly
                 try {
                     await apiRequest('DELETE', `/users/${userId}`);
-                    displayStatusMessage(userListDiv.querySelector('p'), 'User deleted successfully!', false); // Use local status message
+                    displayStatusMessage(userListDiv.querySelector('.status-message'), 'User deleted successfully!', false); // Use local status message
                     loadUsers(); // Refresh the user list
                 } catch (error) {
-                    displayStatusMessage(userListDiv.querySelector('p'), `Error deleting user: ${error.message}`, true); // Use local status message
+                    displayStatusMessage(userListDiv.querySelector('.status-message'), `Error deleting user: ${error.message}`, true); // Use local status message
                     console.error('Error deleting user:', error);
                 }
             }
