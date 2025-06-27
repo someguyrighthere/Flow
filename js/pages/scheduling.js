@@ -135,17 +135,28 @@ export function handleSchedulingPage() {
             
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    // FIX: Parse raw TIMESTAMP WITHOUT TIME ZONE string using a Date object for simpler extraction
-                    // This creates a Date object in the browser's local timezone from the given string.
-                    const shiftStartDateTime = new Date(shift.start_time); 
-                    const shiftEndDateTime = new Date(shift.end_time);     
+                    // FIX: Parse raw TIMESTAMP WITHOUT TIME ZONE string components directly
+                    // Example: "2025-06-23 09:00:00"
+                    const dateTimeParts = shift.start_time.split(' '); // ["2025-06-23", "09:00:00"]
+                    const timeParts = dateTimeParts[1].split(':');     // ["09", "00", "00"]
                     
-                    const shiftStartTotalMinutes = (shiftStartDateTime.getHours() * 60) + shiftStartDateTime.getMinutes();
-                    const shiftEndTotalMinutes = (shiftEndDateTime.getHours() * 60) + shiftEndDateTime.getMinutes();
+                    const shiftStartHour = parseInt(timeParts[0], 10);
+                    const shiftStartMinute = parseInt(timeParts[1], 10);
+
+                    const endDateTimeParts = shift.end_time.split(' ');
+                    const endTimeParts = endDateTimeParts[1].split(':');
+
+                    const shiftEndHour = parseInt(endTimeParts[0], 10);
+                    const shiftEndMinute = parseInt(endTimeParts[1], 10);
+                    
+                    const shiftStartTotalMinutes = (shiftStartHour * 60) + shiftStartMinute;
+                    const shiftEndTotalMinutes = (shiftEndHour * 60) + shiftEndMinute;
                     const heightMinutes = shiftEndTotalMinutes - shiftStartTotalMinutes;
                     
-                    const dayIndex = shiftStartDateTime.getDay(); // Get the day of the week
-                    const dayColumn = document.getElementById(`day-column-${dayIndex}`);
+                    // To get the day index (0-6 for Sun-Sat), create a Date object from the *full* timestamp string.
+                    // JavaScript's Date constructor handles 'YYYY-MM-DD HH:MM:SS' strings gracefully as local time.
+                    const shiftDayOfWeek = new Date(shift.start_time).getDay(); 
+                    const dayColumn = document.getElementById(`day-column-${shiftDayOfWeek}`);
 
                     if (dayColumn) {
                         const shiftElement = document.createElement('div');
@@ -154,8 +165,15 @@ export function handleSchedulingPage() {
                         shiftElement.style.height = `${heightMinutes}px`;
                         
                         const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                        const startTimeString = shiftStartDateTime.toLocaleTimeString('en-US', timeFormatOptions);
-                        const endTimeString = shiftEndDateTime.toLocaleTimeString('en-US', timeFormatOptions);
+                        // To display time, create a temporary Date object at a fixed arbitrary date
+                        // and set its hours/minutes using the parsed components. This avoids real Date obj timezone issues.
+                        const formatTimeForDisplay = (hour, minute) => {
+                            const tempDate = new Date(2000, 0, 1, hour, minute, 0); // Jan 1, 2000 at desired time
+                            return tempDate.toLocaleTimeString('en-US', timeFormatOptions);
+                        };
+
+                        const startTimeString = formatTimeForDisplay(shiftStartHour, shiftStartMinute);
+                        const endTimeString = formatTimeForDisplay(shiftEndHour, shiftEndMinute);
 
                         shiftElement.innerHTML = `
                             <strong>${shift.employee_name}</strong><br>
@@ -171,7 +189,9 @@ export function handleSchedulingPage() {
 
                         // --- DEBUG LOGS (SCHEDULING: SHIFT RENDERING) ---
                         console.log(`[SCHEDULING-DEBUG] Shift Render: Raw Start: ${shift.start_time}, Raw End: ${shift.end_time}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Parsed Start Minutes: ${shiftStartTotalMinutes}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Parsed Start Hour: ${shiftStartHour}, Minute: ${shiftStartMinute}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Parsed End Hour: ${shiftEndHour}, Minute: ${shiftEndMinute}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes for TOP: ${shiftStartTotalMinutes}`);
                         console.log(`[SCHEDULING-DEBUG] Shift Render: Height Minutes: ${heightMinutes}`);
                         // --- END DEBUG LOGS ---
                     }
@@ -248,8 +268,7 @@ export function handleSchedulingPage() {
                     if (dayColumn) {
                         const businessHoursBlock = document.createElement('div');
                         businessHoursBlock.className = 'business-hours-block';
-                        // FIX: Add the visual offset to the top position
-                        businessHoursBlock.style.top = `${businessStartTotalMinutes + VISUAL_OFFSET_MINUTES}px`;
+                        businessHoursBlock.style.top = `${businessStartTotalMinutes + VISUAL_OFFSET_MINUTES}px`; // Add offset
                         businessHoursBlock.style.height = `${durationMinutes}px`;
                         dayColumn.appendChild(businessHoursBlock);
                     }
