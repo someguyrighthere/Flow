@@ -60,8 +60,8 @@
             padding: 20px;
             border-radius: 8px;
             display: flex;
-            flex-direction: column; /* Changed to column to stack header and body */
-            overflow: hidden; /* Important for internal scrolling */
+            flex-direction: column; 
+            overflow: hidden; 
         }
         .calendar-header {
             display: flex;
@@ -72,13 +72,15 @@
             flex-shrink: 0;
         }
         
-        /* --- CALENDAR LAYOUT & ALIGNMENT FIXES --- */
+        /* --- CALENDAR LAYOUT & ALIGNMENT FIXES (REFINED) --- */
         .calendar-grid-container {
             flex-grow: 1; 
             overflow: hidden; 
             display: flex;
             flex-direction: column;
             position: relative; 
+            /* Remove fixed height to let content control scrollable area */
+            /* height: calc(100% - 70px); */ 
         }
 
         .calendar-grid {
@@ -86,7 +88,7 @@
             flex-direction: column;
             width: 100%;
             min-width: 1500px; /* Keep min-width for overall calendar content */
-            height: 100%; /* Fill parent height */
+            height: auto; /* Let content define height for scrolling */
         }
 
         .calendar-grid-header {
@@ -103,10 +105,13 @@
             display: grid;
             grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
             flex-grow: 1;
-            overflow-y: scroll; /* ONLY Y-SCROLL, to keep horizontal fixed */
+            overflow-y: scroll; 
             position: relative; 
             height: 1440px; /* Force 24 hours * 60px/hour = 1440px */
-            min-height: 1440px; /* Ensure it doesn't shrink below this */
+            min-height: 1440px; 
+            box-sizing: content-box; 
+            padding-top: 0; /* Ensure no top padding */
+            margin-top: 0; /* Ensure no top margin */
         }
 
         .calendar-day-header {
@@ -115,6 +120,7 @@
             font-weight: 600;
             color: var(--text-light);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box; 
         }
         .calendar-day-header:last-child {
             border-right: none;
@@ -126,9 +132,12 @@
             z-index: 5;
             background-color: #2a2a2e;
             grid-column: 1;
-            height: 1440px; /* Explicitly set to match total calendar height */
+            height: 1440px; /* Explicitly set to match total calendar body height */
             display: flex;
             flex-direction: column;
+            box-sizing: content-box; 
+            padding-top: 0; /* Ensure no top padding */
+            margin-top: 0; /* Ensure no top margin */
         }
         .time-slot {
             height: 60px; /* Each time slot represents one hour, 60px height */
@@ -150,7 +159,10 @@
             position: relative; /* CRUCIAL for absolute positioning of shifts/blocks */
             border-right: 1px solid rgba(255, 255, 255, 0.1);
             height: 100%; /* Will inherit the 1440px from calendar-body for positioning context */
-            overflow: hidden; /* Prevent content from spilling outside */
+            overflow: hidden; 
+            box-sizing: content-box; 
+            padding-top: 0; /* Ensure no top padding */
+            margin-top: 0; /* Ensure no top margin */
         }
         .day-column:last-child {
             border-right: none;
@@ -158,8 +170,8 @@
 
         .hour-line { /* Visual lines within day columns, one per hour */
             height: 60px; /* Should match time-slot height for alignment */
-            border-bottom: 1px dashed rgba(255, 255, 255, 0.1); /* Dashed lines for clarity */
-            box-sizing: border-box;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1); 
+            box-sizing: content-box; 
         }
         .hour-line:last-child {
             border-bottom: none;
@@ -200,17 +212,17 @@
         .availability-block {
             background-color: rgba(76, 175, 80, 0.2);
             z-index: 1;
-            pointer-events: none; /* Allows clicks to pass through to elements below */
-            border: 1px dashed rgba(76, 175, 80, 0.5); /* Dashed green border */
+            pointer-events: none; 
+            border: 1px dashed rgba(76, 175, 80, 0.5); 
         }
         .availability-block.hidden { display: none; }
 
         .business-hours-block {
-            background-color: rgba(100, 100, 100, 0.1); /* Lighter grey for background */
-            backdrop-filter: blur(1px); /* More subtle blur */
+            background-color: rgba(100, 100, 100, 0.1); 
+            backdrop-filter: blur(1px); 
             -webkit-backdrop-filter: blur(1px);
-            border: 1px solid rgba(255, 255, 255, 0.05); /* Very subtle white border */
-            z-index: 0; /* Behind everything */
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+            z-index: 0; 
             pointer-events: none;
         }
 
