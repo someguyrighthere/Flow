@@ -506,12 +506,13 @@ app.post('/documents', isAuthenticated, upload.single('document'), async (req, r
 });
 
 app.get('/documents', isAuthenticated, async (req, res) => {
-    // Admins can see all documents, regular users only their own
     const userId = req.user.id;
     const userRole = req.user.role;
     let sql = `SELECT document_id, title, description, file_name, file_path, mime_type, size, uploaded_at FROM documents`;
     const params = [];
 
+    // Corrected logic for conditionally adding WHERE clause based on user role
+    // This ensures that the WHERE clause is correctly applied and parameters are handled.
     if (userRole === 'employee') {
         sql += ` WHERE user_id = $1`;
         params.push(userId);
