@@ -1,6 +1,6 @@
 // routes/autoScheduleRoutes.js
 
-// This module will contain the auto-scheduling route logic.
+// This module contains the auto-scheduling route logic.
 // It receives 'app', 'pool', 'isAuthenticated', and 'isAdmin' from server.js
 // to register the route and utilize middleware and database connection.
 
@@ -17,18 +17,18 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
         try {
             await client.query('BEGIN');
 
-            // Clear existing shifts for the target week before auto-generating new ones
-            const currentWeekStart = new Date(weekStartDate); 
+            // --- 1. Pre-processing & Setup ---
+
+            // Clear existing shifts for the target week.
+            const currentWeekStart = new Date(weekStartDate); // This is Date object in client's local timezone
             const nextWeekStart = new Date(currentWeekStart);
             nextWeekStart.setDate(currentWeekStart.getDate() + 7);
             await client.query('DELETE FROM shifts WHERE start_time::date >= $1::date AND start_time::date < $2::date', [currentWeekStart.toISOString().split('T')[0], nextWeekStart.toISOString().split('T')[0]]);
-
 
             // Fetch business operating hours
             const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
             const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
             
-            // Parse business hours into total minutes from midnight (conceptually local)
             const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
             const businessStartMinute = parseInt(settings.operating_hours_start.split(':')[1], 10);
             const businessEndHour = parseInt(settings.operating_hours_end.split(':')[0], 10);
@@ -36,57 +36,53 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
             const businessStartTotalMinutes = businessStartHour * 60 + businessStartMinute;
             const businessEndTotalMinutes = businessEndHour * 60 + businessEndMinute;
-            
-            // --- ULTIMATE DEBUG LOGS (AUTO-SCHEDULE: BUSINESS HOURS) ---
-            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Business Hours (from DB): Raw Start=${settings.operating_hours_start}, Raw End=${settings.operating_hours_end}`);
-            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Business Hours (Parsed Minutes): Start=${businessStartTotalMinutes}, End=${businessEndTotalMinutes}`);
-            // --- END DEBUG LOGS ---
+            const totalBusinessHoursDuration = (businessEndTotalMinutes - businessStartTotalMinutes) / 60; // Duration in hours
+
+            console.log(`[SCHEDULER-REWRITE-DEBUG] Business Hours: ${settings.operating_hours_start} - ${settings.operating_hours_end} (Minutes: ${businessStartTotalMinutes} to ${businessEndTotalMinutes})`);
 
 
-            // Fetch all employees with their availability and type
+            // Fetch all eligible employees
             const { rows: employees } = await client.query(`SELECT user_id, full_name, availability, location_id, employment_type FROM users WHERE role = 'employee' AND availability IS NOT NULL`);
             
-            // Initialize employee data for scheduling, including days worked and scheduled hours
+            // Initialize employee data for scheduling, including weekly tracking
             let employeeScheduleData = employees.map(e => ({
                 ...e,
-                scheduled_hours: 0, // Total hours scheduled for the employee this week
-                daysWorked: 0,      // Total days worked by this employee this week
+                scheduled_hours_this_week: 0, // Total hours for the week
+                days_worked_this_week: 0,     // Total days worked this week
+                shifts_today_ids: new Set(),  // IDs of shifts assigned to this employee today (to enforce one shift/day)
             }));
 
             const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-            let totalShiftsCreated = 0;
+            let totalShiftsCreatedOverall = 0;
 
-            // Define constants for shift lengths and breaks in MINUTES for consistency
-            const FULL_TIME_WORK_DURATION_MINUTES = 8 * 60; // 8 hours
-            const FULL_TIME_BREAK_DURATION_MINUTES = 0.5 * 60; // 30 minutes
-            const FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES = FULL_TIME_WORK_DURATION_MINUTES + FULL_TIME_BREAK_DURATION_MINUTES; // 8.5 hours in minutes
-            const PART_TIME_WORK_DURATION_MINUTES = 4 * 60; // 4 hours
-            const PART_TIME_SHIFT_LENGTH_MINUTES = PART_TIME_WORK_DURATION_MINUTES; // Part-time doesn't have a specific break added
-
-            // Define the smallest scheduling interval (e.g., 15 minutes)
-            const SCHEDULING_INTERVAL_MINUTES = 15;
-
-            // Rule: Part-time max hours
-            const PART_TIME_MAX_HOURS_PER_WEEK = 20;
+            // Shift constants in minutes
+            const FT_WORK_MINUTES = 8 * 60;
+            const FT_BREAK_MINUTES = 0.5 * 60;
+            const FT_SHIFT_TOTAL_MINUTES = FT_WORK_MINUTES + FT_BREAK_MINUTES;
+            const PT_WORK_MINUTES = 4 * 60;
+            const PT_SHIFT_TOTAL_MINUTES = PT_WORK_MINUTES; // PT assumed no integrated break
+            const SCHEDULING_RESOLUTION_MINUTES = 15; // 15-minute intervals
 
 
-            // Iterate through each day of the week (Sunday to Saturday)
+            // --- 2. Main Scheduling Loop: Iterate Day by Day ---
             for (let i = 0; i < 7; i++) {
                 const currentDayDate = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + i); 
-                currentDayDate.setHours(0,0,0,0); // Explicitly set to local midnight for consistency.
+                currentDayDate.setHours(0,0,0,0); // Local midnight for consistency.
 
                 const dayName = daysOfWeek[currentDayDate.getDay()]; 
-                let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); 
-                let remainingDailyTargetMinutes = remainingDailyTargetHours * 60; // Convert target hours to minutes
+                const dailyManHoursTarget = parseFloat(dailyHours[dayName] || 0); 
+                let currentDayManMinutesScheduled = 0; // Track man-minutes added for today to hit target
+
+                console.log(`\n--- [SCHEDULER-REWRITE-DEBUG] Processing Day: ${dayName} (${currentDayDate.toLocaleDateString()}) ---`);
+                console.log(`[SCHEDULER-REWRITE-DEBUG] Daily Man-Hours Target: ${dailyManHoursTarget}`);
+
+                // Daily coverage grid: Tracks how many shifts are covering each 15-min slot
+                const dailySlotCoverage = Array(Math.ceil(totalBusinessHoursDuration * 60 / SCHEDULING_RESOLUTION_MINUTES)).fill(0); 
                 
-                // Track employees already assigned a shift for *this specific day*
-                const employeesScheduledTodayIds = new Set(); 
+                // Reset employees' daily shift tracking for the new day
+                employeeScheduleData.forEach(emp => emp.shifts_today_ids.clear());
 
-                // Daily coverage slots: Now counts required coverage (for overlapping coverage rule).
-                const totalBusinessMinutesDuration = businessEndTotalMinutes - businessStartTotalMinutes;
-                const dailyCoverageSlots = Array(Math.ceil(totalBusinessMinutesDuration / SCHEDULING_INTERVAL_MINUTES)).fill(0); 
-
-                // Mark existing shifts (from manual entries or prior auto-runs in the transaction) as covered.
+                // --- 2.1. Mark existing shifts (manual or previous runs) in dailySlotCoverage ---
                 const existingShiftsRes = await client.query(`
                     SELECT start_time::text as start_time, end_time::text as end_time FROM shifts
                     WHERE start_time::date = $1::date;
@@ -94,174 +90,169 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                 existingShiftsRes.rows.forEach(shift => {
                     const shiftTimeRegex = /(\d{2}):(\d{2}):(\d{2})$/;
-                    const shiftStartMatch = shift.start_time.match(shiftTimeRegex);
-                    const shiftEndMatch = shift.end_time.match(shiftTimeRegex);
-
-                    if (!shiftStartMatch || !shiftEndMatch) {
-                        console.error(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] ERROR: Could not parse existing shift time: Start=${shift.start_time}, End=${shift.end_time}`);
+                    const startMatch = shift.start_time.match(shiftTimeRegex);
+                    const endMatch = shift.end_time.match(shiftTimeRegex);
+                    if (!startMatch || !endMatch) {
+                        console.error(`[SCHEDULER-REWRITE-DEBUG] ERROR: Could not parse existing shift time: Start=${shift.start_time}, End=${shift.end_time}`);
                         return; 
                     }
+                    const startMin = parseInt(startMatch[1], 10) * 60 + parseInt(startMatch[2], 10); 
+                    const endMin = parseInt(endMatch[1], 10) * 60 + parseInt(endMatch[2], 10);     
                     
-                    const shiftStartTotalMinutes = parseInt(shiftStartMatch[1], 10) * 60 + parseInt(shiftStartMatch[2], 10); 
-                    const shiftEndTotalMinutes = parseInt(shiftEndMatch[1], 10) * 60 + parseInt(shiftEndMatch[2], 10);     
-                    
-                    for (let m = shiftStartTotalMinutes; m < shiftEndTotalMinutes; m += SCHEDULING_INTERVAL_MINUTES) {
-                        const coverageIndex = Math.floor((m - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES);
-                        if (coverageIndex >= 0 && coverageIndex < dailyCoverageSlots.length) {
-                            dailyCoverageSlots[coverageIndex]++; // Increment count
+                    for (let m = startMin; m < endMin; m += SCHEDULING_RESOLUTION_MINUTES) {
+                        const slotIndex = Math.floor((m - businessStartTotalMinutes) / SCHEDULING_RESOLUTION_MINUTES);
+                        if (slotIndex >= 0 && slotIndex < dailySlotCoverage.length) {
+                            dailySlotCoverage[slotIndex]++; 
                         }
                     }
                 });
-
-                // --- ULTIMATE DEBUG LOGS (AUTO-SCHEDULE: DAILY STATUS) ---
-                console.log(`\n--- [AUTO-SCHEDULE-ULTIMATE-DEBUG] Processing Day: ${dayName} (Local Date: ${currentDayDate.toLocaleDateString()}) ---`);
-                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Initial Remaining Daily Target Minutes: ${remainingDailyTargetMinutes}`);
-                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Daily Coverage Slots (count of shifts per 15-min interval):`);
-                console.log(dailyCoverageSlots); 
-                // --- END DEBUG LOGS ---
+                console.log(`[SCHEDULER-REWRITE-DEBUG] Daily Slot Coverage after existing shifts: ${dailySlotCoverage}`);
 
 
-                // Iterate through 15-minute intervals within business hours
-                // The loop now goes through all defined business minutes to ensure full coverage.
-                for (let currentMinute = businessStartTotalMinutes; currentMinute < businessEndTotalMinutes; currentMinute += SCHEDULING_INTERVAL_MINUTES) {
-                    const coverageIndex = Math.floor((currentMinute - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES); 
+                // --- 2.2. Iterate through each 15-minute slot in business hours ---
+                for (let currentSlotMinute = businessStartTotalMinutes; currentSlotMinute < businessEndTotalMinutes; currentSlotMinute += SCHEDULING_RESOLUTION_MINUTES) {
+                    const slotIndex = Math.floor((currentSlotMinute - businessStartTotalMinutes) / SCHEDULING_RESOLUTION_MINUTES);
+                    let employeeScheduledThisSlot = null;
 
-                    // Define employee to schedule for this slot
-                    let employeeScheduled = null; // Reset for each minute slot
+                    console.log(`[SCHEDULER-REWRITE-DEBUG] Checking Slot: ${currentSlotMinute} mins. Current Coverage: ${dailySlotCoverage[slotIndex]}. Man-Minutes Today: ${currentDayManMinutesScheduled}`);
 
-                    // PRIORITY 1: Fill UNCOVERED slots with FT first, then PT.
-                    if (dailyCoverageSlots[coverageIndex] === 0) {
-                        console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Slot ${currentMinute}: UNCOVERED. Prioritizing primary coverage.`);
-
-                        // Try to find an eligible FT employee for primary coverage
-                        const eligibleFTEmployeesForCoverage = employeeScheduleData.filter(emp => {
-                            // Hard constraints:
-                            if (emp.daysWorked >= 5) return false; 
-                            if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
+                    // Rule: Full Operating Hours Coverage (MAIN PRIORITY)
+                    // If the slot is currently UNCOVERED, we MUST try to fill it.
+                    if (dailySlotCoverage[slotIndex] === 0) {
+                        console.log(`[SCHEDULER-REWRITE-DEBUG]   SLOT UNCOVERED. Attempting to find primary coverage.`);
+                        
+                        // Try FT first for primary coverage
+                        let eligibleFTEmployees = employeeScheduleData.filter(emp => {
+                            // Hard Limits for basic eligibility:
+                            if (emp.days_worked_this_week >= 5) return false; 
+                            if (emp.shifts_today_ids.has(currentDayDate.getTime())) return false; // Already scheduled today
                             const dayAvail = emp.availability && emp.availability[dayName];
-                            if (!dayAvail) return false;
+                            if (!dayAvail) return false; // Not available today
+
+                            const availStart = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
+                            const availEnd = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
+                            const requiredShiftEnd = currentSlotMinute + FT_SHIFT_TOTAL_MINUTES;
+
+                            // Must fit within availability and business hours
+                            const fitsTime = availStart <= currentSlotMinute && 
+                                             availEnd >= requiredShiftEnd &&
+                                             currentSlotMinute >= businessStartTotalMinutes && 
+                                             requiredShiftEnd <= businessEndTotalMinutes; 
                             
-                            const availStartTotalMinutes = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
-                            const availEndTotalMinutes = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
+                            // SOFT LIMIT: Only schedule FT if they won't exceed 40 hours AND the slot is currently uncovered.
+                            // If they are at 40 hours, they are not preferred for *initial* coverage if others exist.
+                            // This part is for *primary* coverage, so we don't disqualify them if they are at 40 hours yet.
+                            // We will disqualify them later if no one else is found and they are truly over limits.
 
-                            const requiredShiftEndTotalMinutes = currentMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES;
+                            console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Primary Elig Check for ${emp.full_name}: FitsTime=${fitsTime}. WeeklyHours=${emp.scheduled_hours_this_week}`);
+                            return fitsTime;
+                        }).sort((a, b) => a.scheduled_hours_this_week - b.scheduled_hours_this_week); 
 
-                            const isEligible = availStartTotalMinutes <= currentMinute && 
-                                               availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
-                                               currentMinute >= businessStartTotalMinutes && 
-                                               requiredShiftEndTotalMinutes <= businessEndTotalMinutes; 
-                            return isEligible;
-                        }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Least scheduled FT first
-
-                        if (eligibleFTEmployeesForCoverage.length > 0) {
-                            employeeScheduled = eligibleFTEmployeesForCoverage[0];
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Employee ${employeeScheduled.full_name} selected for PRIMARY coverage of UNCOVERED slot.`);
+                        if (eligibleFTEmployees.length > 0) {
+                            employeeScheduledThisSlot = eligibleFTEmployees[0];
                         } else {
-                            // If no FT found for primary coverage, try PT employee for primary coverage
-                            const eligiblePTEmployeesForCoverage = employeeScheduleData.filter(emp => {
-                                // Hard constraints:
+                            // If no FT for primary coverage, try PT
+                            let eligiblePTEmployees = employeeScheduleData.filter(emp => {
+                                // Hard limits for basic eligibility
                                 if (emp.employment_type !== 'Part-time') return false; 
-                                if (emp.daysWorked >= 5) return false; 
-                                if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
+                                if (emp.days_worked_this_week >= 5) return false; 
+                                if (emp.shifts_today_ids.has(currentDayDate.getTime())) return false; 
                                 const dayAvail = emp.availability && emp.availability[dayName];
                                 if (!dayAvail) return false;
-                                const availStartTotalMinutes = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
-                                const availEndTotalMinutes = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
-                                const requiredShiftEndTotalMinutes = currentMinute + PART_TIME_SHIFT_LENGTH_MINUTES; 
-                                const isEligible = availStartTotalMinutes <= currentMinute && 
-                                                   availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
-                                                   currentMinute >= businessStartTotalMinutes && 
-                                                   requiredShiftEndTotalMinutes <= businessEndTotalMinutes;
-                                return isEligible;
-                            }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
+                                
+                                const availStart = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
+                                const availEnd = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
+                                const requiredShiftEnd = currentSlotMinute + PT_SHIFT_TOTAL_MINUTES;
 
-                            if (eligiblePTEmployeesForCoverage.length > 0) {
-                                employeeScheduled = eligiblePTEmployeesForCoverage[0]; 
-                                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Employee ${employeeScheduled.full_name} selected for PRIMARY coverage of UNCOVERED slot.`);
+                                const fitsTime = availStart <= currentSlotMinute && 
+                                                 availEnd >= requiredShiftEnd &&
+                                                 currentSlotMinute >= businessStartTotalMinutes && 
+                                                 requiredShiftEnd <= businessEndTotalMinutes;
+                                console.log(`[SCHEDULER-REWRITE-DEBUG]     PT Primary Elig Check for ${emp.full_name}: FitsTime=${fitsTime}. WeeklyHours=${emp.scheduled_hours_this_week}`);
+                                return fitsTime;
+                            }).sort((a, b) => a.scheduled_hours_this_week - b.scheduled_hours_this_week); 
+
+                            if (eligiblePTEmployees.length > 0) {
+                                employeeScheduledThisSlot = eligiblePTEmployees[0]; 
                             }
                         }
 
-                        if (!employeeScheduled) {
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: UNCOVERED, but NO ELIGIBLE employee found to cover this slot.`);
+                        if (!employeeScheduledThisSlot) {
+                            console.log(`[SCHEDULER-REWRITE-DEBUG]   Slot ${currentSlotMinute}: UNCOVERED, but NO ELIGIBLE employee found for PRIMARY coverage.`);
                         }
                     } 
-                    // PRIORITY 2: If slot is already covered AND we still need man-hours, try to add OVERLAP.
-                    else if (dailyCoverageSlots[coverageIndex] > 0 && remainingDailyTargetMinutes > 0) {
-                        console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Slot ${currentMinute}: Covered, but remaining daily target (${remainingDailyTargetMinutes}) > 0. Attempting to add OVERLAP.`);
+                    // Rule: Add OVERLAP if slot is already covered AND we still need man-hours.
+                    else if (dailySlotCoverage[slotIndex] > 0 && currentDayManMinutesScheduled < dailyManHoursTarget * 60) {
+                         console.log(`[SCHEDULER-REWRITE-DEBUG] Slot ${currentSlotMinute}: COVERED, but man-minutes target not met. Attempting to add OVERLAP.`);
 
-                        // Try to find a Full-time employee for overlap
-                        const eligibleFTEmployeesForOverlap = employeeScheduleData.filter(emp => {
-                            // Hard constraints:
-                            if (emp.daysWorked >= 5) return false; 
-                            if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
-                            const dayAvail = emp.availability && emp.availability[dayName];
-                            if (!dayAvail) return false;
-                            const availStartTotalMinutes = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
-                            const availEndTotalMinutes = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
-                            const requiredShiftEndTotalMinutes = currentMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES;
-                            const isEligible = availStartTotalMinutes <= currentMinute && 
-                                               availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
-                                               currentMinute >= businessStartTotalMinutes && 
-                                               requiredShiftEndTotalMinutes <= businessEndTotalMinutes; 
-                            
-                            // SOFT CONSTRAINT for overlap: Only add if they are not already at their weekly max.
-                            if (emp.scheduled_hours >= 40) {
-                                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Overlap Check for ${emp.full_name} (${emp.user_id}): Exceeds 40 hours. Skipping for overlap.`);
+                        // Try FT for overlap (only if not at max weekly)
+                        let eligibleFTEmployeesForOverlap = employeeScheduleData.filter(emp => {
+                            if (emp.days_worked_this_week >= 5) return false; 
+                            if (emp.shifts_today_ids.has(currentDayDate.getTime())) return false; 
+                            if (emp.scheduled_hours_this_week >= 40) { // Disqualify if already at max hours
+                                console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Overlap Check for ${emp.full_name}: Exceeds 40 hours. Skipping.`);
                                 return false; 
                             }
-                            return isEligible;
-                        }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
+                            const dayAvail = emp.availability && emp.availability[dayName];
+                            if (!dayAvail) return false;
+                            const availStart = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
+                            const availEnd = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
+                            const requiredShiftEnd = currentSlotMinute + FT_SHIFT_TOTAL_MINUTES;
+                            const fitsTime = availStart <= currentSlotMinute && 
+                                             availEnd >= requiredShiftEnd &&
+                                             currentSlotMinute >= businessStartTotalMinutes && 
+                                             requiredShiftEnd <= businessEndTotalMinutes; 
+                            console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Overlap Elig Check for ${emp.full_name}: FitsTime=${fitsTime}`);
+                            return fitsTime;
+                        }).sort((a, b) => a.scheduled_hours_this_week - b.scheduled_hours_this_week); 
 
                         if (eligibleFTEmployeesForOverlap.length > 0) {
-                            employeeScheduled = eligibleFTEmployeesForOverlap[0];
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Employee ${employeeScheduled.full_name} selected for OVERLAP.`);
+                            employeeScheduledThisSlot = eligibleFTEmployeesForOverlap[0];
                         } else {
-                            // If no FT, try to find a Part-time employee for overlap
-                            const eligiblePTEmployeesForOverlap = employeeScheduleData.filter(emp => {
-                                // Hard constraints:
+                            // If no FT for overlap, try PT for overlap
+                            let eligiblePTEmployeesForOverlap = employeeScheduleData.filter(emp => {
                                 if (emp.employment_type !== 'Part-time') return false; 
-                                if (emp.daysWorked >= 5) return false; 
-                                if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
-                                const dayAvail = emp.availability && emp.availability[dayName];
-                                if (!dayAvail) return false;
-                                const availStartTotalMinutes = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
-                                const availEndTotalMinutes = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
-                                const requiredShiftEndTotalMinutes = currentMinute + PART_TIME_SHIFT_LENGTH_MINUTES; 
-                                const isEligible = availStartTotalMinutes <= currentMinute && 
-                                                   availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
-                                                   currentMinute >= businessStartTotalMinutes && 
-                                                   requiredShiftEndTotalMinutes <= businessEndTotalMinutes;
-                                
-                                // SOFT CONSTRAINT for overlap: Only add if they are not already at their weekly max.
-                                if (emp.scheduled_hours >= PART_TIME_MAX_HOURS_PER_WEEK) {
-                                    console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Overlap Check for ${emp.full_name} (${emp.user_id}): Exceeds ${PART_TIME_MAX_HOURS_PER_WEEK} hours. Skipping for overlap.`);
+                                if (emp.days_worked_this_week >= 5) return false; 
+                                if (emp.shifts_today_ids.has(currentDayDate.getTime())) return false; 
+                                if (emp.scheduled_hours_this_week >= PART_TIME_MAX_HOURS_PER_WEEK) { // Disqualify if already at max hours
+                                    console.log(`[SCHEDULER-REWRITE-DEBUG]     PT Overlap Check for ${emp.full_name}: Exceeds ${PART_TIME_MAX_HOURS_PER_WEEK} hours. Skipping.`);
                                     return false; 
                                 }
+                                const dayAvail = emp.availability && emp.availability[dayName];
+                                if (!dayAvail) return false;
+                                const availStart = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
+                                const availEnd = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
+                                const requiredShiftEnd = currentSlotMinute + PT_SHIFT_TOTAL_MINUTES; 
+                                const isEligible = availStart <= currentSlotMinute && 
+                                                   availEnd >= requiredShiftEnd &&
+                                                   currentSlotMinute >= businessStartTotalMinutes && 
+                                                   requiredShiftEnd <= businessEndTotalMinutes;
+                                console.log(`[SCHEDULER-REWRITE-DEBUG]     PT Overlap Elig Check for ${emp.full_name}: FitsTime=${fitsTime}`);
                                 return isEligible;
-                            }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
+                            }).sort((a, b) => a.scheduled_hours_this_week - b.scheduled_hours_this_week); 
 
                             if (eligiblePTEmployeesForOverlap.length > 0) {
-                                employeeScheduled = eligiblePTEmployeesForOverlap[0]; 
-                                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Employee ${employeeScheduled.full_name} selected for OVERLAP.`);
+                                employeeScheduledThisSlot = eligiblePTEmployeesForOverlap[0]; 
                             }
                         }
 
-                        if (!employeeScheduled) {
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: Need OVERLAP, but NO ELIGIBLE employee found.`);
+                        if (!employeeScheduledThisSlot) {
+                            console.log(`[SCHEDULER-REWRITE-DEBUG]   Slot ${currentSlotMinute}: Need OVERLAP, but NO ELIGIBLE employee found.`);
                         }
                     } else {
-                        // Slot is covered and remainingDailyTargetMinutes <= 0, so no need to schedule.
-                        console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: Covered and daily target met. Skipping scheduling for this slot.`);
+                        // Slot is covered and daily man-hours target is met, no need to schedule.
+                        // This handles the "remainingDailyTargetMinutes <= 0" case
+                        console.log(`[SCHEDULER-REWRITE-DEBUG] Slot ${currentSlotMinute}: Covered and daily target met. Skipping scheduling for this slot.`);
                     }
 
 
-                    if (employeeScheduled) {
+                    if (employeeScheduledThisSlot) {
                         // Schedule the chosen employee
-                        const shiftDurationForUpdate = (employeeScheduled.employment_type === 'Full-time') ? FULL_TIME_WORK_DURATION_MINUTES : PART_TIME_WORK_DURATION_MINUTES;
-                        const shiftLengthForCoverage = (employeeScheduled.employment_type === 'Full-time') ? FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES : PART_TIME_SHIFT_LENGTH_MINUTES;
+                        const shiftDurationForUpdate = (employeeScheduledThisSlot.employment_type === 'Full-time') ? FT_WORK_MINUTES : PT_WORK_MINUTES;
+                        const shiftLengthForCoverage = (employeeScheduledThisSlot.employment_type === 'Full-time') ? FT_SHIFT_TOTAL_MINUTES : PT_SHIFT_TOTAL_MINUTES;
                         
-                        const shiftStartDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor(currentMinute / 60), currentMinute % 60, 0); 
-                        const shiftEndDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor((currentMinute + shiftLengthForCoverage) / 60), (currentMinute + shiftLengthForCoverage) % 60, 0); 
+                        const shiftStartDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor(currentSlotMinute / 60), currentSlotMinute % 60, 0); 
+                        const shiftEndDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor((currentSlotMinute + shiftLengthForCoverage) / 60), (currentSlotMinute + shiftLengthForCoverage) % 60, 0); 
                         
                         const formatDateTime = (dateObj) => {
                             const year = dateObj.getFullYear();
@@ -278,30 +269,32 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                         await client.query(
                             'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                            [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeStr, shiftEndTimeStr, `Auto-generated ${employeeScheduled.employment_type} for ${employeeScheduled.full_name}.`]
+                            [employeeScheduledThisSlot.user_id, employeeScheduledThisSlot.location_id, shiftStartTimeStr, shiftEndTimeStr, `Auto-generated ${employeeScheduledThisSlot.employment_type} for ${employeeScheduledThisSlot.full_name}.`]
                         );
                         
-                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduled.user_id);
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduledThisSlot.user_id);
                         if (globalEmpIndex !== -1) {
-                            employeeScheduleData[globalEmpIndex].scheduled_hours += (shiftDurationForUpdate / 60); 
-                            employeeScheduleData[globalEmpIndex].daysWorked++; 
+                            employeeScheduleData[globalEmpIndex].scheduled_hours_this_week += (shiftDurationForUpdate / 60); 
+                            employeeScheduleData[globalEmpIndex].days_worked_this_week++; 
+                            employeeScheduleData[globalEmpIndex].shifts_today_ids.add(currentDayDate.getTime()); // Mark as worked today
                         }
-                        employeesScheduledTodayIds.add(employeeScheduled.user_id); 
-                        remainingDailyTargetMinutes -= shiftDurationForUpdate; 
-                        totalShiftsCreated++;
                         
-                        for (let m = currentMinute; m < currentMinute + shiftLengthForCoverage; m += SCHEDULING_INTERVAL_MINUTES) { 
-                            const idx = Math.floor((m - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES);
-                            if (idx >= 0 && idx < dailyCoverageSlots.length) dailyCoverageSlots[idx]++; 
+                        currentDayManMinutesScheduled += shiftDurationForUpdate; // Track actual man-minutes covered for target
+                        totalShiftsCreatedOverall++;
+                        
+                        // Mark covered slots by incrementing count
+                        for (let m = currentSlotMinute; m < currentSlotMinute + shiftLengthForCoverage; m += SCHEDULING_RESOLUTION_MINUTES) { 
+                            const idx = Math.floor((m - businessStartTotalMinutes) / SCHEDULING_RESOLUTION_MINUTES);
+                            if (idx >= 0 && idx < dailySlotCoverage.length) dailySlotCoverage[idx]++; 
                         }
-                        console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Shift CREATED for ${employeeScheduled.full_name} (${employeeScheduled.user_id}, Type: ${employeeScheduled.employment_type}) on ${dayName}. Local Start: ${shiftStartTimeStr}. Local End: ${shiftEndTimeStr}. Remaining Daily Target: ${remainingDailyTargetMinutes}. Daily Coverage: ${JSON.stringify(dailyCoverageSlots.slice(coverageIndex, coverageIndex + (shiftLengthForCoverage / SCHEDULING_INTERVAL_MINUTES)))}`);
+                        console.log(`[SCHEDULER-REWRITE-DEBUG] Shift CREATED for ${employeeScheduledThisSlot.full_name} (${employeeScheduledThisSlot.user_id}, Type: ${employeeScheduledThisSlot.employment_type}) on ${dayName}. Local Start: ${shiftStartTimeStr}. Local End: ${shiftEndTimeStr}. Man-Minutes Today: ${currentDayManMinutesScheduled}. Daily Coverage: ${JSON.stringify(dailySlotCoverage.slice(slotIndex, slotIndex + (shiftLengthForCoverage / SCHEDULING_RESOLUTION_MINUTES)))}`);
                         // No continue needed here, the loop will naturally increment to the next minute interval.
                     }
                 }
             }
 
             await client.query('COMMIT'); 
-            res.status(201).json({ message: `Successfully auto-generated ${totalShiftsCreated} shifts.` });
+            res.status(201).json({ message: `Successfully auto-generated ${totalShiftsCreatedOverall} shifts.` });
 
         } catch (error) {
             await client.query('ROLLBACK'); 
