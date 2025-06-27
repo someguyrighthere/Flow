@@ -202,9 +202,12 @@
         }
         .availability-block.hidden { display: none; }
 
-        /* --- Business Hours Background Block --- */
+        /* --- Business Hours Background Block (Glass Effect) --- */
         .business-hours-block {
             background-color: rgba(100, 100, 100, 0.5); /* Changed opacity to 0.5 (50%) */
+            backdrop-filter: blur(3px); /* Add blur for glass effect */
+            -webkit-backdrop-filter: blur(3px); /* Safari support */
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle white border */
             position: absolute;
             width: 100%;
             z-index: 0; /* Place behind availability and shifts */
