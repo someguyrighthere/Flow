@@ -132,14 +132,16 @@ export function handleSchedulingPage() {
             
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    const shiftStart = new Date(shift.start_time); // This is in browser's local timezone
-                    const shiftEnd = new Date(shift.end_time);     // This is in browser's local timezone
+                    // FIX: Parse raw TIMESTAMP WITHOUT TIME ZONE string into a Date object
+                    // This creates a Date object in the browser's local timezone.
+                    const shiftStart = new Date(shift.start_time); 
+                    const shiftEnd = new Date(shift.end_time);     
                     
                     const dayIndex = shiftStart.getDay();
                     const dayColumn = document.getElementById(`day-column-${dayIndex}`);
 
                     if (dayColumn) {
-                        // Ensure calculation for positioning is based on local time minutes from midnight
+                        // FIX: Ensure calculation for positioning is based on local time minutes from midnight
                         const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
                         const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
                         const heightMinutes = endMinutes - startMinutes;
