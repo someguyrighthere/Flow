@@ -10,6 +10,72 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
+        /* Re-including modal styles here for self-containment, though ideally
+           these would be in a shared CSS file like style.css */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            display: flex; /* Use flexbox for centering content */
+            align-items: center; /* Center vertically */
+            justify-content: center; /* Center horizontally */
+        }
+
+        .modal-content {
+            background-color: var(--card-bg); /* Use your theme's background color */
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%; /* Responsive width */
+            max-width: 500px; /* Maximum width for larger screens */
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; /* Needed for close button positioning */
+            color: var(--text-light); /* Text color */
+            animation: fadeIn 0.3s ease-out; /* Simple fade-in animation */
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .close-button { /* Still used by confirmation modal 'X' in some contexts if needed */
+            color: var(--text-medium);
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: var(--text-light);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* Keyframe animation for modal fade-in */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
         /* Original admin.html specific styles */
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
         .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
@@ -21,9 +87,16 @@
         }
         .account-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            /* FIX: Always use a single column to stack items as requested */
+            grid-template-columns: 1fr; /* Ensures cards stack vertically on all screen sizes */
             gap: 30px;
         }
+        /* REMOVED: Media query that would re-enable columns on larger screens */
+        /* @media (min-width: 900px) { 
+            .account-grid {
+                grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            }
+        } */
         .list-item {
             display: flex;
             justify-content: space-between;
@@ -91,7 +164,6 @@
         .availability-day select {
             flex-grow: 1;
         }
-
         /* Styles for the status messages (e.g., operating hours confirmation) */
         .status-message {
             text-align: center;
@@ -155,6 +227,7 @@
                     </form>
                 </div>
 
+                <!-- Moved Manage Locations card here -->
                 <div class="card">
                     <h3>Manage Locations</h3>
                     <div id="location-list"></div>
@@ -168,6 +241,8 @@
                             <label for="new-location-address">Location Address</label>
                             <input type="text" id="new-location-address" placeholder="e.g., 123 Main St, Anytown, USA" required>
                         </div>
+                        <!-- Status message for new location -->
+                        <p id="new-location-status-message" class="status-message"></p>
                         <button type="submit" class="btn btn-primary">Create Location</button>
                     </form>
                 </div>
@@ -188,6 +263,8 @@
                             <label for="admin-location-select">Assign to Location</label>
                             <select id="admin-location-select" required></select>
                         </div>
+                        <!-- Status message for invite admin -->
+                        <p id="invite-admin-status-message" class="status-message"></p>
                         <button type="submit" class="btn btn-primary">Send Invite</button>
                     </form>
 
@@ -226,6 +303,8 @@
                             <select id="employee-location-select" required>
                             </select>
                         </div>
+                        <!-- Status message for invite employee -->
+                        <p id="invite-employee-status-message" class="status-message"></p>
                         <button type="submit" class="btn btn-primary">Send Invite</button>
                     </form>
                 </div>
@@ -233,8 +312,7 @@
         </div>
     </div>
     
-    <!-- IMPORTANT: The message/confirmation modals were removed from here
-         as per user request to eliminate them from the admin page. -->
+    <!-- Modals (removed from here to eliminate the pop-up) -->
     
     <script type="module" src="js/app.js"></script>
 </body>
