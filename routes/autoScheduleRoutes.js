@@ -13,7 +13,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
         const FULL_TIME_BREAK_DURATION_MINUTES = 0.5 * 60; // 30 minutes
         const FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES = FULL_TIME_WORK_DURATION_MINUTES + FULL_TIME_BREAK_DURATION_MINUTES; // 8.5 hours in minutes
         const PART_TIME_WORK_DURATION_MINUTES = 4 * 60; // 4 hours
-        const PART_TIME_SHIFT_LENGTH_MINUTES = PART_TIME_WORK_DURATION_MINUTES; // Part-time assumed no integrated break
+        const PART_TIME_SHIFT_LENGTH_MINUTES = 4 * 60; // 4  hours
 
         const SCHEDULING_RESOLUTION_MINUTES = 15; // 15-minute intervals
         const PART_TIME_MAX_HOURS_PER_WEEK = 20; // Rule: Part-time max hours
