@@ -122,18 +122,20 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
 
                 // Iterate through 15-minute intervals within business hours
-                // The loop now goes through all defined business minutes.
+                // FIX: Removed `remainingDailyTargetMinutes <= 0` break condition.
+                // The loop now goes through all defined business minutes to ensure full coverage.
                 for (let currentMinute = businessStartTotalMinutes; currentMinute < businessEndTotalMinutes; currentMinute += SCHEDULING_INTERVAL_MINUTES) {
                     const coverageIndex = Math.floor((currentMinute - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES); 
 
-                    // Rule: Overlapping coverage IS ALLOWED. So we DON'T skip if dailyCoverageSlots[coverageIndex] > 0.
-                    // Instead, we only try to schedule IF:
-                    // 1. The slot is UNCOVERED (count is 0), OR
-                    // 2. We still need to meet the remainingDailyTargetMinutes (i.e., we need MORE than 1 person per slot).
+                    // Rule: Overlapping coverage IS ALLOWED.
+                    // We try to schedule if the slot is currently uncovered OR if we still need more man-hours for the day.
                     const isSlotUncovered = dailyCoverageSlots[coverageIndex] === 0;
 
                     let shouldAttemptSchedule = isSlotUncovered || (remainingDailyTargetMinutes > 0);
 
+                    // --- ULTIMATE DEBUG LOGS: Attempting to schedule at currentMinute ---
+                    console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Attempting to schedule at Minute: ${currentMinute}. Current Coverage: ${dailyCoverageSlots[coverageIndex] || 0}. Remaining Daily Target: ${remainingDailyTargetMinutes}. Should Attempt: ${shouldAttemptSchedule}`);
+                    // --- END DEBUG LOGS ---
 
                     if (shouldAttemptSchedule) {
                         // --- Attempt to schedule a Full-time employee ---
@@ -212,7 +214,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                                 if (idx >= 0 && idx < dailyCoverageSlots.length) dailyCoverageSlots[idx]++; 
                             }
                             console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] FT Shift CREATED for ${employeeScheduled.full_name} (${employeeScheduled.user_id}) on ${dayName}. Local Start: ${shiftStartTimeStr}. Local End: ${shiftEndTimeStr}. Remaining Daily Target: ${remainingDailyTargetMinutes}. Daily Coverage: ${JSON.stringify(dailyCoverageSlots.slice(coverageIndex, coverageIndex + (FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES / SCHEDULING_INTERVAL_MINUTES)))}`);
-                            continue; 
+                            continue; // Move to next minute interval
                         }
 
                         // --- If no FT was scheduled, try to schedule a Part-time employee ---
@@ -284,7 +286,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             continue; 
                         }
                     }
-                    console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: No eligible FT/PT employee found and/or daily target met.`);
+                    // This log is outside the `if (shouldAttemptSchedule)` block, so it fires always if no one scheduled.
+                    console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: No eligible FT/PT employee found.`);
                 }
             }
 
