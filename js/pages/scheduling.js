@@ -25,7 +25,7 @@ export function handleSchedulingPage() {
     // Initialize currentStartDate to the beginning of the current week (Sunday)
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
-    currentStartDate.setHours(0, 0, 0, 0);
+    currentStartDate.setHours(0, 0, 0, 0); // Ensure it's local midnight for consistency
 
     /**
      * Dynamically creates input fields for setting target daily hours for each day of the week.
@@ -132,20 +132,14 @@ export function handleSchedulingPage() {
             
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    const shiftStart = new Date(shift.start_time);
-                    const shiftEnd = new Date(shift.end_time);
+                    const shiftStart = new Date(shift.start_time); // This is in browser's local timezone
+                    const shiftEnd = new Date(shift.end_time);     // This is in browser's local timezone
                     
                     const dayIndex = shiftStart.getDay();
                     const dayColumn = document.getElementById(`day-column-${dayIndex}`);
 
                     if (dayColumn) {
-                        // --- DEBUG LOGS: Shift Rendering ---
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Raw Start: ${shift.start_time}, Raw End: ${shift.end_time}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local Start Hour: ${shiftStart.getHours()}, Minute: ${shiftStart.getMinutes()}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local End Hour: ${shiftEnd.getHours()}, Minute: ${shiftEnd.getMinutes()}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes: ${shiftStart.getHours() * 60 + shiftStart.getMinutes()}, End Minutes: ${shiftEnd.getHours() * 60 + shiftEnd.getMinutes()}`);
-                        // --- END DEBUG LOGS ---
-
+                        // Ensure calculation for positioning is based on local time minutes from midnight
                         const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
                         const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
                         const heightMinutes = endMinutes - startMinutes;
@@ -170,6 +164,14 @@ export function handleSchedulingPage() {
                         shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
                         
                         dayColumn.appendChild(shiftElement);
+
+                        // --- DEBUG LOGS (SCHEDULING: SHIFT RENDERING) ---
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Raw Start: ${shift.start_time}, Raw End: ${shift.end_time}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local Start Hour: ${shiftStart.getHours()}, Minute: ${shiftStart.getMinutes()}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Local End Hour: ${shiftEnd.getHours()}, Minute: ${shiftEnd.getMinutes()}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes for TOP: ${startMinutes}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Height Minutes: ${heightMinutes}`);
+                        // --- END DEBUG LOGS ---
                     }
                 });
             }
@@ -229,17 +231,21 @@ export function handleSchedulingPage() {
         try {
             const settings = await apiRequest('GET', '/settings/business');
             // Ensure settings.operating_hours_start is not null before parsing
-            const businessStartMinute = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10) * 60 + parseInt((settings.operating_hours_start || '00:00').split(':')[1], 10);
-            const businessEndMinute = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10) * 60 + parseInt((settings.operating_hours_end || '00:00').split(':')[1], 10);
-            const durationMinutes = businessEndMinute - businessStartMinute;
+            const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
+            const businessStartMinute = parseInt((settings.operating_hours_start || '00:00').split(':')[1], 10);
+            const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
+            const businessEndMinute = parseInt((settings.operating_hours_end || '00:00').split(':')[1], 10);
 
-            // --- DEBUG LOG: Verify fetched and parsed business hours in scheduling.js ---
-            console.log(`[SCHEDULING-DEBUG] Fetched Business Start Time (Raw): ${settings.operating_hours_start}`);
-            console.log(`[SCHEDULING-DEBUG] Fetched Business End Time (Raw): ${settings.operating_hours_end}`);
-            console.log(`[SCHEDULING-DEBUG] Parsed Business Start Minutes for Rendering: ${businessStartMinute}`);
-            console.log(`[SCHEDULING-DEBUG] Parsed Business End Minutes for Rendering: ${businessEndMinute}`);
-            console.log(`[SCHEDULING-DEBUG] Duration Minutes for Rendering: ${durationMinutes}`);
-            // --- END DEBUG LOG ---
+            // FIX: Calculate total minutes for rendering based on fetched business hours
+            const businessStartTotalMinutes = businessStartHour * 60 + businessStartMinute;
+            const businessEndTotalMinutes = businessEndHour * 60 + businessEndMinute;
+            const durationMinutes = businessEndTotalMinutes - businessStartTotalMinutes;
+
+            // --- DEBUG LOGS (SCHEDULING: BUSINESS HOURS RENDERING) ---
+            console.log(`[SCHEDULING-DEBUG] Business Hours Rendering: Raw Start=${settings.operating_hours_start}, Raw End=${settings.operating_hours_end}`);
+            console.log(`[SCHEDULING-DEBUG] Business Hours Rendering: Parsed Start Minutes=${businessStartTotalMinutes}, Parsed End Minutes=${businessEndTotalMinutes}`);
+            console.log(`[SCHEDULING-DEBUG] Business Hours Rendering: Duration Minutes=${durationMinutes}`);
+            // --- END DEBUG LOGS ---
 
 
             if (durationMinutes > 0) {
@@ -248,7 +254,8 @@ export function handleSchedulingPage() {
                     if (dayColumn) {
                         const businessHoursBlock = document.createElement('div');
                         businessHoursBlock.className = 'business-hours-block';
-                        businessHoursBlock.style.top = `${businessStartMinute}px`;
+                        // FIX: Use calculated total minutes for top and height for precise rendering
+                        businessHoursBlock.style.top = `${businessStartTotalMinutes}px`;
                         businessHoursBlock.style.height = `${durationMinutes}px`;
                         dayColumn.appendChild(businessHoursBlock);
                     }
@@ -333,7 +340,7 @@ export function handleSchedulingPage() {
             if (confirmed) {
                 try {
                     const response = await apiRequest('POST', '/shifts/auto-generate', { 
-                        weekStartDate: currentStartDate.toISOString(),
+                        weekStartDate: currentStartDate.toISOString(), // Send as ISO string
                         dailyHours: dailyHours
                     });
                     showModalMessage(response.message || 'Schedule generation complete!', false);
@@ -377,8 +384,8 @@ export function handleSchedulingPage() {
             const shiftData = {
                 employee_id: document.getElementById('employee-select').value,
                 location_id: document.getElementById('location-select').value,
-                start_time: new Date(rawStartTime).toISOString(),
-                end_time: new Date(rawEndTime).toISOString(),
+                start_time: new Date(rawStartTime).toISOString(), // Convert local input to ISO UTC
+                end_time: new Date(rawEndTime).toISOString(),     // Convert local input to ISO UTC
                 notes: document.getElementById('notes-input').value
             };
 
