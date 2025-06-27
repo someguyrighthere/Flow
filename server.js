@@ -6,12 +6,12 @@ const { Pool } = require('pg');
 const cors =require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const multer = require('multer'); // Keep multer as it might be used by core features, or remove if not.
-const fs = require('fs'); // Keep fs as it might be used by core features, or remove if not.
+const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
 
 // Import new modular routes
-const autoScheduleRoutes = require('./routes/autoScheduleRoutes'); // RE-ADDED: Import auto-scheduling routes
+const autoScheduleRoutes = require('./routes/autoScheduleRoutes');
 
 // --- 2. Initialize Express App ---
 const app = express();
@@ -32,7 +32,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Keep if general file serving is needed
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 
@@ -62,7 +62,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// User, Auth, and Account Routes (These should always exist for login/profile management)
+// User, Auth, and Account Routes
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
@@ -224,7 +224,6 @@ app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(
 // Scheduling Routes
 app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        // Only fetch employees with availability for scheduling purposes
         const result = await pool.query("SELECT user_id, full_name, availability FROM users WHERE role = 'employee' AND availability IS NOT NULL");
         res.json(result.rows);
     } catch (err) {
@@ -235,6 +234,8 @@ app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
 app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ error: 'Start date and end date are required.' });
+    // FIX: Removed AT TIME ZONE from here. PostgreSQL will return TIMESTAMPTZ in UTC.
+    // Frontend will interpret it as local time.
     const sql = `
         SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
         FROM shifts s
@@ -261,6 +262,10 @@ app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     console.log("Server received end_time:", end_time);
 
     try {
+        // FIX: Remove AT TIME ZONE from INSERT. Rely on Node.js Date.toISOString() to send UTC.
+        // The previous attempt added AT TIME ZONE which could convert it multiple times or based on server timezone.
+        // TIMESTAMPTZ always stores UTC. Node.js Date.toISOString() converts local time to UTC automatically.
+        // We ensure Node.js is creating Dates in intended local time in autoScheduleRoutes.js.
         await pool.query(
             'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
             [employee_id, location_id, start_time, end_time, notes]
@@ -288,279 +293,6 @@ app.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
 
 // RE-ADDED: Use the modular autoScheduleRoutes
 autoScheduleRoutes(app, pool, isAuthenticated, isAdmin);
-
-
-// Job Posting and Applicant Routes (Hiring Module)
-app.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
-    const { title, description, requirements, location_id } = req.body;
-    if (!title || !description) {
-        return res.status(400).json({ error: 'Job title and description are required.' });
-    }
-    try {
-        const result = await pool.query(
-            `INSERT INTO job_postings (title, description, requirements, location_id) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [title, description, requirements || null, location_id || null]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error creating job posting:', err);
-        res.status(500).json({ error: 'Failed to create job posting.' });
-    }
-});
-
-app.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT
-                jp.id,
-                jp.title,
-                jp.description,
-                jp.requirements,
-                jp.location_id,
-                l.location_name,
-                COUNT(a.id) AS applicant_count
-            FROM job_postings jp
-            LEFT JOIN locations l ON jp.location_id = l.location_id
-            LEFT JOIN applicants a ON jp.id = a.job_id
-            GROUP BY jp.id, jp.title, jp.description, jp.requirements, jp.location_id, l.location_name
-            ORDER BY jp.created_at DESC;
-        `);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error fetching job postings:', err);
-        res.status(500).json({ error: 'Failed to retrieve job postings.' });
-    }
-});
-
-app.get('/job-postings/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query(`
-            SELECT
-                jp.id,
-                jp.title,
-                jp.description,
-                jp.requirements,
-                l.location_name
-            FROM job_postings jp
-            LEFT JOIN locations l ON jp.location_id = l.location_id
-            WHERE jp.id = $1;
-        `, [id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Job posting not found.' });
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error fetching single job posting:', err);
-        res.status(500).json({ error: 'Failed to retrieve job posting details.' });
-    }
-});
-
-
-app.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query(`DELETE FROM job_postings WHERE id = $1`, [id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Job posting not found.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting job posting:', err);
-        res.status(500).json({ error: 'Failed to delete job posting.' });
-    }
-});
-
-app.post('/apply/:jobId', async (req, res) => {
-    const { jobId } = req.params;
-    const { name, email, phone, address, date_of_birth, availability, is_authorized } = req.body;
-
-    if (!jobId || !name || !email) {
-        return res.status(400).json({ error: 'Job ID, name, and email are required.' });
-    }
-
-    try {
-        // FIX: Changed job_posting_id to job_id in INSERT statement
-        await pool.query(
-            `INSERT INTO applicants (job_id, name, email, phone, address, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [jobId, name, email, phone || null, address || null, date_of_birth || null, availability || null, is_authorized || false]
-        );
-        res.status(201).json({ message: 'Application submitted successfully!' });
-    } catch (err) {
-        console.error('Error submitting application:', err);
-        res.status(500).json({ error: 'Failed to submit application.' });
-    }
-});
-
-app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
-    const { jobId, status, locationId } = req.query;
-    let sql = `
-        SELECT
-            a.id,
-            a.name,
-            a.email,
-            a.phone,
-            a.address,
-            a.date_of_birth,
-            a.availability,
-            a.is_authorized,
-            a.status,
-            jp.title AS job_title,
-            l.location_name
-        FROM applicants a
-        JOIN job_postings jp ON a.job_id = jp.id
-        LEFT JOIN locations l ON jp.location_id = l.location_id
-        WHERE 1=1
-    `;
-    const params = [];
-    let paramIndex = 1;
-
-    if (jobId) {
-        sql += ` AND a.job_id = $${paramIndex++}`;
-        params.push(jobId);
-    }
-    if (status) {
-        sql += ` AND a.status = $${paramIndex++}`;
-        params.push(status);
-    }
-    if (locationId) {
-        sql += ` AND jp.location_id = $${paramIndex++}`;
-        params.push(locationId);
-    }
-
-    sql += ` ORDER BY a.applied_at DESC;`;
-
-    try {
-        const result = await pool.query(sql, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error fetching applicants:', err);
-        res.status(500).json({ error: 'Failed to retrieve applicants.' });
-    }
-});
-
-app.get('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query(`
-            SELECT
-                a.id,
-                a.name,
-                a.email,
-                a.phone,
-                a.address,
-                a.date_of_birth,
-                a.availability,
-                a.is_authorized,
-                a.status,
-                jp.title AS job_title,
-                l.location_name
-            FROM applicants a
-            JOIN job_postings jp ON a.job_id = jp.id
-            LEFT JOIN locations l ON jp.location_id = l.location_id
-            WHERE a.id = $1;
-        `, [id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Applicant not found.' });
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error fetching single applicant:', err);
-        res.status(500).json({ error: 'Failed to retrieve applicant details.' });
-    }
-});
-
-app.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query(`DELETE FROM applicants WHERE id = $1`, [id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Applicant not found.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting applicant:', err);
-        res.status(500).json({ error: 'Failed to delete applicant.' });
-    }
-});
-
-
-// Documents Routes
-const upload = multer({ dest: 'uploads/' }); // Files will be stored in an 'uploads' directory
-
-app.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body;
-    const { originalname, filename, path: filepath, mimetype, size } = req.file;
-    const userId = req.user.id;
-
-    if (!title || !req.file) {
-        return res.status(400).json({ error: 'Title and document file are required.' });
-    }
-
-    try {
-        const result = await pool.query(
-            `INSERT INTO documents (user_id, title, description, file_name, file_path, mime_type, size) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [userId, title, description || null, originalname, filepath, mimetype, size]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error uploading document:', err);
-        res.status(500).json({ error: 'Failed to upload document.' });
-        // Clean up the uploaded file if database insert fails
-        fs.unlink(filepath, (unlinkErr) => {
-            if (unlinkErr) console.error('Error deleting uploaded file:', unlinkErr);
-        });
-    }
-});
-
-app.get('/documents', isAuthenticated, async (req, res) => {
-    const userId = req.user.id;
-    const userRole = req.user.role;
-    let sql = `SELECT document_id, title, description, file_name, file_path, mime_type, size, uploaded_at FROM documents`;
-    const params = [];
-
-    // Corrected logic for conditionally adding WHERE clause based on user role
-    // This ensures that the WHERE clause is correctly applied and parameters are handled.
-    if (userRole === 'employee') {
-        sql += ` WHERE user_id = $1`;
-        params.push(userId);
-    }
-    sql += ` ORDER BY uploaded_at DESC;`;
-
-    try {
-        const result = await pool.query(sql, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error fetching documents:', err);
-        res.status(500).json({ error: 'Failed to retrieve documents.' });
-    }
-});
-
-app.delete('/documents/:id', isAuthenticated, async (req, res) => {
-    const { id } = req.params;
-    const userId = req.user.id;
-    const userRole = req.user.role;
-
-    try {
-        const docQuery = await pool.query('SELECT user_id, file_path FROM documents WHERE document_id = $1', [id]);
-        const document = docQuery.rows[0];
-
-        if (!document) {
-            return res.status(404).json({ error: 'Document not found.' });
-        }
-
-        // Security: Only the owner or an admin can delete a document
-        if (document.user_id != userId && userRole !== 'super_admin' && userRole !== 'location_admin') {
-            return res.status(403).json({ error: 'Access denied. You can only delete your own documents.' });
-        }
-
-        // Delete from database
-        const deleteResult = await pool.query(`DELETE FROM documents WHERE document_id = $1`, [id]);
-        
-        // Delete the actual file from the server
-        fs.unlink(document.file_path, (err) => {
-            if (err) console.error('Error deleting uploaded file:', err);
-        });
-
-        if (deleteResult.rowCount === 0) return res.status(404).json({ error: 'Document not found in DB after check.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting document:', err);
-        res.status(500).json({ error: 'Failed to delete document.' });
-    }
-});
 
 
 // --- 7. Server Startup Logic ---
@@ -593,8 +325,9 @@ const startServer = async () => {
                 id SERIAL PRIMARY KEY,
                 employee_id INT NOT NULL,
                 location_id INT NOT NULL,
-                start_time TIMESTAMPTZ NOT NULL,
-                end_time TIMESTAMPTZ NOT NULL,
+                -- FIX: Change to TIMESTAMP WITHOUT TIME ZONE to store raw time, no timezone interpretation.
+                start_time TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+                end_time TIMESTAMP WITHOUT TIME ZONE NOT NULL,
                 notes TEXT,
                 FOREIGN KEY (employee_id) REFERENCES users(user_id) ON DELETE CASCADE,
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE CASCADE
@@ -604,7 +337,28 @@ const startServer = async () => {
                 operating_hours_start TIME,
                 operating_hours_end TIME
             );
-            -- Schema for job_postings and applicants tables
+            CREATE TABLE IF NOT EXISTS checklists (
+                id SERIAL PRIMARY KEY,
+                position VARCHAR(255) NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                tasks JSONB NOT NULL,
+                structure_type VARCHAR(50) NOT NULL DEFAULT 'single_list',
+                time_group_count INT
+            );
+            CREATE TABLE IF NOT EXISTS onboarding_tasks (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                checklist_id INT,
+                description TEXT NOT NULL,
+                completed BOOLEAN DEFAULT FALSE,
+                document_id INT,
+                document_name VARCHAR(255),
+                task_order INT,
+                group_index INT,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE SET NULL,
+                FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE SET NULL
+            );
             CREATE TABLE IF NOT EXISTS job_postings (
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
@@ -628,8 +382,6 @@ const startServer = async () => {
                 applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE
             );
-            -- Other tables (checklists, onboarding_tasks, documents) schema still need to be added
-            -- for their respective functionalities to work if they are desired in the future.
             CREATE TABLE IF NOT EXISTS documents (
                 document_id SERIAL PRIMARY KEY,
                 user_id INT NOT NULL,
@@ -641,28 +393,6 @@ const startServer = async () => {
                 size BIGINT,
                 uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS checklists (
-                id SERIAL PRIMARY KEY,
-                position VARCHAR(255) NOT NULL,
-                title VARCHAR(255) NOT NULL,
-                tasks JSONB NOT NULL,
-                structure_type VARCHAR(50) NOT NULL DEFAULT 'single_list',
-                time_group_count INT
-            );
-            CREATE TABLE IF NOT EXISTS onboarding_tasks (
-                id SERIAL PRIMARY KEY,
-                user_id INT NOT NULL,
-                checklist_id INT,
-                description TEXT NOT NULL,
-                completed BOOLEAN DEFAULT FALSE,
-                document_id INT,
-                document_name VARCHAR(255),
-                task_order INT,
-                group_index INT,
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE SET NULL,
-                FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE SET NULL
             );
         `;
         
