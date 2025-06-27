@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Import new modular routes
-// const autoScheduleRoutes = require('./routes/autoScheduleRoutes'); // Reverted: Removed auto-scheduling route import
+const autoScheduleRoutes = require('./routes/autoScheduleRoutes');
 
 // --- 2. Initialize Express App ---
 const app = express();
@@ -290,35 +290,275 @@ app.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
 // autoScheduleRoutes(app, pool, isAuthenticated, isAdmin);
 
 
-// Reverted: Removed onboarding dashboard routes to restore previous stability
-// app.get('/positions', ...);
-// app.post('/onboard-employee', ...);
-// app.get('/onboarding-sessions', ...);
-// app.get('/onboarding-tasks/:userId', ...);
-// app.put('/onboarding-tasks/:taskId/complete', ...);
+// Job Posting and Applicant Routes (Hiring Module)
+app.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, description, requirements, location_id } = req.body;
+    if (!title || !description) {
+        return res.status(400).json({ error: 'Job title and description are required.' });
+    }
+    try {
+        const result = await pool.query(
+            `INSERT INTO job_postings (title, description, requirements, location_id) VALUES ($1, $2, $3, $4) RETURNING *`,
+            [title, description, requirements || null, location_id || null]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating job posting:', err);
+        res.status(500).json({ error: 'Failed to create job posting.' });
+    }
+});
+
+app.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                jp.id,
+                jp.title,
+                jp.description,
+                jp.requirements,
+                jp.location_id,
+                l.location_name,
+                COUNT(a.id) AS applicant_count
+            FROM job_postings jp
+            LEFT JOIN locations l ON jp.location_id = l.location_id
+            LEFT JOIN applicants a ON jp.id = a.job_posting_id
+            GROUP BY jp.id, jp.title, jp.description, jp.requirements, jp.location_id, l.location_name
+            ORDER BY jp.created_at DESC;
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching job postings:', err);
+        res.status(500).json({ error: 'Failed to retrieve job postings.' });
+    }
+});
+
+app.get('/job-postings/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`
+            SELECT
+                jp.id,
+                jp.title,
+                jp.description,
+                jp.requirements,
+                l.location_name
+            FROM job_postings jp
+            LEFT JOIN locations l ON jp.location_id = l.location_id
+            WHERE jp.id = $1;
+        `, [id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Job posting not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error fetching single job posting:', err);
+        res.status(500).json({ error: 'Failed to retrieve job posting details.' });
+    }
+});
 
 
-// Reverted: Removed Checklist Routes to restore previous stability
-// app.get('/checklists', ...);
-// app.post('/checklists', ...);
-// app.delete('/checklists/:id', ...);
+app.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`DELETE FROM job_postings WHERE id = $1`, [id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Job posting not found.' });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting job posting:', err);
+        res.status(500).json({ error: 'Failed to delete job posting.' });
+    }
+});
+
+app.post('/apply/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+    const { name, email, phone, address, date_of_birth, availability, is_authorized } = req.body;
+
+    if (!jobId || !name || !email) {
+        return res.status(400).json({ error: 'Job ID, name, and email are required.' });
+    }
+
+    try {
+        await pool.query(
+            `INSERT INTO applicants (job_posting_id, name, email, phone, address, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [jobId, name, email, phone || null, address || null, date_of_birth || null, availability || null, is_authorized || false]
+        );
+        res.status(201).json({ message: 'Application submitted successfully!' });
+    } catch (err) {
+        console.error('Error submitting application:', err);
+        res.status(500).json({ error: 'Failed to submit application.' });
+    }
+});
+
+app.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
+    const { jobId, status, locationId } = req.query;
+    let sql = `
+        SELECT
+            a.id,
+            a.name,
+            a.email,
+            a.phone,
+            a.address,
+            a.date_of_birth,
+            a.availability,
+            a.is_authorized,
+            a.status,
+            jp.title AS job_title,
+            l.location_name
+        FROM applicants a
+        JOIN job_postings jp ON a.job_posting_id = jp.id
+        LEFT JOIN locations l ON jp.location_id = l.location_id
+        WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (jobId) {
+        sql += ` AND a.job_posting_id = $${paramIndex++}`;
+        params.push(jobId);
+    }
+    if (status) {
+        sql += ` AND a.status = $${paramIndex++}`;
+        params.push(status);
+    }
+    if (locationId) {
+        sql += ` AND jp.location_id = $${paramIndex++}`;
+        params.push(locationId);
+    }
+
+    sql += ` ORDER BY a.applied_at DESC;`;
+
+    try {
+        const result = await pool.query(sql, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching applicants:', err);
+        res.status(500).json({ error: 'Failed to retrieve applicants.' });
+    }
+});
+
+app.get('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`
+            SELECT
+                a.id,
+                a.name,
+                a.email,
+                a.phone,
+                a.address,
+                a.date_of_birth,
+                a.availability,
+                a.is_authorized,
+                a.status,
+                jp.title AS job_title,
+                l.location_name
+            FROM applicants a
+            JOIN job_postings jp ON a.job_posting_id = jp.id
+            LEFT JOIN locations l ON jp.location_id = l.location_id
+            WHERE a.id = $1;
+        `, [id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Applicant not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error fetching single applicant:', err);
+        res.status(500).json({ error: 'Failed to retrieve applicant details.' });
+    }
+});
+
+app.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`DELETE FROM applicants WHERE id = $1`, [id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Applicant not found.' });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting applicant:', err);
+        res.status(500).json({ error: 'Failed to delete applicant.' });
+    }
+});
 
 
-// Reverted: Removed Job Posting and Applicant Routes (Hiring Module) to restore previous stability
-// app.post('/job-postings', ...);
-// app.get('/job-postings', ...);
-// app.get('/job-postings/:id', ...);
-// app.delete('/job-postings/:id', ...);
-// app.post('/apply/:jobId', ...);
-// app.get('/applicants', ...);
-// app.get('/applicants/:id', ...);
-// app.delete('/applicants/:id', ...);
+// Documents Routes
+const upload = multer({ dest: 'uploads/' }); // Files will be stored in an 'uploads' directory
 
+app.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
+    const { title, description } = req.body;
+    const { originalname, filename, path: filepath, mimetype, size } = req.file;
+    const userId = req.user.id;
 
-// Reverted: Removed Documents Routes to restore previous stability
-// app.post('/documents', ...);
-// app.get('/documents', ...);
-// app.delete('/documents/:id', ...);
+    if (!title || !req.file) {
+        return res.status(400).json({ error: 'Title and document file are required.' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO documents (user_id, title, description, file_name, file_path, mime_type, size) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [userId, title, description || null, originalname, filepath, mimetype, size]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error uploading document:', err);
+        res.status(500).json({ error: 'Failed to upload document.' });
+        // Clean up the uploaded file if database insert fails
+        fs.unlink(filepath, (unlinkErr) => {
+            if (unlinkErr) console.error('Error deleting uploaded file:', unlinkErr);
+        });
+    }
+});
+
+app.get('/documents', isAuthenticated, async (req, res) => {
+    // Admins can see all documents, regular users only their own
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    let sql = `SELECT document_id, title, description, file_name, file_path, mime_type, size, uploaded_at FROM documents`;
+    const params = [];
+
+    if (userRole === 'employee') {
+        sql += ` WHERE user_id = $1`;
+        params.push(userId);
+    }
+    sql += ` ORDER BY uploaded_at DESC;`;
+
+    try {
+        const result = await pool.query(sql, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching documents:', err);
+        res.status(500).json({ error: 'Failed to retrieve documents.' });
+    }
+});
+
+app.delete('/documents/:id', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    try {
+        const docQuery = await pool.query('SELECT user_id, file_path FROM documents WHERE document_id = $1', [id]);
+        const document = docQuery.rows[0];
+
+        if (!document) {
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+
+        // Security: Only the owner or an admin can delete a document
+        if (document.user_id != userId && userRole !== 'super_admin' && userRole !== 'location_admin') {
+            return res.status(403).json({ error: 'Access denied. You can only delete your own documents.' });
+        }
+
+        // Delete from database
+        const deleteResult = await pool.query(`DELETE FROM documents WHERE document_id = $1`, [id]);
+        
+        // Delete the actual file from the server
+        fs.unlink(document.file_path, (err) => {
+            if (err) console.error('Error deleting uploaded file:', err);
+        });
+
+        if (deleteResult.rowCount === 0) return res.status(404).json({ error: 'Document not found in DB after check.' });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting document:', err);
+        res.status(500).json({ error: 'Failed to delete document.' });
+    }
+});
 
 
 // --- 7. Server Startup Logic ---
@@ -328,11 +568,6 @@ const startServer = async () => {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
         
-        // IMPORTANT: The schema definition below assumes all tables existed
-        // in a prior version. If you are reverting to a state where certain
-        // tables (like checklists, onboarding_tasks, job_postings, applicants, documents)
-        // did not exist, you might need to adjust this schema creation or
-        // ensure your database is in a consistent state.
         const schemaQueries = `
             CREATE TABLE IF NOT EXISTS locations (
                 location_id SERIAL PRIMARY KEY,
@@ -367,12 +602,9 @@ const startServer = async () => {
                 operating_hours_start TIME,
                 operating_hours_end TIME
             );
-            -- Reverted: Removed schema for checklists, onboarding_tasks, job_postings, applicants, documents
-            -- CREATE TABLE IF NOT EXISTS checklists (...);
-            -- CREATE TABLE IF NOT EXISTS onboarding_tasks (...);
-            -- CREATE TABLE IF NOT EXISTS job_postings (...);
-            -- CREATE TABLE IF NOT EXISTS applicants (...);
-            -- CREATE TABLE IF NOT EXISTS documents (...);
+            -- Note: Other tables (checklists, onboarding_tasks, job_postings, applicants, documents)
+            -- are expected to be created/managed by your full application's deployment
+            -- or directly in your database. This schema focuses on core features.
         `;
         
         await client.query(schemaQueries);
