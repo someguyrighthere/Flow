@@ -58,9 +58,11 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 const dayName = daysOfWeek[currentDate.getDay()]; 
                 let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); 
                 
+                // FIX: Declare employeesScheduledTodayIds here so it's reset for each day and in correct scope
+                const employeesScheduledTodayIds = new Set(); 
+
                 // Create a temporary daily state for employees to track who has been scheduled for *this specific day*
-                // This copy is crucial because we will remove employees from it once they are scheduled for the current day.
-                let currentDayEmployeesPool = employeeScheduleData.map(emp => ({ ...emp, scheduledForCurrentDay: false })); 
+                let currentDayEmployeesPool = JSON.parse(JSON.stringify(employeeScheduleData)); 
 
                 // Create a coverage array for the current day, representing each hour within business hours.
                 const dailyCoverage = Array(businessEndHour - businessStartHour).fill(false); 
@@ -94,15 +96,15 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                          break;
                     }
 
-                    let employeeScheduledThisHour = null; // Will hold the employee scheduled for this hour slot
+                    let employeeScheduledInCurrentSlot = null; // Will hold the employee scheduled for this hour slot
 
                     // --- Attempt to schedule a Full-time employee first ---
-                    const eligibleFTEmployees = currentDayEmployeesPool.filter(emp => { // Filter from currentDayEmployeesPool
+                    const eligibleFTEmployees = currentDayEmployeesPool.filter(emp => { 
                         // Global weekly limits
                         if (emp.daysWorked >= 5) return false; 
                         if (emp.scheduled_hours >= 40) return false; 
                         // Per-day limit (one shift per employee per day)
-                        if (emp.scheduledForCurrentDay) return false; // Skip if already assigned a shift today
+                        if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
 
                         const dayAvail = emp.availability && emp.availability[dayName];
                         if (!dayAvail) return false;
@@ -124,7 +126,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize FTs with fewer hours scheduled
 
                     if (eligibleFTEmployees.length > 0) {
-                        employeeScheduledThisHour = eligibleFTEmployees[0]; 
+                        employeeScheduledInCurrentSlot = eligibleFTEmployees[0]; 
                         
                         // Construct Date objects representing the intended local time, then convert to ISO UTC for TIMESTAMPTZ
                         // Use currentDate's year/month/day with currentHour for local time construction on server.
@@ -136,18 +138,16 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                         await client.query(
                             'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                            [employeeScheduledThisHour.user_id, employeeScheduledThisHour.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated FT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                            [employeeScheduledInCurrentSlot.user_id, employeeScheduledInCurrentSlot.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated FT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
                         );
                         
                         // Update the global employeeScheduleData for persistent tracking across days
-                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduledThisHour.user_id);
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduledInCurrentSlot.user_id);
                         if (globalEmpIndex !== -1) {
                             employeeScheduleData[globalEmpIndex].scheduled_hours += FULL_TIME_WORK_DURATION; 
                             employeeScheduleData[globalEmpIndex].daysWorked++; 
                         }
-                        // Mark employee as scheduled for THIS day in the temporary pool
-                        employeeScheduledThisHour.scheduledForCurrentDay = true; 
-                        
+                        employeesScheduledTodayIds.add(employeeScheduledInCurrentSlot.user_id); // Mark employee as scheduled for this day
                         remainingDailyTargetHours -= FULL_TIME_WORK_DURATION; 
                         totalShiftsCreated++;
                         
@@ -156,16 +156,14 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const idx = h - businessStartHour;
                             if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
                         }
-                        // NEW: Remove this employee from currentDayEmployeesPool so they are not scheduled again today
-                        currentDayEmployeesPool = currentDayEmployeesPool.filter(emp => emp.user_id !== employeeScheduledThisHour.user_id);
                         continue; 
                     }
 
                     // --- If no FT was scheduled, try to schedule a Part-time employee ---
-                    const eligiblePTEmployees = currentDayEmployeesPool.filter(emp => { // Filter from currentDayEmployeesPool
+                    const eligiblePTEmployees = currentDayEmployeesPool.filter(emp => { 
                         if (emp.employment_type !== 'Part-time') return false; 
                         if (emp.daysWorked >= 5) return false; 
-                        if (emp.scheduledForCurrentDay) return false; // Exclude if already assigned a shift today
+                        if (employeesScheduledTodayIds.has(emp.user_id)) return false; // Exclude if already assigned a shift today
 
                         const dayAvail = emp.availability && emp.availability[dayName];
                         if (!dayAvail) return false;
@@ -181,7 +179,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
 
                     if (eligiblePTEmployees.length > 0) {
-                        employeeScheduledThisHour = eligiblePTEmployees[0]; 
+                        const employeeScheduled = eligiblePTEmployees[0]; 
                         
                         // Construct Date objects representing the intended local time, then convert to ISO UTC for TIMESTAMPTZ
                         // Use currentDate's year/month/day with currentHour for local time construction on server.
@@ -193,16 +191,16 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                         await client.query(
                             'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                            [employeeScheduledThisHour.user_id, employeeScheduledThisHour.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated PT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                            [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated PT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
                         );
                         
                         // Update the global employeeScheduleData
-                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduledThisHour.user_id);
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduled.user_id);
                         if (globalEmpIndex !== -1) {
                             employeeScheduleData[globalEmpIndex].scheduled_hours += PART_TIME_SHIFT_LENGTH;
                             employeeScheduleData[globalEmpIndex].daysWorked++;
                         }
-                        employeesScheduledTodayIds.add(employeeScheduledThisHour.user_id); // Mark employee as scheduled for this day
+                        employeesScheduledTodayIds.add(employeeScheduled.user_id); // Mark employee as scheduled for this day
                         remainingDailyTargetHours -= PART_TIME_SHIFT_LENGTH;
                         totalShiftsCreated++;
                         
@@ -211,8 +209,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const idx = h - businessStartHour;
                             if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
                         }
-                        // NEW: Remove this employee from currentDayEmployeesPool so they are not scheduled again today
-                        currentDayEmployeesPool = currentDayEmployeesPool.filter(emp => emp.user_id !== employeeAssignedThisHour.user_id);
+                        continue; 
                     }
                 }
             }
