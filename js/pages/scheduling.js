@@ -28,7 +28,8 @@ export function handleSchedulingPage() {
     currentStartDate.setHours(0, 0, 0, 0); // Ensure it's local midnight for consistency
 
     // Define the constant offset for visual alignment (30 minutes = 30 pixels)
-    const VISUAL_OFFSET_MINUTES = 30; // Matches the half-hour misalignment
+    // This value was determined by visual inspection and remains for now.
+    const VISUAL_OFFSET_MINUTES = 30; 
 
     /**
      * Dynamically creates input fields for setting target daily hours for each day of the week.
@@ -135,27 +136,24 @@ export function handleSchedulingPage() {
             
             if (shifts && shifts.length > 0) {
                 shifts.forEach(shift => {
-                    // FIX: Parse raw TIMESTAMP WITHOUT TIME ZONE string components directly
-                    // Example: "2025-06-23 09:00:00"
-                    const dateTimeParts = shift.start_time.split(' '); // ["2025-06-23", "09:00:00"]
-                    const timeParts = dateTimeParts[1].split(':');     // ["09", "00", "00"]
+                    // FIX: Create Date objects directly from the ISO string.
+                    // The Date object constructor handles ISO 8601 strings (with 'T' and 'Z') correctly.
+                    const shiftStartDateTime = new Date(shift.start_time); 
+                    const shiftEndDateTime = new Date(shift.end_time);     
                     
-                    const shiftStartHour = parseInt(timeParts[0], 10);
-                    const shiftStartMinute = parseInt(timeParts[1], 10);
+                    // FIX: Get hours and minutes using UTC methods to treat them as positional time
+                    // This is because the server is sending them as UTC, and we want to map UTC hours to the grid
+                    const shiftStartHour = shiftStartDateTime.getUTCHours();
+                    const shiftStartMinute = shiftStartDateTime.getUTCMinutes();
+                    const shiftEndHour = shiftEndDateTime.getUTCHours();
+                    const shiftEndMinute = shiftEndDateTime.getUTCMinutes();
 
-                    const endDateTimeParts = shift.end_time.split(' ');
-                    const endTimeParts = endDateTimeParts[1].split(':');
-
-                    const shiftEndHour = parseInt(endTimeParts[0], 10);
-                    const shiftEndMinute = parseInt(endTimeParts[1], 10);
-                    
                     const shiftStartTotalMinutes = (shiftStartHour * 60) + shiftStartMinute;
                     const shiftEndTotalMinutes = (shiftEndHour * 60) + shiftEndMinute;
                     const heightMinutes = shiftEndTotalMinutes - shiftStartTotalMinutes;
                     
-                    // To get the day index (0-6 for Sun-Sat), create a Date object from the *full* timestamp string.
-                    // JavaScript's Date constructor handles 'YYYY-MM-DD HH:MM:SS' strings gracefully as local time.
-                    const shiftDayOfWeek = new Date(shift.start_time).getDay(); 
+                    // To get the day index (0-6 for Sun-Sat), use getUTCDay() for consistency with UTC times
+                    const shiftDayOfWeek = shiftStartDateTime.getUTCDay(); 
                     const dayColumn = document.getElementById(`day-column-${shiftDayOfWeek}`);
 
                     if (dayColumn) {
@@ -164,11 +162,11 @@ export function handleSchedulingPage() {
                         shiftElement.style.top = `${shiftStartTotalMinutes + VISUAL_OFFSET_MINUTES}px`; // Add offset
                         shiftElement.style.height = `${heightMinutes}px`;
                         
-                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                        // To display time, create a temporary Date object at a fixed arbitrary date
-                        // and set its hours/minutes using the parsed components. This avoids real Date obj timezone issues.
+                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true, timeZone: 'UTC' }; // Force UTC for display
+                        // Use the new fixed-timezone-for-display method
                         const formatTimeForDisplay = (hour, minute) => {
-                            const tempDate = new Date(2000, 0, 1, hour, minute, 0); // Jan 1, 2000 at desired time
+                            const tempDate = new Date();
+                            tempDate.setUTCHours(hour, minute, 0, 0); // Set UTC hours/minutes
                             return tempDate.toLocaleTimeString('en-US', timeFormatOptions);
                         };
 
@@ -189,9 +187,9 @@ export function handleSchedulingPage() {
 
                         // --- DEBUG LOGS (SCHEDULING: SHIFT RENDERING) ---
                         console.log(`[SCHEDULING-DEBUG] Shift Render: Raw Start: ${shift.start_time}, Raw End: ${shift.end_time}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Parsed Start Hour: ${shiftStartHour}, Minute: ${shiftStartMinute}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Parsed End Hour: ${shiftEndHour}, Minute: ${shiftEndMinute}`);
-                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes for TOP: ${shiftStartTotalMinutes}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: UTC Start Hour: ${shiftStartHour}, Minute: ${shiftStartMinute}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: UTC End Hour: ${shiftEndHour}, Minute: ${shiftEndMinute}`);
+                        console.log(`[SCHEDULING-DEBUG] Shift Render: Start Minutes for TOP (UTC): ${shiftStartTotalMinutes}`);
                         console.log(`[SCHEDULING-DEBUG] Shift Render: Height Minutes: ${heightMinutes}`);
                         // --- END DEBUG LOGS ---
                     }
