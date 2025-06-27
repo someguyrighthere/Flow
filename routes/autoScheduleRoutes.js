@@ -1,520 +1,379 @@
-// js/pages/scheduling.js
-import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
-
-export function handleSchedulingPage() {
-    // Redirect to login page if no authentication token is found in local storage
-    if (!localStorage.getItem("authToken")) {
-        window.location.href = "login.html";
-        return;
-    }
-
-    // Get references to key DOM elements for the scheduling page
-    const calendarGrid = document.getElementById('calendar-grid');
-    const currentWeekDisplay = document.getElementById('current-week-display');
-    const prevWeekBtn = document.getElementById('prev-week-btn');
-    const nextWeekBtn = document.getElementById('next-week-btn');
-    const createShiftForm = document.getElementById('create-shift-form');
-    
-    const employeeSelect = document.getElementById('employee-select');
-    const locationSelect = document.getElementById('location-select');
-
-    const availabilityToggle = document.getElementById('toggle-availability');
-    const autoGenerateBtn = document.getElementById('auto-generate-schedule-btn');
-    const dailyHoursContainer = document.getElementById('daily-hours-inputs'); 
-
-    // Initialize currentStartDate to the beginning of the current week (Sunday)
-    let currentStartDate = new Date();
-    currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
-    currentStartDate.setHours(0, 0, 0, 0);
-
-    /**
-     * Dynamically creates input fields for setting target daily hours for each day of the week.
-     * These inputs are used in the auto-scheduling feature.
-     */
-    function createDailyHoursInputs() {
-        if (!dailyHoursContainer) return; // Exit if the container element is not found
-        dailyHoursContainer.innerHTML = ''; // Clear existing content
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        days.forEach(day => {
-            const dayId = day.toLowerCase(); // Create a lowercase ID for each day
-            const formGroup = document.createElement('div');
-            formGroup.className = 'form-group';
-            formGroup.innerHTML = `
-                <label for="hours-${dayId}">${day}</label>
-                <input type="number" id="hours-${dayId}" class="daily-hours-input" min="0" value="8" step="1" data-day="${dayId}">
-            `;
-            dailyHoursContainer.appendChild(formGroup);
-        });
-    }
-
-    /**
-     * Renders the calendar grid for a given week.
-     * This involves creating the day headers, time column, and individual day columns.
-     * It also triggers fetching and displaying shifts and employee availability for the week.
-     * @param {Date} startDate - The Date object representing the first day (Sunday) of the week to render.
-     */
-    async function renderCalendar(startDate) {
-        if (!calendarGrid || !currentWeekDisplay) return; // Exit if essential elements are missing
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduling - Flow Business Suite</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/Theme.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
+        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
+        .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
+        .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
+        .settings-menu { position: relative; }
+        .settings-dropdown {
+            display: none; position: absolute; top: 55px; right: 0;
+            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 10; padding: 10px 0;
+        }
+        .settings-dropdown a, .settings-dropdown button {
+            color: var(--text-light); padding: 12px 16px; text-decoration: none;
+            display: block; width: 100%; text-align: left; background: none;
+            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
+        }
+        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
         
-        // Calculate the end date for the current week (6 days after the start date)
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 6);
-        // Format options for displaying the date range
-        const options = { month: 'short', day: 'numeric' };
-        // Update the display to show the current week's date range (e.g., "Jun 22 - Jun 28")
-        currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
+        .scheduling-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        @media (max-width: 1200px) {
+            .scheduling-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .sidebar {
+            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
+        }
+        .sidebar h3 {
+            margin-top: 0;
+            color: var(--text-light);
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+        .sidebar .form-group {
+            margin-bottom: 15px;
+        }
+
+        .calendar-main {
+            background-color: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column; /* Changed to column to stack header and body */
+            overflow: hidden; /* Important for internal scrolling */
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: var(--text-light);
+            flex-shrink: 0;
+        }
         
-        calendarGrid.innerHTML = ''; // Clear any existing content in the calendar grid
-
-        // Create the header row container for day names
-        const headerContainer = document.createElement('div');
-        headerContainer.className = 'calendar-grid-header'; // Apply CSS class for grid header styling
-        calendarGrid.appendChild(headerContainer); // Append to the main calendar grid element
-
-        // Create an empty cell in the top-left corner of the header (for alignment with time column)
-        const timeHeader = document.createElement('div');
-        timeHeader.className = 'calendar-day-header';
-        timeHeader.innerHTML = `&nbsp;`; // Use a non-breaking space for an empty but styled cell
-        headerContainer.appendChild(timeHeader);
-
-        // Create individual day headers (e.g., "Sun 23", "Mon 24")
-        for (let i = 0; i < 7; i++) {
-            const dayDate = new Date(startDate);
-            dayDate.setDate(startDate.getDate() + i); // Increment date for each day of the week
-            const dayHeader = document.createElement('div');
-            dayHeader.className = 'calendar-day-header';
-            dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
-            headerContainer.appendChild(dayHeader);
+        /* --- UPDATED CALENDAR LAYOUT CSS --- */
+        .calendar-grid-container {
+            flex-grow: 1; /* Allows the container to fill available space */
+            overflow: hidden; /* Contains internal scrolling */
+            display: flex; /* Use flex to manage inner grid content */
+            flex-direction: column; /* Stack the header and body */
         }
 
-        // Create the main body container for time column and daily shift columns
-        const calendarBody = document.createElement('div');
-        calendarBody.className = 'calendar-body'; // Apply CSS class for calendar body styling
-        calendarGrid.appendChild(calendarBody); // Append to the main calendar grid element
-
-        // Create the time column (vertical list of hours: 12 AM, 1 AM, etc.)
-        const timeColumn = document.createElement('div');
-        timeColumn.className = 'time-column'; // Apply CSS class for time column styling
-        for (let hour = 0; hour < 24; hour++) {
-            const timeSlot = document.createElement('div');
-            timeSlot.className = 'time-slot'; // Apply CSS class for individual time slots
-            const displayHour = hour % 12 === 0 ? 12 : hour % 12; // Convert 24-hour to 12-hour format
-            const ampm = hour < 12 ? 'AM' : 'PM'; // Determine AM/PM
-            timeSlot.textContent = `${displayHour} ${ampm}`;
-            timeColumn.appendChild(timeSlot);
-        }
-        calendarBody.appendChild(timeColumn); // Append time column to the calendar body
-
-        // Create individual day columns where shifts and availability blocks will be rendered
-        for (let i = 0; i < 7; i++) {
-            const dayColumn = document.createElement('div');
-            dayColumn.className = 'day-column'; // Apply CSS class for day column styling
-            dayColumn.id = `day-column-${i}`; // Assign a unique ID (0 for Sunday, 6 for Saturday)
-            // Create 24 hour lines within each day column for visual separation
-            for (let j = 0; j < 24; j++) {
-                const hourLine = document.createElement('div');
-                hourLine.className = 'hour-line';
-                dayColumn.appendChild(hourLine);
-            }
-            calendarBody.appendChild(dayColumn); // Append day column to the calendar body
+        .calendar-grid {
+            /* Removed grid properties from here, now a flex container for header and body */
+            display: flex;
+            flex-direction: column;
+            width: 100%; /* Ensure it takes full width */
+            min-width: 1500px; /* Keep min-width for calendar content */
+            height: 100%; /* Ensure it fills parent height */
         }
 
-        // Concurrently load and display shifts, employee availability, and business operating hours
-        await Promise.all([
-            loadAndDisplayShifts(startDate, endDate),
-            loadAndRenderAvailability(),
-            loadAndRenderBusinessHours() // NEW: Call to render business hours
-        ]);
-    }
+        .calendar-grid-header { /* This class is now used by JS for the header row */
+            display: grid;
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Define 8 columns */
+            position: sticky;
+            top: 0;
+            z-index: 6;
+            background-color: #1a1a1a;
+            border-bottom: 1px solid var(--border-color); /* Add border for separation */
+        }
 
-    /**
-     * Fetches shift data from the backend API and renders each shift as a visual block
-     * on the calendar grid in its corresponding day and time slot.
-     * @param {Date} start - The start date for fetching shifts.
-     * @param {Date} end - The end date for fetching shifts.
-     */
-    async function loadAndDisplayShifts(start, end) {
-        // Remove all existing shift elements from the DOM before rendering new ones
-        document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
+        .calendar-body { /* New wrapper for time column and day columns */
+            display: grid;
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Define 8 columns */
+            flex-grow: 1; /* Allows the body to take remaining vertical space */
+            overflow: auto; /* Enables scrolling for the main calendar content */
+            position: relative; /* For absolute positioning of shifts/availability */
+        }
+
+        .calendar-day-header {
+            padding: 10px 0;
+            text-align: center;
+            font-weight: 600;
+            color: var(--text-light);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* No border-bottom here, as it's on .calendar-grid-header now */
+        .calendar-day-header:last-child {
+            border-right: none; /* Remove right border for the last header */
+        }
         
-        // Helper function to format a Date object to "YYYY-MM-DD" string
-        const formatDate = (d) => d.toISOString().split('T')[0];
-        
-        // Adjust end date to fetch shifts up to the end of the last day in the week
-        let endOfDay = new Date(end);
-        endOfDay.setDate(endOfDay.getDate() + 1); // Go to the next day's start to include current end day's shifts
-
-        try {
-            // Fetch shifts from the API for the specified date range
-            const shifts = await apiRequest('GET', `/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
-            
-            // If shifts are returned, iterate and create elements for each
-            if (shifts && shifts.length > 0) {
-                shifts.forEach(shift => {
-                    const shiftStart = new Date(shift.start_time);
-                    const shiftEnd = new Date(shift.end_time);
-                    
-                    // Determine which day column the shift belongs to (0=Sunday, 6=Saturday)
-                    const dayIndex = shiftStart.getDay();
-                    const dayColumn = document.getElementById(`day-column-${dayIndex}`);
-
-                    if (dayColumn) {
-                        // Calculate the top position and height of the shift element in pixels
-                        // (assuming 1 minute = 1 pixel for positioning within a 60px/hour slot)
-                        const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
-                        const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
-                        const heightMinutes = endMinutes - startMinutes;
-                        
-                        const shiftElement = document.createElement('div');
-                        shiftElement.className = 'calendar-shift'; // Apply CSS class for shift styling
-                        shiftElement.style.top = `${startMinutes}px`; // Set vertical position
-                        shiftElement.style.height = `${heightMinutes}px`; // Set height based on duration
-                        
-                        // Format start and end times for display within the shift element
-                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                        const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
-                        const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
-
-                        // Populate the shift element with shift details and a delete button
-                        shiftElement.innerHTML = `
-                            <strong>${shift.employee_name}</strong><br>
-                            <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
-                            <span style="color: #ddd;">${shift.location_name || ''}</span>
-                            <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1 0-.708z"/></svg>
-                            </button>
-                        `;
-                        // Add a title attribute for tooltip on hover
-                        shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
-                        
-                        dayColumn.appendChild(shiftElement); // Append the shift element to its day column
-                    }
-                });
-            }
+        .time-column {
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            background-color: #2a2a2e;
+            /* Ensure it spans the full height of the body content */
+            grid-column: 1; /* Explicitly place in the first column */
+            height: 100%; /* Span full height of its grid cell */
+            display: flex;
+            flex-direction: column;
         }
-        catch (error) {
-            // Display an error message if shifts fail to load
-            showModalMessage(`Error loading shifts: ${error.message}`, true);
+        .time-slot {
+            height: 60px; /* Fixed height for each hour slot */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: var(--text-medium);
+            flex-shrink: 0; /* Prevent shrinking */
         }
-    }
+        .time-slot:last-child {
+            border-bottom: none; /* Remove border from the last time slot */
+        }
+
+        .day-column {
+            position: relative;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            /* Day columns will automatically be placed in grid-column 2 to 8 */
+            height: 1440px; /* 24 hours * 60 minutes/hour * 1px/minute = 1440px. This makes the column tall enough for absolute positioning */
+            min-height: 100%; /* Ensure it expands to at least the grid height */
+        }
+        .day-column:last-child {
+            border-right: none; /* Remove right border for the last day column */
+        }
+
+        .calendar-shift {
+            background-color: var(--primary-accent);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            padding: 5px 8px;
+            font-size: 0.85rem;
+            position: absolute;
+            width: calc(100% - 4px); /* Full width minus padding/border */
+            left: 2px;
+            opacity: 0.9;
+            z-index: 3;
+            cursor: pointer;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .delete-shift-btn {
+            position: absolute; top: 2px; right: 2px;
+            background: rgba(0,0,0,0.3); border: none;
+            color: white; cursor: pointer; opacity: 0;
+            transition: opacity 0.2s; padding: 2px; border-radius: 50%;
+            width: 18px; height: 18px; display: flex;
+            align-items: center; justify-content: center;
+        }
+        .calendar-shift:hover .delete-shift-btn { opacity: 1; }
+        .delete-shift-btn:hover { background: #e74c3c; }
+
+        .availability-block {
+            background-color: rgba(76, 175, 80, 0.2);
+            position: absolute;
+            width: 100%;
+            z-index: 1;
+            pointer-events: none; /* Allows clicks to pass through to elements below */
+            box-sizing: border-box;
+        }
+        .availability-block.hidden { display: none; }
+
+        /* --- Business Hours Background Block (Glass Effect) --- */
+        .business-hours-block {
+            background-color: rgba(100, 100, 100, 0.5); /* Changed opacity to 0.5 (50%) */
+            backdrop-filter: blur(3px); /* Add blur for glass effect */
+            -webkit-backdrop-filter: blur(3px); /* Safari support */
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle white border */
+            position: absolute;
+            width: 100%;
+            z-index: 0; /* Place behind availability and shifts */
+            pointer-events: none; /* Ensure clicks pass through */
+            box-sizing: border-box;
+            border-radius: 4px; /* Match other blocks */
+        }
+
+
+        /* --- CORRECTED Modal Styles to ensure pop-up behavior --- */
+        .modal {
+            /* Keep hidden by default; JS will set display to 'flex' */
+            display: none; 
+            position: fixed; /* Fixes it relative to the viewport */
+            z-index: 1000; /* High z-index to appear on top of other content */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width of viewport */
+            height: 100%; /* Full height of viewport */
+            overflow: auto; /* Enable scroll if modal content exceeds viewport */
+            background-color: rgba(0,0,0,0.6); /* Semi-transparent black background overlay */
+            /* Flexbox properties to center the modal-content */
+            align-items: center; /* Vertically center */
+            justify-content: center; /* Horizontally center */
+        }
+
+        .modal-content {
+            background-color: var(--card-bg); /* Use your theme's background color */
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%; /* Responsive width */
+            max-width: 500px; /* Maximum width for larger screens */
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; /* Needed for close button positioning */
+            color: var(--text-light); /* Text color */
+            animation: fadeIn 0.3s ease-out; /* Simple fade-in animation */
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .close-button {
+            color: var(--text-medium);
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: var(--text-light);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* Keyframe animation for modal fade-in */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="background-animation"></div>
+    <div class="container">
+        <header class="dashboard-header">
+            <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <div class="settings-menu">
+                <button id="settings-button" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                </button>
+                <div id="settings-dropdown" class="settings-dropdown">
+                    <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <a href="pricing.html">Upgrade Plan</a>
+                    <button id="logout-button">Logout</button>
+                </div>
+            </div>
+        </header>
+        <nav class="main-nav">
+            <a href="suite-hub.html">App Hub</a>
+            <a href="scheduling.html" class="active">Scheduling</a>
+     </nav>
+        <section>
+            <h2 style="color: var(--text-light);">Employee Scheduling</h2>
+            <div class="scheduling-layout">
+                <div class="sidebar">
+                    <h3>Create New Shift</h3>
+                    <form id="create-shift-form">
+                        <div class="form-group">
+                            <label for="employee-select">Employee</label>
+                            <select id="employee-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="location-select">Location</label>
+                            <select id="location-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="start-time-input">Start Time</label>
+                            <input type="datetime-local" id="start-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-time-input">End Time</label>
+                            <input type="datetime-local" id="end-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes-input">Notes (Optional)</label>
+                            <textarea id="notes-input" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Shift</button>
+                    </form>
+
+                    <h3 style="margin-top: 30px;">Auto-Scheduling Settings</h3>
+                    <div class="form-group">
+                        <label>Target Daily Hours:</label>
+                        <div id="daily-hours-inputs">
+                            </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-availability" checked>
+                            <span class="slider round"></span>
+                            Show Availability
+                        </label>
+                    </div>
+                    <button id="auto-generate-schedule-btn" class="btn btn-secondary">Auto-Generate Schedule</button>
+                </div>
+
+                <div class="calendar-main">
+                    <div class="calendar-header">
+                        <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
+                        <h3 id="current-week-display">Loading...</h3>
+                        <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
+                    </div>
+                    <div class="calendar-grid-container">
+                        <div id="calendar-grid">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
     
-    /**
-     * Fetches employee availability data and renders it as semi-transparent overlay blocks
-     * on the calendar, indicating when employees are available to work.
-     */
-    async function loadAndRenderAvailability() {
-        // Remove all existing availability blocks from the DOM
-        document.querySelectorAll('.availability-block').forEach(el => el.remove());
-        
-        try {
-            // Fetch employee availability from the API
-            const employees = await apiRequest('GET', '/users/availability');
-            const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-            employees.forEach(employee => {
-                if (!employee.availability) return; // Skip employees without availability data
-
-                daysOfWeek.forEach((day, index) => {
-                    const dayAvailability = employee.availability[day];
-                    // Check if availability data exists for the current day and has start/end times
-                    if (dayAvailability && dayAvailability.start && dayAvailability.end) {
-                        const dayColumn = document.getElementById(`day-column-${index}`);
-                        if(dayColumn) {
-                            // Parse start and end hours from "HH:MM" format
-                            const startHour = parseInt(dayAvailability.start.split(':')[0], 10);
-                            const startMinute = parseInt(dayAvailability.start.split(':')[1], 10);
-                            const endHour = parseInt(dayAvailability.end.split(':')[0], 10);
-                            const endMinute = parseInt(dayAvailability.end.split(':')[1], 10);
-
-                            const startTotalMinutes = startHour * 60 + startMinute;
-                            const endTotalMinutes = endHour * 60 + endMinute;
-                            const durationMinutes = endTotalMinutes - startTotalMinutes;
-                            
-                            if (durationMinutes > 0) {
-                                const availabilityBlock = document.createElement('div');
-                                availabilityBlock.className = 'availability-block'; // Apply CSS class
-                                // Hide the block if the availability toggle switch is unchecked
-                                if (availabilityToggle && !availabilityToggle.checked) {
-                                    availabilityBlock.classList.add('hidden');
-                                }
-                                // Set vertical position and height based on availability times
-                                availabilityBlock.style.top = `${startTotalMinutes}px`; // Convert total minutes to pixels
-                                availabilityBlock.style.height = `${durationMinutes}px`;
-                                dayColumn.appendChild(availabilityBlock); // Append to the respective day column
-                            }
-                        }
-                    }
-                });
-            });
-        } catch (error) {
-            console.error("Failed to load availability:", error);
-            // Optionally, show a modal message to the user:
-            // showModalMessage(`Error loading availability: ${error.message}`, true);
-        }
-    }
-
-    /**
-     * NEW FUNCTION: Fetches and renders the business operating hours as a subtle background.
-     */
-    async function loadAndRenderBusinessHours() {
-        // Remove any existing business hours blocks from the DOM
-        document.querySelectorAll('.business-hours-block').forEach(el => el.remove());
-
-        try {
-            const settings = await apiRequest('GET', '/settings/business');
-            // Ensure settings.operating_hours_start is not null before splitting
-            const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
-            const businessStartMinute = parseInt((settings.operating_hours_start || '00:00').split(':')[1], 10);
-            const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
-            const businessEndMinute = parseInt((settings.operating_hours_end || '00:00').split(':')[1], 10);
-
-            const startTotalMinutes = businessStartHour * 60 + businessStartMinute;
-            const endTotalMinutes = businessEndHour * 60 + businessEndMinute;
-            const durationMinutes = endTotalMinutes - startTotalMinutes;
-
-            // --- DEBUG LOG: Verify fetched and parsed business hours in scheduling.js ---
-            console.log(`[SCHEDULING-LOG] Fetched Business Start Time (Raw): ${settings.operating_hours_start}`);
-            console.log(`[SCHEDULING-LOG] Fetched Business End Time (Raw): ${settings.operating_hours_end}`);
-            console.log(`[SCHEDULING-LOG] Parsed Business Start Minutes: ${startTotalMinutes}`);
-            console.log(`[SCHEDULING-LOG] Parsed Business End Minutes: ${endTotalMinutes}`);
-            // --- END DEBUG LOG ---
-
-
-            if (durationMinutes > 0) {
-                // For each day column, create a business hours block
-                for (let i = 0; i < 7; i++) {
-                    const dayColumn = document.getElementById(`day-column-${i}`);
-                    if (dayColumn) {
-                        const businessHoursBlock = document.createElement('div');
-                        businessHoursBlock.className = 'business-hours-block'; // New CSS class for styling
-                        businessHoursBlock.style.top = `${startTotalMinutes}px`; // Position from top
-                        businessHoursBlock.style.height = `${durationMinutes}px`; // Height based on duration
-                        dayColumn.appendChild(businessHoursBlock);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("Failed to load or render business operating hours:", error);
-        }
-    }
-
-    /**
-     * Populates the employee and location dropdowns in the shift creation form
-     * by fetching user and location data from the API.
-     */
-    async function populateDropdowns() {
-        try {
-            // Fetch users and locations concurrently
-            const [users, locations] = await Promise.all([
-                apiRequest('GET', '/users'),
-                apiRequest('GET', '/locations')
-            ]);
-            
-            if (employeeSelect) {
-                employeeSelect.innerHTML = '<option value="">Select Employee</option>'; // Default option
-                const employees = users.filter(u => u.role === 'employee'); // Filter for employees only
-                employees.forEach(user => {
-                    const option = new Option(user.full_name, user.user_id);
-                    employeeSelect.add(option);
-                });
-            }
-
-            if (locationSelect) {
-                locationSelect.innerHTML = '<option value="">Select Location</option>'; // Default option
-                locations.forEach(loc => {
-                    const option = new Option(loc.location_name, loc.location_id);
-                    locationSelect.add(option);
-                });
-            }
-        } catch (error) {
-            showModalMessage('Failed to load data for form dropdowns.', true);
-        }
-    }
-
-    // --- Event Handlers ---
-
-    /**
-     * Completely re-implemented delete shift functionality.
-     * Handles click events on the calendar grid via event delegation.
-     * When a delete button is clicked, it extracts the shift ID,
-     * prompts for confirmation, calls the delete API, and re-renders the calendar.
-     */
-    if (calendarGrid) {
-        calendarGrid.addEventListener('click', async (e) => {
-            // Log the element that was actually clicked
-            // console.log("Calendar grid clicked on:", e.target); 
-            // Find the closest parent element with the class 'delete-shift-btn' starting from the clicked target
-            const deleteButton = e.target.closest('.delete-shift-btn');
-            // console.log("Delete button found by closest():", deleteButton); // Log what closest() found
-
-            if (deleteButton) {
-                e.stopPropagation(); // Prevent the click event from bubbling up to parent elements
-                const shiftIdToDelete = String(deleteButton.dataset.shiftId); // Get the shift ID from the data attribute
-
-                // Basic validation for shift ID
-                if (!shiftIdToDelete || shiftIdToDelete === "undefined" || shiftIdToDelete === "null") {
-                    showModalMessage('Shift ID not found. Cannot delete.', true);
-                    return;
-                }
-                
-                // Show confirmation modal to the user
-                const isConfirmed = await showConfirmModal('Are you sure you want to delete this shift? This action cannot be undone.');
-                // console.log("Confirmation modal resolved with:", isConfirmed); // DEBUG: Log confirmed value
-                
-                if (isConfirmed) {
-                    try {
-                        // Call the API to delete the shift
-                        await apiRequest('DELETE', `/shifts/${shiftIdToDelete}`);
-                        showModalMessage('Shift deleted successfully!', false); // Show success message
-                        renderCalendar(currentStartDate); // Re-render the calendar to show the updated shifts
-                    } catch (error) {
-                        // Display an error message if the API call fails
-                        showModalMessage(`Error deleting shift: ${error.message}`, true);
-                    }
-                } else {
-                    // User cancelled the deletion
-                    showModalMessage('Shift deletion cancelled.', false);
-                }
-            }
-        });
-    }
-
-    /**
-     * Handles the click event for the "Auto-Generate Schedule" button.
-     * Collects daily hour targets and sends a request to the backend to generate shifts.
-     */
-    if (autoGenerateBtn) {
-        autoGenerateBtn.addEventListener('click', async () => {
-            const dailyHours = {};
-            // Collect the target daily hours for each day from the input fields
-            document.querySelectorAll('.daily-hours-input').forEach(input => {
-                dailyHours[input.dataset.day] = input.value;
-            });
-            
-            // Show a confirmation modal for auto-scheduling
-            const confirmed = await showConfirmModal(
-                `This will attempt to generate a schedule based on the specified daily hours. Do you want to continue?`,
-                'Generate'
-            );
-
-            if (confirmed) {
-                try {
-                    const response = await apiRequest('POST', '/shifts/auto-generate', { 
-                        weekStartDate: currentStartDate.toISOString(), // Pass the current week's start date
-                        dailyHours: dailyHours // Pass the target daily hours
-                    });
-                    showModalMessage(response.message || 'Schedule generation complete!', false);
-                    await renderCalendar(currentStartDate); // Re-render calendar to show newly generated shifts
-                } catch (error) {
-                    showModalMessage(`Auto-scheduling failed: ${error.message}`, true);
-                }
-            }
-        });
-    }
-
-    /**
-     * Handles the change event for the availability toggle switch.
-     * Toggles the visibility of availability blocks on the calendar.
-     */
-    if (availabilityToggle) {
-        availabilityToggle.addEventListener('change', () => {
-            const blocks = document.querySelectorAll('.availability-block');
-            blocks.forEach(block => {
-                // Toggle the 'hidden' CSS class based on whether the checkbox is checked
-                block.classList.toggle('hidden', !availabilityToggle.checked);
-            });
-        });
-    }
+    <div id="modal-message" class="modal">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
     
-    /**
-     * Handles the click event for the "Previous Week" button.
-     * Decrements the current week's start date by 7 days and re-renders the calendar.
-     */
-    if (prevWeekBtn) {
-        prevWeekBtn.addEventListener('click', () => {
-            currentStartDate.setDate(currentStartDate.getDate() - 7); // Move back one week
-            renderCalendar(currentStartDate); // Re-render calendar for the new week
-        });
-    }
-
-    /**
-     * Handles the click event for the "Next Week" button.
-     * Increments the current week's start date by 7 days and re-renders the calendar.
-     */
-    if (nextWeekBtn) {
-        nextWeekBtn.addEventListener('click', () => { 
-            currentStartDate.setDate(currentStartDate.getDate() + 7); // Move forward one week
-            renderCalendar(currentStartDate); // Re-render calendar for the new week
-        });
-    } 
-    
-    /**
-     * Handles the submission of the "Create New Shift" form.
-     * Collects shift data from form inputs, validates it, and sends it to the backend API.
-     */
-    if (createShiftForm) {
-        createShiftForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); // Prevent default form submission behavior (page reload)
-            // Get raw datetime-local values
-            const rawStartTime = document.getElementById('start-time-input').value;
-            const rawEndTime = document.getElementById('end-time-input').value;
-
-            // FIX: Convert raw datetime-local string to Date objects then to ISO strings
-            // This handles local timezone interpretation and sends clear UTC to TIMESTAMPTZ
-            const shiftData = {
-                employee_id: document.getElementById('employee-select').value,
-                location_id: document.getElementById('location-select').value,
-                start_time: new Date(rawStartTime).toISOString(), // Convert local input to ISO UTC
-                end_time: new Date(rawEndTime).toISOString(),     // Convert local input to ISO UTC
-                notes: document.getElementById('notes-input').value
-            };
-
-            // Client-side validation: Check if required fields are filled
-            if (!shiftData.employee_id || !shiftData.location_id || !rawStartTime || !rawEndTime) { // Check raw inputs for emptiness
-                showModalMessage('Please fill all required fields.', true);
-                return;
-            }
-
-            // DEBUG: Log the ISO strings being sent
-            console.log("Client sending start_time (ISO):", shiftData.start_time);
-            console.log("Client sending end_time (ISO):", shiftData.end_time);
-
-            try {
-                // Send a POST request to create the new shift
-                await apiRequest('POST', '/shifts', shiftData);
-                showModalMessage('Shift created successfully!', false); // Show success message
-                createShiftForm.reset(); // Clear the form fields
-                renderCalendar(currentStartDate); // Re-render the calendar to display the new shift
-            } catch (error) {
-                // Display an error message if shift creation fails
-                showModalMessage(`Error creating shift: ${error.message}`, true);
-            }
-        });
-    }
-    
-    /**
-     * Helper function to generate <option> tags for time select inputs.
-     * Generates options in 15-minute intervals.
-     * @param {number} startHour - The starting hour for options (inclusive).
-     * @param {number} endHour - The ending hour for options (exclusive).
-     * @returns {string} HTML string of time options.
-     */
-    function generateTimeOptions(startHour = 0, endHour = 24) { // Default to 0-24 if hours not set
-        let options = '<option value="">Not Available</option>'; // Default empty option
-        for (let i = startHour; i < endHour; i++) {
-            const hour = i < 10 ? '0' + i : '' + i; // Format as HH (e.g., 01, 10)
-            options += `<option value="${hour}:00">${hour}:00</option>`;
-            options += `<option value="${hour}:15">${hour}:15</option>`;
-            options += `<option value="${hour}:30">${hour}:30</option`;
-            options += `<option value="${hour}:45">${hour}:45</option>`;
-        }
-        return options;
-    }
-
-
-    // --- Initial Page Load Actions ---
-    // These functions are called when the page loads to set up the UI
-    createDailyHoursInputs(); // Populate the daily hours input fields
-    renderCalendar(currentStartDate); // Render the calendar for the initial week
-    populateDropdowns(); // Populate the employee and location dropdowns
-}
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
