@@ -58,7 +58,11 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 const dayName = daysOfWeek[currentDate.getDay()]; 
                 let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); 
                 
-                // Track which specific hours within the business day are covered.
+                // Create a temporary daily pool of employees available to be scheduled for *this specific day*.
+                // This pool will be modified (employees removed) as they are scheduled for the day.
+                let availableEmployeesForDay = JSON.parse(JSON.stringify(employeeScheduleData)); 
+
+                // Create a coverage array for the current day, representing each hour within business hours.
                 const dailyCoverage = Array(businessEndHour - businessStartHour).fill(false); 
 
                 // Mark existing shifts (from manual entries or prior auto-runs in the transaction) as covered.
@@ -80,33 +84,25 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 });
 
                 // Iterate through each hour within business hours to ensure full coverage
-                // This loop drives the scheduling process for the day.
                 for (let currentHour = businessStartHour; currentHour < businessEndHour; currentHour++) {
                     const coverageIndex = currentHour - businessStartHour;
 
-                    // If daily target is met, AND this hour is already covered, move to the next hour.
-                    // If daily target is NOT met, we need to keep scheduling even if the hour is covered,
-                    // to add more manpower (overlapping FTs).
+                    // If daily target is met AND this hour is already covered, move to the next hour.
                     if (remainingDailyTargetHours <= 0 && dailyCoverage[coverageIndex]) {
                         continue; 
                     }
-                    // If the target is met, but this specific hour is still not covered, we must schedule to cover it.
-                    // This implies a soft target for remainingDailyTargetHours if coverage is paramount.
-                    // For now, if remainingDailyTargetHours is 0, we can break if no more shifts are NEEDED.
+                    // If target hours are met, but this hour is NOT covered, and we've gone past business end, stop.
                     if (remainingDailyTargetHours <= 0 && !dailyCoverage[coverageIndex]) {
-                         // We are not adding an explicit break here, because the condition in the filter
-                         // will prevent adding shifts if dailyTargetHours are met.
-                         // The remainingDailyTargetHours will become 0 and effectively stop scheduling.
-                         // This is important for allowing overlaps to fill coverage.
+                         break;
                     }
 
+                    let employeeScheduledInCurrentSlot = null; // Will hold the employee scheduled for this hour slot
 
                     // --- Attempt to schedule a Full-time employee first ---
-                    const eligibleFTEmployees = employeeScheduleData.filter(emp => {
+                    const eligibleFTEmployees = availableEmployeesForDay.filter(emp => { // Filter from availableEmployeesForDay
                         // Global weekly limits
                         if (emp.daysWorked >= 5) return false; 
                         if (emp.scheduled_hours >= 40) return false; 
-                        // IMPORTANT FIX: Removed emp.scheduledForCurrentDay check here to allow overlaps for coverage
                         
                         const dayAvail = emp.availability && emp.availability[dayName];
                         if (!dayAvail) return false;
@@ -115,19 +111,18 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         const availEndHour = parseInt(dayAvail.end.split(':')[0], 10);
 
                         // Ensure proposed shift START is within business hours and employee availability
-                        if (currentHour < businessStartHour || currentHour >= businessEndHour) return false;
+                        if (currentHour < businessStartHour || (currentHour + FULL_TIME_SHIFT_LENGTH_TOTAL) > businessEndHour) return false;
 
-                        const requiredShiftEndHourTotal = currentHour + FULL_TIME_SHIFT_LENGTH_TOTAL;
-
+                        // Check if employee's availability actually starts at or before currentHour
+                        // and ends at or after the required shift end time (including break for FT)
                         return availStartHour <= currentHour && 
-                               availEndHour >= requiredShiftEndHourTotal &&
-                               requiredShiftEndHourTotal <= businessEndHour; // Ensure shift ends within business hours
+                               availEndHour >= (currentHour + FULL_TIME_SHIFT_LENGTH_TOTAL);
                     }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Prioritize FTs with fewer hours scheduled
 
                     if (eligibleFTEmployees.length > 0) {
-                        const employeeScheduled = eligibleFTEmployees[0]; 
+                        employeeScheduledInCurrentSlot = eligibleFTEmployees[0]; 
                         
-                        // Construct Date objects based on the currentDate's local components and currentHour
+                        // Construct Date objects using the currentDate's local components and currentHour
                         const shiftStartTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0); 
                         const shiftEndTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + FULL_TIME_WORK_DURATION, FULL_TIME_BREAK_DURATION * 60, 0); 
                         
@@ -136,17 +131,15 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                         await client.query(
                             'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                            [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated FT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                            [employeeScheduledInCurrentSlot.user_id, employeeScheduledInCurrentSlot.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated FT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
                         );
                         
                         // Update the global employeeScheduleData for persistent tracking across days
-                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduled.user_id);
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduledInCurrentSlot.user_id);
                         if (globalEmpIndex !== -1) {
                             employeeScheduleData[globalEmpIndex].scheduled_hours += FULL_TIME_WORK_DURATION; 
                             employeeScheduleData[globalEmpIndex].daysWorked++; 
                         }
-                        // IMPORTANT FIX: We no longer set 'scheduledForCurrentDay' here to allow multiple shifts per day for the same employee
-                        // employeesScheduledTodayIds.add(employeeScheduled.user_id); // REMOVED THIS LINE
                         
                         remainingDailyTargetHours -= FULL_TIME_WORK_DURATION; 
                         totalShiftsCreated++;
@@ -156,14 +149,15 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const idx = h - businessStartHour;
                             if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
                         }
+                        // NEW: Remove this employee from availableEmployeesForDay for the rest of the day
+                        availableEmployeesForDay = availableEmployeesForDay.filter(emp => emp.user_id !== employeeScheduledInCurrentSlot.user_id);
                         continue; 
                     }
 
                     // --- If no FT was scheduled, try to schedule a Part-time employee ---
-                    const eligiblePTEmployees = employeeScheduleData.filter(emp => { 
+                    const eligiblePTEmployees = availableEmployeesForDay.filter(emp => { // Filter from availableEmployeesForDay
                         if (emp.employment_type !== 'Part-time') return false; 
                         if (emp.daysWorked >= 5) return false; 
-                        // IMPORTANT FIX: Removed emp.scheduledForCurrentDay check here to allow overlaps for coverage
                         
                         const dayAvail = emp.availability && emp.availability[dayName];
                         if (!dayAvail) return false;
@@ -171,17 +165,16 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         const requiredShiftEndHour = currentHour + PART_TIME_SHIFT_LENGTH;
                         
                         // Ensure proposed shift START is within business hours and employee availability
-                        if (currentHour < businessStartHour || currentHour >= businessEndHour) return false;
+                        if (currentHour < businessStartHour || requiredShiftEndHour > businessEndHour) return false;
 
                         return parseInt(dayAvail.start.split(':')[0], 10) <= currentHour && 
-                               parseInt(dayAvail.end.split(':')[0], 10) >= requiredShiftEndHour &&
-                               requiredShiftEndHour <= businessEndHour;
+                               parseInt(dayAvail.end.split(':')[0], 10) >= requiredShiftEndHour;
                     }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
 
                     if (eligiblePTEmployees.length > 0) {
-                        const employeeScheduled = eligiblePTEmployees[0]; 
+                        employeeScheduledInCurrentSlot = eligiblePTEmployees[0]; 
                         
-                        // Construct Date objects based on the currentDate's local components and currentHour
+                        // Construct Date objects representing the intended local time, then convert to ISO UTC for TIMESTAMPTZ
                         const shiftStartTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0); 
                         const shiftEndTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + PART_TIME_SHIFT_LENGTH, 0, 0); 
                         
@@ -190,17 +183,15 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                         await client.query(
                             'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5)',
-                            [employeeScheduled.user_id, employeeScheduled.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated PT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
+                            [employeeScheduledInCurrentSlot.user_id, employeeScheduledInCurrentSlot.location_id, shiftStartTimeISO, shiftEndTimeISO, `Auto-generated PT - Covers ${shiftStartTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})} to ${shiftEndTime.toLocaleTimeString('en-US', {hour: 'numeric', minute: 'numeric', hour12: true})}`]
                         );
                         
                         // Update the global employeeScheduleData
-                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduled.user_id);
+                        const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeScheduledInCurrentSlot.user_id);
                         if (globalEmpIndex !== -1) {
                             employeeScheduleData[globalEmpIndex].scheduled_hours += PART_TIME_SHIFT_LENGTH;
                             employeeScheduleData[globalEmpIndex].daysWorked++;
                         }
-                        // IMPORTANT FIX: We no longer set 'scheduledForCurrentDay' here to allow multiple shifts per day for the same employee
-                        // employeesScheduledTodayIds.add(employeeScheduled.user_id); // REMOVED THIS LINE
                         
                         remainingDailyTargetHours -= PART_TIME_SHIFT_LENGTH;
                         totalShiftsCreated++;
@@ -210,7 +201,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const idx = h - businessStartHour;
                             if (idx >= 0 && idx < dailyCoverage.length) dailyCoverage[idx] = true;
                         }
-                        continue; 
+                        // NEW: Remove this employee from availableEmployeesForDay for the rest of the day
+                        availableEmployeesForDay = availableEmployeesForDay.filter(emp => emp.user_id !== employeeScheduledInCurrentSlot.user_id);
                     }
                 }
             }
