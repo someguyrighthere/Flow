@@ -156,15 +156,6 @@
             border-right: none; /* Remove right border for the last day column */
         }
 
-        .hour-line {
-            height: 60px; /* Represents one hour height */
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            box-sizing: border-box;
-        }
-        .hour-line:last-child {
-            border-bottom: none; /* Remove border from the last hour line */
-        }
-
         .calendar-shift {
             background-color: var(--primary-accent);
             color: #fff;
@@ -289,25 +280,28 @@
     <div class="container">
         <!-- Main Navigation (assuming it exists from other pages) -->
         <header class="dashboard-header">
-            <h1 class="app-title">Flow Business Suite</h1>
-            <nav class="main-nav">
-                <a href="dashboard.html">Dashboard</a>
-                <a href="checklists.html">Checklists</a>
-                <a href="hiring.html">Hiring</a>
-                <a href="scheduling.html" class="active">Scheduling</a>
-                <a href="documents.html">Documents</a>
-                <a href="admin.html">Admin</a>
-            </nav>
+            <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 0-1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 0 1-1.73V4a2 2 0 0 0-2-2z"/><path d="M17.41 6.36l.4.24a2 2 0 0 0 2.22 0l.4-.24a2 2 0 0 1 1-1.73V4a2 2 0 0 0-2-2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l.43.25a2 2 0 0 0 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l-.43-.25a2 2 0 0 0-1-1.73V4a2 2 0 0 0-2-2zM4.59 6.36l-.4.24a2 2 0 0 1-2.22 0l-.4-.24a2 2 0 0 0-1-1.73V4a2 2 0 0 1 2-2h.44a2 2 0 0 1 2 2v.18a2 2 0 0 0 1 1.73l-.43.25a2 2 0 0 1 1-1.73V20a2 2 0 0 1-2 2h-.44a2 2 0 0 1-2-2v-.18a2 2 0 0 0-1-1.73l.43-.25a2 2 0 0 1 1-1.73V4a2 2 0 0 1 2-2z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <a href="pricing.html">Upgrade Plan</a>
                     <button id="logout-button">Logout</button>
                 </div>
             </div>
         </header>
+        <nav class="main-nav">
+            <a href="suite-hub.html">App Hub</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="checklists.html">Checklists</a>
+            <a href="hiring.html">Hiring</a>
+            <a href="scheduling.html" class="active">Scheduling</a>
+            <a href="documents.html">Documents</a>
+            <a href="admin.html">Admin</a>
+        </nav>
 
         <section>
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
