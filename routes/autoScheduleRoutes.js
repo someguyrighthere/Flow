@@ -18,10 +18,12 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             await client.query('BEGIN');
 
             // Clear existing shifts for the target week before auto-generating new ones
-            const currentWeekStart = new Date(weekStartDate); 
+            // Assuming this DELETE is still desired.
+            const currentWeekStart = new Date(weekStartDate); // This date object is implicitly in the client's local timezone
             const nextWeekStart = new Date(currentWeekStart);
             nextWeekStart.setDate(currentWeekStart.getDate() + 7);
-            await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2', [currentWeekStart.toISOString().split('T')[0], nextWeekStart.toISOString().split('T')[0]]); // Compare date strings without time for TIMESTAMP WITHOUT TIME ZONE
+            // Convert to 'YYYY-MM-DD' for comparison with TIMESTAMP WITHOUT TIME ZONE
+            await client.query('DELETE FROM shifts WHERE start_time::date >= $1::date AND start_time::date < $2::date', [currentWeekStart.toISOString().split('T')[0], nextWeekStart.toISOString().split('T')[0]]);
 
 
             // Fetch business operating hours
@@ -68,10 +70,10 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
             // Iterate through each day of the week (Sunday to Saturday)
             for (let i = 0; i < 7; i++) {
-                // currentDayDate represents the specific date being processed (e.g., Jun 23, 2025).
-                // We'll create it as a simple Date object representing the LOCAL midnight of the day.
+                // currentDayDate represents the specific date being processed.
+                // It's constructed as a simple Date object representing the LOCAL midnight of the day.
                 const currentDayDate = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + i); 
-                currentDayDate.setHours(0,0,0,0); // Explicitly set to local midnight for consistency
+                currentDayDate.setHours(0,0,0,0); // Explicitly set to local midnight for consistency.
 
                 const dayName = daysOfWeek[currentDayDate.getDay()]; 
                 let remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0); 
@@ -86,7 +88,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                 // Mark existing shifts (from manual entries or prior auto-runs in the transaction) as covered.
                 // Fetch shifts for the *local date* of currentDayDate.
-                // We convert start_time to DATE for comparison, as we now use TIMESTAMP WITHOUT TIME ZONE.
+                // We're casting to ::date for comparison as we're now using TIMESTAMP WITHOUT TIME ZONE.
                 const existingShiftsRes = await client.query(`
                     SELECT start_time::text as start_time, end_time::text as end_time FROM shifts
                     WHERE start_time::date = $1::date;
@@ -94,11 +96,16 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                 existingShiftsRes.rows.forEach(shift => {
                     // Parse the plain timestamp string (e.g., '2025-06-23 09:00:00') into components
-                    const shiftStartParts = shift.start_time.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
-                    const shiftEndParts = shift.end_time.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+                    const shiftStartParts = shift.start_time.match(/(\d{2}):(\d{2}):(\d{2})$/); 
+                    const shiftEndParts = shift.end_time.match(/(\d{2}):(\d{2}):(\d{2})$/);
 
-                    const shiftStartTotalMinutes = parseInt(shiftStartParts[4], 10) * 60 + parseInt(shiftStartParts[5], 10); // Hour * 60 + Minute
-                    const shiftEndTotalMinutes = parseInt(shiftEndParts[4], 10) * 60 + parseInt(shiftEndParts[5], 10);
+                    if (!shiftStartParts || !shiftEndParts) {
+                        console.error(`[AUTO-SCHEDULE-DEBUG] ERROR: Could not parse existing shift time: Start=${shift.start_time}, End=${shift.end_time}`);
+                        return; // Skip this shift if parsing fails
+                    }
+                    
+                    const shiftStartTotalMinutes = parseInt(shiftStartParts[1], 10) * 60 + parseInt(shiftStartParts[2], 10); 
+                    const shiftEndTotalMinutes = parseInt(shiftEndParts[1], 10) * 60 + parseInt(shiftEndParts[2], 10);     
                     
                     for (let m = shiftStartTotalMinutes; m < shiftEndTotalMinutes; m += SCHEDULING_INTERVAL_MINUTES) {
                         const coverageIndex = Math.floor((m - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES);
@@ -155,7 +162,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                                            currentMinute >= businessStartTotalMinutes && // Ensure shift starts within business hours
                                            requiredShiftEndTotalMinutes <= businessEndTotalMinutes; // Ensure shift ends within business hours
 
-                        console.log(`[AUTO-SCHEDULE-DEBUG] FT Check for Emp ${emp.full_name} (${emp.user_id}, Type: ${emp.employment_type}) at Local Minute ${currentMinute}:`);
+                        console.log(`[AUTO-SCHEDULE-DEBUG] FT Check for Emp ${emp.full_name} (${emp.user_id}, Type: ${emp.employment_type}) at Minute ${currentMinute}:`);
                         console.log(`  Avail: ${dayAvail.start}-${dayAvail.end} (${availStartTotalMinutes}-${availEndTotalMinutes})`);
                         console.log(`  Required Shift End Minute: ${requiredShiftEndTotalMinutes}`);
                         console.log(`  Business Start/End Minutes: ${businessStartTotalMinutes}-${businessEndTotalMinutes}`);
@@ -167,12 +174,11 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     if (eligibleFTEmployees.length > 0) {
                         const employeeScheduled = eligibleFTEmployees[0]; 
                         
-                        // Construct Date object in LOCAL time components directly.
+                        // Construct Date object using LOCAL time components from currentDayDate.
                         // Then format to 'YYYY-MM-DD HH:MM:SS' for TIMESTAMP WITHOUT TIME ZONE.
                         const shiftStartDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor(currentMinute / 60), currentMinute % 60, 0); 
                         const shiftEndDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor((currentMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES) / 60), (currentMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES) % 60, 0); 
                         
-                        // FIX: Format to 'YYYY-MM-DD HH:MM:SS' string for TIMESTAMP WITHOUT TIME ZONE
                         const formatDateTime = (dateObj) => {
                             const year = dateObj.getFullYear();
                             const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
@@ -224,7 +230,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                         const requiredShiftEndTotalMinutes = currentMinute + PART_TIME_SHIFT_LENGTH_MINUTES; 
                         
-                        // Check if employee is available AND shift is within business hours
                         const isEligible = availStartTotalMinutes <= currentMinute && 
                                            availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
                                            currentMinute >= businessStartTotalMinutes && // Ensure shift starts within business hours
@@ -242,11 +247,11 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     if (eligiblePTEmployees.length > 0) {
                         const employeeScheduled = eligiblePTEmployees[0]; 
                         
-                        // Construct Date object in LOCAL time components directly.
+                        // Construct Date object using LOCAL time components directly.
                         const shiftStartDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor(currentMinute / 60), currentMinute % 60, 0); 
                         const shiftEndDateTime = new Date(currentDayDate.getFullYear(), currentDayDate.getMonth(), currentDayDate.getDate(), Math.floor((currentMinute + PART_TIME_SHIFT_LENGTH_MINUTES) / 60), (currentMinute + PART_TIME_SHIFT_LENGTH_MINUTES) % 60, 0); 
                         
-                        // FIX: Format to 'YYYY-MM-DD HH:MM:SS' string for TIMESTAMP WITHOUT TIME ZONE
+                        // Format to 'YYYY-MM-DD HH:MM:SS' string for TIMESTAMP WITHOUT TIME ZONE
                         const formatDateTime = (dateObj) => {
                             const year = dateObj.getFullYear();
                             const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
