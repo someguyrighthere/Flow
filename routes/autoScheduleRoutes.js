@@ -4,16 +4,18 @@
 // It receives 'app', 'pool', 'isAuthenticated', and 'isAdmin' from server.js
 // to register the route and utilize middleware and database connection.
 
-// --- GLOBAL CONSTANTS (Defined once at module top for clarity and scope) ---
-const FULL_TIME_WORK_DURATION_MINUTES = 8 * 60; // 8 hours
-const FULL_TIME_BREAK_DURATION_MINUTES = 0.5 * 60; // 30 minutes
-const FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES = FULL_TIME_WORK_DURATION_MINUTES + FULL_TIME_BREAK_DURATION_MINUTES; // 8.5 hours in minutes
-const PART_TIME_WORK_DURATION_MINUTES = 4 * 60; // 4 hours
-const PART_TIME_SHIFT_LENGTH_MINUTES = PART_TIME_WORK_DURATION_MINUTES; // Part-time doesn't have a specific break added
-const SCHEDULING_RESOLUTION_MINUTES = 15; // 15-minute intervals
-const PART_TIME_MAX_HOURS_PER_WEEK = 20; // Rule: Part-time max hours
-
 module.exports = (app, pool, isAuthenticated, isAdmin) => {
+
+    // --- GLOBAL CONSTANTS (Moved INSIDE module.exports for guaranteed closure scope) ---
+    const FULL_TIME_WORK_DURATION_MINUTES = 8 * 60; // 8 hours
+    const FULL_TIME_BREAK_DURATION_MINUTES = 0.5 * 60; // 30 minutes
+    const FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES = FULL_TIME_WORK_DURATION_MINUTES + FULL_TIME_BREAK_DURATION_MINUTES; // 8.5 hours in minutes
+    const PART_TIME_WORK_DURATION_MINUTES = 4 * 60; // 4 hours
+    const PART_TIME_SHIFT_LENGTH_MINUTES = PART_TIME_WORK_DURATION_MINUTES; // Part-time doesn't have a specific break added
+
+    const SCHEDULING_RESOLUTION_MINUTES = 15; // 15-minute intervals
+    const PART_TIME_MAX_HOURS_PER_WEEK = 20; // Rule: Part-time max hours
+    // --- END GLOBAL CONSTANTS ---
 
     // Auto-generate shifts route
     app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
@@ -52,7 +54,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             // --- END DEBUG LOGS ---
 
 
-            // Fetch all eligible employees
+            // Fetch all employees with their availability and type
             const { rows: employees } = await client.query(`SELECT user_id, full_name, availability, location_id, employment_type FROM users WHERE role = 'employee' AND availability IS NOT NULL`);
             
             // Initialize employee data for scheduling, including weekly tracking
@@ -117,25 +119,25 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 // --- 2.2. Iterate through each 15-minute slot in business hours ---
                 for (let currentSlotMinute = businessStartTotalMinutes; currentSlotMinute < businessEndTotalMinutes; currentSlotMinute += SCHEDULING_RESOLUTION_MINUTES) {
                     const slotIndex = Math.floor((currentSlotMinute - businessStartTotalMinutes) / SCHEDULING_RESOLUTION_MINUTES); 
-                    let employeeScheduledThisSlot = null;
+                    let employeeScheduledThisSlot = null; // Reset for each minute slot
 
                     console.log(`[SCHEDULER-REWRITE-DEBUG] Checking Slot: ${currentSlotMinute} mins. Current Coverage: ${dailySlotCoverage[slotIndex]}. Man-Minutes Today: ${currentDayManMinutesScheduled}`);
 
-                    // --- PRIORITY 1: Fill UNCOVERED slots first (FT then PT). ---
+                    // PRIORITY 1: Fill UNCOVERED slots first (FT then PT).
                     if (dailySlotCoverage[slotIndex] === 0) {
                         console.log(`[SCHEDULER-REWRITE-DEBUG]   SLOT UNCOVERED. Prioritizing primary coverage.`);
 
-                        // Try to find a Full-time employee for primary coverage
+                        // Try to find an eligible FT employee for primary coverage
                         let eligibleFTEmployees = employeeScheduleData.filter(emp => {
                             // Hard constraints:
                             if (emp.days_worked_this_week >= 5) { console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Check for ${emp.full_name}: Exceeds 5 days worked.`); return false; }
-                            if (employeesScheduledTodayIds.has(emp.user_id)) { console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Check for ${emp.full_name}: Already scheduled today.`); return false; }
+                            if (emp.shifts_today_ids.has(currentDayDate.getTime())) { console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Check for ${emp.full_name}: Already scheduled today.`); return false; }
                             const dayAvail = emp.availability && emp.availability[dayName];
                             if (!dayAvail) { console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Check for ${emp.full_name}: Not available on ${dayName}.`); return false; }
                             
                             const availStart = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
                             const availEnd = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
-                            const requiredShiftEnd = currentSlotMinute + FT_SHIFT_TOTAL_MINUTES;
+                            const requiredShiftEnd = currentSlotMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES;
 
                             const fitsTime = availStart <= currentSlotMinute && 
                                              availEnd >= requiredShiftEnd &&
@@ -151,9 +153,10 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         } else {
                             // If no FT found for primary coverage, try PT
                             const eligiblePTEmployees = employeeScheduleData.filter(emp => {
+                                // Hard limits for basic eligibility
                                 if (emp.employment_type !== 'Part-time') return false; 
                                 if (emp.days_worked_this_week >= 5) return false; 
-                                if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
+                                if (emp.shifts_today_ids.has(currentDayDate.getTime())) return false; 
                                 const dayAvail = emp.availability && emp.availability[dayName];
                                 if (!dayAvail) return false;
                                 
@@ -180,27 +183,28 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     // --- PRIORITY 2: Add OVERLAP if slot is covered AND we still need man-hours. ---
                     else if (dailySlotCoverage[slotIndex] > 0 && currentDayManMinutesScheduled < dailyManHoursTarget * 60) {
                          console.log(`[SCHEDULER-REWRITE-DEBUG] Slot ${currentSlotMinute}: COVERED, but man-minutes target not met. Attempting to add OVERLAP.`);
-                         
+
                         // Try FT for overlap (only if not at max weekly)
                         let eligibleFTEmployeesForOverlap = employeeScheduleData.filter(emp => {
+                            // Hard constraints:
                             if (emp.days_worked_this_week >= 5) return false; 
-                            if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
+                            if (emp.shifts_today_ids.has(currentDayDate.getTime())) return false; 
                             const dayAvail = emp.availability && emp.availability[dayName];
                             if (!dayAvail) return false;
                             const availStart = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
                             const availEnd = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
-                            const requiredShiftEnd = currentSlotMinute + FT_SHIFT_TOTAL_MINUTES;
+                            const requiredShiftEnd = currentSlotMinute + FULL_TIME_SHIFT_TOTAL_MINUTES;
                             const fitsTime = availStart <= currentSlotMinute && 
                                              availEnd >= requiredShiftEnd &&
                                              currentSlotMinute >= businessStartTotalMinutes && 
                                              requiredShiftEnd <= businessEndTotalMinutes; 
                             
+                            // SOFT CONSTRAINT for overlap: Only add if they are not already at their weekly max.
                             if (emp.scheduled_hours_this_week >= 40) {
-                                console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Overlap Check for ${emp.full_name}: Exceeds 40 hours. Skipping for overlap.`);
+                                console.log(`[SCHEDULER-REWRITE-DEBUG]   FT Overlap Check for ${emp.full_name}: Exceeds 40 hours. Skipping for overlap.`);
                                 return false; 
                             }
-                            console.log(`[SCHEDULER-REWRITE-DEBUG]     FT Overlap Elig Check for ${emp.full_name}: FitsTime=${fitsTime}`);
-                            return fitsTime;
+                            return isEligible;
                         }).sort((a, b) => a.scheduled_hours_this_week - b.scheduled_hours_this_week); 
 
                         if (eligibleFTEmployeesForOverlap.length > 0) {
@@ -223,10 +227,9 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                                                    requiredShiftEnd <= businessEndTotalMinutes;
                                 
                                 if (emp.scheduled_hours_this_week >= PART_TIME_MAX_HOURS_PER_WEEK) {
-                                    console.log(`[SCHEDULER-REWRITE-DEBUG]     PT Overlap Check for ${emp.full_name}: Exceeds ${PART_TIME_MAX_HOURS_PER_WEEK} hours. Skipping for overlap.`);
+                                    console.log(`[SCHEDULER-REWRITE-DEBUG]   PT Overlap Check for ${emp.full_name}: Exceeds ${PART_TIME_MAX_HOURS_PER_WEEK} hours. Skipping for overlap.`);
                                     return false; 
                                 }
-                                console.log(`[SCHEDULER-REWRITE-DEBUG]     PT Overlap Elig Check for ${emp.full_name}: FitsTime=${fitsTime}`);
                                 return isEligible;
                             }).sort((a, b) => a.scheduled_hours_this_week - b.scheduled_hours_this_week); 
 
@@ -242,7 +245,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     } else {
                         // Slot is covered and daily man-hours target is met, no need to schedule.
                         console.log(`[SCHEDULER-REWRITE-DEBUG] Slot ${currentSlotMinute}: Covered and daily target met. Skipping scheduling for this slot.`);
-                        continue; // Skip to next minute
                     }
 
 
@@ -283,7 +285,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         
                         for (let m = currentSlotMinute; m < currentSlotMinute + shiftLengthForCoverage; m += SCHEDULING_RESOLUTION_MINUTES) { 
                             const idx = Math.floor((m - businessStartTotalMinutes) / SCHEDULING_RESOLUTION_MINUTES);
-                            if (idx >= 0 && idx < dailyCoverageSlots.length) dailySlotCoverage[idx]++; 
+                            if (idx >= 0 && idx < dailySlotCoverage.length) dailySlotCoverage[idx]++; 
                         }
                         console.log(`[SCHEDULER-REWRITE-DEBUG] Shift CREATED for ${employeeScheduledThisSlot.full_name} (${employeeScheduledThisSlot.user_id}, Type: ${employeeScheduledThisSlot.employment_type}) on ${dayName}. Local Start: ${shiftStartTimeStr}. Local End: ${shiftEndTimeStr}. Man-Minutes Today: ${currentDayManMinutesScheduled}. Daily Coverage: ${JSON.stringify(dailySlotCoverage.slice(coverageIndex, coverageIndex + (shiftLengthForCoverage / SCHEDULING_RESOLUTION_MINUTES)))}`);
                     }
