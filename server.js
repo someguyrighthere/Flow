@@ -177,54 +177,8 @@ app.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// GET user by ID for editing
-app.get('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const userId = req.params.id;
-    // Select all relevant fields, including JSONB availability
-    const sql = `SELECT user_id, full_name, email, role, position, employee_id, employment_type, availability, location_id FROM users WHERE user_id = $1`;
-    try {
-        const result = await pool.query(sql, [userId]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found.' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error fetching user for edit:', err);
-        res.status(500).json({ error: 'Failed to retrieve user details.' });
-    }
-});
-
-// PUT (Update) user details
-app.put('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const userId = req.params.id;
-    // Extract all fields that can be updated from the request body
-    const { full_name, email, position, employee_id, employment_type, location_id, availability } = req.body;
-
-    try {
-        // Construct the update query dynamically based on fields provided
-        // Note: Email is intentionally excluded from being updatable here as per frontend, but if it were, you'd add it.
-        // Also, role is not updatable via this endpoint to simplify admin user management flows.
-        const result = await pool.query(
-            `UPDATE users SET full_name = $1, position = $2, employee_id = $3, employment_type = $4, location_id = $5, availability = $6 WHERE user_id = $7 RETURNING *`,
-            [full_name, position || null, employee_id || null, employment_type || null, location_id || null, JSON.stringify(availability) || null, userId]
-        );
-        
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'User not found.' });
-        }
-        res.json({ message: 'User updated successfully.' });
-    } catch (err) {
-        console.error('Error updating user:', err);
-        if (err.code === '23505') { // Unique violation error code (e.g., duplicate employee_id)
-            return res.status(400).json({ error: 'Duplicate entry detected. Employee ID might already exist.' });
-        }
-        res.status(500).json({ error: 'Failed to update user.' });
-    }
-});
-
 
 app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    // Select all user fields needed for display, joining with locations for location_name
     const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`;
     try {
         const result = await pool.query(sql);
@@ -236,7 +190,6 @@ app.get('/users', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 app.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    // Prevent an admin from deleting their own account
     if (req.user.id == req.params.id) return res.status(403).json({ error: "You cannot delete your own account." });
     try {
         const result = await pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id]);
