@@ -126,40 +126,40 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 for (let currentMinute = businessStartTotalMinutes; currentMinute < businessEndTotalMinutes; currentMinute += SCHEDULING_INTERVAL_MINUTES) {
                     const coverageIndex = Math.floor((currentMinute - businessStartTotalMinutes) / SCHEDULING_INTERVAL_MINUTES); 
 
-                    // Define priorities for scheduling at this specific minute slot:
+                    // Define employee to schedule for this slot
                     let employeeScheduled = null; // Reset for each minute slot
 
-                    // PRIORITY 1: Fill UNCOVERED slots first.
+                    // PRIORITY 1: Fill UNCOVERED slots with FT first, then PT.
                     if (dailyCoverageSlots[coverageIndex] === 0) {
-                        console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Slot ${currentMinute}: UNCOVERED. Attempting to schedule primary coverage.`);
+                        console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Slot ${currentMinute}: UNCOVERED. Prioritizing primary coverage.`);
 
-                        // Try to find a Full-time employee for primary coverage
-                        const eligibleFTEmployeesForPrimary = employeeScheduleData.filter(emp => {
-                            // Basic eligibility checks for fitting the shift duration and availability.
-                            // DO NOT check scheduled_hours limits here, as basic coverage is priority.
+                        // Try to find an eligible FT employee for primary coverage
+                        const eligibleFTEmployeesForCoverage = employeeScheduleData.filter(emp => {
+                            // Hard constraints:
                             if (emp.daysWorked >= 5) return false; 
                             if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
                             const dayAvail = emp.availability && emp.availability[dayName];
                             if (!dayAvail) return false;
+                            
                             const availStartTotalMinutes = parseInt(dayAvail.start.split(':')[0], 10) * 60 + parseInt(dayAvail.start.split(':')[1], 10);
                             const availEndTotalMinutes = parseInt(dayAvail.end.split(':')[0], 10) * 60 + parseInt(dayAvail.end.split(':')[1], 10);
+
                             const requiredShiftEndTotalMinutes = currentMinute + FULL_TIME_SHIFT_LENGTH_TOTAL_MINUTES;
+
                             const isEligible = availStartTotalMinutes <= currentMinute && 
                                                availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
                                                currentMinute >= businessStartTotalMinutes && 
                                                requiredShiftEndTotalMinutes <= businessEndTotalMinutes; 
-                            
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Primary Check for ${emp.full_name} (${emp.user_id}): Elig=${isEligible}. Hours=${emp.scheduled_hours}`);
                             return isEligible;
-                        }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Still prioritize least scheduled among those eligible for coverage
+                        }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); // Least scheduled FT first
 
-                        if (eligibleFTEmployeesForPrimary.length > 0) {
-                            employeeScheduled = eligibleFTEmployeesForPrimary[0];
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Employee ${employeeScheduled.full_name} selected for PRIMARY coverage.`);
+                        if (eligibleFTEmployeesForCoverage.length > 0) {
+                            employeeScheduled = eligibleFTEmployeesForCoverage[0];
+                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Employee ${employeeScheduled.full_name} selected for PRIMARY coverage of UNCOVERED slot.`);
                         } else {
-                            // If no FT, try to find a Part-time employee for primary coverage
-                            const eligiblePTEmployeesForPrimary = employeeScheduleData.filter(emp => {
-                                // Basic eligibility checks
+                            // If no FT found for primary coverage, try PT employee for primary coverage
+                            const eligiblePTEmployeesForCoverage = employeeScheduleData.filter(emp => {
+                                // Hard constraints:
                                 if (emp.employment_type !== 'Part-time') return false; 
                                 if (emp.daysWorked >= 5) return false; 
                                 if (employeesScheduledTodayIds.has(emp.user_id)) return false; 
@@ -172,21 +172,20 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                                                    availEndTotalMinutes >= requiredShiftEndTotalMinutes &&
                                                    currentMinute >= businessStartTotalMinutes && 
                                                    requiredShiftEndTotalMinutes <= businessEndTotalMinutes;
-                                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Primary Check for ${emp.full_name} (${emp.user_id}): Elig=${isEligible}. Hours=${emp.scheduled_hours}`);
                                 return isEligible;
                             }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
 
-                            if (eligiblePTEmployeesForPrimary.length > 0) {
-                                employeeScheduled = eligiblePTEmployeesForPrimary[0]; 
-                                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Employee ${employeeScheduled.full_name} selected for PRIMARY coverage.`);
+                            if (eligiblePTEmployeesForCoverage.length > 0) {
+                                employeeScheduled = eligiblePTEmployeesForCoverage[0]; 
+                                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Employee ${employeeScheduled.full_name} selected for PRIMARY coverage of UNCOVERED slot.`);
                             }
                         }
 
                         if (!employeeScheduled) {
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: UNCOVERED but NO ELIGIBLE employee found to cover this slot.`);
+                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: UNCOVERED, but NO ELIGIBLE employee found to cover this slot.`);
                         }
                     } 
-                    // PRIORITY 2: Add OVERLAP if slot is already covered AND we still need man-hours.
+                    // PRIORITY 2: If slot is already covered AND we still need man-hours, try to add OVERLAP.
                     else if (dailyCoverageSlots[coverageIndex] > 0 && remainingDailyTargetMinutes > 0) {
                         console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Slot ${currentMinute}: Covered, but remaining daily target (${remainingDailyTargetMinutes}) > 0. Attempting to add OVERLAP.`);
 
@@ -210,7 +209,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                                 console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Overlap Check for ${emp.full_name} (${emp.user_id}): Exceeds 40 hours. Skipping for overlap.`);
                                 return false; 
                             }
-                            console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   FT Overlap Check for ${emp.full_name} (${emp.user_id}): Elig=${isEligible}. Hours=${emp.scheduled_hours}`);
                             return isEligible;
                         }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
 
@@ -239,7 +237,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                                     console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Overlap Check for ${emp.full_name} (${emp.user_id}): Exceeds ${PART_TIME_MAX_HOURS_PER_WEEK} hours. Skipping for overlap.`);
                                     return false; 
                                 }
-                                console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG]   PT Overlap Check for ${emp.full_name} (${emp.user_id}): Elig=${isEligible}. Hours=${emp.scheduled_hours}`);
                                 return isEligible;
                             }).sort((a, b) => a.scheduled_hours - b.scheduled_hours); 
 
@@ -253,9 +250,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: Need OVERLAP, but NO ELIGIBLE employee found.`);
                         }
                     } else {
-                        // Slot is covered and no more man-hours needed for the day. Skip this minute.
+                        // Slot is covered and remainingDailyTargetMinutes <= 0, so no need to schedule.
                         console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: Covered and daily target met. Skipping scheduling for this slot.`);
-                        continue; // Skip to next minute
                     }
 
 
@@ -299,11 +295,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             if (idx >= 0 && idx < dailyCoverageSlots.length) dailyCoverageSlots[idx]++; 
                         }
                         console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Shift CREATED for ${employeeScheduled.full_name} (${employeeScheduled.user_id}, Type: ${employeeScheduled.employment_type}) on ${dayName}. Local Start: ${shiftStartTimeStr}. Local End: ${shiftEndTimeStr}. Remaining Daily Target: ${remainingDailyTargetMinutes}. Daily Coverage: ${JSON.stringify(dailyCoverageSlots.slice(coverageIndex, coverageIndex + (shiftLengthForCoverage / SCHEDULING_INTERVAL_MINUTES)))}`);
-                        // No continue here, the loop will naturally increment to the next minute interval.
-                    } else {
-                         // This else block handles the case where `shouldAttemptScheduleThisSlot` was true,
-                         // but no eligible employee was found after trying FT and PT.
-                         console.log(`[AUTO-SCHEDULE-ULTIMATE-DEBUG] Minute ${currentMinute}: No eligible FT/PT employee found to fill (or overlap) this slot.`);
+                        // No continue needed here, the loop will naturally increment to the next minute interval.
                     }
                 }
             }
