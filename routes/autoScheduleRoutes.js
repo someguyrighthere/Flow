@@ -66,7 +66,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 // This pool will be filtered and reduced as employees are scheduled for the current day.
                 let availableEmployeesForCurrentDayIteration = [...employeeScheduleData]; // Shallow copy for iteration purposes
 
-                // Create a coverage array for the current day, counting employees covering each hour.
+                // FIX: Declare dailyCoverageCount here so it's reset for each day and in correct scope
                 const dailyCoverageCount = Array(businessEndHour - businessStartHour).fill(0); 
 
                 // Mark existing shifts (from manual entries or prior auto-runs in the transaction) in dailyCoverageCount.
@@ -235,6 +235,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     if (dailyCoverageCount[coverageIndex] === 0) { // If this hour is completely uncovered after primary pass
                         // Try to find ANY eligible employee (who hasn't hit max weekly hours/days) to cover this single hour.
                         const eligibleForGapFill = employeeScheduleData.filter(emp => {
+                            // Re-filter the global pool, but ensure they haven't exhausted their weekly limits
                             if (emp.daysWorked >= 5) return false; 
                             if (emp.employment_type === 'Full-time' && emp.scheduled_hours >= 40) return false; 
                             
@@ -263,11 +264,11 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const globalEmpIndex = employeeScheduleData.findIndex(emp => emp.user_id === employeeToFillGap.user_id);
                             if (globalEmpIndex !== -1) {
                                 employeeScheduleData[globalEmpIndex].scheduled_hours += 1; // Add 1 hour
+                                // Do NOT increment daysWorked here unless this is their only shift this day.
+                                // This pass is for filling *gaps*, not necessarily full new shifts.
                             }
                             totalShiftsCreated++;
                             dailyCoverageCount[coverageIndex]++; // Mark this hour as covered
-                            // We don't mark scheduledForCurrentDay here for gap fills, as they might have had their main shift.
-                            // The primary concern is filling the visual gap.
                         }
                     }
                 }
