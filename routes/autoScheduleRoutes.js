@@ -81,9 +81,18 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     ]);
                 }
 
-                // === Schedule employees to meet daily man-hour target ===
-                outer: while (scheduledHoursToday < dailyTarget) {
+                // Initialize coverage tracking
+                const hoursInDay = businessEndHour - businessStartHour;
+                const coverage = Array(hoursInDay).fill(0);
+
+                // === Schedule employees to meet coverage and man-hour goals ===
+                outer: while (scheduledHoursToday < dailyTarget || coverage.includes(0)) {
+                    let scheduled = false;
+
                     for (let currentHour = businessStartHour; currentHour <= businessEndHour - 4; currentHour++) {
+                        const uncovered = coverage[currentHour - businessStartHour] === 0;
+                        if (!uncovered && scheduledHoursToday >= dailyTarget) continue;
+
                         const eligibleEmployees = employeeScheduleData.filter(emp => {
                             if (emp.daysWorked >= 5 || scheduledToday.has(emp.user_id)) return false;
                             if (emp.employment_type === 'Full-time' && emp.scheduled_hours >= 40) return false;
@@ -126,14 +135,20 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         employeeScheduleData[empIndex].daysWorked++;
                         scheduledToday.add(selectedEmp.user_id);
 
+                        for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
+                            const index = h - businessStartHour;
+                            if (index >= 0 && index < coverage.length) {
+                                coverage[index] = 1;
+                            }
+                        }
+
                         scheduledHoursToday += shiftWorkHours;
                         totalShiftsCreated++;
-
-                        if (scheduledHoursToday >= dailyTarget) break outer;
+                        scheduled = true;
+                        if (scheduledHoursToday >= dailyTarget && !coverage.includes(0)) break outer;
                     }
 
-                    // If we couldn't add more shifts, break to prevent infinite loop
-                    break;
+                    if (!scheduled) break; // prevent infinite loop
                 }
 
                 scheduledHoursByDay[dayName] = scheduledHoursToday;
