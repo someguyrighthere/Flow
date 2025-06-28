@@ -34,8 +34,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             let employeeScheduleData = employees.map(e => ({
                 ...e,
                 scheduled_hours: 0,
-                daysWorked: 0,
-                scheduledForCurrentDay: false
+                daysWorked: 0
             }));
 
             const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -44,6 +43,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             const FULL_TIME_BREAK_DURATION = 0.5;
             const FULL_TIME_SHIFT_LENGTH_TOTAL = FULL_TIME_WORK_DURATION + FULL_TIME_BREAK_DURATION;
             const PART_TIME_SHIFT_LENGTH = 4;
+
             let uncoveredHoursLog = {};
             let scheduledHoursByDay = {};
 
@@ -54,8 +54,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 const dayName = daysOfWeek[currentDate.getDay()];
                 const dailyTarget = parseFloat(dailyHours[dayName] || 0);
                 let scheduledHoursToday = 0;
-
-                employeeScheduleData.forEach(emp => emp.scheduledForCurrentDay = false);
+                const scheduledToday = new Set();
 
                 // === Ensure a manager is scheduled for all hours ===
                 const availableManagers = managers.filter(mgr => {
@@ -82,58 +81,59 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     ]);
                 }
 
-                // === Schedule employees until daily man-hour goal is hit ===
-                while (scheduledHoursToday < dailyTarget) {
-                    const currentHour = businessStartHour + Math.floor(Math.random() * (businessEndHour - businessStartHour));
+                // === Schedule employees to meet daily man-hour target ===
+                outer: while (scheduledHoursToday < dailyTarget) {
+                    for (let currentHour = businessStartHour; currentHour <= businessEndHour - 4; currentHour++) {
+                        const eligibleEmployees = employeeScheduleData.filter(emp => {
+                            if (emp.daysWorked >= 5 || scheduledToday.has(emp.user_id)) return false;
+                            if (emp.employment_type === 'Full-time' && emp.scheduled_hours >= 40) return false;
 
-                    const eligibleEmployees = employeeScheduleData.filter(emp => {
-                        if (emp.daysWorked >= 5 || emp.scheduledForCurrentDay) return false;
-                        if (emp.employment_type === 'Full-time' && emp.scheduled_hours >= 40) return false;
+                            const dayAvail = emp.availability?.[dayName];
+                            if (!dayAvail) return false;
+                            const availStart = parseInt(dayAvail.start.split(':')[0], 10);
+                            const availEnd = parseInt(dayAvail.end.split(':')[0], 10);
 
-                        const dayAvail = emp.availability?.[dayName];
-                        if (!dayAvail) return false;
-                        const availStart = parseInt(dayAvail.start.split(':')[0], 10);
-                        const availEnd = parseInt(dayAvail.end.split(':')[0], 10);
+                            const shiftLength = emp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
+                            const shiftEndHour = currentHour + shiftLength;
 
-                        const shiftLength = emp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
-                        const shiftEndHour = currentHour + shiftLength;
+                            return availStart <= currentHour && availEnd >= shiftEndHour && shiftEndHour <= businessEndHour;
+                        }).sort((a, b) => a.scheduled_hours - b.scheduled_hours);
 
-                        return availStart <= currentHour && availEnd >= shiftEndHour && shiftEndHour <= businessEndHour;
-                    }).sort((a, b) => a.scheduled_hours - b.scheduled_hours);
+                        const selectedEmp = eligibleEmployees.find(e => e.employment_type === 'Full-time') ||
+                                            eligibleEmployees.find(e => e.employment_type === 'Part-time');
 
-                    const selectedEmp = eligibleEmployees.find(e => e.employment_type === 'Full-time') ||
-                                        eligibleEmployees.find(e => e.employment_type === 'Part-time');
+                        if (!selectedEmp) continue;
 
-                    if (!selectedEmp) {
-                        if (!uncoveredHoursLog[dayName]) uncoveredHoursLog[dayName] = [];
-                        uncoveredHoursLog[dayName].push(currentHour);
-                        break;
+                        const shiftLength = selectedEmp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
+                        const shiftWorkHours = selectedEmp.employment_type === 'Full-time' ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
+
+                        const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0);
+                        const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + shiftWorkHours, selectedEmp.employment_type === 'Full-time' ? FULL_TIME_BREAK_DURATION * 60 : 0, 0);
+
+                        await client.query(`
+                            INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
+                            VALUES ($1, $2, $3, $4, $5)
+                        `, [
+                            selectedEmp.user_id,
+                            selectedEmp.location_id,
+                            shiftStart.toISOString(),
+                            shiftEnd.toISOString(),
+                            `Auto-generated ${selectedEmp.employment_type === 'Full-time' ? 'FT' : 'PT'} - ${shiftStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${shiftEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                        ]);
+
+                        const empIndex = employeeScheduleData.findIndex(e => e.user_id === selectedEmp.user_id);
+                        employeeScheduleData[empIndex].scheduled_hours += shiftWorkHours;
+                        employeeScheduleData[empIndex].daysWorked++;
+                        scheduledToday.add(selectedEmp.user_id);
+
+                        scheduledHoursToday += shiftWorkHours;
+                        totalShiftsCreated++;
+
+                        if (scheduledHoursToday >= dailyTarget) break outer;
                     }
 
-                    const shiftLength = selectedEmp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
-                    const shiftWorkHours = selectedEmp.employment_type === 'Full-time' ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
-
-                    const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0);
-                    const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + shiftWorkHours, selectedEmp.employment_type === 'Full-time' ? FULL_TIME_BREAK_DURATION * 60 : 0, 0);
-
-                    await client.query(`
-                        INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
-                        VALUES ($1, $2, $3, $4, $5)
-                    `, [
-                        selectedEmp.user_id,
-                        selectedEmp.location_id,
-                        shiftStart.toISOString(),
-                        shiftEnd.toISOString(),
-                        `Auto-generated ${selectedEmp.employment_type === 'Full-time' ? 'FT' : 'PT'} - ${shiftStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${shiftEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-                    ]);
-
-                    const empIndex = employeeScheduleData.findIndex(e => e.user_id === selectedEmp.user_id);
-                    employeeScheduleData[empIndex].scheduled_hours += shiftWorkHours;
-                    employeeScheduleData[empIndex].daysWorked++;
-                    employeeScheduleData[empIndex].scheduledForCurrentDay = true;
-
-                    scheduledHoursToday += shiftWorkHours;
-                    totalShiftsCreated++;
+                    // If we couldn't add more shifts, break to prevent infinite loop
+                    break;
                 }
 
                 scheduledHoursByDay[dayName] = scheduledHoursToday;
