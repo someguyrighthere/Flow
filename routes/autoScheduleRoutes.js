@@ -158,7 +158,51 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 scheduledHoursByDay[dayName] = scheduledHoursToday;
             }
 
-            await client.query('COMMIT');
+            // === Enforce minimum 40 hours for full-time employees and managers ===
+for (const emp of employeeScheduleData) {
+    const isFullTime = emp.employment_type === 'Full-time';
+    const isManager = managers.some(m => m.user_id === emp.user_id);
+    if ((isFullTime || isManager) && emp.scheduled_hours < 40) {
+        for (let d = 0; d < 7; d++) {
+            if (emp.daysWorked >= 5 || emp.scheduled_hours >= 40) break;
+
+            const currentDate = new Date(weekStartDate);
+            currentDate.setDate(currentDate.getDate() + d);
+            const dayName = daysOfWeek[currentDate.getDay()];
+
+            const dayAvail = emp.availability?.[dayName];
+            if (!dayAvail) continue;
+
+            const availStart = parseInt(dayAvail.start.split(':')[0], 10);
+            const availEnd = parseInt(dayAvail.end.split(':')[0], 10);
+
+            const shiftStartHour = Math.max(availStart, businessStartHour);
+            const shiftEndHour = Math.min(availEnd, businessEndHour);
+            const shiftLength = isFullTime ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
+            if (shiftEndHour - shiftStartHour < shiftLength) continue;
+
+            const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour, 0, 0);
+            const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour + (isFullTime ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH), isFullTime ? FULL_TIME_BREAK_DURATION * 60 : 0, 0);
+
+            await client.query(`
+                INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [
+                emp.user_id,
+                emp.location_id,
+                shiftStart.toISOString(),
+                shiftEnd.toISOString(),
+                `Minimum hours adjustment`
+            ]);
+
+            emp.scheduled_hours += isFullTime ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
+            emp.daysWorked++;
+            totalShiftsCreated++;
+        }
+    }
+}
+
+await client.query('COMMIT');
             res.status(201).json({
                 message: `Successfully created ${totalShiftsCreated} auto-generated shifts.`,
                 uncovered_hours: uncoveredHoursLog,
