@@ -34,6 +34,11 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 WHERE role = 'employee' AND availability IS NOT NULL
             `);
 
+            const { rows: managers } = await client.query(`
+                SELECT user_id, full_name, availability, location_id FROM users 
+                WHERE role = 'manager' AND availability IS NOT NULL
+            `);
+
             let employeeScheduleData = employees.map(e => ({
                 ...e,
                 scheduled_hours: 0,
@@ -55,7 +60,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 currentDate.setDate(currentDate.getDate() + i);
                 currentDate.setHours(0, 0, 0, 0);
                 const dayName = daysOfWeek[currentDate.getDay()];
-                const remainingDailyTargetHours = parseFloat(dailyHours[dayName] || 0);
 
                 employeeScheduleData.forEach(emp => emp.scheduledForCurrentDay = false);
 
@@ -77,9 +81,87 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     }
                 });
 
+                // === Schedule Managers to Cover Entire Day ===
+                const availableManagers = managers.filter(mgr => {
+                    const avail = mgr.availability?.[dayName];
+                    if (!avail) return false;
+
+                    const availStart = parseInt(avail.start.split(':')[0], 10);
+                    const availEnd = parseInt(avail.end.split(':')[0], 10);
+
+                    return availStart <= businessStartHour && availEnd >= businessEndHour;
+                });
+
+                if (availableManagers.length > 0) {
+                    const selected = availableManagers[0];
+                    const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), businessStartHour, 0, 0);
+                    const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), businessEndHour, 0, 0);
+
+                    await client.query(`
+                        INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
+                        VALUES ($1, $2, $3, $4, $5)
+                    `, [
+                        selected.user_id,
+                        selected.location_id,
+                        shiftStart.toISOString(),
+                        shiftEnd.toISOString(),
+                        `Auto-assigned Manager Full Coverage`
+                    ]);
+
+                    for (let h = businessStartHour; h < businessEndHour; h++) {
+                        const idx = h - businessStartHour;
+                        if (idx >= 0 && idx < dailyCoverageCount.length) {
+                            dailyCoverageCount[idx]++;
+                        }
+                    }
+                } else {
+                    // Fallback: split the day among available managers
+                    let hourPointer = businessStartHour;
+
+                    for (let mgr of managers) {
+                        const avail = mgr.availability?.[dayName];
+                        if (!avail) continue;
+
+                        const availStart = parseInt(avail.start.split(':')[0], 10);
+                        const availEnd = parseInt(avail.end.split(':')[0], 10);
+
+                        if (availEnd <= hourPointer || availStart >= businessEndHour) continue;
+
+                        const shiftStartHour = Math.max(hourPointer, availStart);
+                        const shiftEndHour = Math.min(businessEndHour, availEnd);
+                        const shiftLength = shiftEndHour - shiftStartHour;
+
+                        if (shiftLength <= 0) continue;
+
+                        const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour, 0, 0);
+                        const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftEndHour, 0, 0);
+
+                        await client.query(`
+                            INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
+                            VALUES ($1, $2, $3, $4, $5)
+                        `, [
+                            mgr.user_id,
+                            mgr.location_id,
+                            shiftStart.toISOString(),
+                            shiftEnd.toISOString(),
+                            `Auto-assigned Manager Partial`
+                        ]);
+
+                        for (let h = shiftStartHour; h < shiftEndHour; h++) {
+                            const idx = h - businessStartHour;
+                            if (idx >= 0 && idx < dailyCoverageCount.length) {
+                                dailyCoverageCount[idx]++;
+                            }
+                        }
+
+                        hourPointer = shiftEndHour;
+                        if (hourPointer >= businessEndHour) break;
+                    }
+                }
+
+                // === Schedule Employees (overlap allowed) ===
                 for (let currentHour = businessStartHour; currentHour < businessEndHour; currentHour++) {
                     const coverageIndex = currentHour - businessStartHour;
-                    if (dailyCoverageCount[coverageIndex] >= 1) continue;
 
                     const eligibleEmployees = employeeScheduleData.filter(emp => {
                         if (emp.daysWorked >= 5) return false;
@@ -98,8 +180,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         return (
                             availStart <= currentHour &&
                             availEnd >= shiftEndHour &&
-                            shiftEndHour <= businessEndHour &&
-                            isTimeWindowFree(currentHour, shiftEndHour, dailyCoverageCount, businessStartHour)
+                            shiftEndHour <= businessEndHour
                         );
                     }).sort((a, b) => a.scheduled_hours - b.scheduled_hours);
 
