@@ -81,18 +81,14 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     ]);
                 }
 
-                // Initialize coverage tracking
                 const hoursInDay = businessEndHour - businessStartHour;
                 const coverage = Array(hoursInDay).fill(0);
 
-                // === Schedule employees to meet coverage and man-hour goals ===
-                outer: while (scheduledHoursToday < dailyTarget || coverage.includes(0)) {
-                    let scheduled = false;
+                while (scheduledHoursToday < dailyTarget || coverage.includes(0)) {
+                    let bestCandidate = null;
+                    let bestScore = -1;
 
                     for (let currentHour = businessStartHour; currentHour <= businessEndHour - 4; currentHour++) {
-                        const uncovered = coverage[currentHour - businessStartHour] === 0;
-                        if (!uncovered && scheduledHoursToday >= dailyTarget) continue;
-
                         const eligibleEmployees = employeeScheduleData.filter(emp => {
                             if (emp.daysWorked >= 5 || scheduledToday.has(emp.user_id)) return false;
                             if (emp.employment_type === 'Full-time' && emp.scheduled_hours >= 40) return false;
@@ -106,49 +102,57 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const shiftEndHour = currentHour + shiftLength;
 
                             return availStart <= currentHour && availEnd >= shiftEndHour && shiftEndHour <= businessEndHour;
-                        }).sort((a, b) => a.scheduled_hours - b.scheduled_hours);
+                        });
 
-                        const selectedEmp = eligibleEmployees.find(e => e.employment_type === 'Full-time') ||
-                                            eligibleEmployees.find(e => e.employment_type === 'Part-time');
+                        for (const emp of eligibleEmployees) {
+                            const shiftLength = emp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
+                            const shiftWorkHours = emp.employment_type === 'Full-time' ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
 
-                        if (!selectedEmp) continue;
+                            let score = 0;
+                            for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
+                                const idx = h - businessStartHour;
+                                if (coverage[idx] === 0) score++;
+                            }
 
-                        const shiftLength = selectedEmp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
-                        const shiftWorkHours = selectedEmp.employment_type === 'Full-time' ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
-
-                        const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0);
-                        const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + shiftWorkHours, selectedEmp.employment_type === 'Full-time' ? FULL_TIME_BREAK_DURATION * 60 : 0, 0);
-
-                        await client.query(`
-                            INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
-                            VALUES ($1, $2, $3, $4, $5)
-                        `, [
-                            selectedEmp.user_id,
-                            selectedEmp.location_id,
-                            shiftStart.toISOString(),
-                            shiftEnd.toISOString(),
-                            `Auto-generated ${selectedEmp.employment_type === 'Full-time' ? 'FT' : 'PT'} - ${shiftStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${shiftEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-                        ]);
-
-                        const empIndex = employeeScheduleData.findIndex(e => e.user_id === selectedEmp.user_id);
-                        employeeScheduleData[empIndex].scheduled_hours += shiftWorkHours;
-                        employeeScheduleData[empIndex].daysWorked++;
-                        scheduledToday.add(selectedEmp.user_id);
-
-                        for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
-                            const index = h - businessStartHour;
-                            if (index >= 0 && index < coverage.length) {
-                                coverage[index] = 1;
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestCandidate = { emp, currentHour, shiftLength, shiftWorkHours };
                             }
                         }
-
-                        scheduledHoursToday += shiftWorkHours;
-                        totalShiftsCreated++;
-                        scheduled = true;
-                        if (scheduledHoursToday >= dailyTarget && !coverage.includes(0)) break outer;
                     }
 
-                    if (!scheduled) break; // prevent infinite loop
+                    if (!bestCandidate) break;
+
+                    const { emp, currentHour, shiftLength, shiftWorkHours } = bestCandidate;
+
+                    const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0);
+                    const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + shiftWorkHours, emp.employment_type === 'Full-time' ? FULL_TIME_BREAK_DURATION * 60 : 0, 0);
+
+                    await client.query(`
+                        INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
+                        VALUES ($1, $2, $3, $4, $5)
+                    `, [
+                        emp.user_id,
+                        emp.location_id,
+                        shiftStart.toISOString(),
+                        shiftEnd.toISOString(),
+                        `Auto-generated ${emp.employment_type === 'Full-time' ? 'FT' : 'PT'} - ${shiftStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${shiftEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                    ]);
+
+                    const empIndex = employeeScheduleData.findIndex(e => e.user_id === emp.user_id);
+                    employeeScheduleData[empIndex].scheduled_hours += shiftWorkHours;
+                    employeeScheduleData[empIndex].daysWorked++;
+                    scheduledToday.add(emp.user_id);
+
+                    for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
+                        const index = h - businessStartHour;
+                        if (index >= 0 && index < coverage.length) {
+                            coverage[index] = 1;
+                        }
+                    }
+
+                    scheduledHoursToday += shiftWorkHours;
+                    totalShiftsCreated++;
                 }
 
                 scheduledHoursByDay[dayName] = scheduledHoursToday;
