@@ -171,6 +171,40 @@
     <!-- Modals (removed from here as per user request for admin-like pages) -->
     <!-- Removed modal-message-overlay and confirm-modal-overlay structures entirely -->
     
+    <!-- NEW: Attach Document Modal (re-introduced for checklist tasks) -->
+    <div id="attach-document-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Attach a Document</h3>
+            <p>Select a document from your library to attach to this task.</p>
+            <div id="attach-document-list" style="max-height: 300px; overflow-y: auto; text-align: left;">
+                <p style="color: var(--text-medium);">Loading documents...</p>
+            </div>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                 <button id="attach-document-cancel-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Standard message and confirm modals for other pages (if needed) -->
+    <!-- These are kept outside the admin/checklist HTML but are usually in app-wide HTML if used globally -->
+    <div id="modal-message" class="modal" style="display: none;">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+    
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
