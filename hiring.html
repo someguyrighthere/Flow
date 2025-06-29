@@ -49,6 +49,31 @@
         .status-message.error {
             color: #e74c3c;
         }
+
+        /* Modal specific styles (if this HTML is part of a modal, which it appears to be) */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000;
+        }
+        .modal-content {
+            background-color: var(--card-bg); 
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%; 
+            max-width: 500px; 
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; 
+            color: var(--text-light); 
+            animation: fadeIn 0.3s ease-out;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -84,8 +109,10 @@
                     <input type="email" id="onboard-email" placeholder="e.g., jane.doe@example.com" required>
                 </div>
                 <div class="form-group">
-                    <label for="employee-position-select">Position</label>
-                    <select id="employee-position-select" required>
+                    <label for="new-hire-position">Position</label> <!-- Changed label 'for' to match select ID -->
+                    <select id="new-hire-position" required> <!-- FIX: Changed ID to new-hire-position -->
+                        <!-- Options will be populated by JavaScript -->
+                        <!-- FIX: Ensure no hardcoded options like "(Functionality Disabled)" -->
                     </select>
                 </div>
                 <div class="form-group">
@@ -123,7 +150,8 @@ export function handleHiringPage() {
 
     // --- DOM Elements ---
     const onboardEmployeeForm = document.getElementById('onboard-employee-form');
-    const positionSelect = document.getElementById('employee-position-select'); 
+    // FIX: Corrected ID to match hiring.html's <select id="new-hire-position">
+    const positionSelect = document.getElementById('new-hire-position'); 
     const onboardStatusMessage = document.getElementById('onboard-status-message'); 
 
     // --- Helper function for local status messages (similar to admin.js) ---
@@ -144,8 +172,13 @@ export function handleHiringPage() {
      * Loads job postings and populates the position dropdown.
      */
     async function loadJobPostings() {
-        if (!positionSelect) return;
-        // Clear all existing options first
+        if (!positionSelect) {
+            console.error('Error: Position select element (new-hire-position) not found.');
+            // Fallback display if element is truly missing from HTML
+            // This is less likely if HTML is correctly loaded.
+            return; 
+        }
+        // Clear all existing options first, and add a loading message
         positionSelect.innerHTML = '<option value="">Loading positions...</option>'; 
         try {
             const jobPostings = await apiRequest('GET', '/job-postings');
@@ -177,30 +210,28 @@ export function handleHiringPage() {
                 full_name: document.getElementById('onboard-full-name').value.trim(),
                 email: document.getElementById('onboard-email').value.trim(),
                 // Assuming positionSelect.value is the job_posting_id
-                position_id: positionSelect.value, 
+                job_posting_id: positionSelect.value, // Changed to job_posting_id to match backend
                 employee_id: document.getElementById('onboard-employee-id').value.trim(),
                 // Add other fields as per your form structure (phone, address, etc.)
+                // Example: phone: document.getElementById('onboard-phone').value.trim(),
+                // Example: address: document.getElementById('onboard-address').value.trim(),
             };
 
             // Basic validation
-            if (!employeeData.full_name || !employeeData.email || !employeeData.position_id) {
+            if (!employeeData.full_name || !employeeData.email || !employeeData.job_posting_id) {
                 displayStatusMessage(onboardStatusMessage, 'Please fill all required fields.', true);
                 return;
             }
 
             try {
-                // This would be the route to onboard a new employee, potentially a different one than 'invite-employee'
-                // For now, let's assume it attempts to add an employee to a position
-                // You might need a new backend route for this.
-                displayStatusMessage(onboardStatusMessage, 'Employee onboarding functionality temporarily disabled. Please contact support.', true);
-
-                // Example of what a real API call might look like:
-                // await apiRequest('POST', '/employees/onboard', employeeData);
-                // displayStatusMessage(onboardStatusMessage, 'Employee onboarded successfully!', false);
-                // onboardEmployeeForm.reset();
+                // This route should point to your backend's applicant submission endpoint
+                // Assuming applicants POST route does not require authentication (public form)
+                await apiRequest('POST', '/applicants', employeeData); 
+                displayStatusMessage(onboardStatusMessage, 'Application submitted successfully! Your application will be reviewed shortly.', false);
+                onboardEmployeeForm.reset(); // Clear the form
             } catch (error) {
-                displayStatusMessage(onboardStatusMessage, `Error onboarding employee: ${error.message}`, true);
-                console.error('Error onboarding employee:', error);
+                displayStatusMessage(onboardStatusMessage, `Error submitting application: ${error.message}`, true);
+                console.error('Error submitting application:', error);
             }
         });
     }
