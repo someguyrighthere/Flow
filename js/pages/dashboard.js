@@ -16,7 +16,11 @@ export function handleDashboardPage() {
     const showOnboardModalBtn = document.getElementById('show-onboard-modal');
     const modalCancelOnboardBtn = document.getElementById('modal-cancel-onboard');
     const onboardUserForm = document.getElementById('onboard-user-form');
-    const newHirePositionSelect = document.getElementById('new-hire-position'); 
+    // NEW: Existing employee select dropdown
+    const existingEmployeeSelect = document.getElementById('existing-employee-select'); 
+    // NEW: Element to display assigned task list info
+    const assignedTaskListInfo = document.getElementById('assigned-task-list-info');
+
     const onboardModalStatusMessage = document.getElementById('onboard-modal-status-message'); // For messages within the modal
 
     const pendingOnboardsCount = document.getElementById('pending-onboards-count');
@@ -26,6 +30,10 @@ export function handleDashboardPage() {
     const activityFeedPlaceholder = document.getElementById('activity-feed-placeholder');
     const viewJobPostingsBtn = document.getElementById('view-job-postings-btn');
     const viewApplicantsBtn = document.getElementById('view-applicants-btn');
+
+    // Store all checklists and users globally once fetched to avoid re-fetching
+    let allChecklists = [];
+    let allUsers = [];
 
     // --- Helper function for local status messages (within modal) ---
     function displayStatusMessage(element, message, isError = false) {
@@ -42,30 +50,76 @@ export function handleDashboardPage() {
     // --- Data Loading Functions ---
 
     /**
-     * Loads job postings and populates the position dropdown in the onboard modal.
+     * Loads existing employees (users with role 'employee') and populates the dropdown.
      */
-    async function loadJobPostingsForOnboard() {
-        if (!newHirePositionSelect) {
-            console.error('Error: new-hire-position select element not found.');
+    async function loadExistingEmployeesForOnboard() {
+        if (!existingEmployeeSelect) {
+            console.error('Error: Existing employee select element (existing-employee-select) not found.');
             return;
         }
-        newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>'; 
+        existingEmployeeSelect.innerHTML = '<option value="">Loading employees...</option>'; 
         try {
-            const jobPostings = await apiRequest('GET', '/job-postings');
-            newHirePositionSelect.innerHTML = '<option value="">Select Position</option>'; 
+            // Fetch all users
+            const users = await apiRequest('GET', '/users');
+            allUsers = users; // Store all users globally
 
-            if (jobPostings && jobPostings.length > 0) {
-                jobPostings.forEach(post => {
-                    const option = new Option(post.title, post.id); // Use post.id as value
-                    newHirePositionSelect.add(option);
+            // Filter for employees who are not Super Admin or Location Admin
+            const employeesOnly = users.filter(user => user.role === 'employee' || user.role === 'location_admin'); // Include managers who might be onboarded
+
+            existingEmployeeSelect.innerHTML = '<option value="">Select Employee</option>'; 
+
+            if (employeesOnly && employeesOnly.length > 0) {
+                employeesOnly.forEach(emp => {
+                    const option = new Option(`${emp.full_name} (${emp.email})`, emp.user_id);
+                    existingEmployeeSelect.add(option);
                 });
             } else {
-                newHirePositionSelect.innerHTML = '<option value="">No positions available</option>';
+                existingEmployeeSelect.innerHTML = '<option value="">No employees found</option>';
             }
         } catch (error) {
-            console.error('Error loading job postings for onboard modal:', error);
-            newHirePositionSelect.innerHTML = '<option value="">Error loading positions</option>';
-            displayStatusMessage(onboardModalStatusMessage, `Error loading positions: ${error.message}`, true);
+            console.error('Error loading existing employees for onboard modal:', error);
+            existingEmployeeSelect.innerHTML = '<option value="">Error loading employees</option>';
+            displayStatusMessage(onboardModalStatusMessage, `Error loading employees: ${error.message}`, true);
+        }
+    }
+
+    /**
+     * Fetches all checklists.
+     */
+    async function fetchAllChecklists() {
+        try {
+            const checklists = await apiRequest('GET', '/checklists');
+            allChecklists = checklists; // Store all checklists globally
+        } catch (error) {
+            console.error('Error fetching all checklists:', error);
+            // Don't display modal message here, just log, as this is a background fetch.
+        }
+    }
+
+    /**
+     * Displays the associated task list information when an employee is selected.
+     */
+    function displayAssignedTaskListInfo() {
+        if (!assignedTaskListInfo || !existingEmployeeSelect || !allChecklists.length || !allUsers.length) return;
+
+        const selectedUserId = existingEmployeeSelect.value;
+        const selectedEmployee = allUsers.find(user => user.user_id == selectedUserId);
+
+        if (selectedEmployee && selectedEmployee.position) {
+            // Find a checklist that matches the employee's position
+            const matchingChecklist = allChecklists.find(checklist => 
+                checklist.position && checklist.position.toLowerCase() === selectedEmployee.position.toLowerCase()
+            );
+
+            if (matchingChecklist) {
+                assignedTaskListInfo.textContent = `This employee will be assigned the task list: "${matchingChecklist.title}"`;
+                assignedTaskListInfo.style.color = 'var(--text-light)';
+            } else {
+                assignedTaskListInfo.textContent = `No task list found for position: "${selectedEmployee.position}". Please create one in Admin Settings > Task Lists.`;
+                assignedTaskListInfo.style.color = '#ff8a80'; // Error-like color
+            }
+        } else {
+            assignedTaskListInfo.textContent = ''; // Clear if no employee or position selected/found
         }
     }
 
@@ -97,15 +151,6 @@ export function handleDashboardPage() {
         // }
     }
 
-    // --- Utility to generate a random temporary password ---
-    function generateTemporaryPassword(length = 8) {
-        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+';
-        let result = '';
-        for (let i = 0; i < length; i++) {
-            result += characters.charAt(Math.floor(Math.random() * characters.length));
-        }
-        return result;
-    }
 
     // --- Event Listeners ---
 
@@ -114,7 +159,10 @@ export function handleDashboardPage() {
         showOnboardModalBtn.addEventListener('click', () => {
             if (onboardUserModal) {
                 onboardUserModal.style.display = 'flex';
-                loadJobPostingsForOnboard(); // Load positions when modal is shown
+                onboardUserForm.reset(); // Clear form state on open
+                displayStatusMessage(onboardModalStatusMessage, '', false); // Clear previous messages
+                assignedTaskListInfo.textContent = ''; // Clear task list info on open
+                loadExistingEmployeesForOnboard(); // Load employees when modal is shown
             }
         });
     }
@@ -126,64 +174,62 @@ export function handleDashboardPage() {
                 onboardUserModal.style.display = 'none';
                 onboardUserForm.reset(); // Clear form on cancel
                 displayStatusMessage(onboardModalStatusMessage, '', false); // Clear any messages
+                assignedTaskListInfo.textContent = ''; // Clear task list info
             }
         });
     }
 
-    // Submit onboard employee form
+    // Event listener for when an employee is selected in the dropdown
+    if (existingEmployeeSelect) {
+        existingEmployeeSelect.addEventListener('change', displayAssignedTaskListInfo);
+    }
+
+
+    // Submit onboard employee form (now assigns task list to existing employee)
     if (onboardUserForm) {
         onboardUserForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const selectedJobPostingId = newHirePositionSelect.value;
-            const selectedJobPostingTitle = newHirePositionSelect.options[newHirePositionSelect.selectedIndex].text;
-
-            const newEmployeeData = {
-                full_name: document.getElementById('new-hire-name').value.trim(),
-                email: document.getElementById('new-hire-email').value.trim(),
-                // Generate a temporary password since hiring is outside the app
-                password: generateTemporaryPassword(), 
-                // Position is the title of the selected job posting
-                position: selectedJobPostingTitle, 
-                employee_id: document.getElementById('new-hire-id').value.trim(), 
-                // location_id is required by invite-employee. For now, assume a default or select first available.
-                // In a real app, you'd have a dropdown for location on this form.
-                // For this implementation, we'll try to find a location_id from job postings or default to null.
-                location_id: null, // Default to null, as it's not on dashboard form. Server might require it.
-            };
-
-            // Get location_id from the selected job posting if available
-            // This is a workaround if location_id is not a direct input on the form.
-            const selectedJobPosting = await apiRequest('GET', `/job-postings`);
-            const matchedJobPosting = selectedJobPosting.find(job => job.id == selectedJobPostingId);
-            if (matchedJobPosting) {
-                newEmployeeData.location_id = matchedJobPosting.location_id;
-            }
-
-
-            // Basic validation
-            if (!newEmployeeData.full_name || !newEmployeeData.email || !newEmployeeData.position || !newEmployeeData.location_id) {
-                displayStatusMessage(onboardModalStatusMessage, 'Please fill all required fields: Full Name, Email, Position, and ensure a valid Location is associated with the selected position.', true);
+            const selectedUserId = existingEmployeeSelect.value;
+            if (!selectedUserId) {
+                displayStatusMessage(onboardModalStatusMessage, 'Please select an employee.', true);
                 return;
             }
-            if (!newEmployeeData.location_id) {
-                 displayStatusMessage(onboardModalStatusMessage, 'Selected position does not have an associated location. Please select a position with a valid location or contact admin.', true);
-                 return;
+
+            const selectedEmployee = allUsers.find(user => user.user_id == selectedUserId);
+            if (!selectedEmployee) {
+                displayStatusMessage(onboardModalStatusMessage, 'Selected employee not found. Please try again.', true);
+                return;
             }
 
+            // Find the task list associated with the employee's position
+            const matchingChecklist = allChecklists.find(checklist => 
+                checklist.position && selectedEmployee.position && // Ensure both exist
+                checklist.position.toLowerCase() === selectedEmployee.position.toLowerCase()
+            );
+
+            if (!matchingChecklist) {
+                displayStatusMessage(onboardModalStatusMessage, `No task list found for position: "${selectedEmployee.position}". Please create one in Admin Settings > Task Lists.`, true);
+                return;
+            }
 
             try {
-                // Submit to the /invite-employee route, as hiring is done outside the app
-                const response = await apiRequest('POST', '/invite-employee', newEmployeeData); 
+                // NEW API call to assign a checklist to a user (onboarding_tasks table)
+                // This route needs to be added to server.js
+                await apiRequest('POST', '/onboarding-tasks', {
+                    user_id: selectedUserId,
+                    checklist_id: matchingChecklist.id
+                }); 
 
-                displayStatusMessage(onboardModalStatusMessage, `Employee onboarded successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new employee.`, false);
+                displayStatusMessage(onboardModalStatusMessage, `Task list "${matchingChecklist.title}" assigned to ${selectedEmployee.full_name} successfully!`, false);
                 onboardUserForm.reset(); 
-                // Keep modal open to show password, user can close manually.
-                loadDashboardData(); 
+                assignedTaskListInfo.textContent = ''; // Clear task list info
+                onboardUserModal.style.display = 'none'; // Close modal after successful assignment
+                loadDashboardData(); // Reload dashboard data to reflect new onboarding status
 
             } catch (error) {
-                displayStatusMessage(onboardModalStatusMessage, `Error onboarding employee: ${error.message}`, true);
-                console.error('Error onboarding employee:', error);
+                displayStatusMessage(onboardModalStatusMessage, `Error assigning task list: ${error.message}`, true);
+                console.error('Error assigning task list:', error);
             }
         });
     }
@@ -197,7 +243,6 @@ export function handleDashboardPage() {
 
     if (viewApplicantsBtn) {
         viewApplicantsBtn.addEventListener('click', () => {
-            // Placeholder: functionality for viewing applicants is not yet implemented.
             showModalMessage('Viewing applicants functionality is not yet fully implemented.', false);
         });
     }
@@ -205,5 +250,6 @@ export function handleDashboardPage() {
 
     // --- Initial Page Load ---
     loadDashboardData(); // Load dashboard data when the page loads
-    // loadJobPostingsForOnboard() is called when the modal is shown
+    fetchAllChecklists(); // Fetch all checklists in background when dashboard loads
+    // loadExistingEmployeesForOnboard() is called when the modal is shown
 }
