@@ -6,8 +6,8 @@ const { Pool } = require('pg');
 const cors =require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const multer = require('multer');
-const fs = require('fs');
+const multer = require('multer'); // NEW: Import multer for file uploads
+const fs = require('fs'); // NEW: Import fs for file system operations
 const path = require('path');
 
 // Import new modular routes
@@ -18,6 +18,25 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
+
+// --- Multer Storage Setup (for document uploads) ---
+const uploadsDir = path.join(__dirname, 'uploads');
+// Ensure the uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        // Use original filename with a timestamp to prevent collisions
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+const upload = multer({ storage: storage });
+
 
 // --- 3. Database Connection ---
 if (!DATABASE_URL) {
@@ -32,7 +51,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded files statically
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 
@@ -160,7 +179,7 @@ app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
         res.status(201).json(result.rows[0]);
-    }  catch (err) {
+    } catch (err) {
         console.error(err);
         res.status(400).json({ error: 'Failed to create location.' });
     }
@@ -220,6 +239,80 @@ const inviteUser = async (req, res, role) => {
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
+// NEW: Document Management Routes
+app.get('/documents', isAuthenticated, async (req, res) => {
+    try {
+        // In a real app, you might filter by user_id or other criteria
+        const result = await pool.query('SELECT document_id, user_id, title, description, file_name, file_path, mime_type, size, uploaded_at FROM documents ORDER BY uploaded_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching documents:', err);
+        res.status(500).json({ error: 'Failed to retrieve documents.' });
+    }
+});
+
+app.post('/documents', isAuthenticated, upload.single('documentFile'), async (req, res) => {
+    const { title, description, userId } = req.body; // userId should be req.user.id from token in a real app
+    const file = req.file;
+
+    if (!file) {
+        return res.status(400).json({ error: 'No file uploaded.' });
+    }
+    if (!title) {
+        // Delete the uploaded file if title is missing
+        fs.unlink(file.path, (err) => {
+            if (err) console.error('Error deleting uploaded file:', err);
+        });
+        return res.status(400).json({ error: 'Document title is required.' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO documents (user_id, title, description, file_name, file_path, mime_type, size) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [req.user.id, title, description, file.originalname, file.path, file.mimetype, file.size]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error uploading document:', err);
+        // Delete the uploaded file if DB insert fails
+        fs.unlink(file.path, (unlinkErr) => {
+            if (unlinkErr) console.error('Error deleting uploaded file after DB fail:', unlinkErr);
+        });
+        res.status(500).json({ error: 'Failed to upload document.' });
+    }
+});
+
+app.delete('/documents/:id', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    try {
+        // First, get the file path from the database to delete the physical file
+        const fileRes = await pool.query('SELECT file_path FROM documents WHERE document_id = $1', [id]);
+        if (fileRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+        const filePathToDelete = fileRes.rows[0].file_path;
+
+        // Delete the database record
+        const deleteRes = await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
+        if (deleteRes.rowCount === 0) {
+            return res.status(404).json({ error: 'Document not found in DB after check.' });
+        }
+
+        // Delete the physical file from the server
+        fs.unlink(filePathToDelete, (err) => {
+            if (err) {
+                console.error('Error deleting physical file:', filePathToDelete, err);
+                // Optionally, log this but don't return a 500 if DB record was deleted
+            }
+        });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting document:', err);
+        res.status(500).json({ error: 'Failed to delete document.' });
+    }
+});
+
+
 // NEW: Job Postings Routes
 app.get('/job-postings', isAuthenticated, async (req, res) => {
     try {
@@ -277,7 +370,7 @@ app.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
 
 // NEW: Applicants Routes
 // This route is typically public for job applications
-app.post('/applicants', async (req, res) => {
+app.post('/applicants', upload.none(), async (req, res) => { // Use upload.none() for form data without files
     const { job_posting_id, name, email, phone, address, date_of_birth, availability, is_authorized } = req.body;
     if (!job_posting_id || !name || !email) return res.status(400).json({ error: 'Job posting ID, name, and email are required.' });
     try {
@@ -291,7 +384,8 @@ app.post('/applicants', async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('Error submitting application:', err);
-        if (err.code === '23503') return res.status(400).json({ error: 'Job posting not found.' }); // Foreign key violation
+        if (err.code === '23503') return res.status(400).json({ error: 'Job posting not found (Foreign Key constraint).' }); // Foreign key violation
+        if (err.code === '23502') return res.status(400).json({ error: 'Missing required fields for applicant.' });
         res.status(500).json({ error: 'Failed to submit application.' });
     }
 });
