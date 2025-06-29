@@ -16,9 +16,22 @@ export function handleOnboardingViewPage() {
     const welcomeMessage = document.getElementById('welcome-message'); // Assuming a welcome message element
     const onboardingTaskListDiv = document.getElementById('onboarding-task-list'); // Container for tasks
     const taskListOverviewDiv = document.getElementById('task-list-overview'); // For completion status (e.g., "0/5 tasks complete")
+    const onboardingStatusMessageElement = document.getElementById('onboarding-status-message'); // NEW: For general status messages
 
     let currentUserId = null; // Will store the ID of the logged-in user
     let userTasks = []; // Store the tasks fetched for the user
+
+    // --- Load confetti library ---
+    // Make sure this is loaded only once and correctly in your HTML/JS setup.
+    // For this example, we'll assume it's available or load it dynamically.
+    // If you need a script tag in HTML, it should be <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.1/dist/confetti.browser.min.js"></script>
+    // For direct use in module, you might need dynamic import or a global var check.
+    const confetti = window.confetti || ((opts) => {
+        // Fallback for when confetti library is not loaded
+        console.warn('Confetti library not loaded. Add <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.1/dist/confetti.browser.min.js"></script> to your HTML.');
+        return Promise.resolve(null);
+    });
+
 
     // --- Helper function to get user ID from token (simple parsing, robust check on backend) ---
     function getUserIdFromToken(token) {
@@ -36,6 +49,24 @@ export function handleOnboardingViewPage() {
         }
     }
 
+    // --- Helper for local status messages ---
+    function displayStatusMessage(message, isError = false) {
+        if (!onboardingStatusMessageElement) {
+            console.warn("Onboarding status message element not found. Message:", message);
+            // Fallback to showModalMessage if no inline element.
+            showModalMessage(message, isError);
+            return;
+        }
+        onboardingStatusMessageElement.textContent = message;
+        onboardingStatusMessageElement.classList.remove('success', 'error');
+        onboardingStatusMessageElement.classList.add(isError ? 'error' : 'success');
+        setTimeout(() => {
+            onboardingStatusMessageElement.textContent = '';
+            onboardingStatusMessageElement.classList.remove('success', 'error');
+        }, 5000);
+    }
+
+
     // --- Data Loading and Rendering Functions ---
 
     /**
@@ -46,7 +77,6 @@ export function handleOnboardingViewPage() {
 
         onboardingTaskListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading your onboarding tasks...</p>';
         
-        // Get the user ID from the stored token
         currentUserId = getUserIdFromToken(authToken);
         if (!currentUserId) {
             displayStatusMessage('Error: User ID not found. Please log in again.', true);
@@ -76,8 +106,9 @@ export function handleOnboardingViewPage() {
         if (userTasks && userTasks.length > 0) {
             userTasks.forEach(task => {
                 const taskItem = document.createElement('div');
+                // Added data-task-id here to be consistent with usage
                 taskItem.className = `checklist-item ${task.completed ? 'completed' : ''}`;
-                taskItem.dataset.taskId = task.id; // Store task ID for updates
+                taskItem.dataset.taskId = task.id; 
 
                 taskItem.innerHTML = `
                     <div class="checklist-item-title">
@@ -95,9 +126,25 @@ export function handleOnboardingViewPage() {
                     
                     try {
                         await apiRequest('PUT', `/onboarding-tasks/${taskId}`, { completed: isCompleted });
+                        
+                        // FIX: Update UI immediately by toggling class
                         e.target.closest('.checklist-item').classList.toggle('completed', isCompleted);
+                        
+                        // FIX: Update the specific task in the userTasks array
+                        const updatedTaskIndex = userTasks.findIndex(t => t.id == taskId);
+                        if (updatedTaskIndex !== -1) {
+                            userTasks[updatedTaskIndex].completed = isCompleted;
+                        }
+
                         updateTaskListOverview(); // Update overview after task completion
                         displayStatusMessage(`Task "${task.description}" marked ${isCompleted ? 'complete' : 'incomplete'}.`, false);
+
+                        // If all tasks are completed, trigger fireworks
+                        const allTasksCompleted = userTasks.every(t => t.completed);
+                        if (allTasksCompleted && userTasks.length > 0) {
+                            triggerFireworks();
+                        }
+
                     } catch (error) {
                         console.error('Error updating task status:', error);
                         e.target.checked = !isCompleted; // Revert checkbox state on error
@@ -126,17 +173,21 @@ export function handleOnboardingViewPage() {
         }
     }
 
-    // --- Helper for general messages (not modal) ---
-    function displayStatusMessage(message, isError = false) {
-        if (!welcomeMessage) return; // Using welcomeMessage area for general feedback
-        welcomeMessage.innerHTML = `<span style="color: ${isError ? '#e74c3c' : 'var(--primary-accent)'};">${message}</span>`;
-        setTimeout(() => {
-            if (welcomeMessage.querySelector('span')) welcomeMessage.querySelector('span').remove();
-            // Restore original welcome message or clear if no original
-            // This is a simplified approach; ideally, this would be a separate element.
-        }, 5000);
+    /**
+     * Triggers a confetti/fireworks animation.
+     */
+    function triggerFireworks() {
+        // Check if confetti is loaded and callable
+        if (typeof confetti === 'function') {
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        } else {
+            console.warn("Confetti function not available. Make sure 'canvas-confetti' script is loaded.");
+        }
     }
-
 
     // --- Initial Page Load ---
     loadOnboardingTasks(); // Load tasks when the page initializes
