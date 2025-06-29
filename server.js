@@ -257,7 +257,7 @@ app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
         FROM shifts s
         JOIN users u ON s.employee_id = u.user_id
-        LEFT JOIN JOIN locations l ON s.location_id = l.location_id
+        LEFT JOIN locations l ON s.location_id = l.location_id
         WHERE s.start_time >= $1 AND s.start_time < $2
         ORDER BY s.start_time;
     `;
@@ -312,7 +312,7 @@ app.get('/documents', isAuthenticated, async (req, res) => {
 });
 
 app.post('/documents', isAuthenticated, upload.single('documentFile'), async (req, res) => {
-    const { title, description, userId } = req.body; // userId should be req.user.id from token in a real app
+    const { title, description, userId } = req.body; 
     const file = req.file;
 
     if (!file) {
