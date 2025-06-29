@@ -1,5 +1,5 @@
 // js/pages/checklists.js
-import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js'; // Keep imports, but use local displayStatusMessage
+import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js'; 
 
 /**
  * Handles all logic for the checklists/task lists page.
@@ -49,25 +49,60 @@ export function handleChecklistsPage() {
 
     /**
      * Fetches and displays existing task lists.
-     * Updated to display static message if API routes are not yet available.
+     * Now attempts to fetch from backend.
      */
     async function loadChecklists() {
         if (!checklistListDiv) return;
         checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading task lists...</p>'; // Indicate loading
-        // For now, still display disabled message as backend is not fully implemented for checklists
-        displayStatusMessage(checklistStatusMessage, 'Task list functionality temporarily disabled. Please contact support.', true);
-        // Original API call (commented out as backend routes might be missing or under development)
-        // try {
-        //     const checklists = await apiRequest('GET', '/checklists');
-        //     checklistListDiv.innerHTML = ''; 
-        //     if (checklists && checklists.length > 0) {
-        //         checklists.forEach(checklist => { /* render each checklist */ });
-        //     } else {
-        //         checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists found. Create one above!</p>';
-        //     }
-        // } catch (error) {
-        //     displayStatusMessage(checklistStatusMessage, `Error loading task lists: ${error.message}`, true);
-        // }
+        
+        try {
+            // Backend /checklists route is now expected to be available
+            const checklists = await apiRequest('GET', '/checklists');
+            checklistListDiv.innerHTML = ''; // Clear loading message
+
+            if (checklists && checklists.length > 0) {
+                // Render existing checklists here
+                checklists.forEach(checklist => {
+                    const checklistItem = document.createElement('div');
+                    checklistItem.className = 'checklist-item';
+                    checklistItem.innerHTML = `
+                        <div class="checklist-item-title">
+                            ${checklist.title} <span style="font-size:0.8em; color:var(--text-medium);">(${checklist.position})</span>
+                        </div>
+                        <div class="checklist-item-actions">
+                            <button class="btn-delete" data-id="${checklist.id}" title="Delete Task List">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    checklistListDiv.appendChild(checklistItem);
+
+                    // Attach delete listener for dynamically added delete buttons
+                    checklistItem.querySelector('.btn-delete').addEventListener('click', async (e) => {
+                        const checklistId = e.currentTarget.dataset.id;
+                        const confirmed = await showConfirmModal('Are you sure you want to delete this task list? This cannot be undone.', 'Delete');
+                        if (confirmed) {
+                            try {
+                                await apiRequest('DELETE', `/checklists/${checklistId}`);
+                                displayStatusMessage(checklistStatusMessage, 'Task List deleted successfully!', false);
+                                loadChecklists(); // Reload the list
+                            } catch (error) {
+                                displayStatusMessage(checklistStatusMessage, `Error deleting task list: ${error.message}`, true);
+                            }
+                        }
+                    });
+                });
+            } else {
+                checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists found. Create one above!</p>';
+            }
+        } catch (error) {
+            displayStatusMessage(checklistStatusMessage, `Error loading task lists: ${error.message}`, true);
+            console.error('Error loading task lists:', error);
+            // Fallback message if API fails completely
+            if (checklistListDiv.innerHTML === '<p style="color: var(--text-medium);">Loading task lists...</p>') {
+                checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Task list functionality temporarily disabled. Please contact support.</p>';
+            }
+        }
     }
 
 
@@ -91,7 +126,7 @@ export function handleChecklistsPage() {
                     <input type="text" id="${uniqueInputId}" class="task-description-input" value="${task.description || ''}" placeholder="e.g., Complete HR paperwork" required>
                 </div>
                 <div class="task-actions" style="display: flex; align-items: flex-end; gap: 5px; margin-bottom: 0;">
-                    <button type="button" class="btn btn-secondary btn-sm attach-file-btn">Attach</button> <!-- Button is now visible by default -->
+                    <button type="button" class="btn btn-secondary btn-sm attach-file-btn">Attach</button> 
                     <button type="button" class="btn btn-secondary btn-sm remove-task-btn">Remove</button>
                 </div>
             </div>
@@ -257,22 +292,21 @@ export function handleChecklistsPage() {
                 time_group_count: (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(time_group_count_value, 10) : null
             };
 
-            // This form submission is currently a placeholder as backend route is still under development for full functionality.
-            displayStatusMessage(checklistStatusMessage, "Task List creation functionality temporarily disabled. Please contact support.", true);
-            
-            // try {
-            //     await apiRequest("POST", "/checklists", payload); // Backend route for checklists needs to be implemented/enabled
-            //     displayStatusMessage(checklistStatusMessage, `Task List created successfully!`, false);
-            //     newChecklistForm.reset();
-            //     timeGroupCountContainer.style.display = 'none';
-            //     tasksInputArea.innerHTML = '';
-            //     taskCounter = 0;
-            //     addSingleTaskInput(tasksInputArea); // Add back a single empty task input
-            //     loadChecklists(); // Reload checklists (will show static message for now)
-            // } catch (error) {
-            //     displayStatusMessage(checklistStatusMessage, `Error creating task list: ${error.message}`, true);
-            //     console.error('Error creating task list:', error);
-            // }
+            // This form submission is now fully active
+            try {
+                // Backend route for checklists is now expected to be available in server.js
+                await apiRequest("POST", "/checklists", payload); 
+                displayStatusMessage(checklistStatusMessage, `Task List created successfully!`, false);
+                newChecklistForm.reset();
+                timeGroupCountContainer.style.display = 'none';
+                tasksInputArea.innerHTML = '';
+                taskCounter = 0;
+                addSingleTaskInput(tasksInputArea); // Add back a single empty task input
+                loadChecklists(); // Reload checklists to show newly created one
+            } catch (error) {
+                displayStatusMessage(checklistStatusMessage, `Error creating task list: ${error.message}`, true);
+                console.error('Error creating task list:', error);
+            }
         });
     }
 
@@ -297,6 +331,17 @@ export function handleChecklistsPage() {
             btn.addEventListener('click', (e) => {
                 currentTaskElementForAttachment = e.target.closest('.task-input-group');
                 openDocumentSelectorModal();
+            });
+        });
+        // Re-attach listeners for existing remove-attachment-btn elements if any (e.g., on load for existing tasks)
+        document.querySelectorAll('.remove-attachment-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const parentInfoDiv = btn.closest('.attached-document-info');
+                if (parentInfoDiv) {
+                    parentInfoDiv.innerHTML = '';
+                    parentInfoDiv.closest('.task-input-group').dataset.documentId = '';
+                    parentInfoDiv.closest('.task-input-group').dataset.documentName = '';
+                }
             });
         });
     }
