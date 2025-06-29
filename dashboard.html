@@ -3,222 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Onboarding Dashboard - Flow Business Suite</title>
+    <title>Dashboard - Flow Business Suite</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/Theme.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        /* Base styles (Mobile-first approach) */
-        .container {
-            z-index: 2;
-            padding: 20px 5%; /* Fluid padding */
-            box-sizing: border-box;
+        .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
+        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
+        .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
+        .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
+        .card {
+             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
+             border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
         }
-        .dashboard-header {
-            display: flex;
-            flex-direction: column; /* Stack items vertically on small screens */
-            align-items: center;
-            text-align: center;
-            padding-top: 20px;
-            padding-bottom: 20px;
-        }
-        .app-title {
-            font-size: 1.8rem; /* Smaller title for mobile */
-            margin-bottom: 15px; /* Space between title and settings on mobile */
-        }
-        .settings-menu {
-            position: relative;
-            margin-top: 10px; /* Adjust spacing */
-        }
-        .settings-dropdown {
-            display: none;
-            position: absolute;
-            top: 45px; /* Adjust dropdown position */
-            right: 0;
-            background-color: rgba(26, 26, 26, 0.9);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            min-width: 160px; /* Slightly smaller dropdown */
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 10;
-            padding: 10px 0;
-        }
-        .settings-dropdown a, .settings-dropdown button {
-            color: var(--text-light);
-            padding: 10px 15px; /* Adjusted padding */
-            text-decoration: none;
-            display: block;
-            width: 100%;
-            text-align: left;
-            background: none;
-            border: none;
-            font-family: 'Poppins', sans-serif;
-            font-size: 0.9rem; /* Smaller font */
-            cursor: pointer;
-        }
-        .settings-dropdown a:hover, .settings-dropdown button:hover {
-            background-color: rgba(255,255,255,0.1);
-        }
-        .main-nav {
-            display: flex;
-            flex-direction: column; /* Stack navigation links vertically */
-            gap: 8px; /* Reduced gap */
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            margin-bottom: 20px; /* Adjusted margin */
-            padding-bottom: 10px; /* Add some padding below nav */
-        }
-        .main-nav a {
-            padding: 8px 12px; /* Adjusted padding */
-            text-decoration: none;
-            color: var(--text-medium);
-            font-weight: 600;
-            border-bottom: 3px solid transparent;
-            text-align: center; /* Center align links */
-        }
-        .main-nav a.active {
-            color: var(--text-light);
-            border-bottom-color: var(--primary-accent);
-        }
-        .dashboard-section-header {
-            display: flex;
-            flex-direction: column; /* Stack header items vertically on small screens */
-            align-items: center;
-            gap: 15px; /* Space between title and button */
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .dashboard-section-header h2 {
-            font-size: 1.8rem; /* Smaller heading for mobile */
-            margin-bottom: 0;
-        }
-        .onboarding-item {
-            display: flex;
-            flex-direction: column; /* Stack content vertically */
-            align-items: flex-start; /* Align text to start */
-            gap: 10px; /* Space between info and actions */
-            padding: 15px;
-            background-color: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border-left: 4px solid transparent;
-            transition: all 0.3s ease;
-            width: 100%; /* Ensure full width */
-            box-sizing: border-box;
-        }
-        .onboarding-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border-left: 4px solid var(--primary-accent);
-        }
-        .onboarding-item-info {
-            display: flex;
-            flex-direction: column; /* Stack info items vertically */
-            align-items: flex-start;
-            gap: 5px; /* Smaller gap for info items */
-            font-weight: 500;
-        }
-        .onboarding-item-info p {
-            margin: 0; /* Remove default paragraph margins */
-            font-size: 0.95rem;
-        }
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); display: none; align-items: center;
-            justify-content: center; z-index: 1000;
-        }
-        .modal-content {
-            background-color: rgba(26, 26, 26, 0.8); backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2); padding: 25px; /* Smaller padding */
-            border-radius: 8px;
-            width: 90%; /* Fluid width */
-            max-width: 400px; /* Max width for larger screens */
-            text-align: left;
-        }
-        .modal-content h3 { margin-top: 0; font-size: 1.3rem; } /* Smaller heading */
-        .modal-buttons { margin-top: 15px; display: flex; gap: 8px; justify-content: flex-end; }
-        .form-group { margin-bottom: 15px; } /* Adjusted margin */
-        .form-group label { font-weight: 600; margin-bottom: 4px; display: block; font-size: 0.95rem;} /* Adjusted font size */
-        .form-group input, .form-group select {
-            width: 100%; padding: 10px; /* Adjusted padding */
-            border-radius: 6px;
+        .form-group { margin-bottom: 20px; text-align: left; }
+        .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%; padding: 12px; border-radius: 6px;
             border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
-            color: var(--text-light); box-sizing: border-box; font-size: 0.9rem; /* Adjusted font size */
+            color: var(--text-light); box-sizing: border-box;
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
 
-
-        /* Media queries for larger screens (e.g., tablets and desktops) */
-        @media (min-width: 768px) {
-            .dashboard-header {
-                flex-direction: row; /* Layout items horizontally */
-                justify-content: space-between; /* Space them out */
-            }
-            .app-title {
-                font-size: 2rem; /* Restore larger title */
-                margin-bottom: 0;
-            }
-            .settings-menu {
-                margin-top: 0;
-            }
-            .settings-dropdown {
-                top: 55px; /* Restore original dropdown position */
-                min-width: 180px; /* Restore original width */
-            }
-            .settings-dropdown a, .settings-dropdown button {
-                padding: 12px 16px; /* Restore original padding */
-                font-size: 1rem; /* Restore original font size */
-            }
-            .main-nav {
-                flex-direction: row; /* Layout navigation links horizontally */
-                gap: 10px; /* Restore original gap */
-                margin-bottom: 30px;
-                padding-bottom: 0;
-            }
-            .main-nav a {
-                padding: 10px 15px; /* Restore original padding */
-                text-align: left; /* Restore left align */
-            }
-            .dashboard-section-header {
-                flex-direction: row; /* Layout header items horizontally */
-                justify-content: space-between;
-                gap: 0; /* Remove gap */
-                text-align: left;
-            }
-            .dashboard-section-header h2 {
-                font-size: 2.5rem; /* Restore original heading size */
-            }
-            .onboarding-item {
-                flex-direction: row; /* Layout content horizontally */
-                align-items: center; /* Center items vertically */
-                gap: 15px; /* Restore original gap */
-                padding: 15px 20px;
-            }
-            .onboarding-item-info {
-                flex-direction: row; /* Layout info items horizontally */
-                align-items: center;
-                gap: 15px; /* Restore original gap */
-            }
-            .onboarding-item-info p {
-                font-size: 1rem;
-            }
-            .modal-content {
-                padding: 30px; /* Restore original padding */
-            }
-            .modal-content h3 {
-                font-size: 1.5rem; /* Restore original heading size */
-            }
-            .modal-buttons {
-                gap: 10px;
-            }
-            .form-group { margin-bottom: 20px; }
-            .form-group label { font-size: 1rem; }
-            .form-group input, .form-group select { font-size: 1rem; padding: 12px; }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
         }
+        .dashboard-stats {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .dashboard-stats div {
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            min-width: 120px;
+        }
+        .dashboard-stats h3 {
+            margin: 0;
+            color: var(--primary-accent);
+            font-size: 2.2rem;
+        }
+        .dashboard-stats p {
+            margin: 5px 0 0;
+            font-size: 0.9rem;
+            color: var(--text-medium);
+        }
+        .activity-feed ul {
+            list-style: none;
+            padding: 0;
+        }
+        .activity-feed li {
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+        .activity-feed li strong {
+            color: var(--primary-accent);
+        }
+        .quick-actions .btn {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .settings-menu { position: relative; }
+        .settings-dropdown {
+            display: none; position: absolute; top: 55px; right: 0;
+            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 10; padding: 10px 0;
+        }
+        .settings-dropdown a, .settings-dropdown button {
+            color: var(--text-light); padding: 12px 16px; text-decoration: none;
+            display: block; width: 100%; text-align: left; background: none;
+            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
+        }
+        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000;
+        }
+        .modal-content {
+            background-color: var(--card-bg); 
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%; 
+            max-width: 500px; 
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); 
+            position: relative;
+            color: var(--text-light);
+        }
+        .modal-content h3 { margin-bottom: 15px; }
+        .modal-content p { margin-bottom: 20px; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
+        .modal-buttons .btn { padding: 10px 25px; font-size: 1rem; }
     </style>
 </head>
 <body>
@@ -230,38 +119,91 @@
                 <button id="settings-button" class="btn btn-secondary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
-             <div id="settings-dropdown" class="settings-dropdown">
-    <a href="account.html">My Account</a>
-    <a href="admin.html">Admin Settings</a>
-    <a href="pricing.html" id="upgrade-plan-link" style="display: none;">Upgrade Plan</a>
-    <button id="logout-button">Logout</button>
-</div>
+                <div id="settings-dropdown" class="settings-dropdown">
+                    <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
+                    <button id="logout-button">Logout</button>
+                </div>
             </div>
         </header>
         <nav class="main-nav">
             <a href="suite-hub.html">App Hub</a>
-            <a href="dashboard.html" class="active">Onboarding</a>
+            <a href="dashboard.html" class="active">Onboarding Dashboard</a>
             <a href="checklists.html">Task Lists</a>
         </nav>
-        <section id="onboarding-sessions-section">
-            <div class="dashboard-section-header">
-                <h2 style="color: var(--text-light);">Active Onboardings</h2>
-                <button id="show-onboard-modal-btn" class="btn btn-primary">Onboard New Employee +</button>
+
+        <section>
+            <h2 style="color: var(--text-light);">Onboarding Dashboard</h2>
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3>Overview</h3>
+                    <div class="dashboard-stats">
+                        <div>
+                            <h3 id="pending-onboards-count">0</h3>
+                            <p>Pending Onboards</p>
+                        </div>
+                        <div>
+                            <h3 id="in-progress-count">0</h3>
+                            <p>In Progress</p>
+                        </div>
+                        <div>
+                            <h3 id="completed-count">0</h3>
+                            <p>Completed</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Quick Actions</h3>
+                    <div class="quick-actions">
+                        <button id="show-onboard-modal" class="btn btn-primary">Onboard New Employee</button>
+                        <button id="view-job-postings-btn" class="btn btn-secondary">View Job Postings</button>
+                        <button id="view-applicants-btn" class="btn btn-secondary">View Applicants</button>
+                    </div>
+                </div>
             </div>
-            <div id="session-list" style="margin-top: 20px;">
-                 <p style="color: var(--text-medium);">No active onboardings.</p>
+            
+            <div class="card" style="margin-top: 30px;">
+                <h3>Recent Activity</h3>
+                <div class="activity-feed">
+                    <p style="color: var(--text-medium);" id="activity-feed-placeholder">No recent activity.</p>
+                    <ul id="activity-list">
+                        <!-- Activity items will be loaded here -->
+                    </ul>
+                </div>
             </div>
         </section>
     </div>
-    <div id="onboard-user-modal" class="modal-overlay">
+
+    <!-- Modals -->
+    <div id="onboard-user-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3>Onboard New Employee</h3>
             <form id="onboard-user-form">
-                <div class="form-group"><label for="new-hire-name">Full Name</label><input type="text" id="new-hire-name" required></div>
-                <div class="form-group"><label for="new-hire-email">Email Address</label><input type="email" id="new-hire-email" required></div>
-                <div class="form-group"><label for="new-hire-position">Position</label><select id="new-hire-position" required><option value="">Loading positions...</option></select></div>
-                <div class="form-group"><label for="new-hire-id">Employee ID (Optional)</label><input type="text" id="new-hire-id"></div>
-                <p style="font-size: 0.9rem; color: var(--text-medium);">The system will automatically assign the task list for the selected position.</p>
+                <div class="form-group">
+                    <label for="new-hire-name">Full Name</label>
+                    <input type="text" id="new-hire-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-hire-email">Email Address</label>
+                    <input type="email" id="new-hire-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-hire-position">Position</label>
+                    <select id="new-hire-position" required>
+                        <!-- FIX: Removed hardcoded "(Functionality Disabled)" or "Loading positions..." -->
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="new-hire-id">Employee ID (Optional)</label>
+                    <input type="text" id="new-hire-id">
+                </div>
+                <!-- This paragraph is for a status message within the modal -->
+                <p id="onboard-modal-status-message" class="status-message"></p> 
+                <div class="form-group">
+                    <p style="font-size: 0.9em; color: var(--text-medium);">The system will automatically assign the task list for the selected position.</p>
+                </div>
                 <div class="modal-buttons">
                     <button type="button" id="modal-cancel-onboard" class="btn btn-secondary">Cancel</button>
                     <button type="submit" class="btn btn-primary">Send Invite</button>
@@ -269,8 +211,9 @@
             </form>
         </div>
     </div>
+    
     <!-- Message Modal Overlay (for showModalMessage function) - included here for consistency -->
-    <div id="message-modal-overlay" class="modal-overlay">
+    <div id="message-modal-overlay" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <p id="modal-message-text"></p>
             <div class="modal-buttons">
@@ -278,6 +221,16 @@
             </div>
         </div>
     </div>
+    <div id="confirm-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="confirm-modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
