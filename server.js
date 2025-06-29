@@ -177,7 +177,7 @@ app.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
 app.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
     const { location_name, location_address } = req.body;
     try {
-        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
+        const result = await pool.query(`INSERT INTO locations (location_name, location_address) RETURNING *`, [location_name, location_address]);
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error(err);
@@ -239,19 +239,17 @@ const inviteUser = async (req, res, role) => {
 app.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 app.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
-// Scheduling Routes (now handled by autoScheduleRoutes.js)
-// NEW: GET /users/availability route (needed by scheduling page)
+// Scheduling Routes
 app.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query("SELECT user_id, full_name, availability FROM users WHERE role = 'employee' AND availability IS NOT NULL");
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching employee availability:', err); // Specific log for this route
+        console.error('Error fetching employee availability:', err);
         res.status(500).json({ error: 'Failed to retrieve employee availability.' });
     }
 });
 
-// NEW: GET /shifts route (needed by scheduling page)
 app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ error: 'Start date and end date are required.' });
@@ -259,20 +257,19 @@ app.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         SELECT s.id, s.start_time, s.end_time, s.notes, u.full_name as employee_name, l.location_name
         FROM shifts s
         JOIN users u ON s.employee_id = u.user_id
-        LEFT JOIN locations l ON s.location_id = l.location_id
+        LEFT JOIN JOIN locations l ON s.location_id = l.location_id
         WHERE s.start_time >= $1 AND s.start_time < $2
         ORDER BY s.start_time;
     `;
     try {
         const result = await pool.query(sql, [startDate, endDate]);
         res.json(result.rows);
-    }  catch (err) {
-        console.error('Error retrieving shifts:', err); // Specific log for this route
+    } catch (err) {
+        console.error('Error retrieving shifts:', err);
         res.status(500).json({ error: 'Failed to retrieve shifts.' });
     }
 });
 
-// NEW: POST /shifts route (needed by scheduling page for manual shift creation)
 app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { employee_id, location_id, start_time, end_time, notes } = req.body;
     if (!employee_id || !location_id || !start_time || !end_time) return res.status(400).json({ error: 'Missing required shift information.' });
@@ -283,7 +280,7 @@ app.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         );
         res.status(201).json({ message: 'Shift created successfully.' });
     } catch (err) {
-        console.error('Error creating shift:', err); // Specific log for this route
+        console.error('Error creating shift:', err);
         res.status(500).json({ error: 'Failed to create shift.' });
     }
 });
@@ -414,7 +411,7 @@ app.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
 
 
 // Applicants Routes
-app.post('/applicants', upload.none(), async (req, res) => {
+app.post('/applicants', upload.none(), async (req, res) => { 
     const { job_posting_id, name, email, phone, address, date_of_birth, availability, is_authorized } = req.body;
     if (!job_posting_id || !name || !email) return res.status(400).json({ error: 'Job posting ID, name, and email are required.' });
     try {
