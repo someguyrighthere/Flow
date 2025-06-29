@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Onboard New Employee - Flow Business Suite</title>
+    <title>Hiring - Flow Business Suite</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/Theme.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,15 +27,49 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
         /* Add other page-specific styles as needed */
-        .onboard-form-card {
-            max-width: 500px;
-            margin: 40px auto;
-            text-align: center;
+        .hiring-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
         }
-        .onboard-form-card h2 {
-            margin-bottom: 25px;
-            color: var(--text-light);
+        .job-posting-item {
+            background-color: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
         }
+        .job-posting-item h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--primary-accent);
+        }
+        .job-posting-item p {
+            font-size: 0.9em;
+            color: var(--text-medium);
+        }
+        .job-posting-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .job-posting-actions .btn-sm {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
+        .settings-menu { position: relative; }
+        .settings-dropdown {
+            display: none; position: absolute; top: 55px; right: 0;
+            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 10; padding: 10px 0;
+        }
+        .settings-dropdown a, .settings-dropdown button {
+            color: var(--text-light); padding: 12px 16px; text-decoration: none;
+            display: block; width: 100%; text-align: left; background: none;
+            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
+        }
+        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
         .status-message {
             text-align: center;
             margin-top: 15px;
@@ -48,31 +82,6 @@
         }
         .status-message.error {
             color: #e74c3c;
-        }
-
-        /* Modal specific styles (if this HTML is part of a modal, which it appears to be) */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
-            justify-content: center; z-index: 1000;
-        }
-        .modal-content {
-            background-color: var(--card-bg); 
-            padding: 20px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            width: 80%; 
-            max-width: 500px; 
-            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
-            position: relative; 
-            color: var(--text-light); 
-            animation: fadeIn 0.3s ease-out;
-        }
-        .modal-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 20px;
         }
     </style>
 </head>
@@ -97,40 +106,75 @@
             <a href="suite-hub.html">App Hub</a>
             <a href="hiring.html" class="active">Hiring</a>
         </nav>
-        <div class="onboard-form-card card">
-            <h2>Onboard New Employee</h2>
-            <form id="onboard-employee-form">
-                <div class="form-group">
-                    <label for="onboard-full-name">Full Name</label>
-                    <input type="text" id="onboard-full-name" placeholder="e.g., Jane Doe" required>
+
+        <section>
+            <h2 style="color: var(--text-light);">Hiring Management</h2>
+
+            <div class="hiring-layout">
+                <div class="card">
+                    <h3>Create New Job Posting</h3>
+                    <form id="new-job-posting-form">
+                        <div class="form-group">
+                            <label for="job-title">Job Title</label>
+                            <input type="text" id="job-title" placeholder="e.g., Sales Associate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-description">Description</label>
+                            <textarea id="job-description" rows="5" placeholder="Detailed job responsibilities..." required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-requirements">Requirements</label>
+                            <textarea id="job-requirements" rows="3" placeholder="Qualifications, experience..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-location-select">Location</label>
+                            <select id="job-location-select" required>
+                                <!-- Options will be populated by JS -->
+                            </select>
+                        </div>
+                        <p id="job-posting-status-message" class="status-message"></p>
+                        <button type="submit" class="btn btn-primary">Post Job</button>
+                    </form>
                 </div>
-                <div class="form-group">
-                    <label for="onboard-email">Email Address</label>
-                    <input type="email" id="onboard-email" placeholder="e.g., jane.doe@example.com" required>
+
+                <div class="card">
+                    <h3>Current Job Postings</h3>
+                    <div id="job-postings-list">
+                        <p style="color: var(--text-medium);">Loading job postings...</p>
+                        <!-- Job postings will be loaded here by JS -->
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="new-hire-position">Position</label> 
-                    <select id="new-hire-position" required> 
-                        <!-- Options will be populated by JavaScript -->
-                        <!-- FIX: Ensure no hardcoded options like "(Functionality Disabled)" -->
-                    </select>
+
+                <div class="card">
+                    <h3>Recent Applicants</h3>
+                    <div id="applicants-list">
+                        <p style="color: var(--text-medium);">Loading applicants...</p>
+                        <!-- Applicants will be loaded here by JS -->
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="onboard-employee-id">Employee ID (Optional)</label>
-                    <input type="text" id="onboard-employee-id" placeholder="e.g., EMP001">
-                </div>
-                <!-- Status message for onboarding form -->
-                <p id="onboard-status-message" class="status-message"></p>
-                <div class="form-group">
-                    <p style="color: var(--text-medium); font-size: 0.9em; margin-bottom: 20px;">The system will automatically assign the task list for the selected position.</p>
-                </div>
-                <div class="modal-buttons">
-                    <button type="button" class="btn btn-secondary" id="onboard-cancel-btn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Send Invite</button>
-                </div>
-            </form>
+            </div>
+        </section>
+    </div>
+    
+    <!-- Modals (for confirmations/messages - global if used across app) -->
+    <div id="message-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">OK</button>
+            </div>
         </div>
     </div>
+    <div id="confirm-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="confirm-modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
