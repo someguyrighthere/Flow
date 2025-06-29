@@ -8,6 +8,7 @@ import { handleDocumentsPage } from './pages/documents.js';
 import { handleHiringPage } from './pages/hiring.js';
 import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
+import { handleOnboardingViewPage } from './pages/onboardingView.js'; // NEW: Import for new-hire-view.html
 
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
@@ -47,4 +48,5 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (path.includes("hiring.html")) handleHiringPage();
     else if (path.includes("scheduling.html")) handleSchedulingPage();
     else if (path.includes("apply.html")) handleApplyPage();
+    else if (path.includes("new-hire-view.html")) handleOnboardingViewPage(); // NEW: Route for new-hire-view.html
 });
