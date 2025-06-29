@@ -1,5 +1,5 @@
 // js/pages/checklists.js
-import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
+import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js'; // Keep imports, but use local displayStatusMessage
 
 /**
  * Handles all logic for the checklists/task lists page.
@@ -14,10 +14,6 @@ export function handleChecklistsPage() {
     // --- Get all necessary elements from the DOM ---
     const newChecklistForm = document.getElementById("new-checklist-form");
     const tasksInputArea = document.getElementById("tasks-input-area");
-    // Reverted: Removed references to edit/attach document modals as they are removed from HTML and backend
-    // const attachDocumentModalOverlay = document.getElementById("attach-document-modal-overlay");
-    // const attachDocumentListDiv = document.getElementById("attach-document-list");
-    // const attachDocumentCancelBtn = document.getElementById("attach-document-cancel-btn");
     
     // Elements for task structure
     const structureTypeSelect = document.getElementById('structure-type-select');
@@ -25,21 +21,47 @@ export function handleChecklistsPage() {
     const timeGroupCountLabel = document.getElementById('time-group-count-label');
     const timeGroupCountInput = document.getElementById('time-group-count');
 
-    // *** Reverted: Element for displaying the list of existing checklists is now static text ***
     const checklistListDiv = document.getElementById('checklist-list');
+    const checklistStatusMessage = document.getElementById('checklist-status-message'); // NEW: Reference to status message element
     
-    // State variables (Reverted: removed currentTaskElementForAttachment)
+    // State variables
     let taskCounter = 0;
 
-    // --- Data Loading and Rendering (Reverted: simplified as backend routes are removed) ---
+    // --- Helper function to display local status messages ---
+    function displayStatusMessage(element, message, isError = false) {
+        if (!element) return;
+        element.textContent = message;
+        element.classList.remove('success', 'error'); // Clear previous states
+        element.classList.add(isError ? 'error' : 'success');
+        setTimeout(() => {
+            element.textContent = '';
+            element.classList.remove('success', 'error');
+        }, 5000); 
+    }
+
+    // --- Data Loading and Rendering ---
 
     /**
-     * *** Reverted: Fetches and displays existing task lists is now static message ***
+     * Fetches and displays existing task lists.
+     * Updated to display static message if API routes are not yet available.
      */
     async function loadChecklists() {
         if (!checklistListDiv) return;
+        // Reverted to static message if API is not fully enabled for checklists
         checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">Task list functionality temporarily disabled.</p>';
-        // Removed API call for /checklists as it's no longer in server.js
+        displayStatusMessage(checklistStatusMessage, 'Task list functionality temporarily disabled. Please contact support.', true);
+        // Original API call (commented out as backend routes might be missing or under development)
+        // try {
+        //     const checklists = await apiRequest('GET', '/checklists');
+        //     checklistListDiv.innerHTML = ''; // Clear static message
+        //     if (checklists && checklists.length > 0) {
+        //         checklists.forEach(checklist => { /* render each checklist */ });
+        //     } else {
+        //         checklistListDiv.innerHTML = '<p style="color: var(--text-medium);">No task lists found. Create one above!</p>';
+        //     }
+        // } catch (error) {
+        //     displayStatusMessage(checklistStatusMessage, `Error loading task lists: ${error.message}`, true);
+        // }
     }
 
 
@@ -51,9 +73,6 @@ export function handleChecklistsPage() {
     function addSingleTaskInput(container, task = {}) {
         const div = document.createElement('div');
         div.className = 'form-group task-input-group';
-        // Reverted: Removed data-document-id and data-document-name as document attachment is disabled
-        // div.dataset.documentId = task.documentId || '';
-        // div.dataset.documentName = task.documentName || '';
         
         const uniqueInputId = `task-input-${taskCounter++}`;
         div.innerHTML = `
@@ -67,31 +86,21 @@ export function handleChecklistsPage() {
                     <button type="button" class="btn btn-secondary btn-sm remove-task-btn">Remove</button>
                 </div>
             </div>
-            <div class="attached-document-info" style="font-size: 0.8rem; color: var(--text-medium); margin-top: 5px; height: 1.2em;">
-                ${task.documentName ? `<span class="attachment-chip">${task.documentName}</span>` : ''}
-            </div>
+            <div class="attached-document-info" style="font-size: 0.8rem; color: var(--text-medium); margin-top: 5px; height: 1.2em;"></div>
         `;
         container.appendChild(div);
 
         // Add event listeners to the new buttons
-        div.querySelector('.remove-task-btn').addEventListener('click', () => div.remove());
-        // Reverted: Removed attach file button listener as functionality is disabled
-        // div.querySelector('.attach-file-btn').addEventListener('click', (e) => {
-        //     currentTaskElementForAttachment = e.target.closest('.task-input-group');
-        //     openDocumentSelectorModal();
-        // });
+        div.querySelector('.remove-task-btn').addEventListener('click', () => {
+            if (document.querySelectorAll('.task-input-group').length > 1) { // Ensure at least one task remains
+                div.remove();
+            } else {
+                displayStatusMessage(checklistStatusMessage, "Task list must have at least one task.", true);
+            }
+        });
     }
 
-    /**
-     * Reverted: openDocumentSelectorModal is removed as document attachment is disabled
-     */
-    // async function openDocumentSelectorModal() { /* ... content removed ... */ }
-
     // --- Event Listeners ---
-    
-    // Reverted: Removed attach document modal listeners
-    // if (attachDocumentCancelBtn) { /* ... content removed ... */ }
-    // if (attachDocumentModalOverlay) { /* ... content removed ... */ }
     
     if (structureTypeSelect) {
         structureTypeSelect.addEventListener('change', () => {
@@ -104,9 +113,6 @@ export function handleChecklistsPage() {
             }
         });
     }
-
-    // *** Reverted: Event listener for deleting a checklist removed ***
-    // if (checklistListDiv) { /* ... content removed ... */ }
 
     // Event listener for "Add Another Task" button
     const addTaskBtn = document.getElementById('add-task-btn');
@@ -121,57 +127,64 @@ export function handleChecklistsPage() {
             e.preventDefault();
             
             // Reverted: This form submission is now a placeholder as backend route is removed
-            showModalMessage("Task List creation functionality temporarily disabled. Please contact support.", true);
+            // NEW: Use the local displayStatusMessage instead of showModalMessage
+            displayStatusMessage(checklistStatusMessage, "Task List creation functionality temporarily disabled. Please contact support.", true);
+            
             newChecklistForm.reset();
             timeGroupCountContainer.style.display = 'none';
-            document.getElementById('tasks-input-area').innerHTML = '';
+            // Clear all but the first task input
+            tasksInputArea.innerHTML = '';
+            taskCounter = 0; // Reset task counter
             addSingleTaskInput(tasksInputArea);
             loadChecklists(); // Still call loadChecklists to update the static message.
 
-            // Original API call (now removed)
-            // const position = document.getElementById("new-checklist-position").value.trim();
-            // const title = document.getElementById("new-checklist-title").value.trim();
-            // const structure_type = structureTypeSelect.value;
-            // const time_group_count = timeGroupCountInput.value;
-            // const tasks = [];
-            // document.querySelectorAll('#tasks-input-area .task-input-group').forEach(groupEl => {
-            //     const descriptionInput = groupEl.querySelector('.task-description-input');
-            //     if (descriptionInput && descriptionInput.value.trim()) {
-            //         tasks.push({
-            //             description: descriptionInput.value.trim(),
-            //             completed: false,
-            //             documentId: groupEl.dataset.documentId || null,
-            //             documentName: groupEl.dataset.documentName || null
-            //         });
-            //     }
-            // });
-            // if (!position || !title || tasks.length === 0) {
-            //     showModalMessage("Please provide a position, title, and at least one task.", true);
-            //     return;
-            // }
-            // const payload = {
-            //     position,
-            //     title,
-            //     tasks,
-            //     structure_type,
-            //     time_group_count: (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(time_group_count, 10) : null
-            // };
-            // try {
-            //     await apiRequest("POST", "/checklists", payload);
-            //     showModalMessage(`Task List created successfully!`, false);
-            //     newChecklistForm.reset();
-            //     timeGroupCountContainer.style.display = 'none';
-            //     document.getElementById('tasks-input-area').innerHTML = '';
-            //     addSingleTaskInput(tasksInputArea);
-            //     loadChecklists();
-            // } catch (error) {
-            //     showModalMessage(error.message, true);
-            // }
+            // Original API call (now removed/commented out as backend routes might be missing or under development)
+            /*
+            const position = document.getElementById("new-checklist-position").value.trim();
+            const title = document.getElementById("new-checklist-title").value.trim();
+            const structure_type = structureTypeSelect.value;
+            const time_group_count = timeGroupCountInput.value;
+            const tasks = [];
+            document.querySelectorAll('#tasks-input-area .task-input-group').forEach(groupEl => {
+                const descriptionInput = groupEl.querySelector('.task-description-input');
+                if (descriptionInput && descriptionInput.value.trim()) {
+                    tasks.push({
+                        description: descriptionInput.value.trim(),
+                        completed: false,
+                        documentId: groupEl.dataset.documentId || null,
+                        documentName: groupEl.dataset.documentName || null
+                    });
+                }
+            });
+            if (!position || !title || tasks.length === 0) {
+                displayStatusMessage(checklistStatusMessage, "Please provide a position, title, and at least one task.", true);
+                return;
+            }
+            const payload = {
+                position,
+                title,
+                tasks,
+                structure_type,
+                time_group_count: (structure_type === 'daily' || structure_type === 'weekly') ? parseInt(time_group_count, 10) : null
+            };
+            try {
+                await apiRequest("POST", "/checklists", payload);
+                displayStatusMessage(checklistStatusMessage, `Task List created successfully!`, false);
+                newChecklistForm.reset();
+                timeGroupCountContainer.style.display = 'none';
+                tasksInputArea.innerHTML = '';
+                taskCounter = 0;
+                addSingleTaskInput(tasksInputArea);
+                loadChecklists();
+            } catch (error) {
+                displayStatusMessage(checklistStatusMessage, error.message, true);
+            }
+            */
         });
     }
 
     // --- Initial page setup ---
-    loadChecklists(); // *** NEW: Load existing lists on page load ***
+    loadChecklists(); // Load existing lists on page load
     if(tasksInputArea) {
         addSingleTaskInput(tasksInputArea);
     }
