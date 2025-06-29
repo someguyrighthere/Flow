@@ -1,5 +1,3 @@
-// routes/autoScheduleRoutes.js
-
 module.exports = (app, pool, isAuthenticated, isAdmin) => {
     app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
         const { weekStartDate, dailyHours } = req.body;
@@ -43,6 +41,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             const FULL_TIME_BREAK_DURATION = 0.5;
             const FULL_TIME_SHIFT_LENGTH_TOTAL = FULL_TIME_WORK_DURATION + FULL_TIME_BREAK_DURATION;
             const PART_TIME_SHIFT_LENGTH = 4;
+            const MINIMUM_HOURS_FULL_TIME = 40;
 
             let uncoveredHoursLog = {};
             let scheduledHoursByDay = {};
@@ -56,19 +55,23 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 let scheduledHoursToday = 0;
                 const scheduledToday = new Set();
 
-                // === Ensure a manager is scheduled for all hours ===
+                // Manager Scheduling with Partial Coverage
+                const hoursInDay = businessEndHour - businessStartHour;
+                const managerCoverage = Array(hoursInDay).fill(0);
                 const availableManagers = managers.filter(mgr => {
                     const avail = mgr.availability?.[dayName];
                     if (!avail) return false;
                     const availStart = parseInt(avail.start.split(':')[0], 10);
                     const availEnd = parseInt(avail.end.split(':')[0], 10);
-                    return availStart <= businessStartHour && availEnd >= businessEndHour;
+                    return availStart < businessEndHour && availEnd > businessStartHour;
                 });
 
-                if (availableManagers.length > 0) {
-                    const mgr = availableManagers[0];
-                    const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), businessStartHour, 0, 0);
-                    const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), businessEndHour, 0, 0);
+                for (const mgr of availableManagers) {
+                    const avail = mgr.availability[dayName];
+                    const availStart = Math.max(parseInt(avail.start.split(':')[0], 10), businessStartHour);
+                    const availEnd = Math.min(parseInt(avail.end.split(':')[0], 10), businessEndHour);
+                    const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), availStart, 0, 0);
+                    const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), availEnd, 0, 0);
                     await client.query(`
                         INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
                         VALUES ($1, $2, $3, $4, $5)
@@ -77,21 +80,34 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         mgr.location_id,
                         shiftStart.toISOString(),
                         shiftEnd.toISOString(),
-                        `Auto-assigned Manager Full Coverage`
+                        `Auto-assigned Manager Partial Coverage`
                     ]);
+                    for (let h = availStart; h < availEnd; h++) {
+                        const index = h - businessStartHour;
+                        if (index >= 0 && index < managerCoverage.length) {
+                            managerCoverage[index] = 1;
+                        }
+                    }
                 }
 
-                const hoursInDay = businessEndHour - businessStartHour;
-                const coverage = Array(hoursInDay).fill(0);
+                // Log uncovered manager hours
+                if (!uncoveredHoursLog[dayName]) uncoveredHoursLog[dayName] = [];
+                for (let h = 0; h < managerCoverage.length; h++) {
+                    if (managerCoverage[h] === 0) {
+                        uncoveredHoursLog[dayName].push(businessStartHour + h);
+                    }
+                }
 
+                // Employee Scheduling with Break for Full-Time
+                const coverage = Array(hoursInDay).fill(0);
                 while (scheduledHoursToday < dailyTarget || coverage.includes(0)) {
                     let bestCandidate = null;
                     let bestScore = -1;
 
-                    for (let currentHour = businessStartHour; currentHour <= businessEndHour - 4; currentHour++) {
+                    for (let currentHour = businessStartHour; currentHour <= businessEndHour - PART_TIME_SHIFT_LENGTH; currentHour++) {
                         const eligibleEmployees = employeeScheduleData.filter(emp => {
                             if (emp.daysWorked >= 5 || scheduledToday.has(emp.user_id)) return false;
-                            if (emp.employment_type === 'Full-time' && emp.scheduled_hours >= 40) return false;
+                            if (emp.employment_type === 'Full-time' && emp.scheduled_hours >= MINIMUM_HOURS_FULL_TIME) return false;
 
                             const dayAvail = emp.availability?.[dayName];
                             if (!dayAvail) return false;
@@ -109,9 +125,23 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const shiftWorkHours = emp.employment_type === 'Full-time' ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
 
                             let score = 0;
-                            for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
-                                const idx = h - businessStartHour;
-                                if (coverage[idx] === 0) score++;
+                            if (emp.employment_type === 'Full-time') {
+                                // Calculate coverage for full-time with break after 4 hours
+                                const breakStartHour = currentHour + 4;
+                                for (let h = currentHour; h < currentHour + 4; h++) {
+                                    const idx = h - businessStartHour;
+                                    if (idx >= 0 && idx < coverage.length && coverage[idx] === 0) score++;
+                                }
+                                for (let h = breakStartHour + 0.5; h < currentHour + shiftWorkHours; h++) {
+                                    const idx = h - businessStartHour;
+                                    if (idx >= 0 && idx < coverage.length && coverage[idx] === 0) score++;
+                                }
+                            } else {
+                                // Part-time, no break
+                                for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
+                                    const idx = h - businessStartHour;
+                                    if (idx >= 0 && idx < coverage.length && coverage[idx] === 0) score++;
+                                }
                             }
 
                             if (score > bestScore) {
@@ -124,9 +154,14 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     if (!bestCandidate) break;
 
                     const { emp, currentHour, shiftLength, shiftWorkHours } = bestCandidate;
-
                     const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour, 0, 0);
-                    const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + shiftWorkHours, emp.employment_type === 'Full-time' ? FULL_TIME_BREAK_DURATION * 60 : 0, 0);
+                    const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + shiftLength, 0, 0);
+                    let notes = `Auto-generated ${emp.employment_type === 'Full-time' ? 'FT' : 'PT'} - ${shiftStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${shiftEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+                    if (emp.employment_type === 'Full-time') {
+                        const breakStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + 4, 0, 0);
+                        const breakEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + 4, 30, 0);
+                        notes += `, Break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+                    }
 
                     await client.query(`
                         INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
@@ -136,7 +171,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         emp.location_id,
                         shiftStart.toISOString(),
                         shiftEnd.toISOString(),
-                        `Auto-generated ${emp.employment_type === 'Full-time' ? 'FT' : 'PT'} - ${shiftStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${shiftEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                        notes
                     ]);
 
                     const empIndex = employeeScheduleData.findIndex(e => e.user_id === emp.user_id);
@@ -144,10 +179,28 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     employeeScheduleData[empIndex].daysWorked++;
                     scheduledToday.add(emp.user_id);
 
-                    for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
-                        const index = h - businessStartHour;
-                        if (index >= 0 && index < coverage.length) {
-                            coverage[index] = 1;
+                    if (emp.employment_type === 'Full-time') {
+                        // Mark coverage for work periods, excluding break
+                        const breakStartHour = currentHour + 4;
+                        for (let h = currentHour; h < breakStartHour; h++) {
+                            const index = h - businessStartHour;
+                            if (index >= 0 && index < coverage.length) {
+                                coverage[index] = 1;
+                            }
+                        }
+                        for (let h = breakStartHour + 0.5; h < currentHour + shiftWorkHours; h++) {
+                            const index = h - businessStartHour;
+                            if (index >= 0 && index < coverage.length) {
+                                coverage[index] = 1;
+                            }
+                        }
+                    } else {
+                        // Part-time, mark continuous coverage
+                        for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
+                            const index = h - businessStartHour;
+                            if (index >= 0 && index < coverage.length) {
+                                coverage[index] = 1;
+                            }
                         }
                     }
 
@@ -155,54 +208,63 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     totalShiftsCreated++;
                 }
 
+                // Log uncovered employee hours
+                for (let h = 0; h < coverage.length; h++) {
+                    if (coverage[h] === 0) {
+                        if (!uncoveredHoursLog[dayName]) uncoveredHoursLog[dayName] = [];
+                        uncoveredHoursLog[dayName].push(businessStartHour + h);
+                    }
+                }
+
                 scheduledHoursByDay[dayName] = scheduledHoursToday;
             }
 
-            // === Enforce minimum 40 hours for full-time employees and managers ===
-for (const emp of employeeScheduleData) {
-    const isFullTime = emp.employment_type === 'Full-time';
-    const isManager = managers.some(m => m.user_id === emp.user_id);
-    if ((isFullTime || isManager) && emp.scheduled_hours < 40) {
-        for (let d = 0; d < 7; d++) {
-            if (emp.daysWorked >= 5 || emp.scheduled_hours >= 40) break;
+            // Enforce Minimum Hours for Full-time Employees and Managers
+            for (const emp of employeeScheduleData) {
+                const isFullTime = emp.employment_type === 'Full-time';
+                const isManager = managers.some(m => m.user_id === emp.user_id);
+                if ((isFullTime || isManager) && emp.scheduled_hours < MINIMUM_HOURS_FULL_TIME) {
+                    for (let d = 0; d < 7; d++) {
+                        if (emp.daysWorked >= 5 || emp.scheduled_hours >= MINIMUM_HOURS_FULL_TIME) break;
 
-            const currentDate = new Date(weekStartDate);
-            currentDate.setDate(currentDate.getDate() + d);
-            const dayName = daysOfWeek[currentDate.getDay()];
+                        const currentDate = new Date(weekStartDate);
+                        currentDate.setDate(currentDate.getDate() + d);
+                        const dayName = daysOfWeek[currentDate.getDay()];
 
-            const dayAvail = emp.availability?.[dayName];
-            if (!dayAvail) continue;
+                        const dayAvail = emp.availability?.[dayName];
+                        if (!dayAvail) continue;
 
-            const availStart = parseInt(dayAvail.start.split(':')[0], 10);
-            const availEnd = parseInt(dayAvail.end.split(':')[0], 10);
+                        const availStart = parseInt(dayAvail.start.split(':')[0], 10);
+                        const availEnd = parseInt(dayAvail.end.split(':')[0], 10);
+                        const shiftStartHour = Math.max(availStart, businessStartHour);
+                        const shiftEndHour = shiftStartHour + FULL_TIME_SHIFT_LENGTH_TOTAL;
 
-            const shiftStartHour = Math.max(availStart, businessStartHour);
-            const shiftEndHour = Math.min(availEnd, businessEndHour);
-            const shiftLength = isFullTime ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
-            if (shiftEndHour - shiftStartHour < shiftLength) continue;
+                        if (shiftEndHour > availEnd || shiftEndHour > businessEndHour) continue;
 
-            const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour, 0, 0);
-            const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour + (isFullTime ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH), isFullTime ? FULL_TIME_BREAK_DURATION * 60 : 0, 0);
+                        const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour, 0, 0);
+                        const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour + FULL_TIME_SHIFT_LENGTH_TOTAL, 0, 0);
+                        const breakStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour + 4, 0, 0);
+                        const breakEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour + 4, 30, 0);
 
-            await client.query(`
-                INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
-                VALUES ($1, $2, $3, $4, $5)
-            `, [
-                emp.user_id,
-                emp.location_id,
-                shiftStart.toISOString(),
-                shiftEnd.toISOString(),
-                `Minimum hours adjustment`
-            ]);
+                        await client.query(`
+                            INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
+                            VALUES ($1, $2, $3, $4, $5)
+                        `, [
+                            emp.user_id,
+                            emp.location_id,
+                            shiftStart.toISOString(),
+                            shiftEnd.toISOString(),
+                            `Minimum hours adjustment, Break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                        ]);
 
-            emp.scheduled_hours += isFullTime ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
-            emp.daysWorked++;
-            totalShiftsCreated++;
-        }
-    }
-}
+                        emp.scheduled_hours += FULL_TIME_WORK_DURATION;
+                        emp.daysWorked++;
+                        totalShiftsCreated++;
+                    }
+                }
+            }
 
-await client.query('COMMIT');
+            await client.query('COMMIT');
             res.status(201).json({
                 message: `Successfully created ${totalShiftsCreated} auto-generated shifts.`,
                 uncovered_hours: uncoveredHoursLog,
