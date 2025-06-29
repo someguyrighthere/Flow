@@ -16,9 +16,7 @@ export function handleDashboardPage() {
     const showOnboardModalBtn = document.getElementById('show-onboard-modal');
     const modalCancelOnboardBtn = document.getElementById('modal-cancel-onboard');
     const onboardUserForm = document.getElementById('onboard-user-form');
-    // NEW: Existing employee select dropdown
     const existingEmployeeSelect = document.getElementById('existing-employee-select'); 
-    // NEW: Element to display assigned task list info
     const assignedTaskListInfo = document.getElementById('assigned-task-list-info');
 
     const onboardModalStatusMessage = document.getElementById('onboard-modal-status-message'); // For messages within the modal
@@ -59,12 +57,10 @@ export function handleDashboardPage() {
         }
         existingEmployeeSelect.innerHTML = '<option value="">Loading employees...</option>'; 
         try {
-            // Fetch all users
             const users = await apiRequest('GET', '/users');
-            allUsers = users; // Store all users globally
+            allUsers = users; 
 
-            // Filter for employees who are not Super Admin or Location Admin
-            const employeesOnly = users.filter(user => user.role === 'employee' || user.role === 'location_admin'); // Include managers who might be onboarded
+            const employeesOnly = users.filter(user => user.role === 'employee' || user.role === 'location_admin'); 
 
             existingEmployeeSelect.innerHTML = '<option value="">Select Employee</option>'; 
 
@@ -89,10 +85,9 @@ export function handleDashboardPage() {
     async function fetchAllChecklists() {
         try {
             const checklists = await apiRequest('GET', '/checklists');
-            allChecklists = checklists; // Store all checklists globally
+            allChecklists = checklists; 
         } catch (error) {
             console.error('Error fetching all checklists:', error);
-            // Don't display modal message here, just log, as this is a background fetch.
         }
     }
 
@@ -106,7 +101,6 @@ export function handleDashboardPage() {
         const selectedEmployee = allUsers.find(user => user.user_id == selectedUserId);
 
         if (selectedEmployee && selectedEmployee.position) {
-            // Find a checklist that matches the employee's position
             const matchingChecklist = allChecklists.find(checklist => 
                 checklist.position && checklist.position.toLowerCase() === selectedEmployee.position.toLowerCase()
             );
@@ -116,10 +110,10 @@ export function handleDashboardPage() {
                 assignedTaskListInfo.style.color = 'var(--text-light)';
             } else {
                 assignedTaskListInfo.textContent = `No task list found for position: "${selectedEmployee.position}". Please create one in Admin Settings > Task Lists.`;
-                assignedTaskListInfo.style.color = '#ff8a80'; // Error-like color
+                assignedTaskListInfo.style.color = '#ff8a80'; 
             }
         } else {
-            assignedTaskListInfo.textContent = ''; // Clear if no employee or position selected/found
+            assignedTaskListInfo.textContent = ''; 
         }
     }
 
@@ -127,28 +121,69 @@ export function handleDashboardPage() {
      * Loads and displays dashboard metrics and recent activity.
      */
     async function loadDashboardData() {
-        // Placeholder for fetching actual dashboard stats
-        // try {
-        //     const stats = await apiRequest('GET', '/dashboard/stats');
-        //     pendingOnboardsCount.textContent = stats.pending;
-        //     inProgressCount.textContent = stats.inProgress;
-        //     completedCount.textContent = stats.completed;
-        //
-        //     const activity = await apiRequest('GET', '/dashboard/activity');
-        //     if (activity && activity.length > 0) {
-        //         activityList.innerHTML = ''; // Clear placeholder
-        //         activity.forEach(item => {
-        //             const li = document.createElement('li');
-        //             li.textContent = `${item.timestamp}: ${item.description}`;
-        //             activityList.appendChild(li);
-        //         });
-        //     } else {
-        //         activityFeedPlaceholder.style.display = 'block';
-        //     }
-        // } catch (error) {
-        //     console.error('Error loading dashboard data:', error);
-        //     showModalMessage('Failed to load dashboard data. Please try again.', true); // Use global modal for dashboard
-        // }
+        try {
+            // Fetch all onboarding tasks
+            const onboardingTasks = await apiRequest('GET', '/onboarding-tasks');
+
+            let pendingCount = 0;
+            let inProgressCountVal = 0;
+            let completedCountVal = 0;
+            const activityItems = [];
+
+            // Group by completion status
+            onboardingTasks.forEach(task => {
+                if (task.completed) {
+                    completedCountVal++;
+                } else {
+                    // Check if a task is 'in progress' based on some criteria (e.g., has tasks started but not all completed)
+                    // For now, assuming if not completed, it's either pending or in progress
+                    // A more robust solution would check sub-tasks.
+                    if (task.completed_at) { // Assuming completed_at being set means "in progress" state
+                        inProgressCountVal++;
+                    } else {
+                        pendingCount++;
+                    }
+                }
+                
+                // Add to activity feed (get user name and checklist title)
+                const user = allUsers.find(u => u.user_id === task.user_id);
+                const checklist = allChecklists.find(c => c.id === task.checklist_id);
+
+                if (user && checklist) {
+                    const taskStatus = task.completed ? 'completed' : (task.completed_at ? 'in progress' : 'pending');
+                    activityItems.push({
+                        timestamp: new Date(task.uploaded_at || task.created_at).toLocaleString(), // Use uploaded_at or created_at
+                        description: `<strong>${user.full_name}</strong>'s task list "<em>${checklist.title}</em>" is ${taskStatus}.`
+                    });
+                }
+            });
+
+            // Update UI counts
+            pendingOnboardsCount.textContent = pendingCount;
+            inProgressCount.textContent = inProgressCountVal;
+            completedCount.textContent = completedCountVal;
+
+            // Sort activity items by timestamp (most recent first)
+            activityItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+            // Render activity feed
+            if (activityItems.length > 0) {
+                activityList.innerHTML = ''; // Clear placeholder
+                activityFeedPlaceholder.style.display = 'none'; // Hide placeholder
+                activityItems.forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `${item.timestamp}: ${item.description}`; // Use innerHTML for bold/italic tags
+                    activityList.appendChild(li);
+                });
+            } else {
+                activityFeedPlaceholder.style.display = 'block';
+                activityList.innerHTML = '';
+            }
+
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            showModalMessage('Failed to load dashboard data. Please try again.', true); 
+        }
     }
 
 
@@ -159,9 +194,9 @@ export function handleDashboardPage() {
         showOnboardModalBtn.addEventListener('click', () => {
             if (onboardUserModal) {
                 onboardUserModal.style.display = 'flex';
-                onboardUserForm.reset(); // Clear form state on open
-                displayStatusMessage(onboardModalStatusMessage, '', false); // Clear previous messages
-                assignedTaskListInfo.textContent = ''; // Clear task list info on open
+                onboardUserForm.reset(); 
+                displayStatusMessage(onboardModalStatusMessage, '', false); 
+                assignedTaskListInfo.textContent = ''; 
                 loadExistingEmployeesForOnboard(); // Load employees when modal is shown
             }
         });
@@ -172,9 +207,9 @@ export function handleDashboardPage() {
         modalCancelOnboardBtn.addEventListener('click', () => {
             if (onboardUserModal) {
                 onboardUserModal.style.display = 'none';
-                onboardUserForm.reset(); // Clear form on cancel
-                displayStatusMessage(onboardModalStatusMessage, '', false); // Clear any messages
-                assignedTaskListInfo.textContent = ''; // Clear task list info
+                onboardUserForm.reset(); 
+                displayStatusMessage(onboardModalStatusMessage, '', false); 
+                assignedTaskListInfo.textContent = ''; 
             }
         });
     }
@@ -204,7 +239,7 @@ export function handleDashboardPage() {
 
             // Find the task list associated with the employee's position
             const matchingChecklist = allChecklists.find(checklist => 
-                checklist.position && selectedEmployee.position && // Ensure both exist
+                checklist.position && selectedEmployee.position && 
                 checklist.position.toLowerCase() === selectedEmployee.position.toLowerCase()
             );
 
@@ -214,8 +249,6 @@ export function handleDashboardPage() {
             }
 
             try {
-                // NEW API call to assign a checklist to a user (onboarding_tasks table)
-                // This route needs to be added to server.js
                 await apiRequest('POST', '/onboarding-tasks', {
                     user_id: selectedUserId,
                     checklist_id: matchingChecklist.id
@@ -223,9 +256,9 @@ export function handleDashboardPage() {
 
                 displayStatusMessage(onboardModalStatusMessage, `Task list "${matchingChecklist.title}" assigned to ${selectedEmployee.full_name} successfully!`, false);
                 onboardUserForm.reset(); 
-                assignedTaskListInfo.textContent = ''; // Clear task list info
-                onboardUserModal.style.display = 'none'; // Close modal after successful assignment
-                loadDashboardData(); // Reload dashboard data to reflect new onboarding status
+                assignedTaskListInfo.textContent = ''; 
+                onboardUserModal.style.display = 'none'; 
+                loadDashboardData(); 
 
             } catch (error) {
                 displayStatusMessage(onboardModalStatusMessage, `Error assigning task list: ${error.message}`, true);
@@ -251,5 +284,4 @@ export function handleDashboardPage() {
     // --- Initial Page Load ---
     loadDashboardData(); // Load dashboard data when the page loads
     fetchAllChecklists(); // Fetch all checklists in background when dashboard loads
-    // loadExistingEmployeesForOnboard() is called when the modal is shown
 }
