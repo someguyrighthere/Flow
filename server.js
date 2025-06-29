@@ -475,6 +475,66 @@ app.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 
+// Checklist Routes (NEW: Added full CRUD for checklists)
+app.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    const { position, title, tasks, structure_type, time_group_count } = req.body;
+    if (!position || !title || !tasks || tasks.length === 0) {
+        return res.status(400).json({ error: 'Position, title, and at least one task are required.' });
+    }
+    try {
+        const result = await pool.query(
+            `INSERT INTO checklists (position, title, tasks, structure_type, time_group_count) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [position, title, JSON.stringify(tasks), structure_type, time_group_count]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating checklist:', err);
+        res.status(500).json({ error: 'Failed to create checklist.' });
+    }
+});
+
+app.get('/checklists', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM checklists ORDER BY id DESC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching checklists:', err);
+        res.status(500).json({ error: 'Failed to retrieve checklists.' });
+    }
+});
+
+app.put('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { position, title, tasks, structure_type, time_group_count } = req.body;
+    if (!position || !title || !tasks || tasks.length === 0) {
+        return res.status(400).json({ error: 'Position, title, and at least one task are required.' });
+    }
+    try {
+        const result = await pool.query(
+            `UPDATE checklists SET position = $1, title = $2, tasks = $3, structure_type = $4, time_group_count = $5 WHERE id = $6 RETURNING *`,
+            [position, title, JSON.stringify(tasks), structure_type, time_group_count, id]
+        );
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Checklist not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error updating checklist:', err);
+        res.status(500).json({ error: 'Failed to update checklist.' });
+    }
+});
+
+app.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM checklists WHERE id = $1', [id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Checklist not found.' });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting checklist:', err);
+        res.status(500).json({ error: 'Failed to delete checklist.' });
+    }
+});
+
+
 // Scheduling Routes (now handled by autoScheduleRoutes.js)
 autoScheduleRoutes(app, pool, isAuthenticated, isAdmin);
 
