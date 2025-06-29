@@ -1,278 +1,96 @@
 // js/pages/hiring.js
-import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
+import { apiRequest, showModalMessage } from '../utils.js';
 
 export function handleHiringPage() {
-    // --- DOM Element Selection ---
-    const createJobForm = document.getElementById('create-job-posting-form');
-    const jobPostingListDiv = document.getElementById('job-posting-list');
-    const applicantListDiv = document.getElementById('applicant-list');
-    
-    // Filters and Dropdowns
-    const jobPostingLocationSelect = document.getElementById('job-posting-location-select');
-    const filterJobSelect = document.getElementById('filter-applicant-job-posting-select');
-    const filterStatusSelect = document.getElementById('filter-applicant-status');
-    const filterLocationSelect = document.getElementById('filter-applicant-location-select');
-    const applyFiltersBtn = document.getElementById('apply-applicant-filters-btn');
-    const clearFiltersBtn = document.getElementById('clear-applicant-filters-btn');
-
-    // Share Modal
-    const shareModal = document.getElementById('share-link-modal-overlay');
-    const shareLinkInput = document.getElementById('share-job-link-input');
-    const shareEmbedInput = document.getElementById('share-job-embed-code-input');
-    const closeModalBtn = document.getElementById('share-link-modal-close-button');
-    const copyLinkBtn = document.getElementById('copy-link-btn');
-    const copyEmbedBtn = document.getElementById('copy-embed-btn');
-
-    // View Applicant Modal
-    const viewApplicantModal = document.getElementById('view-applicant-modal');
-    const viewApplicantCloseBtn = document.getElementById('view-applicant-close-btn');
-    const printApplicantBtn = document.getElementById('print-applicant-btn'); // New button
-
-    // --- Data Loading and Rendering Functions ---
-
-    async function loadLocationsIntoSelects() {
-        const selectsToPopulate = [jobPostingLocationSelect, filterLocationSelect];
-        try {
-            const locations = await apiRequest("GET", "/locations");
-            
-            selectsToPopulate.forEach(select => {
-                if (select) {
-                    while (select.options.length > 1) {
-                        select.remove(1);
-                    }
-                    locations.forEach(loc => {
-                        const option = new Option(loc.location_name, loc.location_id);
-                        select.add(option);
-                    });
-                }
-            });
-        } catch (error) {
-            console.error("Failed to load locations for dropdowns:", error);
-            showModalMessage("Could not load locations for filtering.", true);
-        }
+    // Security check: Redirect if not logged in
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
     }
 
+    // --- DOM Elements ---
+    const onboardEmployeeForm = document.getElementById('onboard-employee-form');
+    const positionSelect = document.getElementById('employee-position-select'); // Assuming this is the ID of your position select
+    const onboardStatusMessage = document.getElementById('onboard-status-message'); // Assuming you have a status message element on this page
+
+    // --- Helper function for local status messages (similar to admin.js) ---
+    function displayStatusMessage(element, message, isError = false) {
+        if (!element) return;
+        element.innerHTML = message;
+        element.classList.remove('success', 'error');
+        element.classList.add(isError ? 'error' : 'success');
+        setTimeout(() => {
+            element.textContent = '';
+            element.classList.remove('success', 'error');
+        }, 5000);
+    }
+
+    // --- Data Loading Functions ---
+
+    /**
+     * Loads job postings and populates the position dropdown.
+     */
     async function loadJobPostings() {
-        if (!jobPostingListDiv) return;
-        jobPostingListDiv.innerHTML = '<p>Loading job postings...</p>';
+        if (!positionSelect) return;
+        positionSelect.innerHTML = '<option value="">Loading positions...</option>';
         try {
-            const postings = await apiRequest('GET', '/job-postings');
-            jobPostingListDiv.innerHTML = '';
-            
-            if (filterJobSelect) {
-                filterJobSelect.innerHTML = '<option value="">All Job Postings</option>';
-                postings.forEach(job => {
-                    const option = new Option(job.title, job.id);
-                    filterJobSelect.add(option);
-                });
-            }
+            const jobPostings = await apiRequest('GET', '/job-postings');
+            positionSelect.innerHTML = '<option value="">Select Position</option>'; // Default option
 
-            if (postings && postings.length > 0) {
-                postings.forEach(job => {
-                    const jobItem = document.createElement('div');
-                    jobItem.className = 'job-posting-item';
-                    jobItem.innerHTML = `
-                        <h4>${job.title}</h4>
-                        <p><strong>Location:</strong> ${job.location_name || 'Company Wide'}</p>
-                        <p><strong>Applicants:</strong> ${job.applicant_count || 0}</p>
-                        <div class="actions">
-                            <button class="share-btn" data-job-id="${job.id}" data-job-title="${job.title}">Share</button>
-                            <button class="delete-btn" data-job-id="${job.id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 1 0 0 1-2 2H5a2 1 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-                            </button>
-                        </div>
-                    `;
-                    jobPostingListDiv.appendChild(jobItem);
+            if (jobPostings && jobPostings.length > 0) {
+                jobPostings.forEach(post => {
+                    const option = new Option(post.title, post.id); // Use post.id as value
+                    positionSelect.add(option);
                 });
             } else {
-                jobPostingListDiv.innerHTML = '<p>No active job postings.</p>';
+                positionSelect.innerHTML = '<option value="">No positions available</option>';
             }
         } catch (error) {
-            jobPostingListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading jobs: ${error.message}</p>`;
-        }
-    }
-    
-    async function loadApplicants() {
-        if (!applicantListDiv) return;
-        applicantListDiv.innerHTML = '<p>Loading applicants...</p>';
-        
-        const params = new URLSearchParams();
-        if (filterJobSelect.value) params.append('jobId', filterJobSelect.value);
-        if (filterStatusSelect.value) params.append('status', filterStatusSelect.value);
-        if (filterLocationSelect.value) params.append('locationId', filterLocationSelect.value);
-        const queryString = params.toString();
-
-        try {
-            const applicants = await apiRequest('GET', `/applicants?${queryString}`);
-            applicantListDiv.innerHTML = '';
-            if (applicants && applicants.length > 0) {
-                 applicants.forEach(applicant => {
-                    const applicantItem = document.createElement('div');
-                    applicantItem.className = 'applicant-item';
-                    applicantItem.innerHTML = `
-                        <h4>${applicant.name}</h4>
-                        <p><strong>Applying for:</strong> ${applicant.job_title || 'N/A'}</p>
-                        <p><strong>Status:</strong> ${applicant.status || 'Applied'}</p>
-                        <p><strong>Contact:</strong> ${applicant.email || 'N/A'}</p>
-                        <div class="actions">
-                             <button class="btn btn-secondary btn-sm view-applicant-btn" data-applicant-id="${applicant.id}">View</button>
-                             <button class="delete-btn" data-applicant-id="${applicant.id}">Delete</button>
-                        </div>
-                    `;
-                    applicantListDiv.appendChild(applicantItem);
-                });
-            } else {
-                applicantListDiv.innerHTML = '<p>No applicants match the current filters.</p>';
-            }
-        } catch (error) {
-             applicantListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading applicants: ${error.message}</p>`;
+            console.error('Error loading job postings:', error);
+            positionSelect.innerHTML = '<option value="">Error loading positions</option>';
+            displayStatusMessage(onboardStatusMessage, `Error loading positions: ${error.message}`, true);
         }
     }
 
-    async function showApplicantDetails(applicantId) {
-        if (!viewApplicantModal) return;
-        try {
-            const applicant = await apiRequest('GET', `/applicants/${applicantId}`);
-            document.getElementById('view-applicant-name').textContent = applicant.name || '-';
-            document.getElementById('view-applicant-email').textContent = applicant.email || '-';
-            document.getElementById('view-applicant-phone').textContent = applicant.phone || '-';
-            document.getElementById('view-applicant-address').textContent = applicant.address || '-';
-            document.getElementById('view-applicant-dob').textContent = applicant.date_of_birth ? new Date(applicant.date_of_birth).toLocaleDateString() : '-';
-            document.getElementById('view-applicant-availability').textContent = applicant.availability || '-';
-            document.getElementById('view-applicant-authorized').textContent = applicant.is_authorized ? 'Yes' : 'No';
-            viewApplicantModal.style.display = 'flex';
-        } catch (error) {
-            showModalMessage(`Error fetching applicant details: ${error.message}`, true);
-        }
-    }
+    // --- Event Listeners ---
 
-    // --- Event Handlers ---
-
-    if (createJobForm) {
-        createJobForm.addEventListener('submit', async (e) => {
+    if (onboardEmployeeForm) {
+        onboardEmployeeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const jobData = {
-                title: document.getElementById('job-title-input').value,
-                description: document.getElementById('job-description-input').value,
-                requirements: document.getElementById('job-requirements-input').value,
-                location_id: document.getElementById('job-posting-location-select').value || null
+            // Assuming this form submits new employee data for onboarding
+            const employeeData = {
+                full_name: document.getElementById('onboard-full-name').value.trim(),
+                email: document.getElementById('onboard-email').value.trim(),
+                // Assuming positionSelect.value is the job_posting_id
+                position_id: positionSelect.value, 
+                employee_id: document.getElementById('onboard-employee-id').value.trim(),
+                // Add other fields as per your form structure (phone, address, etc.)
             };
+
+            // Basic validation
+            if (!employeeData.full_name || !employeeData.email || !employeeData.position_id) {
+                displayStatusMessage(onboardStatusMessage, 'Please fill all required fields.', true);
+                return;
+            }
+
             try {
-                await apiRequest('POST', '/job-postings', jobData);
-                showModalMessage('Job posted successfully!', false);
-                createJobForm.reset();
-                loadJobPostings();
-                loadApplicants();
+                // This would be the route to onboard a new employee, potentially a different one than 'invite-employee'
+                // For now, let's assume it attempts to add an employee to a position
+                // You might need a new backend route for this.
+                // For demonstration, let's use a placeholder.
+                displayStatusMessage(onboardStatusMessage, 'Employee onboarding functionality temporarily disabled. Please contact support.', true);
+
+                // Example of what a real API call might look like:
+                // await apiRequest('POST', '/employees/onboard', employeeData);
+                // displayStatusMessage(onboardStatusMessage, 'Employee onboarded successfully!', false);
+                // onboardEmployeeForm.reset();
             } catch (error) {
-                showModalMessage(`Error posting job: ${error.message}`, true);
-            }
-        });
-    }
-
-    if (jobPostingListDiv) {
-        jobPostingListDiv.addEventListener('click', async (e) => {
-            const shareBtn = e.target.closest('.share-btn');
-            const deleteBtn = e.target.closest('.delete-btn');
-
-            if (shareBtn) {
-                const jobId = shareBtn.dataset.jobId;
-                const jobTitle = shareBtn.dataset.jobTitle;
-                const publicLink = `${window.location.origin}/apply.html?jobId=${jobId}`;
-                const embedCode = `<a href="${publicLink}" target="_blank" style="padding: 10px 20px; background-color: #C86DD7; color: white; border-radius: 5px; text-decoration: none;">Apply for ${jobTitle}</a>`;
-                
-                if (shareLinkInput) shareLinkInput.value = publicLink;
-                if (shareEmbedInput) shareEmbedInput.value = embedCode;
-                if (shareModal) shareModal.style.display = 'flex';
-            }
-
-            if (deleteBtn) {
-                const jobId = deleteBtn.dataset.jobId;
-                const confirmed = await showConfirmModal('Are you sure you want to delete this job posting?');
-                if (confirmed) {
-                    try {
-                        await apiRequest('DELETE', `/job-postings/${jobId}`);
-                        showModalMessage('Job posting deleted.', false);
-                        loadJobPostings();
-                        loadApplicants();
-                    } catch (error) {
-                         showModalMessage(`Error: ${error.message}`, true);
-                    }
-                }
-            }
-        });
-    }
-    
-    if (applicantListDiv) {
-        applicantListDiv.addEventListener('click', async (e) => {
-            const viewBtn = e.target.closest('.view-applicant-btn');
-            const deleteBtn = e.target.closest('.delete-btn');
-
-            if (viewBtn) {
-                const applicantId = viewBtn.dataset.applicantId;
-                showApplicantDetails(applicantId);
-            }
-
-            if (deleteBtn) {
-                const applicantId = deleteBtn.dataset.applicantId;
-                const confirmed = await showConfirmModal('Are you sure you want to delete this applicant? This cannot be undone.');
-                if(confirmed) {
-                    try {
-                        await apiRequest('DELETE', `/applicants/${applicantId}`);
-                        showModalMessage('Applicant deleted successfully.', false);
-                        loadApplicants();
-                    } catch (error) {
-                        showModalMessage(`Error deleting applicant: ${error.message}`, true);
-                    }
-                }
-            }
-        });
-    }
-
-    if(applyFiltersBtn) applyFiltersBtn.addEventListener('click', loadApplicants);
-    if(clearFiltersBtn) {
-        clearFiltersBtn.addEventListener('click', () => {
-            if (filterJobSelect) filterJobSelect.value = '';
-            if (filterStatusSelect) filterStatusSelect.value = '';
-            if (filterLocationSelect) filterLocationSelect.value = '';
-            loadApplicants();
-        });
-    }
-
-    if(closeModalBtn) closeModalBtn.addEventListener('click', () => shareModal.style.display = 'none');
-    if(shareModal) shareModal.addEventListener('click', (e) => { if (e.target === shareModal) shareModal.style.display = 'none'; });
-    if(copyLinkBtn) copyLinkBtn.addEventListener('click', () => {
-        shareLinkInput.select();
-        document.execCommand('copy');
-        showModalMessage('Link copied to clipboard!', false);
-    });
-    if(copyEmbedBtn) copyEmbedBtn.addEventListener('click', () => {
-        shareEmbedInput.select();
-        document.execCommand('copy');
-        showModalMessage('Embed code copied to clipboard!', false);
-    });
-    
-    if (viewApplicantCloseBtn) {
-        viewApplicantCloseBtn.addEventListener('click', () => {
-            if(viewApplicantModal) viewApplicantModal.style.display = 'none';
-        });
-    }
-    
-    if (printApplicantBtn) {
-        printApplicantBtn.addEventListener('click', () => {
-            window.print();
-        });
-    }
-    
-    if (viewApplicantModal) {
-        viewApplicantModal.addEventListener('click', (e) => {
-            if (e.target === viewApplicantModal) {
-                viewApplicantModal.style.display = 'none';
+                displayStatusMessage(onboardStatusMessage, `Error onboarding employee: ${error.message}`, true);
+                console.error('Error onboarding employee:', error);
             }
         });
     }
 
     // --- Initial Page Load ---
-    loadJobPostings();
-    loadApplicants();
-    loadLocationsIntoSelects();
+    loadJobPostings(); // Load positions when the page loads
 }
