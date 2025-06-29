@@ -475,65 +475,67 @@ app.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 
-// Checklist Routes (NEW: Added full CRUD for checklists)
-app.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
-    const { position, title, tasks, structure_type, time_group_count } = req.body;
-    if (!position || !title || !tasks || tasks.length === 0) {
-        return res.status(400).json({ error: 'Position, title, and at least one task are required.' });
+// NEW: Onboarding Tasks API (for assigning checklists to existing users)
+app.post('/onboarding-tasks', isAuthenticated, isAdmin, async (req, res) => {
+    const { user_id, checklist_id } = req.body;
+    if (!user_id || !checklist_id) {
+        return res.status(400).json({ error: 'User ID and Checklist ID are required.' });
     }
+
     try {
-        const result = await pool.query(
-            `INSERT INTO checklists (position, title, tasks, structure_type, time_group_count) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [position, title, JSON.stringify(tasks), structure_type, time_group_count]
+        // First, check if the user already has this checklist assigned
+        const existingAssignment = await pool.query(
+            'SELECT * FROM onboarding_tasks WHERE user_id = $1 AND checklist_id = $2',
+            [user_id, checklist_id]
         );
-        res.status(201).json(result.rows[0]);
+        if (existingAssignment.rows.length > 0) {
+            return res.status(409).json({ error: 'This task list is already assigned to this user.' });
+        }
+
+        // Fetch tasks from the selected checklist
+        const checklistRes = await pool.query('SELECT tasks FROM checklists WHERE id = $1', [checklist_id]);
+        if (checklistRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Checklist not found.' });
+        }
+        const tasks = checklistRes.rows[0].tasks;
+
+        await client.query('BEGIN');
+
+        for (const [index, task] of tasks.entries()) {
+            await client.query(
+                `INSERT INTO onboarding_tasks (user_id, checklist_id, description, completed, document_id, document_name, task_order) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [user_id, checklist_id, task.description, false, task.documentId || null, task.documentName || null, index + 1]
+            );
+        }
+
+        await client.query('COMMIT');
+
+        res.status(201).json({ message: 'Task list assigned successfully.' });
+
     } catch (err) {
-        console.error('Error creating checklist:', err);
-        res.status(500).json({ error: 'Failed to create checklist.' });
+        await client.query('ROLLBACK');
+        console.error('Error assigning onboarding tasks:', err);
+        res.status(500).json({ error: 'Failed to assign onboarding tasks.' });
     }
 });
 
-app.get('/checklists', isAuthenticated, async (req, res) => {
+app.get('/onboarding-tasks', isAuthenticated, async (req, res) => {
+    const { user_id } = req.query; // Allow filtering by user_id
     try {
-        const result = await pool.query('SELECT * FROM checklists ORDER BY id DESC');
+        let query = 'SELECT * FROM onboarding_tasks';
+        const params = [];
+        if (user_id) {
+            query += ' WHERE user_id = $1';
+            params.push(user_id);
+        }
+        query += ' ORDER BY id';
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching checklists:', err);
-        res.status(500).json({ error: 'Failed to retrieve checklists.' });
+        console.error('Error fetching onboarding tasks:', err);
+        res.status(500).json({ error: 'Failed to retrieve onboarding tasks.' });
     }
 });
-
-app.put('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    const { position, title, tasks, structure_type, time_group_count } = req.body;
-    if (!position || !title || !tasks || tasks.length === 0) {
-        return res.status(400).json({ error: 'Position, title, and at least one task are required.' });
-    }
-    try {
-        const result = await pool.query(
-            `UPDATE checklists SET position = $1, title = $2, tasks = $3, structure_type = $4, time_group_count = $5 WHERE id = $6 RETURNING *`,
-            [position, title, JSON.stringify(tasks), structure_type, time_group_count, id]
-        );
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Checklist not found.' });
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error updating checklist:', err);
-        res.status(500).json({ error: 'Failed to update checklist.' });
-    }
-});
-
-app.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM checklists WHERE id = $1', [id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Checklist not found.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting checklist:', err);
-        res.status(500).json({ error: 'Failed to delete checklist.' });
-    }
-});
-
 
 // Scheduling Routes (now handled by autoScheduleRoutes.js)
 autoScheduleRoutes(app, pool, isAuthenticated, isAdmin);
