@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <!-- NEW: Confetti library script -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.1/dist/confetti.browser.min.js"></script>
     <style>
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
         .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
@@ -54,6 +56,20 @@
             font-weight: 600;
             color: var(--text-light);
         }
+        /* New style for inline status messages (copied from Admin/Checklists) */
+        .status-message {
+            text-align: center;
+            margin-top: 15px;
+            min-height: 20px; /* Ensure space even when empty */
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .status-message.success {
+            color: var(--primary-accent); /* Use your accent color for success */
+        }
+        .status-message.error {
+            color: #e74c3c; /* Red color for errors */
+        }
     </style>
 </head>
 <body>
@@ -85,6 +101,8 @@
         <section>
             <h2 id="welcome-message" style="color: var(--text-light);">Welcome!</h2>
             <p style="color: var(--text-medium);">Here is your onboarding checklist. Please complete these tasks to get started:</p>
+            <!-- NEW: Status message for general onboarding view actions -->
+            <p id="onboarding-status-message" class="status-message"></p>
             
             <div id="onboarding-task-list" class="card" style="margin-top: 20px;">
                 <!-- Onboarding tasks will be loaded and rendered here by JavaScript -->
@@ -120,3 +138,217 @@
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
+```
+
+
+```javascript
+// js/pages/onboardingView.js
+import { apiRequest, showModalMessage } from '../utils.js'; // Keep showModalMessage for general app-wide errors if needed
+
+/**
+ * Handles the logic for the employee's onboarding view page (new-hire-view.html).
+ */
+export function handleOnboardingViewPage() {
+    // Security check: Redirect if not logged in
+    const authToken = localStorage.getItem("authToken");
+    if (!authToken) {
+        window.location.href = "login.html";
+        return;
+    }
+
+    // --- DOM Elements ---
+    const welcomeMessage = document.getElementById('welcome-message'); 
+    const onboardingTaskListDiv = document.getElementById('onboarding-task-list'); 
+    const taskListOverviewDiv = document.getElementById('task-list-overview'); 
+    // FIX: Correctly get the status message element
+    const onboardingStatusMessageElement = document.getElementById('onboarding-status-message'); 
+
+    let currentUserId = null; 
+    let userTasks = []; 
+
+    // --- Load confetti library ---
+    // Assuming confetti.browser.min.js is loaded via a script tag in new-hire-view.html
+    const confetti = window.confetti || (() => {
+        console.warn('Confetti library (window.confetti) not found. Fireworks effect disabled.');
+        return Promise.resolve(null);
+    });
+
+
+    // --- Helper function to get user ID from token (simple parsing, robust check on backend) ---
+    function getUserIdFromToken(token) {
+        try {
+            // Decoding JWT payload
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            const payload = JSON.parse(jsonPayload);
+            return payload.id; // Assuming the user ID is stored in 'id' claim
+        } catch (e) {
+            console.error("Error decoding token:", e);
+            // FIX: Use local status message for token decoding errors
+            displayStatusMessage('Error: Failed to decode user information from token. Please log in again.', true);
+            return null;
+        }
+    }
+
+    // --- Helper for local status messages ---
+    // FIX: Ensure this helper targets the correct element and doesn't fall back to global modal
+    function displayStatusMessage(message, isError = false) {
+        if (!onboardingStatusMessageElement) {
+            console.error("Onboarding status message element (onboarding-status-message) not found. Cannot display message:", message);
+            // If the element is truly not found, we fall back to the global modal (if it exists) or console.
+            // This is a last resort, as we intend to use the inline message.
+            if (typeof showModalMessage === 'function') {
+                showModalMessage(message, isError);
+            } else {
+                isError ? console.error(`ERROR: ${message}`) : console.log(`MESSAGE: ${message}`);
+            }
+            return;
+        }
+        onboardingStatusMessageElement.textContent = message;
+        onboardingStatusMessageElement.classList.remove('success', 'error');
+        onboardingStatusMessageElement.classList.add(isError ? 'error' : 'success');
+        setTimeout(() => {
+            onboardingStatusMessageElement.textContent = '';
+            onboardingStatusMessageElement.classList.remove('success', 'error');
+        }, 5000);
+    }
+
+
+    // --- Data Loading and Rendering Functions ---
+
+    /**
+     * Fetches onboarding tasks for the current user and renders them.
+     */
+    async function loadOnboardingTasks() {
+        if (!onboardingTaskListDiv) {
+            console.error("Error: onboarding-task-list div not found.");
+            displayStatusMessage('Error: Task list container not found. Please contact support.', true);
+            return;
+        }
+
+        onboardingTaskListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading your onboarding tasks...</p>';
+        
+        currentUserId = getUserIdFromToken(authToken);
+        if (!currentUserId) {
+            // Error message already displayed by getUserIdFromToken
+            onboardingTaskListDiv.innerHTML = '<p style="color: #e74c3c;">Failed to load tasks. User not identified.</p>';
+            return;
+        }
+
+        try {
+            // The API route should now be working, filtered by user_id
+            const tasks = await apiRequest('GET', `/onboarding-tasks?user_id=${currentUserId}`);
+            userTasks = tasks; 
+            renderOnboardingTasks(); 
+            updateTaskListOverview(); 
+
+        } catch (error) {
+            console.error('Error loading onboarding tasks:', error);
+            onboardingTaskListDiv.innerHTML = '<p style="color: #e74c3c;">Error loading tasks. Please contact support.</p>';
+            displayStatusMessage(`Error loading tasks: ${error.message}`, true);
+        }
+    }
+
+    /**
+     * Renders the fetched onboarding tasks into the DOM.
+     */
+    function renderOnboardingTasks() {
+        if (!onboardingTaskListDiv) return;
+        onboardingTaskListDiv.innerHTML = ''; 
+
+        if (userTasks && userTasks.length > 0) {
+            userTasks.forEach(task => {
+                const taskItem = document.createElement('div');
+                taskItem.className = `checklist-item ${task.completed ? 'completed' : ''}`;
+                taskItem.dataset.taskId = task.id; 
+
+                // Ensure file_path exists before trying to split it
+                const fileNameEncoded = task.file_path ? encodeURIComponent(task.file_path.split('/').pop()) : '';
+                const fileLink = task.documentName && fileNameEncoded ? 
+                    `<br><small style="color:var(--text-medium);">Attached: <a href="/uploads/${fileNameEncoded}" target="_blank" style="color: var(--primary-accent);">${task.documentName}</a></small>` : '';
+
+                taskItem.innerHTML = `
+                    <div class="checklist-item-title">
+                        <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''}>
+                        <span>${task.description}</span>
+                        ${fileLink}
+                    </div>
+                `;
+                onboardingTaskListDiv.appendChild(taskItem);
+
+                // Add event listener for checkbox
+                taskItem.querySelector('.task-checkbox').addEventListener('change', async (e) => {
+                    const isCompleted = e.target.checked;
+                    const taskId = e.target.closest('.checklist-item').dataset.taskId;
+                    
+                    try {
+                        await apiRequest('PUT', `/onboarding-tasks/${taskId}`, { completed: isCompleted });
+                        
+                        // FIX: Update UI immediately by toggling class
+                        e.target.closest('.checklist-item').classList.toggle('completed', isCompleted);
+                        
+                        // FIX: Update the specific task in the userTasks array (important for overview count)
+                        const updatedTaskIndex = userTasks.findIndex(t => t.id == taskId);
+                        if (updatedTaskIndex !== -1) {
+                            userTasks[updatedTaskIndex].completed = isCompleted;
+                        }
+
+                        updateTaskListOverview(); 
+                        displayStatusMessage(`Task "${task.description}" marked ${isCompleted ? 'complete' : 'incomplete'}.`, false);
+
+                        // If all tasks are completed, trigger fireworks
+                        const allTasksCompleted = userTasks.every(t => t.completed);
+                        if (allTasksCompleted && userTasks.length > 0) {
+                            triggerFireworks();
+                        }
+
+                    } catch (error) {
+                        console.error('Error updating task status:', error);
+                        e.target.checked = !isCompleted; // Revert checkbox state on error
+                        displayStatusMessage(`Error updating task status: ${error.message}`, true);
+                    }
+                });
+            });
+        } else {
+            onboardingTaskListDiv.innerHTML = '<p style="color: var(--text-medium);">No onboarding tasks assigned yet. Contact your administrator.</p>';
+        }
+    }
+
+    /**
+     * Updates the task list overview (e.g., "X/Y tasks complete").
+     */
+    function updateTaskListOverview() {
+        if (!taskListOverviewDiv) return;
+        const completedTasks = userTasks.filter(task => task.completed).length;
+        const totalTasks = userTasks.length;
+        taskListOverviewDiv.textContent = `${completedTasks}/${totalTasks} tasks complete`;
+        if (completedTasks === totalTasks && totalTasks > 0) {
+            taskListOverviewDiv.textContent += " - All tasks completed!";
+            taskListOverviewDiv.style.color = 'var(--primary-accent)';
+        } else {
+             taskListOverviewDiv.style.color = 'var(--text-light)';
+        }
+    }
+
+    /**
+     * Triggers a confetti/fireworks animation.
+     */
+    function triggerFireworks() {
+        // Check if confetti is loaded and callable
+        if (typeof confetti === 'function') {
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        } else {
+            console.warn("Confetti function (window.confetti) not available. Fireworks effect disabled.");
+        }
+    }
+
+    // --- Initial Page Load ---
+    loadOnboardingTasks(); // Load tasks when the page initializes
+}
