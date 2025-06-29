@@ -11,9 +11,9 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
     };
 
     app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
-        const { weekStartDate, dailyHours } = req.body;
-        if (!weekStartDate || !dailyHours) {
-            return res.status(400).json({ error: 'Week start date and daily hours are required.' });
+        const { weekStartDate, dailyHours, business_id } = req.body;
+        if (!weekStartDate || !dailyHours || !business_id) {
+            return res.status(400).json({ error: 'Week start date, daily hours, and business ID are required.' });
         }
 
         const client = await pool.connect();
@@ -23,25 +23,29 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             const currentWeekStart = new Date(weekStartDate);
             const nextWeekStart = new Date(currentWeekStart);
             nextWeekStart.setDate(currentWeekStart.getDate() + 7);
-            await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2', [
+            await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2 AND business_id = $3', [
                 formatDateTime(currentWeekStart),
-                formatDateTime(nextWeekStart)
+                formatDateTime(nextWeekStart),
+                business_id
             ]);
 
-            const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
-            const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
+            const settingsRes = await client.query('SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE business_id = $1', [business_id]);
+            if (settingsRes.rows.length === 0) {
+                return res.status(400).json({ error: 'Operating hours not configured for this business. Please update business settings.' });
+            }
+            const settings = settingsRes.rows[0];
             const businessStartHour = parseInt(settings.operating_hours_start.split(':')[0], 10);
             const businessEndHour = parseInt(settings.operating_hours_end.split(':')[0], 10);
 
             const { rows: employees } = await client.query(`
                 SELECT user_id, full_name, availability, location_id, employment_type FROM users 
-                WHERE role = 'employee' AND availability IS NOT NULL
-            `);
+                WHERE role = 'employee' AND availability IS NOT NULL AND business_id = $1
+            `, [business_id]);
 
             const { rows: managers } = await client.query(`
                 SELECT user_id, full_name, availability, location_id FROM users 
-                WHERE role = 'manager' AND availability IS NOT NULL
-            `);
+                WHERE role = 'manager' AND availability IS NOT NULL AND business_id = $1
+            `, [business_id]);
 
             let employeeScheduleData = employees.map(e => ({
                 ...e,
@@ -96,14 +100,15 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     const shiftStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), availStart, 0, 0);
                     const shiftEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), availEnd, 0, 0);
                     await client.query(`
-                        INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
-                        VALUES ($1, $2, $3, $4, $5)
+                        INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes, business_id)
+                        VALUES ($1, $2, $3, $4, $5, $6)
                     `, [
                         mgr.user_id,
                         mgr.location_id,
                         formatDateTime(shiftStart),
                         formatDateTime(shiftEnd),
-                        `Auto-assigned Manager Partial Coverage`
+                        `Auto-assigned Manager Partial Coverage`,
+                        business_id
                     ]);
                     for (let h = availStart; h < availEnd; h++) {
                         const index = h - businessStartHour;
@@ -126,13 +131,13 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
 
                             const dayAvail = emp.availability?.[dayName];
                             if (!dayAvail) return false;
-                            const availStart = parseInt(dayAvail.start.split(':')[0], 10);
-                            const availEnd = parseInt(dayAvail.end.split(':')[0], 10);
+                            const availStart = Math.max(parseInt(dayAvail.start.split(':')[0], 10), businessStartHour);
+                            const availEnd = Math.min(parseInt(dayAvail.end.split(':')[0], 10), businessEndHour);
 
                             const shiftLength = emp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
                             const shiftEndHour = currentHour + shiftLength;
 
-                            return availStart <= currentHour && availEnd >= shiftEndHour && shiftEndHour <= businessEndHour;
+                            return availStart <= currentHour && availEnd >= shiftEndHour && currentHour >= businessStartHour && shiftEndHour <= businessEndHour;
                         });
 
                         for (const emp of eligibleEmployees) {
@@ -189,14 +194,15 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     }
 
                     await client.query(`
-                        INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
-                        VALUES ($1, $2, $3, $4, $5)
+                        INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes, business_id)
+                        VALUES ($1, $2, $3, $4, $5, $6)
                     `, [
                         emp.user_id,
                         emp.location_id,
                         formatDateTime(shiftStart),
                         formatDateTime(shiftEnd),
-                        notes
+                        notes,
+                        business_id
                     ]);
 
                     const empIndex = employeeScheduleData.findIndex(e => e.user_id === emp.user_id);
@@ -267,8 +273,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         const dayAvail = emp.availability?.[dayName];
                         if (!dayAvail) continue;
 
-                        const availStart = parseInt(dayAvail.start.split(':')[0], 10);
-                        const availEnd = parseInt(dayAvail.end.split(':')[0], 10);
+                        const availStart = Math.max(parseInt(dayAvail.start.split(':')[0], 10), businessStartHour);
+                        const availEnd = Math.min(parseInt(dayAvail.end.split(':')[0], 10), businessEndHour);
                         const shiftStartHour = Math.max(availStart, businessStartHour);
                         const shiftEndHour = shiftStartHour + FULL_TIME_SHIFT_LENGTH_TOTAL;
 
@@ -280,14 +286,15 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         const breakEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), shiftStartHour + 4, 30, 0);
 
                         await client.query(`
-                            INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
-                            VALUES ($1, $2, $3, $4, $5)
+                            INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes, business_id)
+                            VALUES ($1, $2, $3, $4, $5, $6)
                         `, [
                             emp.user_id,
                             emp.location_id,
                             formatDateTime(shiftStart),
                             formatDateTime(shiftEnd),
-                            `Minimum hours adjustment, Off-the-clock break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                            `Minimum hours adjustment, Off-the-clock break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+                            business_id
                         ]);
 
                         emp.scheduled_hours += FULL_TIME_WORK_DURATION;
