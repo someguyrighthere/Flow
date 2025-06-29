@@ -1,4 +1,15 @@
 module.exports = (app, pool, isAuthenticated, isAdmin) => {
+    // Helper function to format date as YYYY-MM-DD HH:MM:SS without time zone
+    const formatDateTime = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+
     app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
         const { weekStartDate, dailyHours } = req.body;
         if (!weekStartDate || !dailyHours) {
@@ -12,7 +23,10 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             const currentWeekStart = new Date(weekStartDate);
             const nextWeekStart = new Date(currentWeekStart);
             nextWeekStart.setDate(currentWeekStart.getDate() + 7);
-            await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2', [currentWeekStart, nextWeekStart]);
+            await client.query('DELETE FROM shifts WHERE start_time >= $1 AND start_time < $2', [
+                formatDateTime(currentWeekStart),
+                formatDateTime(nextWeekStart)
+            ]);
 
             const settingsRes = await client.query('SELECT * FROM business_settings WHERE id = 1');
             const settings = settingsRes.rows[0] || { operating_hours_start: '09:00', operating_hours_end: '17:00' };
@@ -42,6 +56,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             const FULL_TIME_SHIFT_LENGTH_TOTAL = FULL_TIME_WORK_DURATION + FULL_TIME_BREAK_DURATION;
             const PART_TIME_SHIFT_LENGTH = 4;
             const MINIMUM_HOURS_FULL_TIME = 40;
+            const MINIMUM_EMPLOYEES_PER_HOUR = 2;
+            const MINIMUM_MANAGERS_PER_HOUR = 1;
 
             let uncoveredHoursLog = {};
             let scheduledHoursByDay = {};
@@ -54,9 +70,16 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 const dailyTarget = parseFloat(dailyHours[dayName] || 0);
                 let scheduledHoursToday = 0;
                 const scheduledToday = new Set();
+                const hoursInDay = businessEndHour - businessStartHour;
+
+                // Validate dailyTarget against minimum staffing requirement
+                const minimumEmployeeHours = MINIMUM_EMPLOYEES_PER_HOUR * hoursInDay;
+                let warnings = [];
+                if (dailyTarget < minimumEmployeeHours) {
+                    warnings.push(`Daily hours target (${dailyTarget}) is less than minimum required (${minimumEmployeeHours}) for ${MINIMUM_EMPLOYEES_PER_HOUR} employees over ${hoursInDay} hours.`);
+                }
 
                 // Manager Scheduling with Partial Coverage
-                const hoursInDay = businessEndHour - businessStartHour;
                 const managerCoverage = Array(hoursInDay).fill(0);
                 const availableManagers = managers.filter(mgr => {
                     const avail = mgr.availability?.[dayName];
@@ -78,29 +101,21 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     `, [
                         mgr.user_id,
                         mgr.location_id,
-                        shiftStart.toISOString(),
-                        shiftEnd.toISOString(),
+                        formatDateTime(shiftStart),
+                        formatDateTime(shiftEnd),
                         `Auto-assigned Manager Partial Coverage`
                     ]);
                     for (let h = availStart; h < availEnd; h++) {
                         const index = h - businessStartHour;
                         if (index >= 0 && index < managerCoverage.length) {
-                            managerCoverage[index] = 1;
+                            managerCoverage[index]++;
                         }
                     }
                 }
 
-                // Log uncovered manager hours
-                if (!uncoveredHoursLog[dayName]) uncoveredHoursLog[dayName] = [];
-                for (let h = 0; h < managerCoverage.length; h++) {
-                    if (managerCoverage[h] === 0) {
-                        uncoveredHoursLog[dayName].push(businessStartHour + h);
-                    }
-                }
-
                 // Employee Scheduling with Break for Full-Time
-                const coverage = Array(hoursInDay).fill(0);
-                while (scheduledHoursToday < dailyTarget || coverage.includes(0)) {
+                const employeeCoverage = Array(hoursInDay).fill(0);
+                while (employeeCoverage.some(count => count < MINIMUM_EMPLOYEES_PER_HOUR) || scheduledHoursToday < dailyTarget) {
                     let bestCandidate = null;
                     let bestScore = -1;
 
@@ -124,25 +139,35 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                             const shiftLength = emp.employment_type === 'Full-time' ? FULL_TIME_SHIFT_LENGTH_TOTAL : PART_TIME_SHIFT_LENGTH;
                             const shiftWorkHours = emp.employment_type === 'Full-time' ? FULL_TIME_WORK_DURATION : PART_TIME_SHIFT_LENGTH;
 
-                            let score = 0;
+                            let coverageScore = 0;
+                            let hoursScore = Math.min(dailyTarget - scheduledHoursToday, shiftWorkHours) / dailyTarget; // Normalize contribution to dailyTarget
                             if (emp.employment_type === 'Full-time') {
                                 // Calculate coverage for full-time with break after 4 hours
                                 const breakStartHour = currentHour + 4;
-                                for (let h = currentHour; h < currentHour + 4; h++) {
+                                for (let h = currentHour; h < breakStartHour; h++) {
                                     const idx = h - businessStartHour;
-                                    if (idx >= 0 && idx < coverage.length && coverage[idx] === 0) score++;
+                                    if (idx >= 0 && idx < employeeCoverage.length && employeeCoverage[idx] < MINIMUM_EMPLOYEES_PER_HOUR) {
+                                        coverageScore += (MINIMUM_EMPLOYEES_PER_HOUR - employeeCoverage[idx]);
+                                    }
                                 }
                                 for (let h = breakStartHour + 0.5; h < currentHour + shiftWorkHours; h++) {
                                     const idx = h - businessStartHour;
-                                    if (idx >= 0 && idx < coverage.length && coverage[idx] === 0) score++;
+                                    if (idx >= 0 && idx < employeeCoverage.length && employeeCoverage[idx] < MINIMUM_EMPLOYEES_PER_HOUR) {
+                                        coverageScore += (MINIMUM_EMPLOYEES_PER_HOUR - employeeCoverage[idx]);
+                                    }
                                 }
                             } else {
                                 // Part-time, no break
                                 for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
                                     const idx = h - businessStartHour;
-                                    if (idx >= 0 && idx < coverage.length && coverage[idx] === 0) score++;
+                                    if (idx >= 0 && idx < employeeCoverage.length && employeeCoverage[idx] < MINIMUM_EMPLOYEES_PER_HOUR) {
+                                        coverageScore += (MINIMUM_EMPLOYEES_PER_HOUR - employeeCoverage[idx]);
+                                    }
                                 }
                             }
+
+                            // Combine coverage and hours scores (weight coverage higher to prioritize minimum staffing)
+                            const score = (0.7 * coverageScore) + (0.3 * hoursScore);
 
                             if (score > bestScore) {
                                 bestScore = score;
@@ -160,7 +185,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     if (emp.employment_type === 'Full-time') {
                         const breakStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + 4, 0, 0);
                         const breakEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentHour + 4, 30, 0);
-                        notes += `, Break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+                        notes += `, Off-the-clock break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
                     }
 
                     await client.query(`
@@ -169,8 +194,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     `, [
                         emp.user_id,
                         emp.location_id,
-                        shiftStart.toISOString(),
-                        shiftEnd.toISOString(),
+                        formatDateTime(shiftStart),
+                        formatDateTime(shiftEnd),
                         notes
                     ]);
 
@@ -184,22 +209,22 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         const breakStartHour = currentHour + 4;
                         for (let h = currentHour; h < breakStartHour; h++) {
                             const index = h - businessStartHour;
-                            if (index >= 0 && index < coverage.length) {
-                                coverage[index] = 1;
+                            if (index >= 0 && index < employeeCoverage.length) {
+                                employeeCoverage[index]++;
                             }
                         }
                         for (let h = breakStartHour + 0.5; h < currentHour + shiftWorkHours; h++) {
                             const index = h - businessStartHour;
-                            if (index >= 0 && index < coverage.length) {
-                                coverage[index] = 1;
+                            if (index >= 0 && index < employeeCoverage.length) {
+                                employeeCoverage[index]++;
                             }
                         }
                     } else {
                         // Part-time, mark continuous coverage
                         for (let h = currentHour; h < currentHour + shiftWorkHours; h++) {
                             const index = h - businessStartHour;
-                            if (index >= 0 && index < coverage.length) {
-                                coverage[index] = 1;
+                            if (index >= 0 && index < employeeCoverage.length) {
+                                employeeCoverage[index]++;
                             }
                         }
                     }
@@ -208,15 +233,23 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                     totalShiftsCreated++;
                 }
 
-                // Log uncovered employee hours
-                for (let h = 0; h < coverage.length; h++) {
-                    if (coverage[h] === 0) {
-                        if (!uncoveredHoursLog[dayName]) uncoveredHoursLog[dayName] = [];
-                        uncoveredHoursLog[dayName].push(businessStartHour + h);
+                // Log uncovered hours for managers and employees
+                if (!uncoveredHoursLog[dayName]) uncoveredHoursLog[dayName] = [];
+                for (let h = 0; h < hoursInDay; h++) {
+                    if (managerCoverage[h] < MINIMUM_MANAGERS_PER_HOUR || employeeCoverage[h] < MINIMUM_EMPLOYEES_PER_HOUR) {
+                        uncoveredHoursLog[dayName].push({
+                            hour: businessStartHour + h,
+                            managers: managerCoverage[h],
+                            employees: employeeCoverage[h]
+                        });
                     }
                 }
 
-                scheduledHoursByDay[dayName] = scheduledHoursToday;
+                scheduledHoursByDay[dayName] = {
+                    target: dailyTarget,
+                    scheduled: scheduledHoursToday,
+                    warnings: warnings.length > 0 ? warnings : undefined
+                };
             }
 
             // Enforce Minimum Hours for Full-time Employees and Managers
@@ -252,9 +285,9 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                         `, [
                             emp.user_id,
                             emp.location_id,
-                            shiftStart.toISOString(),
-                            shiftEnd.toISOString(),
-                            `Minimum hours adjustment, Break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                            formatDateTime(shiftStart),
+                            formatDateTime(shiftEnd),
+                            `Minimum hours adjustment, Off-the-clock break from ${breakStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${breakEnd.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
                         ]);
 
                         emp.scheduled_hours += FULL_TIME_WORK_DURATION;
