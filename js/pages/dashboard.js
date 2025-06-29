@@ -16,7 +16,6 @@ export function handleDashboardPage() {
     const showOnboardModalBtn = document.getElementById('show-onboard-modal');
     const modalCancelOnboardBtn = document.getElementById('modal-cancel-onboard');
     const onboardUserForm = document.getElementById('onboard-user-form');
-    // FIX: Corrected ID to match dashboard.html's <select id="new-hire-position">
     const newHirePositionSelect = document.getElementById('new-hire-position'); 
     const onboardModalStatusMessage = document.getElementById('onboard-modal-status-message'); // For messages within the modal
 
@@ -50,11 +49,9 @@ export function handleDashboardPage() {
             console.error('Error: new-hire-position select element not found.');
             return;
         }
-        // Clear all existing options first, and add a loading message
         newHirePositionSelect.innerHTML = '<option value="">Loading positions...</option>'; 
         try {
             const jobPostings = await apiRequest('GET', '/job-postings');
-            // After loading, clear 'Loading positions...' and add 'Select Position'
             newHirePositionSelect.innerHTML = '<option value="">Select Position</option>'; 
 
             if (jobPostings && jobPostings.length > 0) {
@@ -100,6 +97,15 @@ export function handleDashboardPage() {
         // }
     }
 
+    // --- Utility to generate a random temporary password ---
+    function generateTemporaryPassword(length = 8) {
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length));
+        }
+        return result;
+    }
 
     // --- Event Listeners ---
 
@@ -129,38 +135,55 @@ export function handleDashboardPage() {
         onboardUserForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const selectedJobPostingId = newHirePositionSelect.value;
+            const selectedJobPostingTitle = newHirePositionSelect.options[newHirePositionSelect.selectedIndex].text;
+
             const newEmployeeData = {
                 full_name: document.getElementById('new-hire-name').value.trim(),
                 email: document.getElementById('new-hire-email').value.trim(),
-                // job_posting_id is the value from the selected position
-                job_posting_id: newHirePositionSelect.value, 
-                // Assuming new-hire-id is the employee_id as per the HTML
+                // Generate a temporary password since hiring is outside the app
+                password: generateTemporaryPassword(), 
+                // Position is the title of the selected job posting
+                position: selectedJobPostingTitle, 
                 employee_id: document.getElementById('new-hire-id').value.trim(), 
-                // Add other potential fields from the form if applicable (e.g., phone, address, etc.)
-                // phone: document.getElementById('new-hire-phone').value.trim(),
+                // location_id is required by invite-employee. For now, assume a default or select first available.
+                // In a real app, you'd have a dropdown for location on this form.
+                // For this implementation, we'll try to find a location_id from job postings or default to null.
+                location_id: null, // Default to null, as it's not on dashboard form. Server might require it.
             };
 
-            if (!newEmployeeData.full_name || !newEmployeeData.email || !newEmployeeData.job_posting_id) {
-                displayStatusMessage(onboardModalStatusMessage, 'Please fill all required fields: Full Name, Email, and Position.', true);
-                return;
+            // Get location_id from the selected job posting if available
+            // This is a workaround if location_id is not a direct input on the form.
+            const selectedJobPosting = await apiRequest('GET', `/job-postings`);
+            const matchedJobPosting = selectedJobPosting.find(job => job.id == selectedJobPostingId);
+            if (matchedJobPosting) {
+                newEmployeeData.location_id = matchedJobPosting.location_id;
             }
 
-            try {
-                // This route should point to your backend's applicant submission endpoint
-                // Assuming applicants POST route does not require authentication (public form)
-                await apiRequest('POST', '/applicants', newEmployeeData); // Use /applicants route
 
-                displayStatusMessage(onboardModalStatusMessage, 'Application submitted successfully! Your application will be reviewed shortly.', false);
-                onboardUserForm.reset(); // Clear the form
-                if (onboardUserModal) {
-                    // You might want to automatically close the modal after success or leave it open
-                    // onboardUserModal.style.display = 'none';
-                }
-                loadDashboardData(); // Reload dashboard data to reflect new applicant if applicable
+            // Basic validation
+            if (!newEmployeeData.full_name || !newEmployeeData.email || !newEmployeeData.position || !newEmployeeData.location_id) {
+                displayStatusMessage(onboardModalStatusMessage, 'Please fill all required fields: Full Name, Email, Position, and ensure a valid Location is associated with the selected position.', true);
+                return;
+            }
+            if (!newEmployeeData.location_id) {
+                 displayStatusMessage(onboardModalStatusMessage, 'Selected position does not have an associated location. Please select a position with a valid location or contact admin.', true);
+                 return;
+            }
+
+
+            try {
+                // Submit to the /invite-employee route, as hiring is done outside the app
+                const response = await apiRequest('POST', '/invite-employee', newEmployeeData); 
+
+                displayStatusMessage(onboardModalStatusMessage, `Employee onboarded successfully! Temporary Password: <span style="color: var(--primary-accent); font-weight: bold;">${response.tempPassword}</span>. Please provide this to the new employee.`, false);
+                onboardUserForm.reset(); 
+                // Keep modal open to show password, user can close manually.
+                loadDashboardData(); 
 
             } catch (error) {
-                displayStatusMessage(onboardModalStatusMessage, `Error submitting application: ${error.message}`, true);
-                console.error('Error submitting application:', error);
+                displayStatusMessage(onboardModalStatusMessage, `Error onboarding employee: ${error.message}`, true);
+                console.error('Error onboarding employee:', error);
             }
         });
     }
@@ -168,15 +191,13 @@ export function handleDashboardPage() {
     // Navigation for Job Postings/Applicants - assuming these links navigate to separate pages
     if (viewJobPostingsBtn) {
         viewJobPostingsBtn.addEventListener('click', () => {
-            window.location.href = 'hiring.html'; // Assuming hiring.html shows job postings
+            window.location.href = 'hiring.html'; 
         });
     }
 
     if (viewApplicantsBtn) {
         viewApplicantsBtn.addEventListener('click', () => {
-            // Assuming apply.html (or another page) shows applicants.
-            // Or you might have a dedicated admin page for viewing applicants.
-            // For now, redirect to a placeholder.
+            // Placeholder: functionality for viewing applicants is not yet implemented.
             showModalMessage('Viewing applicants functionality is not yet fully implemented.', false);
         });
     }
@@ -184,5 +205,5 @@ export function handleDashboardPage() {
 
     // --- Initial Page Load ---
     loadDashboardData(); // Load dashboard data when the page loads
-    // loadJobPostingsForOnboard(); // This is now called when the modal is shown
+    // loadJobPostingsForOnboard() is called when the modal is shown
 }
