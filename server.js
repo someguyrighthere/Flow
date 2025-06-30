@@ -232,7 +232,7 @@ apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) =>
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
 // Fallback for serving index.html on any non-API route
-app.get('*', (req, res) => {
+app.get(/'*'/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
