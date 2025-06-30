@@ -10,8 +10,8 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 
-// Import new modular routes
-const autoScheduleRoutes = require('./routes/autoScheduleRoutes');
+// Import modular routes
+// REMOVED: const autoScheduleRoutes = require('./routes/autoScheduleRoutes'); 
 const onboardingRoutes = require('./routes/onboardingRoutes');
 
 // --- 2. Initialize Express App ---
@@ -310,9 +310,8 @@ apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
     }
 });
 
-// CORRECTED: The field name from multer is 'document' to match the frontend
 apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body; 
+    const { title, description } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -356,7 +355,7 @@ apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
 
 
 // Job Postings and Applicants Routes
-apiRoutes.get('/job-postings', async (req, res) => { // Publicly accessible
+apiRoutes.get('/job-postings', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM job_postings ORDER BY created_at DESC');
         res.json(result.rows);
@@ -366,7 +365,7 @@ apiRoutes.get('/job-postings', async (req, res) => { // Publicly accessible
     }
 });
 
-apiRoutes.get('/job-postings/:id', async (req, res) => { // Publicly accessible
+apiRoutes.get('/job-postings/:id', async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query('SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1', [id]);
@@ -545,12 +544,11 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
 
 
 // Modular Routes
-// REMOVED: Duplicated /onboarding-tasks routes. They are now handled by the modular router.
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
-autoScheduleRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
+// REMOVED: autoScheduleRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
 // Fallback for serving index.html on any non-API route
-app.get('*', (req, res) => {
+app.get('*'/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
