@@ -312,7 +312,7 @@ apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
 
 // CORRECTED: The field name from multer is 'document' to match the frontend
 apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body;
+    const { title, description } = req.body; 
     const file = req.file;
 
     if (!file) {
@@ -545,7 +545,7 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
 
 
 // Modular Routes
-// REMOVED: Duplicated /onboarding-tasks routes. They will be handled by the modular router below.
+// REMOVED: Duplicated /onboarding-tasks routes. They are now handled by the modular router.
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 autoScheduleRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
