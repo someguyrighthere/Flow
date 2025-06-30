@@ -11,7 +11,9 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
     };
 
     app.post('/shifts/auto-generate', isAuthenticated, isAdmin, async (req, res) => {
-        const { weekStartDate, dailyHours, business_id } = req.body;
+        const { weekStartDate, dailyHours } = req.body;
+        // Use session business_id if available, otherwise require from body
+        const business_id = req.session?.business_id || req.body.business_id;
         if (!weekStartDate || !dailyHours || !business_id) {
             return res.status(400).json({ error: 'Week start date, daily hours, and business ID are required.' });
         }
