@@ -10,73 +10,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        /* Re-including modal styles here for self-containment, though ideally
-           these would be in a shared CSS file like style.css */
-        .modal {
-            display: none; /* Hidden by default */
-            position: fixed; /* Stay in place */
-            z-index: 1000; /* Sit on top */
-            left: 0;
-            top: 0;
-            width: 100%; /* Full width */
-            height: 100%; /* Full height */
-            overflow: auto; /* Enable scroll if needed */
-            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
-            display: flex; /* Use flexbox for centering content */
-            align-items: center; /* Center vertically */
-            justify-content: center; /* Horizontally center */
-        }
-
-        .modal-content {
-            background-color: var(--card-bg); /* Use your theme's background color */
-            padding: 20px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            width: 80%; /* Responsive width */
-            max-width: 500px; /* Maximum width for larger screens */
-            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
-            position: relative; /* Needed for close button positioning */
-            color: var(--text-light); /* Text color */
-            animation: fadeIn 0.3s ease-out; /* Simple fade-in animation */
-        }
-
-        .modal-content p {
-            margin-bottom: 20px;
-            text-align: center;
-            font-size: 1.1rem;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .close-button { /* Still used by confirmation modal 'X' in some contexts if needed */
-            color: var(--text-medium);
-            font-size: 28px;
-            font-weight: bold;
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            cursor: pointer;
-        }
-
-        .close-button:hover,
-        .close-button:focus {
-            color: var(--text-light);
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        /* Keyframe animation for modal fade-in */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        /* Original admin.html specific styles */
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
         .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
         .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
@@ -85,22 +18,20 @@
              background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
              border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
         }
-        /* FIX: Redefine account-grid for 3 columns on larger screens */
         .account-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr); /* Default to 3 equal columns */
+            grid-template-columns: 1fr;
             gap: 30px;
         }
-        @media (max-width: 1200px) { /* On smaller screens, stack them in 1 column */
+        @media (min-width: 1200px) {
             .account-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(3, 1fr);
             }
         }
-        /* New column wrappers for specific content placement */
         .grid-column {
             display: flex;
             flex-direction: column;
-            gap: 30px; /* Gap between cards within a column */
+            gap: 30px;
         }
 
         .list-item {
@@ -110,9 +41,9 @@
             background: rgba(0,0,0,0.2);
             padding: 10px 15px;
             border-radius: 6px;
-            margin-bottom: 10px; /* Reduced as gap is handled by column */
+            margin-bottom: 10px;
         }
-        .list-item .btn-delete { /* Only delete button was here before */
+        .list-item .btn-delete {
             background: none; border: none; color: var(--text-medium);
             cursor: pointer; opacity: 0.7; transition: opacity 0.3s ease;
         }
@@ -141,7 +72,6 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
        
-        /* Business Hours Styles */
         .business-hours-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -153,38 +83,35 @@
             gap: 10px;
             align-items: center;
         }
-        .availability-day {
-            display: contents;
-        }
-        .availability-day label {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            grid-column: 1 / 2;
-        }
-        .availability-day .time-range {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            grid-column: 2 / 3;
-        }
-        .availability-day select {
-            flex-grow: 1;
-        }
-        /* Styles for the status messages (e.g., operating hours confirmation) */
+        .availability-day { display: contents; }
+        .availability-day label { display: flex; align-items: center; gap: 10px; grid-column: 1 / 2; }
+        .availability-day .time-range { display: flex; align-items: center; gap: 10px; grid-column: 2 / 3; }
+        .availability-day select { flex-grow: 1; }
         .status-message {
             text-align: center;
             margin-top: 15px;
-            min-height: 20px; /* Ensure space even when empty */
+            min-height: 20px;
             font-size: 0.95rem;
             font-weight: 500;
         }
-        .status-message.success {
-            color: var(--primary-accent); /* Use your accent color for success */
+        .status-message.success { color: var(--primary-accent); }
+        .status-message.error { color: #e74c3c; }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: none; align-items: center;
+            justify-content: center; z-index: 1000;
         }
-        .status-message.error {
-            color: #e74c3c; /* Red color for errors */
+        .modal-content {
+            background-color: rgba(26, 26, 26, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 400px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
         }
+        .modal-content p { margin-bottom: 20px; font-size: 1.1rem; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; }
     </style>
 </head>
 <body>
@@ -194,7 +121,7 @@
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698 1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
@@ -230,13 +157,11 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Status message for operating hours -->
                             <p id="operating-hours-status-message" class="status-message"></p>
                             <button type="submit" class="btn btn-primary">Save Settings</button>
                         </form>
                     </div>
 
-                    <!-- Moved Manage Locations card here -->
                     <div class="card">
                         <h3>Manage Locations</h3>
                         <div id="location-list"></div>
@@ -250,7 +175,6 @@
                                 <label for="new-location-address">Location Address</label>
                                 <input type="text" id="new-location-address" placeholder="e.g., 123 Main St, Anytown, USA" required>
                             </div>
-                            <!-- Status message for new location -->
                             <p id="new-location-status-message" class="status-message"></p>
                             <button type="submit" class="btn btn-primary">Create Location</button>
                         </form>
@@ -272,7 +196,6 @@
                                 <label for="admin-location-select">Assign to Location</label>
                                 <select id="admin-location-select" required></select>
                             </div>
-                            <!-- Status message for invite admin -->
                             <p id="invite-admin-status-message" class="status-message"></p>
                             <button type="submit" class="btn btn-primary">Send Invite</button>
                         </form>
@@ -313,7 +236,6 @@
                                 <select id="employee-location-select" required>
                                 </select>
                             </div>
-                            <!-- Status message for invite employee -->
                             <p id="invite-employee-status-message" class="status-message"></p>
                             <button type="submit" class="btn btn-primary">Send Invite</button>
                         </form>
@@ -325,15 +247,30 @@
                     <div class="card">
                         <h3>Manage Users</h3>
                         <div id="user-list"></div>
-                        <hr style="border-color: var(--border-color); margin: 30px 0;">
-                        <!-- Other user management forms might go here if they existed -->
                     </div>
                 </div>
              </div>
         </div>
     </div>
     
-    <!-- Modals (removed from here to eliminate the pop-up) -->
+    <!-- ADDED: Modal HTML for error messages -->
+    <div id="message-modal" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-ok-button" class="btn btn-secondary">OK</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-buttons">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
     
     <script type="module" src="js/app.js"></script>
 </body>
