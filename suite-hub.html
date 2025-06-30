@@ -57,15 +57,15 @@
             color: var(--text-medium);
             font-size: 0.9rem;
         }
+        /* UPDATED GREETING STYLE */
         #greeting-container {
             text-align: center;
-            padding: 40px 20px;
-            margin: 40px 0;
-            font-size: 1.8rem;
-            font-weight: 500;
-            color: var(--text-light);
-            background-color: rgba(0,0,0,0.1);
-            border-radius: 8px;
+            margin: 60px 0;
+            font-family: 'Fredoka One', cursive; /* Matched to logo */
+            font-size: 2rem; /* Adjusted size */
+            font-weight: 400; /* Matched to logo */
+            color: #f0f0f0; /* Matched to logo */
+            text-shadow: 0 3px 3px rgba(0,0,0,.5),0 0 15px rgba(200,109,215,.5),0 0 30px rgba(200,109,215,.4),0 0 50px rgba(200,109,215,.3); /* Matched to logo */
         }
         /* Modal Styles */
         .modal-overlay {
@@ -132,7 +132,6 @@
         </main>
     </div>
 
-    <!-- ADDED: Modal HTML structure for error messages -->
     <div id="message-modal" class="modal-overlay">
         <div class="modal-content">
             <p id="modal-text"></p>
