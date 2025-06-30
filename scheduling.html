@@ -27,14 +27,15 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
 
+        /* Restored Original Grid Layout */
         .account-grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr; /* Default for mobile */
             gap: 30px;
         }
         @media (min-width: 1200px) {
             .account-grid {
-                grid-template-columns: 350px 1fr;
+                grid-template-columns: 350px 1fr; 
             }
         }
         .grid-column {
@@ -44,16 +45,9 @@
         }
         
         /* Calendar Styles */
-        .schedule-display {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        #schedule-table {
-            position: relative;
-            overflow-x: auto;
-        }
+        .schedule-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;}
+        #current-week-display { font-size: 1.2rem; font-weight: 600; }
+        .calendar-container { position: relative; overflow-x: auto; }
         .calendar-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); min-width: 800px; }
         .calendar-grid-header { display: contents; }
         .calendar-day-header { text-align: center; padding: 10px 0; font-weight: 600; border-bottom: 1px solid var(--border-color); }
@@ -160,7 +154,7 @@
                             </div>
                             <button type="submit" class="btn btn-primary">Add Shift</button>
                         </form>
-                         <div class="form-group" style="text-align: left; margin-top: 20px;">
+                        <div class="form-group" style="text-align: left; margin-top: 20px;">
                             <label for="toggle-availability" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="toggle-availability" checked>
                                 Show Employee Availability
@@ -170,14 +164,14 @@
                 </div>
                 <div class="grid-column">
                     <div class="card">
-                        <div class="schedule-display">
-                            <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
-                            <h3 id="current-week-display">Loading...</h3>
-                            <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
+                        <div class="schedule-controls">
+                            <button id="prev-week-btn" class="btn btn-secondary">&lt; Previous</button>
+                            <span id="current-week-display">Loading...</span>
+                            <button id="next-week-btn" class="btn btn-secondary">Next &gt;</button>
                         </div>
-                        <div id="schedule-table">
+                        <div class="calendar-container">
                             <div id="calendar-grid">
-                                <!-- JS will build the calendar here -->
+                                <p style="text-align: center; color: var(--text-medium);">Loading calendar...</p>
                             </div>
                         </div>
                     </div>
