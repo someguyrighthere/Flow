@@ -9,7 +9,7 @@ import { handleHiringPage } from './pages/hiring.js';
 import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
-import { handleSuiteHubPage } from './pages/suiteHub.js'; // NEW: Import for suite-hub.html
+import { handleSuiteHubPage } from './pages/suiteHub.js'; // Import for suite-hub.html
 
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
@@ -31,7 +31,7 @@ function setupSettingsDropdown() {
         logoutButton.addEventListener("click", () => {
             localStorage.removeItem("authToken");
             localStorage.removeItem("userRole");
-            localStorage.removeItem('userId'); // Also clear userId
+            localStorage.removeItem('userId');
             window.location.href = "login.html";
         });
     }
@@ -41,10 +41,11 @@ document.addEventListener("DOMContentLoaded", () => {
     setupSettingsDropdown();
     const path = window.location.pathname;
 
+    // Corrected Router Logic
     if (path.includes("login.html") || path.includes("register.html")) {
         handleLoginPage();
     } else if (path.includes("suite-hub.html")) {
-        handleSuiteHubPage(); // NEW: Route for suite-hub.html
+        handleSuiteHubPage(); // This will now correctly execute the greeting logic
     } else if (path.includes("dashboard.html")) {
         handleDashboardPage();
     } else if (path.includes("checklists.html")) {
