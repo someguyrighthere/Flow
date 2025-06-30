@@ -8,7 +8,8 @@ import { handleDocumentsPage } from './pages/documents.js';
 import { handleHiringPage } from './pages/hiring.js';
 import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
-import { handleOnboardingViewPage } from './pages/onboardingView.js'; // NEW: Import for new-hire-view.html
+import { handleOnboardingViewPage } from './pages/onboardingView.js';
+import { handleSuiteHubPage } from './pages/suiteHub.js'; // NEW: Import for suite-hub.html
 
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
@@ -30,6 +31,7 @@ function setupSettingsDropdown() {
         logoutButton.addEventListener("click", () => {
             localStorage.removeItem("authToken");
             localStorage.removeItem("userRole");
+            localStorage.removeItem('userId'); // Also clear userId
             window.location.href = "login.html";
         });
     }
@@ -39,14 +41,27 @@ document.addEventListener("DOMContentLoaded", () => {
     setupSettingsDropdown();
     const path = window.location.pathname;
 
-    if (path.includes("login.html")) handleLoginPage();
-    else if (path.includes("dashboard.html")) handleDashboardPage();
-    else if (path.includes("checklists.html")) handleChecklistsPage();
-    else if (path.includes("admin.html")) handleAdminPage();
-    else if (path.includes("account.html")) handleAccountPage();
-    else if (path.includes("documents.html")) handleDocumentsPage();
-    else if (path.includes("hiring.html")) handleHiringPage();
-    else if (path.includes("scheduling.html")) handleSchedulingPage();
-    else if (path.includes("apply.html")) handleApplyPage();
-    else if (path.includes("new-hire-view.html")) handleOnboardingViewPage(); // NEW: Route for new-hire-view.html
+    if (path.includes("login.html") || path.includes("register.html")) {
+        handleLoginPage();
+    } else if (path.includes("suite-hub.html")) {
+        handleSuiteHubPage(); // NEW: Route for suite-hub.html
+    } else if (path.includes("dashboard.html")) {
+        handleDashboardPage();
+    } else if (path.includes("checklists.html")) {
+        handleChecklistsPage();
+    } else if (path.includes("admin.html")) {
+        handleAdminPage();
+    } else if (path.includes("account.html")) {
+        handleAccountPage();
+    } else if (path.includes("documents.html")) {
+        handleDocumentsPage();
+    } else if (path.includes("hiring.html")) {
+        handleHiringPage();
+    } else if (path.includes("scheduling.html")) {
+        handleSchedulingPage();
+    } else if (path.includes("apply.html")) {
+        handleApplyPage();
+    } else if (path.includes("new-hire-view.html")) {
+        handleOnboardingViewPage();
+    }
 });
