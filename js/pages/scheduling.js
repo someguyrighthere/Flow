@@ -31,64 +31,69 @@ export function handleSchedulingPage() {
     async function renderCalendar(startDate) {
         if (!calendarGrid || !currentWeekDisplay) return;
         
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 6);
-        const options = { month: 'short', day: 'numeric' };
-        currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
-        
-        calendarGrid.innerHTML = ''; 
+        try {
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 6);
+            const options = { month: 'short', day: 'numeric' };
+            currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
+            
+            calendarGrid.innerHTML = ''; 
 
-        const headerContainer = document.createElement('div');
-        headerContainer.className = 'calendar-grid-header';
-        calendarGrid.appendChild(headerContainer);
+            const headerContainer = document.createElement('div');
+            headerContainer.className = 'calendar-grid-header';
+            calendarGrid.appendChild(headerContainer);
 
-        const timeHeader = document.createElement('div');
-        timeHeader.className = 'calendar-day-header';
-        timeHeader.innerHTML = `&nbsp;`;
-        headerContainer.appendChild(timeHeader);
+            const timeHeader = document.createElement('div');
+            timeHeader.className = 'calendar-day-header';
+            timeHeader.innerHTML = `&nbsp;`;
+            headerContainer.appendChild(timeHeader);
 
-        for (let i = 0; i < 7; i++) {
-            const dayDate = new Date(startDate);
-            dayDate.setDate(startDate.getDate() + i);
-            const dayHeader = document.createElement('div');
-            dayHeader.className = 'calendar-day-header';
-            dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
-            headerContainer.appendChild(dayHeader);
-        }
-
-        const calendarBody = document.createElement('div');
-        calendarBody.className = 'calendar-body';
-        calendarGrid.appendChild(calendarBody);
-
-        const timeColumn = document.createElement('div');
-        timeColumn.className = 'time-column';
-        for (let hour = 0; hour < 24; hour++) {
-            const timeSlot = document.createElement('div');
-            timeSlot.className = 'time-slot';
-            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-            const ampm = hour < 12 ? 'AM' : 'PM';
-            timeSlot.textContent = `${displayHour} ${ampm}`;
-            timeColumn.appendChild(timeSlot);
-        }
-        calendarBody.appendChild(timeColumn);
-
-        for (let i = 0; i < 7; i++) {
-            const dayColumn = document.createElement('div');
-            dayColumn.className = 'day-column';
-            dayColumn.id = `day-column-${i}`;
-            for (let j = 0; j < 24; j++) {
-                const hourLine = document.createElement('div');
-                hourLine.className = 'hour-line';
-                dayColumn.appendChild(hourLine);
+            for (let i = 0; i < 7; i++) {
+                const dayDate = new Date(startDate);
+                dayDate.setDate(startDate.getDate() + i);
+                const dayHeader = document.createElement('div');
+                dayHeader.className = 'calendar-day-header';
+                dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+                headerContainer.appendChild(dayHeader);
             }
-            calendarBody.appendChild(dayColumn);
-        }
 
-        await Promise.all([
-            loadAndDisplayShifts(startDate, endDate),
-            loadAndRenderAvailability(),
-            loadAndRenderBusinessHours()
-        ]);
+            const calendarBody = document.createElement('div');
+            calendarBody.className = 'calendar-body';
+            calendarGrid.appendChild(calendarBody);
+
+            const timeColumn = document.createElement('div');
+            timeColumn.className = 'time-column';
+            for (let hour = 0; hour < 24; hour++) {
+                const timeSlot = document.createElement('div');
+                timeSlot.className = 'time-slot';
+                const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+                const ampm = hour < 12 ? 'AM' : 'PM';
+                timeSlot.textContent = `${displayHour} ${ampm}`;
+                timeColumn.appendChild(timeSlot);
+            }
+            calendarBody.appendChild(timeColumn);
+
+            for (let i = 0; i < 7; i++) {
+                const dayColumn = document.createElement('div');
+                dayColumn.className = 'day-column';
+                dayColumn.id = `day-column-${i}`;
+                for (let j = 0; j < 24; j++) {
+                    const hourLine = document.createElement('div');
+                    hourLine.className = 'hour-line';
+                    dayColumn.appendChild(hourLine);
+                }
+                calendarBody.appendChild(dayColumn);
+            }
+
+            await Promise.all([
+                loadAndDisplayShifts(startDate, endDate),
+                loadAndRenderAvailability(),
+                loadAndRenderBusinessHours()
+            ]);
+        } catch (error) {
+            console.error("Failed to render calendar:", error);
+            if(calendarGrid) calendarGrid.innerHTML = `<p style="color:red; text-align:center;">Could not render calendar. ${error.message}</p>`;
+        }
     }
 
     /**

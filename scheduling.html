@@ -28,22 +28,31 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
 
+        /* NEW: Flexbox layout for the main content */
         .scheduling-layout {
-            display: grid;
-            grid-template-columns: 1fr; /* Default for mobile */
+            display: flex;
+            flex-direction: column;
             gap: 30px;
         }
-        @media (min-width: 1200px) {
+        @media (min-width: 1024px) {
             .scheduling-layout {
-                grid-template-columns: 350px 1fr; 
+                flex-direction: row;
             }
+        }
+
+        .side-panel {
+            flex: 1 1 350px; /* Grow, shrink, and basis */
+            min-width: 300px;
+        }
+
+        .main-panel {
+            flex: 2 1 600px; /* Grow more, basis of 600px */
         }
         
         /* Calendar Styles */
-        .calendar-main { display: flex; flex-direction: column; height: 100%; }
-        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;}
+        .schedule-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;}
         #current-week-display { font-size: 1.2rem; font-weight: 600; }
-        .calendar-grid-container { flex-grow: 1; position: relative; overflow-x: auto; }
+        .calendar-container { position: relative; overflow-x: auto; }
         .calendar-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); min-width: 800px; }
         .calendar-grid-header { display: contents; }
         .calendar-day-header { text-align: center; padding: 10px 0; font-weight: 600; border-bottom: 1px solid var(--border-color); }
@@ -86,7 +95,7 @@
         .availability-block.hidden { display: none; }
         .business-hours-block {
             position: absolute; left: 0; right: 0;
-            background-color: rgba(0, 255, 150, 0.05);
+            background-color: rgba(0, 255, 150, 0.05); /* Subtle green background */
             z-index: 0;
             pointer-events: none;
         }
@@ -160,17 +169,14 @@
                 </div>
                 <div class="main-panel">
                     <div class="card">
-                        <div class="calendar-main">
-                            <div class="calendar-header">
-                                <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
-                                <h3 id="current-week-display">Loading...</h3>
-                                <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
-                            </div>
-                            <div class="calendar-grid-container">
-                                <div id="calendar-grid">
-                                    <!-- JS will build the header (.calendar-grid-header) 
-                                         and body (.calendar-body) with time/day columns here -->
-                                </div>
+                        <div class="schedule-controls">
+                            <button id="prev-week-btn" class="btn btn-secondary">&lt; Previous</button>
+                            <span id="current-week-display">Loading...</span>
+                            <button id="next-week-btn" class="btn btn-secondary">Next &gt;</button>
+                        </div>
+                        <div class="calendar-container">
+                            <div id="calendar-grid">
+                                <p style="text-align: center; color: var(--text-medium);">Loading calendar...</p>
                             </div>
                         </div>
                     </div>
