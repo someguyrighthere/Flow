@@ -111,7 +111,9 @@ apiRoutes.post('/login', async (req, res) => {
         if (!user || !user.password) return res.status(401).json({ error: "Invalid credentials." });
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
-        const payload = { id: user.user_id, role: user.role };
+        
+        // UPDATED: Include location_id in the JWT payload
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ message: "Logged in successfully!", token: token, role: user.role });
     } catch (err) {
@@ -120,7 +122,7 @@ apiRoutes.post('/login', async (req, res) => {
     }
 });
 
-// User Profile
+// Authenticated Routes
 apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
@@ -136,9 +138,21 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
 
 // User Management
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    const sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.role, u.full_name`;
+    // UPDATED: Filter users based on admin role
+    let sql;
+    const params = [];
+
+    if (req.user.role === 'super_admin') {
+        // Super admins see all users
+        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.role, u.full_name`;
+    } else {
+        // Location admins only see users from their own location
+        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id WHERE u.location_id = $1 ORDER BY u.role, u.full_name`;
+        params.push(req.user.location_id);
+    }
+
     try {
-        const result = await pool.query(sql);
+        const result = await pool.query(sql, params);
         res.json(result.rows);
     } catch (err) {
         console.error('Error fetching users:', err);
@@ -216,7 +230,7 @@ apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) =>
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
 // Fallback for serving index.html on any non-API route
-app.get(/'*'/, (req, res) => {
+app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
