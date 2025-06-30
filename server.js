@@ -310,9 +310,9 @@ apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
     }
 });
 
-// CORRECTED: The field name from multer is 'document', not 'documentFile'
+// CORRECTED: The field name from multer is 'document' to match the frontend
 apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body; 
+    const { title, description } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -652,7 +652,7 @@ const startServer = async () => {
                 availability VARCHAR(255),
                 is_authorized BOOLEAN,
                 status VARCHAR(50) DEFAULT 'pending',
-                applied_at TIMESTAMTz DEFAULT CURRENT_TIMESTAMP,
+                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (job_posting_id) REFERENCES job_postings(id) ON DELETE CASCADE
             );
         `;
