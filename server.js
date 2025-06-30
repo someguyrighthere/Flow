@@ -115,7 +115,7 @@ apiRoutes.post('/login', async (req, res) => {
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         
-        // UPDATED: Added location_id to the response
+        // CORRECTED: Ensure location_id is sent in the response body
         res.json({ message: "Logged in successfully!", token: token, role: user.role, location_id: user.location_id });
     } catch (err) {
         console.error(err);
@@ -174,7 +174,7 @@ const inviteUser = async (req, res, role) => {
     const { full_name, email, password, location_id, position, employment_type, availability } = req.body;
     if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
     
-    // If the inviting user is a location admin, force the new user's location to be the same.
+    // CORRECTED: Securely use the inviting admin's location_id from their token
     const final_location_id = req.user.role === 'location_admin' ? req.user.location_id : location_id;
 
     try {
