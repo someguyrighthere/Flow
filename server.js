@@ -237,7 +237,7 @@ const startServer = async () => {
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-        // Schema creation logic...
+        // Schema creation logic... (assuming it's correct from previous versions)
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Server is running on port ${PORT}`);
         });
