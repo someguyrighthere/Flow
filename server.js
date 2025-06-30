@@ -114,7 +114,9 @@ apiRoutes.post('/login', async (req, res) => {
         
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ message: "Logged in successfully!", token: token, role: user.role });
+        
+        // UPDATED: Added location_id to the response
+        res.json({ message: "Logged in successfully!", token: token, role: user.role, location_id: user.location_id });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "An internal server error occurred." });
@@ -141,9 +143,9 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     const params = [];
 
     if (req.user.role === 'super_admin') {
-        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.role, u.full_name`;
+        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.role, u.full_name`;
     } else {
-        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, u.employment_type, u.availability, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id WHERE u.location_id = $1 ORDER BY u.role, u.full_name`;
+        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id WHERE u.location_id = $1 ORDER BY u.role, u.full_name`;
         params.push(req.user.location_id);
     }
 
@@ -171,11 +173,15 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
 const inviteUser = async (req, res, role) => {
     const { full_name, email, password, location_id, position, employment_type, availability } = req.body;
     if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
+    
+    // If the inviting user is a location admin, force the new user's location to be the same.
+    const final_location_id = req.user.role === 'location_admin' ? req.user.location_id : location_id;
+
     try {
         const hash = await bcrypt.hash(password, 10);
         await pool.query(
             `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [full_name, email, hash, role, position || null, location_id || null, employment_type || null, availability ? JSON.stringify(availability) : null]
+            [full_name, email, hash, role, position || null, final_location_id, employment_type || null, availability ? JSON.stringify(availability) : null]
         );
         res.status(201).json({ message: `${role} invited successfully.` });
     } catch (err) {
@@ -226,7 +232,7 @@ apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) =>
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
 // Fallback for serving index.html on any non-API route
-app.get(/'*'/, (req, res) => {
+app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
@@ -237,7 +243,7 @@ const startServer = async () => {
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-        // Schema creation logic... (assuming it's correct from previous versions)
+        // Schema creation logic...
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Server is running on port ${PORT}`);
         });
