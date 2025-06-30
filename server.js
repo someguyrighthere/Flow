@@ -16,15 +16,13 @@ const onboardingRoutes = require('./routes/onboardingRoutes');
 
 // --- 2. Initialize Express App ---
 const app = express();
-// NEW: Create a router for all API endpoints
-const apiRoutes = express.Router();
+const apiRoutes = express.Router(); // Create a router for all API endpoints
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
 
-// --- Multer Storage Setup (for document uploads) ---
+// --- Multer Storage Setup ---
 const uploadsDir = path.join(__dirname, 'uploads');
-// Ensure the uploads directory exists
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
 }
@@ -34,7 +32,6 @@ const storage = multer.diskStorage({
         cb(null, uploadsDir);
     },
     filename: (req, file, cb) => {
-        // Use original filename with a timestamp to prevent collisions
         cb(null, `${Date.now()}-${file.originalname}`);
     }
 });
@@ -53,11 +50,9 @@ const pool = new Pool({
 // --- 4. Middleware ---
 app.use(cors());
 app.use(express.json());
+app.use('/api', apiRoutes); // Use the apiRoutes router for all paths starting with /api
 
-// NEW: Use the apiRoutes router for all paths starting with /api
-app.use('/api', apiRoutes);
-
-// Static file serving remains on the main app
+// Static file serving
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/css', express.static(path.join(__dirname, 'css')));
@@ -84,8 +79,6 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- 6. API Routes (now attached to apiRoutes) ---
-
-// All routes are changed from `app.get(...)` to `apiRoutes.get(...)` etc.
 
 // User, Auth, and Account Routes
 apiRoutes.post('/login', async (req, res) => {
@@ -317,9 +310,9 @@ apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
     }
 });
 
-// Corrected upload route to use 'document' as the field name
+// CORRECTED: The field name from multer is 'document', not 'documentFile'
 apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body;
+    const { title, description } = req.body; 
     const file = req.file;
 
     if (!file) {
@@ -343,7 +336,6 @@ apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (
     }
 });
 
-
 apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     try {
@@ -363,8 +355,8 @@ apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
 });
 
 
-// Job Postings Routes
-apiRoutes.get('/job-postings', async (req, res) => { // Made public
+// Job Postings and Applicants Routes
+apiRoutes.get('/job-postings', async (req, res) => { // Publicly accessible
     try {
         const result = await pool.query('SELECT * FROM job_postings ORDER BY created_at DESC');
         res.json(result.rows);
@@ -373,8 +365,8 @@ apiRoutes.get('/job-postings', async (req, res) => { // Made public
         res.status(500).json({ error: 'Failed to retrieve job postings.' });
     }
 });
-// Get a single job posting by ID
-apiRoutes.get('/job-postings/:id', async (req, res) => { // Made public
+
+apiRoutes.get('/job-postings/:id', async (req, res) => { // Publicly accessible
     const { id } = req.params;
     try {
         const result = await pool.query('SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1', [id]);
@@ -431,8 +423,6 @@ apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res)
     }
 });
 
-
-// Applicants Routes
 apiRoutes.post('/apply/:jobId', async (req, res) => {
     const { jobId } = req.params;
     const { name, email, phone, address, date_of_birth, availability, is_authorized } = req.body;
@@ -448,7 +438,6 @@ apiRoutes.post('/apply/:jobId', async (req, res) => {
         res.status(500).json({ error: 'Failed to submit application.' });
     }
 });
-
 
 apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     try {
@@ -555,12 +544,12 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
 });
 
 
-// Onboarding & Scheduling Routes (now handled by modular routers)
-// Pass the apiRoutes object to them
+// Modular Routes
+// REMOVED: Duplicated /onboarding-tasks routes. They will be handled by the modular router below.
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 autoScheduleRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
-// This is the main HTML serving route. It should be last.
+// Fallback for serving index.html on any non-API route
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -663,7 +652,7 @@ const startServer = async () => {
                 availability VARCHAR(255),
                 is_authorized BOOLEAN,
                 status VARCHAR(50) DEFAULT 'pending',
-                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                applied_at TIMESTAMTz DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (job_posting_id) REFERENCES job_postings(id) ON DELETE CASCADE
             );
         `;
