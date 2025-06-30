@@ -336,35 +336,5 @@
     <!-- Modals (removed from here to eliminate the pop-up) -->
     
     <script type="module" src="js/app.js"></script>
-    <script>
-        document.querySelector('#business-settings-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const startTime = document.getElementById('operating-hours-start').value;
-            const endTime = document.getElementById('operating-hours-end').value;
-            fetch('/api/business-settings/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ operating_hours_start: startTime, operating_hours_end: endTime })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.business_id) {
-                    alert('Settings saved. Business ID: ' + data.business_id); // For testing, can hide later
-                    document.getElementById('businessId').value = data.business_id;
-                    document.getElementById('operating-hours-status-message').textContent = 'Settings saved successfully!';
-                    document.getElementById('operating-hours-status-message').className = 'status-message success';
-                } else if (data.error) {
-                    document.getElementById('operating-hours-status-message').textContent = data.error;
-                    document.getElementById('operating-hours-status-message').className = 'status-message error';
-                }
-            })
-            .catch(error => {
-                document.getElementById('operating-hours-status-message').textContent = 'Error saving settings.';
-                document.getElementById('operating-hours-status-message').className = 'status-message error';
-                console.error('Error:', error);
-            });
-        });
-    </script>
-    <input type="hidden" id="businessId" name="businessId" value="">
 </body>
 </html>
