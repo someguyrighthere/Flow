@@ -28,25 +28,16 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
 
-        /* NEW: Flexbox layout for the main content */
+        /* Restored Grid Layout */
         .scheduling-layout {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 1fr;
             gap: 30px;
         }
         @media (min-width: 1024px) {
             .scheduling-layout {
-                flex-direction: row;
+                grid-template-columns: 350px 1fr;
             }
-        }
-
-        .side-panel {
-            flex: 1 1 350px; /* Grow, shrink, and basis */
-            min-width: 300px;
-        }
-
-        .main-panel {
-            flex: 2 1 600px; /* Grow more, basis of 600px */
         }
         
         /* Calendar Styles */
