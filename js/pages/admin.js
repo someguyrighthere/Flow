@@ -9,6 +9,14 @@ export function handleAdminPage() {
         return;
     }
 
+    // Hide "Invite New Admin" card if the user is a location_admin
+    if (userRole === 'location_admin') {
+        const inviteAdminCard = document.getElementById('invite-admin-card');
+        if (inviteAdminCard) {
+            inviteAdminCard.style.display = 'none';
+        }
+    }
+
     // DOM Element Selection
     const locationListDiv = document.getElementById('location-list');
     const newLocationForm = document.getElementById('new-location-form');
