@@ -72,11 +72,6 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
        
-        .business-hours-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
         .availability-grid {
             display: grid;
             grid-template-columns: auto 1fr;
@@ -141,27 +136,6 @@
              <div class="account-grid">
                 <!-- LEFT COLUMN -->
                 <div class="grid-column">
-                    <div class="card">
-                        <h3>Business Settings</h3>
-                        <form id="business-settings-form">
-                            <div class="form-group">
-                                <label>Operating Hours</label>
-                                <div class="business-hours-grid">
-                                    <div class="form-group">
-                                        <label for="operating-hours-start">Start Time</label>
-                                        <input type="time" id="operating-hours-start" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="operating-hours-end">End Time</label>
-                                        <input type="time" id="operating-hours-end" required>
-                                    </div>
-                                </div>
-                            </div>
-                            <p id="operating-hours-status-message" class="status-message"></p>
-                            <button type="submit" class="btn btn-primary">Save Settings</button>
-                        </form>
-                    </div>
-
                     <div class="card">
                         <h3>Manage Locations</h3>
                         <div id="location-list"></div>
@@ -253,7 +227,6 @@
         </div>
     </div>
     
-    <!-- ADDED: Modal HTML for error messages -->
     <div id="message-modal" class="modal-overlay">
         <div class="modal-content">
             <p id="modal-text"></p>

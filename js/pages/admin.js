@@ -10,10 +10,6 @@ export function handleAdminPage() {
     }
 
     // DOM Element Selection
-    const businessSettingsForm = document.getElementById('business-settings-form');
-    const operatingHoursStartInput = document.getElementById('operating-hours-start');
-    const operatingHoursEndInput = document.getElementById('operating-hours-end');
-    const operatingHoursStatusMessage = document.getElementById('operating-hours-status-message');
     const locationListDiv = document.getElementById('location-list');
     const newLocationForm = document.getElementById('new-location-form');
     const newLocationNameInput = document.getElementById('new-location-name');
@@ -28,8 +24,8 @@ export function handleAdminPage() {
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
     const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message');
 
-    let businessOperatingStartHour = 0;
-    let businessOperatingEndHour = 24;
+    let businessOperatingStartHour = 0; // Default start hour
+    let businessOperatingEndHour = 24; // Default end hour
 
     function displayStatusMessage(element, message, isError = false) {
         if (!element) return;
@@ -40,25 +36,6 @@ export function handleAdminPage() {
             element.textContent = '';
             element.classList.remove('success', 'error');
         }, 5000); 
-    }
-
-    async function loadBusinessSettings() {
-        if (!businessSettingsForm) return;
-        try {
-            const settings = await apiRequest('GET', '/api/settings/business');
-            const formattedStartTime = settings.operating_hours_start ? settings.operating_hours_start.substring(0, 5) : '09:00';
-            const formattedEndTime = settings.operating_hours_end ? settings.operating_hours_end.substring(0, 5) : '17:00';
-
-            operatingHoursStartInput.value = formattedStartTime;
-            operatingHoursEndInput.value = formattedEndTime;
-
-            businessOperatingStartHour = parseInt(formattedStartTime.split(':')[0], 10);
-            businessOperatingEndHour = parseInt(formattedEndTime.split(':')[0], 10);
-            
-            generateAvailabilityInputs(); 
-        } catch (error) {
-            displayStatusMessage(operatingHoursStatusMessage, 'Could not load business settings.', true);
-        }
     }
 
     async function loadLocations() {
@@ -203,24 +180,6 @@ export function handleAdminPage() {
     }
 
     // Event Listeners
-    if (businessSettingsForm) {
-        businessSettingsForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const settingsData = {
-                operating_hours_start: operatingHoursStartInput.value,
-                operating_hours_end: operatingHoursEndInput.value,
-            };
-            try {
-                await apiRequest('POST', '/api/settings/business', settingsData);
-                displayStatusMessage(operatingHoursStatusMessage, 'Business settings saved!', false);
-                loadBusinessSettings();
-            }
-            catch (error) {
-                displayStatusMessage(operatingHoursStatusMessage, `Error: ${error.message}`, true);
-            }
-        });
-    }
-
     if (newLocationForm) {
         newLocationForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -331,7 +290,7 @@ export function handleAdminPage() {
     }
 
     // Initial Page Load
-    loadBusinessSettings();
+    generateAvailabilityInputs();
     loadLocations();
     populateLocationDropdowns();
     loadUsers();
