@@ -36,8 +36,8 @@ export function handleAdminPage() {
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
     const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message');
 
-    let businessOperatingStartHour = 0; // Default start hour
-    let businessOperatingEndHour = 24; // Default end hour
+    let businessOperatingStartHour = 0;
+    let businessOperatingEndHour = 24;
 
     function displayStatusMessage(element, message, isError = false) {
         if (!element) return;

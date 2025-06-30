@@ -133,7 +133,9 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Routes
+// --- Admin Routes ---
+
+// User Management
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     let sql;
     const params = [];
@@ -186,6 +188,39 @@ const inviteUser = async (req, res, role) => {
 apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
 apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
 
+
+// Location Management
+apiRoutes.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching locations:', err);
+        res.status(500).json({ error: 'Failed to retrieve locations.' });
+    }
+});
+
+apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_name, location_address } = req.body;
+    try {
+        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating location:', err);
+        res.status(400).json({ error: 'Failed to create location.' });
+    }
+});
+
+apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting location:', err);
+        res.status(500).json({ error: 'Failed to delete location.' });
+    }
+});
 
 // Modular Routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
