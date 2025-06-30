@@ -17,16 +17,7 @@
         .card {
              background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
              border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
-        }
-        .scheduling-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 30px;
-        }
-        @media (min-width: 1024px) {
-            .scheduling-grid {
-                grid-template-columns: 350px 1fr;
-            }
+             height: 100%;
         }
         .form-group { margin-bottom: 20px; text-align: left; }
         .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
@@ -37,8 +28,29 @@
         }
         .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
 
+        /* NEW: Flexbox layout for the main content */
+        .scheduling-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        @media (min-width: 1024px) {
+            .scheduling-layout {
+                flex-direction: row;
+            }
+        }
+
+        .side-panel {
+            flex: 1 1 350px; /* Grow, shrink, and basis */
+            min-width: 300px;
+        }
+
+        .main-panel {
+            flex: 2 1 600px; /* Grow more, basis of 600px */
+        }
+        
         /* Calendar Styles */
-        .schedule-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .schedule-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;}
         #current-week-display { font-size: 1.2rem; font-weight: 600; }
         .calendar-container { position: relative; overflow-x: auto; }
         .calendar-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); min-width: 800px; }
@@ -87,6 +99,13 @@
             z-index: 0;
             pointer-events: none;
         }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+        .modal-content { background-color: var(--card-bg); padding: 20px; border: 1px solid var(--border-color); border-radius: 8px; width: 80%; max-width: 500px; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19); position: relative; color: var(--text-light); animation: fadeIn 0.3s ease-out; }
+        .modal-content p { margin-bottom: 20px; text-align: center; font-size: 1.1rem; }
+        .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -96,7 +115,7 @@
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698 1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
@@ -113,48 +132,52 @@
 
         <div id="scheduling-content">
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
-            <div class="scheduling-grid">
-                <div class="card">
-                    <h3>Create New Shift</h3>
-                    <form id="create-shift-form">
-                        <div class="form-group">
-                            <label for="employee-select">Employee</label>
-                            <select id="employee-select" required></select>
+            <div class="scheduling-layout">
+                <div class="side-panel">
+                    <div class="card">
+                        <h3>Create New Shift</h3>
+                        <form id="create-shift-form">
+                            <div class="form-group">
+                                <label for="employee-select">Employee</label>
+                                <select id="employee-select" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="location-select">Location</label>
+                                <select id="location-select" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="start-time-input">Start Time</label>
+                                <input type="datetime-local" id="start-time-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="end-time-input">End Time</label>
+                                <input type="datetime-local" id="end-time-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="notes-input">Notes (Optional)</label>
+                                <textarea id="notes-input"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Shift</button>
+                        </form>
+                        <div class="form-group" style="text-align: left; margin-top: 20px;">
+                            <label for="toggle-availability" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="toggle-availability" checked>
+                                Show Employee Availability
+                            </label>
                         </div>
-                        <div class="form-group">
-                            <label for="location-select">Location</label>
-                            <select id="location-select" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="start-time-input">Start Time</label>
-                            <input type="datetime-local" id="start-time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="end-time-input">End Time</label>
-                            <input type="datetime-local" id="end-time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="notes-input">Notes (Optional)</label>
-                            <textarea id="notes-input"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Add Shift</button>
-                    </form>
+                    </div>
                 </div>
-                <div class="card">
-                    <div class="schedule-controls">
-                        <button id="prev-week-btn" class="btn btn-secondary">&lt; Previous</button>
-                        <span id="current-week-display">Loading...</span>
-                        <button id="next-week-btn" class="btn btn-secondary">Next &gt;</button>
-                    </div>
-                    <div class="form-group" style="text-align: right;">
-                        <label for="toggle-availability" style="display: inline-flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="toggle-availability" checked>
-                            Show Employee Availability
-                        </label>
-                    </div>
-                    <div class="calendar-container">
-                        <div id="calendar-grid">
-                            <!-- Calendar will be generated by JS -->
+                <div class="main-panel">
+                    <div class="card">
+                        <div class="schedule-controls">
+                            <button id="prev-week-btn" class="btn btn-secondary">&lt; Previous</button>
+                            <span id="current-week-display">Loading...</span>
+                            <button id="next-week-btn" class="btn btn-secondary">Next &gt;</button>
+                        </div>
+                        <div class="calendar-container">
+                            <div id="calendar-grid">
+                                <p style="text-align: center; color: var(--text-medium);">Loading calendar...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
