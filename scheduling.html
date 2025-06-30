@@ -10,97 +10,295 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
+        /* General reset for consistent spacing */
+        body, html {
+            margin: 0;
+            padding: 0;
+        }
+
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
-        .main-nav { display: flex; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
+        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
         .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
         .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
-        .card {
-             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
-             border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
+        .settings-menu { position: relative; }
+        .settings-dropdown {
+            display: none; position: absolute; top: 55px; right: 0;
+            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 10; padding: 10px 0;
         }
-        .form-group { margin-bottom: 20px; text-align: left; }
-        .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%; padding: 12px; border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
-            color: var(--text-light); box-sizing: border-box;
+        .settings-dropdown a, .settings-dropdown button {
+            color: var(--text-light); padding: 12px 16px; text-decoration: none;
+            display: block; width: 100%; text-align: left; background: none;
+            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
         }
-        .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
-
-        /* Restored Original Grid Layout */
-        .account-grid {
+        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
+        
+        .scheduling-layout {
             display: grid;
-            grid-template-columns: 1fr; /* Default for mobile */
+            grid-template-columns: 320px 1fr;
             gap: 30px;
+            margin-top: 30px;
         }
-        @media (min-width: 1200px) {
-            .account-grid {
-                grid-template-columns: 350px 1fr; 
+        @media (max-width: 1200px) {
+            .scheduling-layout {
+                grid-template-columns: 1fr;
             }
         }
-        .grid-column {
+
+        .sidebar {
+            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
+        }
+        .sidebar h3 {
+            margin-top: 0;
+            color: var(--text-light);
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+        .sidebar .form-group {
+            margin-bottom: 15px;
+        }
+
+        .calendar-main {
+            background-color: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 8px;
             display: flex;
-            flex-direction: column;
-            gap: 30px;
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: var(--text-light);
+            flex-shrink: 0;
         }
         
-        /* Calendar Styles */
-        .schedule-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;}
-        #current-week-display { font-size: 1.2rem; font-weight: 600; }
-        .calendar-container { position: relative; overflow-x: auto; }
-        .calendar-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); min-width: 800px; }
-        .calendar-grid-header { display: contents; }
-        .calendar-day-header { text-align: center; padding: 10px 0; font-weight: 600; border-bottom: 1px solid var(--border-color); }
-        .calendar-body { display: contents; }
-        .time-column { grid-column: 1 / 2; }
-        .time-slot { height: 60px; border-bottom: 1px dotted rgba(255,255,255,0.1); box-sizing: border-box; font-size: 0.8em; text-align: right; padding-right: 5px; color: var(--text-medium); }
-        .day-column { grid-column: auto; position: relative; border-left: 1px solid var(--border-color); }
-        .hour-line { height: 60px; border-bottom: 1px dotted rgba(255,255,255,0.1); box-sizing: border-box; }
-        .calendar-shift {
-            position: absolute;
-            left: 5px; right: 5px;
-            background-color: var(--primary-accent);
-            color: white;
-            border-radius: 4px;
-            padding: 5px;
-            font-size: 0.8em;
-            overflow: hidden;
+        /* --- CALENDAR LAYOUT & ALIGNMENT FIXES (DEFINITIVE) --- */
+        section {
+            padding: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
+        .calendar-grid-container {
+            flex-grow: 1; 
+            overflow: hidden; 
+            display: flex;
+            flex-direction: column;
+            position: relative; 
+        }
+
+        .calendar-grid {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            min-width: 1500px; 
+            height: auto;
+        }
+
+        .calendar-grid-header {
+            display: grid;
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
+            position: sticky;
+            top: 0;
+            z-index: 6;
+            background-color: #1a1a1a;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .calendar-body {
+            display: grid;
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
+            flex-grow: 1;
+            overflow-y: scroll; 
+            position: relative; 
+            height: 1440px;
+            min-height: 1440px; 
+            box-sizing: content-box;
+            padding: 0;
+            margin: 0;
+        }
+
+        .calendar-day-header {
+            padding: 10px 0;
+            text-align: center;
+            font-weight: 600;
+            color: var(--text-light);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box; 
+        }
+        .calendar-day-header:last-child {
+            border-right: none;
+        }
+        
+        .time-column {
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            background-color: #2a2a2e;
+            grid-column: 1;
+            height: 1440px;
+            display: flex;
+            flex-direction: column;
+            box-sizing: content-box; 
+            padding: 0;
+            margin: 0;
+        }
+        .time-slot {
+            height: 60px;
+            line-height: 60px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
-            border: 1px solid rgba(255,255,255,0.5);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: var(--text-medium);
+            flex-shrink: 0;
+            padding: 0;
+            margin: 0;
+        }
+        .time-slot:last-child {
+            border-bottom: none;
+        }
+
+        .day-column {
+            position: relative;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            height: 100%;
+            overflow: hidden; 
+            box-sizing: content-box; 
+            padding: 0;
+            margin: 0;
+        }
+        .day-column:last-child {
+            border-right: none;
+        }
+
+        .hour-line {
+            height: 60px;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1); 
+            box-sizing: content-box; 
+            padding: 0;
+            margin: 0;
+        }
+        .hour-line:last-child {
+            border-bottom: none;
+        }
+
+        .calendar-shift, .availability-block, .business-hours-block {
+            position: absolute;
+            width: calc(100% - 4px);
+            left: 2px;
+            box-sizing: border-box;
+            border-radius: 4px;
+        }
+
+        .calendar-shift {
+            background-color: var(--primary-accent);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 5px 8px;
+            font-size: 0.85rem;
+            opacity: 0.9;
+            z-index: 3;
+            cursor: pointer;
+            overflow: hidden;
         }
         .delete-shift-btn {
-            position: absolute;
-            top: 2px;
-            right: 2px;
-            background: none;
-            border: none;
-            color: white;
-            cursor: pointer;
-            opacity: 0.6;
+            position: absolute; top: 2px; right: 2px;
+            background: rgba(0,0,0,0.3); border: none;
+            color: white; cursor: pointer; opacity: 0;
+            transition: opacity 0.2s; padding: 2px; border-radius: 50%;
+            width: 18px; height: 18px; display: flex;
+            align-items: center; justify-content: center;
         }
-        .delete-shift-btn:hover { opacity: 1; }
+        .calendar-shift:hover .delete-shift-btn { opacity: 1; }
+        .delete-shift-btn:hover { background: #e74c3c; }
+
         .availability-block {
-            position: absolute; left: 0; right: 0;
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: rgba(76, 175, 80, 0.2);
             z-index: 1;
-            pointer-events: none;
+            pointer-events: none; 
+            border: 1px dashed rgba(76, 175, 80, 0.5); 
         }
         .availability-block.hidden { display: none; }
+
         .business-hours-block {
-            position: absolute; left: 0; right: 0;
-            background-color: rgba(0, 255, 150, 0.05);
-            z-index: 0;
+            background-color: rgba(100, 100, 100, 0.1); 
+            backdrop-filter: blur(1px); 
+            -webkit-backdrop-filter: blur(1px);
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+            z-index: 0; 
             pointer-events: none;
         }
 
-        /* Modal Styles */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
-        .modal-content { background-color: var(--card-bg); padding: 20px; border: 1px solid var(--border-color); border-radius: 8px; width: 80%; max-width: 500px; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19); position: relative; color: var(--text-light); animation: fadeIn 0.3s ease-out; }
-        .modal-content p { margin-bottom: 20px; text-align: center; font-size: 1.1rem; }
-        .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .modal {
+            display: none; 
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative;
+            color: var(--text-light);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .close-button {
+            color: var(--text-medium);
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: var(--text-light);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
     </style>
 </head>
 <body>
@@ -115,7 +313,7 @@
                 <div id="settings-dropdown" class="settings-dropdown">
                     <a href="account.html">My Account</a>
                     <a href="admin.html">Admin Settings</a>
-                    <a href="pricing.html" id="upgrade-plan-link" style="display: none;">Upgrade Plan</a>
+                    <a href="pricing.html">Upgrade Plan</a>
                     <button id="logout-button">Logout</button>
                 </div>
             </div>
@@ -125,80 +323,79 @@
             <a href="scheduling.html" class="active">Scheduling</a>
         </nav>
 
-        <div id="scheduling-content">
+        <section>
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
-            <div class="account-grid">
-                <div class="grid-column">
-                    <div class="card">
-                        <h3>Create New Shift</h3>
-                        <form id="create-shift-form">
-                            <div class="form-group">
-                                <label for="employee-select">Employee</label>
-                                <select id="employee-select" required></select>
-                            </div>
-                            <div class="form-group">
-                                <label for="location-select">Location</label>
-                                <select id="location-select" required></select>
-                            </div>
-                            <div class="form-group">
-                                <label for="start-time-input">Start Time</label>
-                                <input type="datetime-local" id="start-time-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="end-time-input">End Time</label>
-                                <input type="datetime-local" id="end-time-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="notes-input">Notes (Optional)</label>
-                                <textarea id="notes-input"></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Add Shift</button>
-                        </form>
-                        <div class="form-group" style="text-align: left; margin-top: 20px;">
-                            <label for="toggle-availability" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="toggle-availability" checked>
-                                Show Employee Availability
-                            </label>
+            <div class="scheduling-layout">
+                <div class="sidebar">
+                    <h3>Create New Shift</h3>
+                    <form id="create-shift-form">
+                        <div class="form-group">
+                            <label for="employee-select">Employee</label>
+                            <select id="employee-select" required></select>
                         </div>
+                        <div class="form-group">
+                            <label for="location-select">Location</label>
+                            <select id="location-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="start-time-input">Start Time</label>
+                            <input type="datetime-local" id="start-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-time-input">End Time</label>
+                            <input type="datetime-local" id="end-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes-input">Notes (Optional)</label>
+                            <textarea id="notes-input" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Shift</button>
+                    </form>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-availability" checked>
+                            <span class="slider round"></span>
+                            Show Availability
+                        </label>
                     </div>
                 </div>
-                <div class="grid-column">
-                    <div class="card">
-                        <div class="schedule-controls">
-                            <button id="prev-week-btn" class="btn btn-secondary">&lt; Previous</button>
-                            <span id="current-week-display">Loading...</span>
-                            <button id="next-week-btn" class="btn btn-secondary">Next &gt;</button>
-                        </div>
-                        <div class="calendar-container">
-                            <div id="calendar-grid">
-                                <p style="text-align: center; color: var(--text-medium);">Loading calendar...</p>
-                            </div>
+
+                <div class="calendar-main">
+                    <div class="calendar-header">
+                        <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
+                        <h3 id="current-week-display">Loading...</h3>
+                        <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
+                    </div>
+                    <div class="calendar-grid-container">
+                        <div id="calendar-grid">
+                            <!-- JS will build the calendar here -->
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
     </div>
-
-    <!-- Modals -->
-    <div id="message-modal" class="modal" style="display:none;">
+    
+    <!-- Modals (message and confirmation) -->
+    <div id="modal-message" class="modal">
         <div class="modal-content">
             <p id="modal-text"></p>
-            <div class="modal-buttons">
+            <div class="modal-actions">
                 <button id="modal-ok-button" class="btn btn-primary">OK</button>
             </div>
         </div>
     </div>
-    <div id="confirm-modal" class="modal" style="display:none;">
+    <div id="confirm-modal" class="modal">
         <div class="modal-content">
             <p id="confirm-modal-text"></p>
-            <div class="modal-buttons">
+            <div class="modal-actions">
                 <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
                 <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
             </div>
         </div>
     </div>
-
+    
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
