@@ -28,12 +28,13 @@ export async function handleSuiteHubPage() {
         
         const greeting = getGreeting();
         
-        greetingContainer.textContent = `${greeting}, ${userName}.`;
+        // UPDATED: Added the new sentence to the greeting.
+        greetingContainer.textContent = `${greeting}, ${userName}. We are going to do great things today.`;
 
     } catch (error) {
         // This catch block will run if the apiRequest fails for any reason.
         console.error("Failed to fetch user for greeting:", error);
-        // Display a generic greeting as a fallback.
-        greetingContainer.textContent = `${getGreeting()}! Welcome back.`;
+        // Display a generic greeting as a fallback, also with the new sentence.
+        greetingContainer.textContent = `${getGreeting()}! Welcome back. We are going to do great things today.`;
     }
 }
