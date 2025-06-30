@@ -1,5 +1,6 @@
 // js/app.js (Main Router)
 import { handleLoginPage } from './pages/login.js';
+import { handleRegisterPage } from './pages/register.js'; // NEW
 import { handleDashboardPage } from './pages/dashboard.js';
 import { handleChecklistsPage } from './pages/checklists.js';
 import { handleAdminPage } from './pages/admin.js';
@@ -9,7 +10,7 @@ import { handleHiringPage } from './pages/hiring.js';
 import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
-import { handleSuiteHubPage } from './pages/suiteHub.js'; // Import for suite-hub.html
+import { handleSuiteHubPage } from './pages/suiteHub.js';
 
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
@@ -41,11 +42,12 @@ document.addEventListener("DOMContentLoaded", () => {
     setupSettingsDropdown();
     const path = window.location.pathname;
 
-    // Corrected Router Logic
-    if (path.includes("login.html") || path.includes("register.html")) {
+    if (path.includes("login.html")) {
         handleLoginPage();
+    } else if (path.includes("register.html")) { // UPDATED
+        handleRegisterPage();
     } else if (path.includes("suite-hub.html")) {
-        handleSuiteHubPage(); // This will now correctly execute the greeting logic
+        handleSuiteHubPage();
     } else if (path.includes("dashboard.html")) {
         handleDashboardPage();
     } else if (path.includes("checklists.html")) {
