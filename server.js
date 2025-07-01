@@ -57,18 +57,25 @@ const isAuthenticated = (req, res, next) => {
     if (token == null) return res.sendStatus(401); // No token, unauthorized
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403); // Token invalid/expired, forbidden
+        if (err) {
+            console.error('JWT verification error:', err.message); // Log JWT error
+            return res.sendStatus(403); // Token invalid/expired, forbidden
+        }
         req.user = user; // Attach user payload to request
         next(); // Proceed to the next middleware/route handler
     });
 };
 
 const isAdmin = (req, res, next) => {
+    // Debugging: Log the user role received by isAdmin middleware
+    console.log('[isAdmin Middleware] User Role:', req.user ? req.user.role : 'N/A (user object missing)');
+
     // Check if user role is super_admin or location_admin
-    if (req.user.role !== 'super_admin' && req.user.role !== 'location_admin') {
-        return res.status(403).json({ error: 'Access denied.' }); // Not an admin, forbidden
+    if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
+        next(); // Proceed if authorized
+    } else {
+        return res.status(403).json({ error: 'Access denied. Administrator privileges required.' }); // Not an admin, forbidden
     }
-    next(); // Proceed if authorized
 };
 
 // --- 6. API Routes ---
