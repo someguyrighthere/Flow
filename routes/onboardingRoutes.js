@@ -57,7 +57,11 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
     // Get onboarding tasks for a specific user or all for admins
     // This route requires authentication and admin privileges for general access,
     // but a regular employee can access their own tasks.
-    app.get('/onboarding-tasks', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware here
+    app.get('/onboarding-tasks', isAuthenticated, isAdmin, async (req, res) => {
+        // Debugging: Log the user role and ID at the very start of the route handler
+        console.log('[GET /onboarding-tasks Handler] Requesting User Role:', req.user ? req.user.role : 'N/A');
+        console.log('[GET /onboarding-tasks Handler] Requesting User ID:', req.user ? req.user.id : 'N/A');
+
         const { user_id } = req.query; // Allow filtering by user_id
         const requestingUserId = req.user.id;
         const requestingUserRole = req.user.role;
@@ -82,6 +86,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 whereClauses.push(`ot.user_id = $${paramIndex++}`);
                 params.push(user_id);
             }
+            // No location filter for super_admin
         } else if (requestingUserRole === 'location_admin') {
             // Location admins can view tasks for users in their location, possibly filtered by user_id
             whereClauses.push(`u.location_id = $${paramIndex++}`);
@@ -90,12 +95,14 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 whereClauses.push(`ot.user_id = $${paramIndex++}`);
                 params.push(user_id);
             }
-        } else { // Regular employee role (should not reach here if isAdmin middleware is effective for dashboard)
-            // Employees can only view their own tasks
+        } else { // This block should ideally not be reached if isAdmin middleware is correctly applied and working
+            // This is the fallback for non-admin roles, allowing them to only view their own tasks.
+            // If an admin user somehow falls here, it indicates a middleware issue.
             whereClauses.push(`ot.user_id = $${paramIndex++}`);
             params.push(requestingUserId);
             // If an employee tries to query for another user's tasks, deny
             if (user_id && String(user_id) !== String(requestingUserId)) {
+                console.warn('[GET /onboarding-tasks Handler] Employee trying to access other user tasks. Denied.');
                 return res.status(403).json({ error: 'Access denied. You can only view your own tasks.' });
             }
         }
