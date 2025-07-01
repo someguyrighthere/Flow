@@ -566,7 +566,7 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
 });
 
 // Get all documents
-apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
+apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware
     let sql = `SELECT d.*, u.full_name as uploaded_by_name
                FROM documents d
                JOIN users u ON d.uploaded_by = u.user_id`;
