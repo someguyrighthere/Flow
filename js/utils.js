@@ -115,9 +115,19 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
     const token = localStorage.getItem('authToken');
     const endpoint = `${API_BASE_URL}${path}`;
 
+    // Debugging: Log the token being sent
+    console.log(`[apiRequest] Sending request to: ${endpoint}`);
+    console.log(`[apiRequest] Token present: ${!!token}`);
+    if (token) {
+        // Log a truncated token for security, or just its presence
+        console.log(`[apiRequest] Auth Token (first 20 chars): ${token.substring(0, 20)}...`);
+    }
+
+
     const handleAuthError = (errorMessage) => {
         localStorage.removeItem('authToken');
         localStorage.removeItem('userRole');
+        localStorage.removeItem('userId'); // Ensure userId is also cleared
         showModalMessage(errorMessage, true);
         setTimeout(() => { window.location.href = 'login.html?sessionExpired=true'; }, 1500); 
     };
@@ -133,6 +143,8 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try { resolve(JSON.parse(xhr.responseText || '{}')); } catch (e) { resolve({}); }
                 } else if (xhr.status === 401 || xhr.status === 403) {
+                    // Debugging: Log XHR response for auth errors
+                    console.error(`[apiRequest XHR] Auth Error Status: ${xhr.status}, Response: ${xhr.responseText}`);
                     handleAuthError('Your session has expired. Please log in again.');
                     reject(new Error('Authentication failed.'));
                 } else {
@@ -161,6 +173,9 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         const response = await fetch(endpoint, options);
         
         if (response.status === 401 || response.status === 403) {
+            // Debugging: Log fetch response for auth errors
+            const errorText = await response.text(); // Get raw text to see "Invalid token"
+            console.error(`[apiRequest Fetch] Auth Error Status: ${response.status}, Response: ${errorText}`);
             handleAuthError('Your session has expired. Please log in again.');
             throw new Error('Authentication failed.');
         }
@@ -168,10 +183,11 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         if (!response.ok) {
             let errorMsg = `HTTP error! Status: ${response.status}`;
             try {
-                const errorData = await response.json();
+                const errorData = await response.json(); // Try to parse JSON error
                 errorMsg = errorData.error || errorMsg;
             } catch (e) {
-                errorMsg = response.statusText;
+                // If response is not JSON (e.g., HTML "Invalid token"), use statusText or raw text
+                errorMsg = response.statusText || await response.text(); 
             }
             throw new Error(errorMsg);
         }
@@ -182,12 +198,13 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
 
         const contentLength = response.headers.get("content-length");
         if (response.status === 204 || contentLength === "0") {
-            return null;
+            return null; // No content expected
         }
 
-        return response.json();
+        return response.json(); // Parse and return JSON response
 
     } catch (error) {
+        // Re-throw the error after showing the modal so calling functions can catch it too
         showModalMessage(error.message, true);
         throw error;
     }

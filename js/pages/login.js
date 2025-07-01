@@ -45,7 +45,11 @@ export function handleLoginPage() {
             if (data && data.token) {
                 localStorage.setItem("authToken", data.token); // Store authentication token
                 localStorage.setItem("userRole", data.role);   // Store user role
-                // localStorage.setItem("userId", data.id); // Consider storing userId if needed globally on frontend
+                // Debugging: Log what's being stored
+                console.log('[login.js] Login successful. Stored authToken and userRole.');
+                console.log('[login.js] Stored Role:', data.role);
+                console.log('[login.js] Stored Token (first 20 chars):', data.token.substring(0, 20) + '...');
+
 
                 // Redirect based on user role
                 const destination = (data.role === "super_admin" || data.role === "location_admin") 
