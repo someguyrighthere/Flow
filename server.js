@@ -213,15 +213,18 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     let sql;
     const params = [];
     if (req.user.role === 'super_admin') {
+        // Super admin sees all users, no location filter
         sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name 
                FROM users u LEFT JOIN locations l ON u.location_id = l.location_id 
                ORDER BY u.role, u.full_name`;
     } else { // location_admin
+        // Location admin sees users only from their assigned location
         sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name 
                FROM users u LEFT JOIN locations l ON u.location_id = l.location_id 
                WHERE u.location_id = $1 ORDER BY u.role, u.full_name`;
         params.push(req.user.location_id);
     }
+    console.log('[GET /users] SQL:', sql, 'Params:', params); // Debugging log
     try {
         const result = await pool.query(sql, params);
         res.json(result.rows);
@@ -349,6 +352,7 @@ apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
         params.push(req.user.location_id);
     }
     sql += ` ORDER BY location_name`;
+    console.log('[GET /locations] SQL:', sql, 'Params:', params); // Debugging log
     try {
         const result = await pool.query(sql, params);
         res.json(result.rows);
@@ -479,6 +483,7 @@ apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
         params.push(req.user.location_id);
     }
     sql += ` ORDER BY a.applied_at DESC;`;
+    console.log('[GET /applicants] SQL:', sql, 'Params:', params); // Debugging log
     try {
         const result = await pool.query(sql, params);
         res.json(result.rows);
@@ -567,20 +572,24 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
 
 // Get all documents
 apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware
-    let sql = `SELECT d.*, u.full_name as uploaded_by_name
-               FROM documents d
-               JOIN users u ON d.uploaded_by = u.user_id`;
+    let sql;
     const params = [];
 
-    // Location admins can only see documents from their location's users (if applicable)
-    // This assumes documents are linked to a user's location, or a document has a location_id
-    // For simplicity, let's assume super_admin sees all, location_admin sees documents uploaded by users in their location
-    if (req.user.role === 'location_admin') {
-        sql += ` WHERE u.location_id = $1`;
+    if (req.user.role === 'super_admin') {
+        // Super admin sees all documents, no location filter
+        sql = `SELECT d.*, u.full_name as uploaded_by_name
+               FROM documents d
+               LEFT JOIN users u ON d.uploaded_by = u.user_id`; // Use LEFT JOIN to show documents even if u.uploaded_by is NULL
+    } else { // location_admin
+        // Location admin sees documents uploaded by users in their assigned location
+        sql = `SELECT d.*, u.full_name as uploaded_by_name
+               FROM documents d
+               JOIN users u ON d.uploaded_by = u.user_id
+               WHERE u.location_id = $1`; 
         params.push(req.user.location_id);
     }
     sql += ` ORDER BY d.uploaded_at DESC`;
-
+    console.log('[GET /documents] SQL:', sql, 'Params:', params); // Debugging log
     try {
         const result = await pool.query(sql, params);
         res.json(result.rows);
@@ -655,15 +664,20 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 
 // Get all checklists
 apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware here
-    let sql = `SELECT c.*
-               FROM checklists c`;
+    let sql;
     const params = [];
     // Super admin sees all checklists. Location admin sees only checklists created for their location.
-    if (req.user.role === 'location_admin') {
-        sql += ` WHERE c.created_by_location_id = $1`; 
+    if (req.user.role === 'super_admin') {
+        sql = `SELECT c.*
+               FROM checklists c`; // No location filter for super_admin
+    } else { // location_admin
+        sql = `SELECT c.*
+               FROM checklists c
+               WHERE c.created_by_location_id = $1`; 
         params.push(req.user.location_id);
     }
     sql += ` ORDER BY c.title`;
+    console.log('[GET /checklists] SQL:', sql, 'Params:', params); // Debugging log
     try {
         const result = await pool.query(sql, params);
         // Parse the tasks JSON string back to an object for the frontend
@@ -726,21 +740,24 @@ apiRoutes.get('/shifts', isAuthenticated, async (req, res) => {
     if (!startDate || !endDate) {
         return res.status(400).json({ error: 'Start and end dates are required.' });
     }
+    let sql = `
+        SELECT s.*, u.full_name as employee_name, l.location_name
+        FROM shifts s
+        JOIN users u ON s.employee_id = u.user_id
+        JOIN locations l ON s.location_id = l.location_id
+        WHERE s.start_time >= $1 AND s.end_time <= $2
+    `;
+    const params = [startDate, endDate];
+    let paramIndex = 3; // Start index for additional parameters
+
+    // Location admin can only see shifts for their location
+    if (req.user.role === 'location_admin') {
+        sql += ` AND l.location_id = $${paramIndex++}`; 
+        params.push(req.user.location_id);
+    }
+    sql += ` ORDER BY s.start_time`;
+    console.log('[GET /shifts] SQL:', sql, 'Params:', params); // Debugging log
     try {
-        let sql = `
-            SELECT s.*, u.full_name as employee_name, l.location_name
-            FROM shifts s
-            JOIN users u ON s.employee_id = u.user_id
-            JOIN locations l ON s.location_id = l.location_id
-            WHERE s.start_time >= $1 AND s.end_time <= $2
-        `;
-        const params = [startDate, endDate];
-        // Location admin can only see shifts for their location
-        if (req.user.role === 'location_admin') {
-            sql += ` AND l.location_id = $3`;
-            params.push(req.user.location_id);
-        }
-        sql += ` ORDER BY s.start_time`;
         const result = await pool.query(sql, params);
         res.json(result.rows);
     } catch (err) {
@@ -755,7 +772,7 @@ apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     if (!employee_id || !location_id || !start_time || !end_time) {
         return res.status(400).json({ error: 'Employee, location, start, and end times are required.' });
     }
-    // Location admin can only create shifts for their location
+    // Location admin can only create shifts for their own location
     if (req.user.role === 'location_admin' && req.user.location_id != location_id) {
         return res.status(403).json({ error: 'You are not authorized to create shifts for this location.' });
     }
@@ -793,6 +810,8 @@ apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
     } catch (err) {
         console.error('Error deleting shift:', err);
         res.status(500).json({ error: 'Failed to delete shift.' });
+    } finally {
+        client.release();
     }
 });
 
@@ -813,6 +832,7 @@ apiRoutes.get('/users/availability', isAuthenticated, async (req, res) => {
             // Ensure availability is a string before parsing, and handle nulls
             availability: (row.availability && typeof row.availability === 'string') ? JSON.parse(row.availability) : row.availability
         }));
+        console.log('[GET /users/availability] SQL:', sql, 'Params:', params); // Debugging log
         res.json(usersWithAvailability);
     } catch (err) {
         console.error('Error fetching user availability:', err);

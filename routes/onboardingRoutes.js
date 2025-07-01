@@ -90,7 +90,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 whereClauses.push(`ot.user_id = $${paramIndex++}`);
                 params.push(user_id);
             }
-        } else { // Regular employee role
+        } else { // Regular employee role (should not reach here if isAdmin middleware is effective for dashboard)
             // Employees can only view their own tasks
             whereClauses.push(`ot.user_id = $${paramIndex++}`);
             params.push(requestingUserId);
@@ -104,6 +104,8 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             query += ' WHERE ' + whereClauses.join(' AND ');
         }
         query += ' ORDER BY ot.assigned_at DESC, ot.task_order ASC'; // Order by assignment date and task order
+
+        console.log('[GET /onboarding-tasks] SQL:', query, 'Params:', params); // Debugging log
 
         try {
             const result = await pool.query(query, params);
