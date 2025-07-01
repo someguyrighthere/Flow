@@ -647,7 +647,7 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 // Get all checklists
-apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware
+apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware here
     let sql = `SELECT c.*
                FROM checklists c`;
     const params = [];
@@ -662,7 +662,7 @@ apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => { // 
         // Parse the tasks JSON string back to an object for the frontend
         const checklists = result.rows.map(row => ({
             ...row,
-            tasks: row.tasks ? JSON.parse(row.tasks) : [] // Handle potential null or empty tasks
+            tasks: row.tasks ? (typeof row.tasks === 'string' ? JSON.parse(row.tasks) : row.tasks) : [] // Handle potential null, empty, or already-parsed tasks
         }));
         res.json(checklists);
     } catch (err) {
