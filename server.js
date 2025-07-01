@@ -9,7 +9,6 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const onboardingRoutes = require('./routes/onboardingRoutes');
 
@@ -19,7 +18,6 @@ const apiRoutes = express.Router();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
-const YOUR_DOMAIN = process.env.YOUR_DOMAIN || 'http://localhost:3000';
 
 // --- Multer Storage Setup ---
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -42,44 +40,6 @@ const pool = new Pool({
 });
 
 // --- 4. Middleware ---
-// Use express.raw() for the Stripe webhook, before express.json()
-app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    let event;
-
-    try {
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err) {
-        console.error(`Webhook signature verification failed.`, err.message);
-        return res.sendStatus(400);
-    }
-
-    // Handle the event
-    switch (event.type) {
-        case 'checkout.session.completed':
-            const session = event.data.object;
-            const companyId = session.client_reference_id;
-            const stripeCustomerId = session.customer;
-            const subscriptionPlan = session.metadata.plan;
-
-            try {
-                await pool.query(
-                    'UPDATE companies SET subscription_plan = $1, stripe_customer_id = $2 WHERE id = $3',
-                    [subscriptionPlan, stripeCustomerId, companyId]
-                );
-                console.log(`Company ${companyId} successfully subscribed to ${subscriptionPlan} plan.`);
-            } catch (dbError) {
-                console.error('Failed to update company subscription in database:', dbError);
-            }
-            break;
-        default:
-            console.log(`Unhandled event type ${event.type}`);
-    }
-
-    res.json({received: true});
-});
-
 app.use(cors());
 app.use(express.json());
 app.use('/api', apiRoutes);
@@ -117,35 +77,21 @@ apiRoutes.post('/register', async (req, res) => {
     if (!companyName || !fullName || !email || !password) {
         return res.status(400).json({ error: "All fields are required." });
     }
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        // Create a new company with a default 'Free' plan
-        const companyRes = await client.query(
-            `INSERT INTO companies (name, subscription_plan) VALUES ($1, 'Free') RETURNING id`,
-            [companyName]
-        );
-        const companyId = companyRes.rows[0].id;
-
-        // Create a default location for the new company
         const locationRes = await client.query(
-            `INSERT INTO locations (location_name, location_address, company_id) VALUES ($1, $2, $3) RETURNING location_id`,
-            [`${companyName} HQ`, 'Default Address', companyId]
+            `INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING location_id`,
+            [`${companyName} HQ`, 'Default Address']
         );
         const locationId = locationRes.rows[0].location_id;
-
-        // Create the super_admin user for the company
         const hash = await bcrypt.hash(password, 10);
         await client.query(
-            `INSERT INTO users (full_name, email, password, role, location_id, company_id) VALUES ($1, $2, $3, 'super_admin', $4, $5)`,
-            [fullName, email, hash, locationId, companyId]
+            `INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4)`,
+            [fullName, email, hash, locationId]
         );
-        
         await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful! You can now log in." });
-
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Registration error:', err);
@@ -166,9 +112,10 @@ apiRoutes.post('/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
         
-        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, company_id: user.company_id };
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         
+        // CORRECTED: Ensure location_id is sent in the response body
         res.json({ message: "Logged in successfully!", token: token, role: user.role, location_id: user.location_id });
     } catch (err) {
         console.error(err);
@@ -176,61 +123,114 @@ apiRoutes.post('/login', async (req, res) => {
     }
 });
 
-// --- Subscription and Payment Routes ---
-apiRoutes.post('/create-checkout-session', isAuthenticated, async (req, res) => {
-    const { plan } = req.body;
-    const companyId = req.user.company_id;
-
-    const priceIds = {
-        'Pro': process.env.STRIPE_PRO_PRICE_ID,
-        'Enterprise': process.env.STRIPE_ENTERPRISE_PRICE_ID
-    };
-
-    const priceId = priceIds[plan];
-    if (!priceId) {
-        return res.status(400).json({ error: 'Invalid plan selected.' });
-    }
-
+// Authenticated Routes
+apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     try {
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [{
-                price: priceId,
-                quantity: 1,
-            }],
-            mode: 'subscription',
-            success_url: `${YOUR_DOMAIN}/account.html?payment=success`,
-            cancel_url: `${YOUR_DOMAIN}/pricing.html?payment=cancelled`,
-            client_reference_id: companyId, // Pass company ID to webhook
-            metadata: {
-                plan: plan // Pass plan name to webhook
-            }
-        });
-        res.json({ id: session.id });
-    } catch (error) {
-        console.error("Stripe session creation error:", error);
-        res.status(500).json({ error: 'Failed to create checkout session.' });
+        const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
 });
 
-apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
+// --- Admin Routes ---
+
+// User Management
+apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+    let sql;
+    const params = [];
+
+    if (req.user.role === 'super_admin') {
+        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.role, u.full_name`;
+    } else {
+        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id WHERE u.location_id = $1 ORDER BY u.role, u.full_name`;
+        params.push(req.user.location_id);
+    }
+
     try {
-        const result = await pool.query('SELECT subscription_plan FROM companies WHERE id = $1', [req.user.company_id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({error: 'Company not found.'});
-        }
-        res.json({ plan: result.rows[0].subscription_plan });
-    } catch (error) {
-        console.error("Error fetching subscription status:", error);
-        res.status(500).json({ error: 'Failed to get subscription status.' });
+        const result = await pool.query(sql, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching users:', err);
+        res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
 
+apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
+    if (req.user.id == req.params.id) return res.status(403).json({ error: "You cannot delete your own account." });
+    try {
+        const result = await pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting user:', err);
+        res.status(500).json({ error: 'Failed to delete user.' });
+    }
+});
 
-// Other routes...
+const inviteUser = async (req, res, role) => {
+    const { full_name, email, password, location_id, position, employment_type, availability } = req.body;
+    if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
+    
+    const final_location_id = req.user.role === 'location_admin' ? req.user.location_id : location_id;
+
+    try {
+        const hash = await bcrypt.hash(password, 10);
+        await pool.query(
+            `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [full_name, email, hash, role, position || null, final_location_id, employment_type || null, availability ? JSON.stringify(availability) : null]
+        );
+        res.status(201).json({ message: `${role} invited successfully.` });
+    } catch (err) {
+        console.error('Invite user error:', err);
+        if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
+};
+
+apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
+apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
+
+
+// Location Management
+apiRoutes.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching locations:', err);
+        res.status(500).json({ error: 'Failed to retrieve locations.' });
+    }
+});
+
+apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_name, location_address } = req.body;
+    try {
+        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating location:', err);
+        res.status(400).json({ error: 'Failed to create location.' });
+    }
+});
+
+apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting location:', err);
+        res.status(500).json({ error: 'Failed to delete location.' });
+    }
+});
+
+// Modular Routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
-// Fallback for serving index.html
+// Fallback for serving index.html on any non-API route
 app.get(/'*'/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -242,46 +242,10 @@ const startServer = async () => {
     try {
         client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
-        
-        const schemaQueries = `
-            CREATE TABLE IF NOT EXISTS companies (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                subscription_plan VARCHAR(50) DEFAULT 'Free',
-                stripe_customer_id VARCHAR(255),
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS locations (
-                location_id SERIAL PRIMARY KEY,
-                location_name VARCHAR(255) NOT NULL,
-                location_address TEXT,
-                company_id INT NOT NULL,
-                FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
-            );
-            
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id INT;
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM information_schema.constraint_column_usage
-                    WHERE table_name = 'users' AND constraint_name = 'users_company_id_fkey'
-                ) THEN
-                    ALTER TABLE users ADD CONSTRAINT users_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
-                END IF;
-            END;
-            $$;
-        `;
-        
-        await client.query(schemaQueries);
-        console.log("Database schema verified/created.");
-
-        client.release();
-
+        // Schema creation logic...
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Server is running on port ${PORT}`);
         });
-
     } catch (err) {
         console.error('Failed to initialize database or start server:', err.stack);
         if (client) client.release();
