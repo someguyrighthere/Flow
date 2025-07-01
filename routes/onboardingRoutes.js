@@ -57,7 +57,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
     // Get onboarding tasks for a specific user or all for admins
     // This route requires authentication and admin privileges for general access,
     // but a regular employee can access their own tasks.
-    app.get('/onboarding-tasks', isAuthenticated, async (req, res) => {
+    app.get('/onboarding-tasks', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware here
         const { user_id } = req.query; // Allow filtering by user_id
         const requestingUserId = req.user.id;
         const requestingUserRole = req.user.role;
