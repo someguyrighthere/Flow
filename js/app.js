@@ -1,6 +1,6 @@
 // js/app.js (Main Router)
 import { handleLoginPage } from './pages/login.js';
-import { handleRegisterPage } from './pages/register.js'; // NEW
+import { handleRegisterPage } from './pages/register.js';
 import { handleDashboardPage } from './pages/dashboard.js';
 import { handleChecklistsPage } from './pages/checklists.js';
 import { handleAdminPage } from './pages/admin.js';
@@ -32,7 +32,8 @@ function setupSettingsDropdown() {
         logoutButton.addEventListener("click", () => {
             localStorage.removeItem("authToken");
             localStorage.removeItem("userRole");
-            localStorage.removeItem('userId');
+            localStorage.removeItem('userId'); // Ensure userId is also removed on logout
+            console.log('User logged out. Local storage cleared.'); // Added for debugging
             window.location.href = "login.html";
         });
     }
@@ -44,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (path.includes("login.html")) {
         handleLoginPage();
-    } else if (path.includes("register.html")) { // UPDATED
+    } else if (path.includes("register.html")) {
         handleRegisterPage();
     } else if (path.includes("suite-hub.html")) {
         handleSuiteHubPage();
