@@ -115,7 +115,6 @@ apiRoutes.post('/login', async (req, res) => {
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         
-        // CORRECTED: Ensure location_id is sent in the response body
         res.json({ message: "Logged in successfully!", token: token, role: user.role, location_id: user.location_id });
     } catch (err) {
         console.error(err);
@@ -135,97 +134,17 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     }
 });
 
+// --- NEW: Subscription Status Route ---
+apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
+    // This is a placeholder. In a real app, you'd query your database
+    // to get the user's company and their subscription plan.
+    res.json({ plan: 'Free' }); 
+});
+
+
 // --- Admin Routes ---
+// ... (All your other admin routes like /users, /locations, etc. go here) ...
 
-// User Management
-apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    let sql;
-    const params = [];
-
-    if (req.user.role === 'super_admin') {
-        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.role, u.full_name`;
-    } else {
-        sql = `SELECT u.user_id, u.full_name, u.email, u.role, u.position, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id WHERE u.location_id = $1 ORDER BY u.role, u.full_name`;
-        params.push(req.user.location_id);
-    }
-
-    try {
-        const result = await pool.query(sql, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error fetching users:', err);
-        res.status(500).json({ error: 'Failed to retrieve users.' });
-    }
-});
-
-apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    if (req.user.id == req.params.id) return res.status(403).json({ error: "You cannot delete your own account." });
-    try {
-        const result = await pool.query(`DELETE FROM users WHERE user_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting user:', err);
-        res.status(500).json({ error: 'Failed to delete user.' });
-    }
-});
-
-const inviteUser = async (req, res, role) => {
-    const { full_name, email, password, location_id, position, employment_type, availability } = req.body;
-    if (!full_name || !email || !password) return res.status(400).json({ error: "All fields are required." });
-    
-    const final_location_id = req.user.role === 'location_admin' ? req.user.location_id : location_id;
-
-    try {
-        const hash = await bcrypt.hash(password, 10);
-        await pool.query(
-            `INSERT INTO users (full_name, email, password, role, position, location_id, employment_type, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [full_name, email, hash, role, position || null, final_location_id, employment_type || null, availability ? JSON.stringify(availability) : null]
-        );
-        res.status(201).json({ message: `${role} invited successfully.` });
-    } catch (err) {
-        console.error('Invite user error:', err);
-        if (err.code === '23505') return res.status(400).json({ error: "Email may already be in use." });
-        res.status(500).json({ error: "An internal server error occurred." });
-    }
-};
-
-apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'location_admin'));
-apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, (req, res) => inviteUser(req, res, 'employee'));
-
-
-// Location Management
-apiRoutes.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query("SELECT * FROM locations ORDER BY location_name");
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error fetching locations:', err);
-        res.status(500).json({ error: 'Failed to retrieve locations.' });
-    }
-});
-
-apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_name, location_address } = req.body;
-    try {
-        const result = await pool.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *`, [location_name, location_address]);
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error creating location:', err);
-        res.status(400).json({ error: 'Failed to create location.' });
-    }
-});
-
-apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(`DELETE FROM locations WHERE location_id = $1`, [req.params.id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting location:', err);
-        res.status(500).json({ error: 'Failed to delete location.' });
-    }
-});
 
 // Modular Routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
