@@ -16,54 +16,63 @@ export function handleOnboardingViewPage() {
     const welcomeMessage = document.getElementById('welcome-message'); // Assuming a welcome message element
     const onboardingTaskListDiv = document.getElementById('onboarding-task-list'); // Container for tasks
     const taskListOverviewDiv = document.getElementById('task-list-overview'); // For completion status (e.g., "0/5 tasks complete")
-    const onboardingStatusMessageElement = document.getElementById('onboarding-status-message'); // NEW: For general status messages
+    const onboardingStatusMessageElement = document.getElementById('onboarding-status-message'); // For general status messages
 
     let currentUserId = null; // Will store the ID of the logged-in user
     let userTasks = []; // Store the tasks fetched for the user
 
     // --- Load confetti library ---
-    // Make sure this is loaded only once and correctly in your HTML/JS setup.
-    // For this example, we'll assume it's available or load it dynamically.
-    // If you need a script tag in HTML, it should be <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.1/dist/confetti.browser.min.js"></script>
-    // For direct use in module, you might need dynamic import or a global var check.
+    // The confetti library is expected to be loaded via a script tag in new-hire-view.html.
+    // This provides a fallback if it's not globally available.
     const confetti = window.confetti || ((opts) => {
-        // Fallback for when confetti library is not loaded
         console.warn('Confetti library not loaded. Add <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.1/dist/confetti.browser.min.js"></script> to your HTML.');
-        return Promise.resolve(null);
+        return Promise.resolve(null); // Return a resolved promise to avoid breaking async flow
     });
 
 
     // --- Helper function to get user ID from token (simple parsing, robust check on backend) ---
+    /**
+     * Decodes the JWT token to extract the user ID.
+     * @param {string} token - The JWT token from local storage.
+     * @returns {string|null} The user ID or null if decoding fails.
+     */
     function getUserIdFromToken(token) {
         try {
+            // JWTs have three parts: header.payload.signature
             const base64Url = token.split('.')[1];
+            // Decode base64url to base64, then to string, then parse JSON
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
             const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
                 return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
             }).join(''));
             const payload = JSON.parse(jsonPayload);
-            return payload.id; // Assuming the user ID is stored in 'id' claim
+            return payload.id; // Assuming the user ID is stored in the 'id' claim of the JWT
         } catch (e) {
-            console.error("Error decoding token:", e);
+            console.error("Error decoding token to get user ID:", e);
             return null;
         }
     }
 
     // --- Helper for local status messages ---
+    /**
+     * Displays a status message on the onboarding view page.
+     * @param {string} message - The message text.
+     * @param {boolean} [isError=false] - True if the message is an error, false for success.
+     */
     function displayStatusMessage(message, isError = false) {
         if (!onboardingStatusMessageElement) {
             console.warn("Onboarding status message element not found. Message:", message);
-            // Fallback to showModalMessage if no inline element.
+            // Fallback to showModalMessage if no inline element is available
             showModalMessage(message, isError);
             return;
         }
         onboardingStatusMessageElement.textContent = message;
-        onboardingStatusMessageElement.classList.remove('success', 'error');
+        onboardingStatusMessageElement.classList.remove('success', 'error'); // Clear previous states
         onboardingStatusMessageElement.classList.add(isError ? 'error' : 'success');
         setTimeout(() => {
             onboardingStatusMessageElement.textContent = '';
             onboardingStatusMessageElement.classList.remove('success', 'error');
-        }, 5000);
+        }, 5000); // Clear message after 5 seconds
     }
 
 
@@ -75,19 +84,22 @@ export function handleOnboardingViewPage() {
     async function loadOnboardingTasks() {
         if (!onboardingTaskListDiv) return;
 
-        onboardingTaskListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading your onboarding tasks...</p>';
+        onboardingTaskListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading your onboarding tasks...</p>'; // Show loading state
         
         currentUserId = getUserIdFromToken(authToken);
         if (!currentUserId) {
-            displayStatusMessage('Error: User ID not found. Please log in again.', true);
+            displayStatusMessage('Error: User ID not found in token. Please log in again.', true);
+            // Optionally redirect to login if no user ID can be determined
+            setTimeout(() => { window.location.href = 'login.html?sessionExpired=true'; }, 1500);
             return;
         }
 
         try {
+            // Fetch onboarding tasks specific to the current user
             const tasks = await apiRequest('GET', `/onboarding-tasks?user_id=${currentUserId}`);
-            userTasks = tasks; // Store fetched tasks
-            renderOnboardingTasks(); // Render the tasks
-            updateTaskListOverview(); // Update the completion status
+            userTasks = tasks; // Store fetched tasks in a global variable for this module
+            renderOnboardingTasks(); // Render the tasks into the DOM
+            updateTaskListOverview(); // Update the completion status display
 
         } catch (error) {
             console.error('Error loading onboarding tasks:', error);
@@ -101,45 +113,48 @@ export function handleOnboardingViewPage() {
      */
     function renderOnboardingTasks() {
         if (!onboardingTaskListDiv) return;
-        onboardingTaskListDiv.innerHTML = ''; // Clear loading message
+        onboardingTaskListDiv.innerHTML = ''; // Clear loading message and any previous tasks
 
         if (userTasks && userTasks.length > 0) {
             userTasks.forEach(task => {
                 const taskItem = document.createElement('div');
-                // Added data-task-id here to be consistent with usage
                 taskItem.className = `checklist-item ${task.completed ? 'completed' : ''}`;
-                taskItem.dataset.taskId = task.id; 
+                taskItem.dataset.taskId = task.id; // Store task ID for updates
 
                 taskItem.innerHTML = `
                     <div class="checklist-item-title">
                         <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''}>
                         <span>${task.description}</span>
-                        ${task.documentName ? `<br><small style="color:var(--text-medium);">Attached: <a href="/uploads/${encodeURIComponent(task.file_path.split('/').pop())}" target="_blank" style="color: var(--primary-accent);">${task.documentName}</a></small>` : ''}
+                        ${task.document_name && task.document_id ? 
+                            `<br><small style="color:var(--text-medium);">Attached: <a href="/uploads/${encodeURIComponent(task.document_name)}" target="_blank" style="color: var(--primary-accent);">${task.document_name}</a></small>` 
+                            : ''
+                        }
                     </div>
                 `;
                 onboardingTaskListDiv.appendChild(taskItem);
 
-                // Add event listener for checkbox
+                // Add event listener for checkbox change
                 taskItem.querySelector('.task-checkbox').addEventListener('change', async (e) => {
                     const isCompleted = e.target.checked;
                     const taskId = e.target.closest('.checklist-item').dataset.taskId;
                     
                     try {
+                        // Send PUT request to update the task's completion status
                         await apiRequest('PUT', `/onboarding-tasks/${taskId}`, { completed: isCompleted });
                         
-                        // FIX: Update UI immediately by toggling class
+                        // Update UI immediately by toggling class
                         e.target.closest('.checklist-item').classList.toggle('completed', isCompleted);
                         
-                        // FIX: Update the specific task in the userTasks array
-                        const updatedTaskIndex = userTasks.findIndex(t => t.id == taskId);
+                        // Update the specific task in the local userTasks array
+                        const updatedTaskIndex = userTasks.findIndex(t => String(t.id) === String(taskId)); // Ensure type comparison
                         if (updatedTaskIndex !== -1) {
                             userTasks[updatedTaskIndex].completed = isCompleted;
                         }
 
-                        updateTaskListOverview(); // Update overview after task completion
+                        updateTaskListOverview(); // Update the completion overview after task status changes
                         displayStatusMessage(`Task "${task.description}" marked ${isCompleted ? 'complete' : 'incomplete'}.`, false);
 
-                        // If all tasks are completed, trigger fireworks
+                        // If all tasks are completed, trigger fireworks!
                         const allTasksCompleted = userTasks.every(t => t.completed);
                         if (allTasksCompleted && userTasks.length > 0) {
                             triggerFireworks();
@@ -158,7 +173,7 @@ export function handleOnboardingViewPage() {
     }
 
     /**
-     * Updates the task list overview (e.g., "X/Y tasks complete").
+     * Updates the task list overview display (e.g., "X/Y tasks complete").
      */
     function updateTaskListOverview() {
         if (!taskListOverviewDiv) return;
@@ -167,9 +182,9 @@ export function handleOnboardingViewPage() {
         taskListOverviewDiv.textContent = `${completedTasks}/${totalTasks} tasks complete`;
         if (completedTasks === totalTasks && totalTasks > 0) {
             taskListOverviewDiv.textContent += " - All tasks completed!";
-            taskListOverviewDiv.style.color = 'var(--primary-accent)';
+            taskListOverviewDiv.style.color = 'var(--primary-accent)'; // Highlight when all tasks are done
         } else {
-             taskListOverviewDiv.style.color = 'var(--text-light)';
+             taskListOverviewDiv.style.color = 'var(--text-light)'; // Normal color
         }
     }
 
@@ -177,18 +192,18 @@ export function handleOnboardingViewPage() {
      * Triggers a confetti/fireworks animation.
      */
     function triggerFireworks() {
-        // Check if confetti is loaded and callable
+        // Check if confetti is loaded and callable before attempting to use it
         if (typeof confetti === 'function') {
             confetti({
                 particleCount: 100,
                 spread: 70,
-                origin: { y: 0.6 }
+                origin: { y: 0.6 } // Start from the middle-bottom of the screen
             });
         } else {
             console.warn("Confetti function not available. Make sure 'canvas-confetti' script is loaded.");
         }
     }
 
-    // --- Initial Page Load ---
+    // --- Initial Page Load Actions ---
     loadOnboardingTasks(); // Load tasks when the page initializes
 }

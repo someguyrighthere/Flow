@@ -1,15 +1,20 @@
 // js/pages/admin.js
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
+/**
+ * Handles all logic for the admin settings page.
+ */
 export function handleAdminPage() {
-    // Security check
+    // Security check: Redirect to login page if no authentication token is found in local storage
+    const authToken = localStorage.getItem("authToken");
     const userRole = localStorage.getItem('userRole');
-    if (!localStorage.getItem("authToken") || (userRole !== 'super_admin' && userRole !== 'location_admin')) {
+
+    if (!authToken || (userRole !== 'super_admin' && userRole !== 'location_admin')) {
         window.location.href = "login.html";
         return;
     }
 
-    // Hide sections based on user role
+    // Hide sections based on user role for UI consistency (backend also enforces this)
     if (userRole === 'location_admin') {
         const inviteAdminCard = document.getElementById('invite-admin-card');
         if (inviteAdminCard) {
@@ -21,7 +26,7 @@ export function handleAdminPage() {
         }
     }
 
-    // DOM Element Selection
+    // --- DOM Element Selection ---
     const locationListDiv = document.getElementById('location-list');
     const newLocationForm = document.getElementById('new-location-form');
     const newLocationNameInput = document.getElementById('new-location-name');
@@ -36,50 +41,69 @@ export function handleAdminPage() {
     const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
     const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message');
 
-    let businessOperatingStartHour = 0;
-    let businessOperatingEndHour = 24;
+    // Default business hours for availability generation, fetched from backend if available
+    let businessOperatingStartHour = 0; // Default to 00:00 (midnight)
+    let businessOperatingEndHour = 24; // Default to 24:00 (midnight next day)
 
+    // --- Helper function to display local status messages ---
+    /**
+     * Displays a status message on a specified DOM element.
+     * @param {HTMLElement} element - The DOM element to display the message in.
+     * @param {string} message - The message text.
+     * @param {boolean} [isError=false] - True if the message is an error, false for success.
+     */
     function displayStatusMessage(element, message, isError = false) {
         if (!element) return;
         element.innerHTML = message;
-        element.classList.remove('success', 'error');
+        element.classList.remove('success', 'error'); // Clear previous states
         element.classList.add(isError ? 'error' : 'success');
         setTimeout(() => {
             element.textContent = '';
             element.classList.remove('success', 'error');
-        }, 5000); 
+        }, 5000); // Clear message after 5 seconds
     }
 
+    // --- Data Loading Functions ---
+
+    /**
+     * Fetches and displays existing locations.
+     */
     async function loadLocations() {
         if (!locationListDiv) return;
-        locationListDiv.innerHTML = '<p>Loading...</p>';
+        locationListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading locations...</p>'; // Show loading state
         try {
+            // API call to get locations (backend filters by location_admin role)
             const locations = await apiRequest('GET', '/api/locations');
-            locationListDiv.innerHTML = '';
+            locationListDiv.innerHTML = ''; // Clear loading message
 
             if (locations && locations.length > 0) {
                 locations.forEach(loc => {
                     const listItem = document.createElement('div');
                     listItem.className = 'list-item';
                     listItem.innerHTML = `
-                        <span><strong>${loc.location_name}</strong></span>
-                        <button class="btn-delete" data-id="${loc.location_id}" data-type="location">
+                        <span><strong>${loc.location_name}</strong> (${loc.location_address})</span>
+                        <button class="btn-delete" data-id="${loc.location_id}" data-type="location" title="Delete Location">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                         </button>
                     `;
                     locationListDiv.appendChild(listItem);
                 });
             } else {
-                locationListDiv.innerHTML = '<p>No locations added yet.</p>';
+                locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations added yet.</p>';
             }
         } catch (error) {
             showModalMessage(`Error loading locations: ${error.message}`, true); 
+            console.error('Error loading locations:', error);
         }
     }
 
+    /**
+     * Populates the location dropdowns for inviting new admins and employees.
+     */
     async function populateLocationDropdowns() {
         if (!adminLocationSelect || !employeeLocationSelect) return;
         try {
+            // API call to get locations (backend filters by location_admin role)
             const locations = await apiRequest('GET', '/api/locations');
             
             adminLocationSelect.innerHTML = '<option value="">Select Location</option>';
@@ -98,15 +122,21 @@ export function handleAdminPage() {
             }
         } catch (error) {
             console.error("Failed to populate location dropdowns:", error);
+            // Display a message to the user if dropdowns can't be loaded
+            showModalMessage('Failed to load locations for dropdowns. Please try again.', true);
         }
     }
 
+    /**
+     * Fetches and displays all users (admins and employees).
+     */
     async function loadUsers() {
         if (!userListDiv) return;
-        userListDiv.innerHTML = '<p>Loading users...</p>';
+        userListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading users...</p>'; // Show loading state
         try {
+            // API call to get users (backend filters by location_admin role)
             const users = await apiRequest('GET', '/api/users');
-            userListDiv.innerHTML = '';
+            userListDiv.innerHTML = ''; // Clear loading message
 
             if (users && users.length > 0) {
                 const userGroups = {
@@ -115,6 +145,7 @@ export function handleAdminPage() {
                     employee: []
                 };
 
+                // Categorize users by role
                 users.forEach(user => {
                     if (userGroups[user.role]) {
                         userGroups[user.role].push(user);
@@ -128,6 +159,7 @@ export function handleAdminPage() {
                     employee: 'Employees'
                 };
 
+                // Render users grouped by role
                 groupOrder.forEach(role => {
                     const group = userGroups[role];
                     if (group.length > 0) {
@@ -139,8 +171,12 @@ export function handleAdminPage() {
                             const listItem = document.createElement('div');
                             listItem.className = 'list-item';
                             listItem.innerHTML = `
-                                <span><strong>${user.full_name}</strong> (${user.email})</span>
-                                <button class="btn-delete" data-id="${user.user_id}" data-type="user">
+                                <span>
+                                    <strong>${user.full_name}</strong> (${user.email}) 
+                                    ${user.location_name ? `<br><small style="color:var(--text-medium);">Location: ${user.location_name}</small>` : ''}
+                                    ${user.position ? `<br><small style="color:var(--text-medium);">Position: ${user.position}</small>` : ''}
+                                </span>
+                                <button class="btn-delete" data-id="${user.user_id}" data-type="user" title="Delete User">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                                 </button>
                             `;
@@ -149,16 +185,38 @@ export function handleAdminPage() {
                     }
                 });
             } else {
-                userListDiv.innerHTML = '<p>No users found.</p>';
+                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users found.</p>';
             }
         } catch (error) {
             showModalMessage(`Error loading users: ${error.message}`, true);
+            console.error('Error loading users:', error);
         }
     }
 
+    /**
+     * Fetches business operating hours to set the range for availability inputs.
+     */
+    async function fetchBusinessHours() {
+        try {
+            const settings = await apiRequest('GET', '/api/settings/business');
+            if (settings) {
+                businessOperatingStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
+                businessOperatingEndHour = parseInt((settings.operating_hours_end || '24:00').split(':')[0], 10);
+                generateAvailabilityInputs(); // Regenerate inputs with correct hours
+            }
+        } catch (error) {
+            console.error("Failed to fetch business hours, using defaults:", error);
+            // Continue with default 0-24 hours if fetch fails
+            generateAvailabilityInputs();
+        }
+    }
+
+    /**
+     * Generates time input dropdowns for weekly availability.
+     */
     function generateAvailabilityInputs() {
         if (!employeeAvailabilityGrid) return;
-        employeeAvailabilityGrid.innerHTML = '';
+        employeeAvailabilityGrid.innerHTML = ''; // Clear existing inputs
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         
         days.forEach(day => {
@@ -182,16 +240,25 @@ export function handleAdminPage() {
         });
     }
 
+    /**
+     * Generates <option> tags for time select dropdowns.
+     * @param {number} startHour - The starting hour (0-23).
+     * @param {number} endHour - The ending hour (0-24, where 24 means end of day).
+     * @returns {string} HTML string of option tags.
+     */
     function generateTimeOptions(startHour = 0, endHour = 24) {
-        let options = '<option value="">Not Available</option>';
-        for (let i = startHour; i < endHour; i++) {
+        let options = '<option value="">Not Available</option>'; // Default "Not Available"
+        for (let i = startHour; i <= endHour; i++) { // Include endHour for full range, e.g., 17:00
             const hour = i < 10 ? '0' + i : '' + i;
-            options += `<option value="${hour}:00">${hour}:00</option>`;
+            const displayTime = `${hour}:00`;
+            options += `<option value="${displayTime}">${displayTime}</option>`;
         }
         return options;
     }
 
-    // Event Listeners
+    // --- Event Listeners ---
+
+    // Handle new location form submission
     if (newLocationForm) {
         newLocationForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -200,46 +267,59 @@ export function handleAdminPage() {
                 location_address: newLocationAddressInput.value.trim()
             };
             if (!locationData.location_name || !locationData.location_address) {
-                return displayStatusMessage(newLocationStatusMessage, 'Name and address are required.', true);
+                return displayStatusMessage(newLocationStatusMessage, 'Location name and address are required.', true);
             }
             try {
                 await apiRequest('POST', '/api/locations', locationData);
-                displayStatusMessage(newLocationStatusMessage, 'Location created!', false);
-                newLocationForm.reset();
-                loadLocations();
-                populateLocationDropdowns();
+                displayStatusMessage(newLocationStatusMessage, 'Location created successfully!', false);
+                newLocationForm.reset(); // Clear the form
+                loadLocations(); // Reload location list
+                populateLocationDropdowns(); // Update dropdowns
             } catch (error) {
-                displayStatusMessage(newLocationStatusMessage, `Error: ${error.message}`, true);
+                displayStatusMessage(newLocationStatusMessage, `Error creating location: ${error.message}`, true);
+                console.error('Error creating location:', error);
             }
         });
     }
 
+    // Handle delete actions for locations and users using event delegation
     const handleDelete = async (e) => {
         const deleteBtn = e.target.closest('.btn-delete');
         if (deleteBtn) {
             const id = deleteBtn.dataset.id;
-            const type = deleteBtn.dataset.type;
-            const confirmed = await showConfirmModal(`Are you sure you want to delete this ${type}?`);
+            const type = deleteBtn.dataset.type; // 'user' or 'location'
+            
+            let confirmMessage = `Are you sure you want to delete this ${type}? This action cannot be undone.`;
+            if (type === 'location') {
+                confirmMessage = `Are you sure you want to delete this location? All users associated with this location must be reassigned or deleted first. This cannot be undone.`;
+            } else if (type === 'user') {
+                 confirmMessage = `Are you sure you want to delete this user? This will also remove any onboarding tasks assigned to them. This cannot be undone.`;
+            }
+
+            const confirmed = await showConfirmModal(confirmMessage);
             if (confirmed) {
                 try {
-                    await apiRequest('DELETE', `/api/${type}s/${id}`);
+                    await apiRequest('DELETE', `/api/${type}s/${id}`); // Call the generic delete endpoint
                     showModalMessage(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully.`, false);
                     if (type === 'location') {
-                        loadLocations();
-                        populateLocationDropdowns();
+                        loadLocations(); // Reload locations
+                        populateLocationDropdowns(); // Update dropdowns
                     } else if (type === 'user') {
-                        loadUsers();
+                        loadUsers(); // Reload users
                     }
                 } catch (error) {
                     showModalMessage(`Error deleting ${type}: ${error.message}`, true);
+                    console.error(`Error deleting ${type}:`, error);
                 }
             }
         }
     };
 
+    // Attach delegated event listeners to the parent containers
     if (locationListDiv) locationListDiv.addEventListener('click', handleDelete);
     if (userListDiv) userListDiv.addEventListener('click', handleDelete);
 
+    // Handle invite new admin form submission
     if (inviteAdminForm) {
         inviteAdminForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -247,31 +327,34 @@ export function handleAdminPage() {
                 full_name: document.getElementById('admin-name').value.trim(),
                 email: document.getElementById('admin-email').value.trim(),
                 password: document.getElementById('admin-password').value,
-                location_id: document.getElementById('admin-location-select').value || null
+                location_id: adminLocationSelect.value || null
             };
-            if (!adminData.full_name || !adminData.email || !adminData.password) {
-                return displayStatusMessage(inviteAdminStatusMessage, 'All fields are required.', true);
+            if (!adminData.full_name || !adminData.email || !adminData.password || !adminData.location_id) {
+                return displayStatusMessage(inviteAdminStatusMessage, 'Full name, email, password, and location are required.', true);
             }
             try {
                 await apiRequest('POST', '/api/invite-admin', adminData);
                 displayStatusMessage(inviteAdminStatusMessage, 'Admin invited successfully!', false);
-                inviteAdminForm.reset();
-                loadUsers();
+                inviteAdminForm.reset(); // Clear the form
+                loadUsers(); // Reload user list to show new admin
             } catch (error) {
                 displayStatusMessage(inviteAdminStatusMessage, `Error: ${error.message}`, true);
+                console.error('Error inviting admin:', error);
             }
         });
     }
 
+    // Handle invite new employee form submission
     if (inviteEmployeeForm) {
         inviteEmployeeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const availability = {};
+            // Collect availability data from generated selects
             document.querySelectorAll('#employee-availability-grid select').forEach(select => {
-                if(select.value) {
-                    const day = select.dataset.day;
-                    const type = select.dataset.type;
-                    if(!availability[day]) availability[day] = {};
+                const day = select.dataset.day;
+                const type = select.dataset.type; // 'start' or 'end'
+                if (select.value) { // Only add if a time is selected (not "Not Available")
+                    if (!availability[day]) availability[day] = {};
                     availability[day][type] = select.value;
                 }
             });
@@ -283,8 +366,8 @@ export function handleAdminPage() {
                 position: document.getElementById('employee-position').value.trim(),
                 employee_id: document.getElementById('employee-id').value.trim(),
                 employment_type: document.getElementById('employee-type').value,
-                location_id: document.getElementById('employee-location-select').value || null,
-                availability: Object.keys(availability).length > 0 ? availability : null
+                location_id: employeeLocationSelect.value || null,
+                availability: Object.keys(availability).length > 0 ? availability : null // Send as JSON object or null
             };
 
             if (!employeeData.full_name || !employeeData.email || !employeeData.password || !employeeData.location_id) {
@@ -293,17 +376,22 @@ export function handleAdminPage() {
             try {
                 await apiRequest('POST', '/api/invite-employee', employeeData);
                 displayStatusMessage(inviteEmployeeStatusMessage, 'Employee invited successfully!', false);
-                inviteEmployeeForm.reset();
-                loadUsers();
+                inviteEmployeeForm.reset(); // Clear the form
+                generateAvailabilityInputs(); // Regenerate default availability inputs
+                loadUsers(); // Reload user list to show new employee
             } catch (error) {
                 displayStatusMessage(inviteEmployeeStatusMessage, `Error: ${error.message}`, true);
+                console.error('Error inviting employee:', error);
             }
         });
     }
 
-    // Initial Page Load
-    generateAvailabilityInputs();
-    loadLocations();
-    populateLocationDropdowns();
-    loadUsers();
+    // --- Initial Page Load Actions ---
+    // Fetch business hours first to correctly set availability input ranges
+    fetchBusinessHours().then(() => {
+        // Then load other data that might depend on business hours or just needs to be loaded
+        loadLocations();
+        populateLocationDropdowns();
+        loadUsers();
+    });
 }

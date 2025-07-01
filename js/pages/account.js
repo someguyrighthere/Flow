@@ -5,16 +5,15 @@ import { apiRequest, showModalMessage } from '../utils.js';
  * Handles all logic for the account page.
  */
 export function handleAccountPage() {
-    // Security check: Redirect if not logged in
+    // Security check: Redirect to login page if no authentication token is found in local storage
     if (!localStorage.getItem("authToken")) {
         window.location.href = "login.html";
         return;
     }
 
     // Get elements from the DOM
+    const displaySubscriptionPlan = document.getElementById('display-subscription-plan');
     const updateProfileForm = document.getElementById('update-profile-form');
-    const displayName = document.getElementById('display-profile-name');
-    const displayEmail = document.getElementById('display-profile-email');
     const profileNameInput = document.getElementById('profile-name');
     const profileEmailInput = document.getElementById('profile-email');
     const currentPasswordInput = document.getElementById('current-password');
@@ -25,22 +24,42 @@ export function handleAccountPage() {
      */
     async function loadProfile() {
         // Set loading text while fetching
-        if (displayName) displayName.textContent = 'Loading...';
-        if (displayEmail) displayEmail.textContent = 'Loading...';
+        if (profileNameInput) profileNameInput.value = 'Loading...';
+        if (profileEmailInput) profileEmailInput.value = 'Loading...';
 
         try {
             // Assumes an API endpoint like '/users/me' to get the current user's data
-            const user = await apiRequest('GET', '/users/me'); 
+            const user = await apiRequest('GET', '/api/users/me'); 
             if (user) {
-                if (displayName) displayName.textContent = user.full_name;
-                if (displayEmail) displayEmail.textContent = user.email;
                 if (profileNameInput) profileNameInput.value = user.full_name;
                 if (profileEmailInput) profileEmailInput.value = user.email;
             }
         } catch (error) {
             showModalMessage(`Error loading profile: ${error.message}`, true);
-            if (displayName) displayName.textContent = 'Error';
-            if (displayEmail) displayEmail.textContent = 'Error';
+            console.error('Error loading profile:', error);
+            if (profileNameInput) profileNameInput.value = 'Error loading data';
+            if (profileEmailInput) profileEmailInput.value = 'Error loading data';
+        }
+    }
+
+    /**
+     * Fetches and displays the user's subscription plan.
+     */
+    async function loadSubscriptionPlan() {
+        if (!displaySubscriptionPlan) return;
+        displaySubscriptionPlan.textContent = 'Loading...'; // Show loading state
+        try {
+            // Fetch subscription status from the backend
+            const response = await apiRequest('GET', '/api/subscription-status');
+            if (response && response.plan) {
+                displaySubscriptionPlan.textContent = response.plan;
+            } else {
+                displaySubscriptionPlan.textContent = 'N/A';
+            }
+        } catch (error) {
+            console.error('Error loading subscription plan:', error);
+            displaySubscriptionPlan.textContent = 'Error';
+            showModalMessage(`Error loading subscription plan: ${error.message}`, true);
         }
     }
 
@@ -71,22 +90,24 @@ export function handleAccountPage() {
             }
 
             try {
-                // Assumes a PUT request to update the user's profile
-                await apiRequest('PUT', '/users/me', updateData); 
+                // Send PUT request to update the user's profile
+                await apiRequest('PUT', '/api/users/me', updateData); 
                 showModalMessage('Profile updated successfully!', false);
                 
                 // Clear password fields after successful submission
                 if(currentPasswordInput) currentPasswordInput.value = '';
                 if(newPasswordInput) newPasswordInput.value = '';
 
-                // Reload profile to reflect updated info
+                // Reload profile to reflect updated info (e.g., if email changed)
                 loadProfile(); 
             } catch (error) {
                 showModalMessage(`Error updating profile: ${error.message}`, true);
+                console.error('Error updating profile:', error);
             }
         });
     }
 
-    // Initial call to load the profile data when the page loads
-    loadProfile();
+    // --- Initial Page Load Actions ---
+    loadProfile(); // Load user profile data when the page loads
+    loadSubscriptionPlan(); // Load subscription plan when the page loads
 }
