@@ -261,7 +261,7 @@ apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) =>
     try {
         const hash = await bcrypt.hash(password, 10);
         await pool.query(
-            `INSERT INTO users (full_name, email, password, role, position, employee_id, employment_type, location_id, availability) VALUES ($1, $2, $3, 'employee', $4, $5, $6, $7, $8)`,
+            `INSERT INTO users (full_name, email, password, role, position, employee_id, employment_type, location_id, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [full_name, email, hash, position, employee_id, employment_type, location_id, availability]
         );
         res.status(201).json({ message: "Employee invited successfully!" });
@@ -291,13 +291,14 @@ apiRoutes.delete('/:type/:id', isAuthenticated, isAdmin, async (req, res) => {
                 await client.query('ROLLBACK');
                 return res.status(403).json({ error: 'Only super admins can delete other super admins.' });
             }
-            if (req.user.role === 'location_admin' && targetLocationId !== req.user.location_id) {
-                await client.query('ROLLBACK');
-                return res.status(403).json({ error: 'Location admins can only delete users from their own location.' });
-            }
             if (req.user.id == id) { // Prevent user from deleting their own account
                 await client.query('ROLLBACK');
                 return res.status(403).json({ error: 'You cannot delete your own account.' });
+            }
+            // If location_admin, ensure they can only delete users from their own location
+            if (req.user.role === 'location_admin' && targetLocationId !== req.user.location_id) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'Location admins can only delete users from their own location.' });
             }
 
             // Delete associated onboarding tasks first
@@ -400,7 +401,7 @@ apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     }
     // Location admin can only create job postings for their own location
     if (req.user.role === 'location_admin' && req.user.location_id != location_id) {
-        return res.status(403).json({ error: 'Location admins can only create job postings for their assigned location.' });
+        return res.status(403).json({ error: 'You are not authorized to create job postings for this location.' });
     }
     try {
         const result = await pool.query(
@@ -642,16 +643,14 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 // Get all checklists
-apiRoutes.get('/checklists', isAuthenticated, async (req, res) => {
-    let sql = `SELECT c.*, l.location_id, l.location_name
-               FROM checklists c
-               LEFT JOIN users u ON c.created_by = u.user_id
-               LEFT JOIN locations l ON u.location_id = l.location_id`;
+apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => { // Added isAdmin middleware
+    let sql = `SELECT c.*
+               FROM checklists c`;
     const params = [];
     // If location_admin, filter by their location's checklists (assuming created_by is linked to location)
     // Or, more accurately, if checklists are associated with a location directly:
     if (req.user.role === 'location_admin') {
-        sql += ` WHERE c.location_id = $1`; // Assuming checklists table has location_id
+        sql += ` WHERE c.created_by_location_id = $1`; // Assuming checklists table has created_by_location_id
         params.push(req.user.location_id);
     }
     sql += ` ORDER BY c.title`;
@@ -677,12 +676,12 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
         await client.query('BEGIN');
         // Prevent location_admin from deleting checklists outside their location (if applicable)
         if (req.user.role === 'location_admin') {
-            const checklist = await client.query('SELECT location_id FROM checklists WHERE id = $1', [id]);
+            const checklist = await client.query('SELECT created_by_location_id FROM checklists WHERE id = $1', [id]); // Assuming created_by_location_id
             if (checklist.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Checklist not found.' });
             }
-            if (checklist.rows[0].location_id !== req.user.location_id) {
+            if (checklist.rows[0].created_by_location_id !== req.user.location_id) {
                 await client.query('ROLLBACK');
                 return res.status(403).json({ error: 'You are not authorized to delete this checklist.' });
             }
@@ -907,7 +906,8 @@ const startServer = async () => {
                 tasks JSONB NOT NULL, -- Array of task objects: [{description, completed, documentId, documentName}]
                 structure_type VARCHAR(50) DEFAULT 'single_list', -- 'single_list', 'daily', 'weekly'
                 time_group_count INTEGER,
-                created_by INTEGER REFERENCES users(user_id),
+                created_by INTEGER REFERENCES users(user_id), -- Added to track who created it
+                created_by_location_id INTEGER REFERENCES locations(location_id), -- Added for location-based filtering
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
 
