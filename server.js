@@ -631,9 +631,13 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
         return res.status(400).json({ error: 'Position, title, and at least one task are required.' });
     }
     try {
+        // Get the user's ID and location_id from the JWT payload
+        const createdByUserId = req.user.id;
+        const createdByLocationId = req.user.location_id;
+
         const result = await pool.query(
-            `INSERT INTO checklists (position, title, tasks, structure_type, time_group_count) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [position, title, JSON.stringify(tasks), structure_type, time_group_count] // Store tasks as JSON string
+            `INSERT INTO checklists (position, title, tasks, structure_type, time_group_count, created_by, created_by_location_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [position, title, JSON.stringify(tasks), structure_type, time_group_count, createdByUserId, createdByLocationId] // Store tasks as JSON string
         );
         res.status(201).json({ message: 'Checklist created successfully!', checklist: result.rows[0] });
     } catch (err) {
@@ -647,10 +651,9 @@ apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => { // 
     let sql = `SELECT c.*
                FROM checklists c`;
     const params = [];
-    // If location_admin, filter by their location's checklists (assuming created_by is linked to location)
-    // Or, more accurately, if checklists are associated with a location directly:
+    // Super admin sees all checklists. Location admin sees only checklists created for their location.
     if (req.user.role === 'location_admin') {
-        sql += ` WHERE c.created_by_location_id = $1`; // Assuming checklists table has created_by_location_id
+        sql += ` WHERE c.created_by_location_id = $1`; 
         params.push(req.user.location_id);
     }
     sql += ` ORDER BY c.title`;
@@ -659,7 +662,7 @@ apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => { // 
         // Parse the tasks JSON string back to an object for the frontend
         const checklists = result.rows.map(row => ({
             ...row,
-            tasks: JSON.parse(row.tasks)
+            tasks: row.tasks ? JSON.parse(row.tasks) : [] // Handle potential null or empty tasks
         }));
         res.json(checklists);
     } catch (err) {
@@ -676,7 +679,7 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
         await client.query('BEGIN');
         // Prevent location_admin from deleting checklists outside their location (if applicable)
         if (req.user.role === 'location_admin') {
-            const checklist = await client.query('SELECT created_by_location_id FROM checklists WHERE id = $1', [id]); // Assuming created_by_location_id
+            const checklist = await client.query('SELECT created_by_location_id FROM checklists WHERE id = $1', [id]); 
             if (checklist.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Checklist not found.' });
@@ -797,10 +800,11 @@ apiRoutes.get('/users/availability', isAuthenticated, async (req, res) => {
             params.push(req.user.location_id);
         }
         const result = await pool.query(sql, params);
-        // Parse availability JSON string back to object
+        // Parse availability JSON string back to object, handling potential non-JSON values
         const usersWithAvailability = result.rows.map(row => ({
             ...row,
-            availability: row.availability ? JSON.parse(row.availability) : null
+            // Ensure availability is a string before parsing, and handle nulls
+            availability: (row.availability && typeof row.availability === 'string') ? JSON.parse(row.availability) : row.availability
         }));
         res.json(usersWithAvailability);
     } catch (err) {
