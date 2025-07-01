@@ -21,7 +21,28 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-t
 const DATABASE_URL = process.env.DATABASE_URL;
 const YOUR_DOMAIN = process.env.YOUR_DOMAIN || 'http://localhost:3000';
 
-// --- Stripe Webhook Middleware (must come before express.json()) ---
+// --- Multer Storage Setup ---
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage: storage });
+
+// --- 3. Database Connection Pool ---
+if (!DATABASE_URL) {
+    throw new Error("DATABASE_URL environment variable is not set.");
+}
+const pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+
+// --- 4. Middleware ---
+// The Stripe webhook needs to read the raw request body, so it comes before express.json()
 app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -54,8 +75,6 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (
     res.json({received: true});
 });
 
-
-// --- 4. Standard Middleware ---
 app.use(cors());
 app.use(express.json());
 app.use('/api', apiRoutes);
@@ -85,7 +104,7 @@ const isAdmin = (req, res, next) => {
     next();
 };
 
-// --- 6. API Routes ---
+// --- 6. API Route Definitions ---
 
 // Public Registration and Login
 apiRoutes.post('/register', async (req, res) => {
@@ -194,14 +213,11 @@ apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     }
 });
 
-
-// All other authenticated routes...
+// All other API routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
-// (Add other modular routes here if you create them)
-
 
 // Fallback for serving index.html
-app.get('*', (req, res) => {
+app.get(/'*'/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
@@ -227,7 +243,7 @@ const startServer = async () => {
                 location_name VARCHAR(255) NOT NULL,
                 location_address TEXT,
                 company_id INT,
-                FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL
+                FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
             );
             
             CREATE TABLE IF NOT EXISTS users (
@@ -244,79 +260,6 @@ const startServer = async () => {
                 availability JSONB,
                 FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL,
                 FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS shifts (
-                id SERIAL PRIMARY KEY,
-                employee_id INT NOT NULL,
-                location_id INT NOT NULL,
-                start_time TIMESTAMPTZ NOT NULL,
-                end_time TIMESTAMPTZ NOT NULL,
-                notes TEXT,
-                FOREIGN KEY (employee_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE CASCADE
-            );
-            
-            CREATE TABLE IF NOT EXISTS documents (
-                document_id SERIAL PRIMARY KEY,
-                user_id INT NOT NULL,
-                title VARCHAR(255) NOT NULL,
-                description TEXT,
-                file_name VARCHAR(255) NOT NULL,
-                file_path TEXT NOT NULL,
-                mime_type VARCHAR(255),
-                size BIGINT,
-                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS checklists (
-                id SERIAL PRIMARY KEY,
-                position VARCHAR(255) NOT NULL,
-                title VARCHAR(255) NOT NULL,
-                tasks JSONB NOT NULL,
-                structure_type VARCHAR(50) NOT NULL DEFAULT 'single_list',
-                time_group_count INT
-            );
-
-            CREATE TABLE IF NOT EXISTS onboarding_tasks (
-                id SERIAL PRIMARY KEY,
-                user_id INT NOT NULL,
-                checklist_id INT,
-                description TEXT NOT NULL,
-                completed BOOLEAN DEFAULT FALSE,
-                document_id INT,
-                document_name VARCHAR(255),
-                task_order INT,
-                group_index INT,
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE SET NULL,
-                FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE SET NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS job_postings (
-                id SERIAL PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                description TEXT NOT NULL,
-                requirements TEXT,
-                location_id INT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS applicants (
-                id SERIAL PRIMARY KEY,
-                job_posting_id INT NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                email VARCHAR(255) NOT NULL,
-                phone VARCHAR(50),
-                address TEXT,
-                date_of_birth DATE,
-                availability VARCHAR(255),
-                is_authorized BOOLEAN,
-                status VARCHAR(50) DEFAULT 'pending',
-                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (job_posting_id) REFERENCES job_postings(id) ON DELETE CASCADE
             );
         `;
         
