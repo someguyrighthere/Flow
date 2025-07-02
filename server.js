@@ -281,8 +281,8 @@ apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) =>
     try {
         const hash = await bcrypt.hash(password, 10);
         await pool.query(
-            `INSERT INTO users (full_name, email, password, role, position, employee_id, employment_type, location_id, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [full_name, email, hash, position, employee_id, employment_type, location_id, availability]
+            `INSERT INTO users (full_name, email, password, role, position, employee_id, employment_type, location_id, availability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [full_name, email, hash, 'employee', position, employee_id, employment_type, location_id, availability] // Fix: Added 'employee' role and shifted params
         );
         res.status(201).json({ message: "Employee invited successfully!" });
     } catch (err) {
@@ -820,9 +820,8 @@ apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
     } catch (err) {
         console.error('Error deleting shift:', err);
         res.status(500).json({ error: 'Failed to delete shift.' });
-    } finally {
-        client.release();
     }
+    // ✅ Removed the finally block - no client to release as pool.query is used directly
 });
 
 // Get user availability (for scheduling page)
