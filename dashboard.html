@@ -22,8 +22,49 @@
             <a href="checklists.html">Task Lists</a>
         </nav>
         <section>
+            <div class="dashboard-metrics">
+                <div class="metric-card">
+                    <h3>Pending Onboards</h3>
+                    <p id="pending-onboards-count">0</p>
+                </div>
+                <div class="metric-card">
+                    <h3>In Progress</h3>
+                    <p id="in-progress-count">0</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Completed</h3>
+                    <p id="completed-count">0</p>
+                </div>
+            </div>
+            <div class="dashboard-actions">
+                <button id="show-onboard-modal" class="btn btn-primary">Onboard Existing Employee</button>
+            </div>
+            <div class="activity-feed card">
+                <h3>Recent Activity</h3>
+                <ul id="activity-list"></ul>
+                <p id="activity-feed-placeholder" style="color: var(--text-medium); display: none;">No recent activity.</p>
+            </div>
         </section>
     </div>
+
+    <div id="onboard-user-modal" class="modal-overlay">
+        <div class="modal-content card">
+            <h2>Onboard Existing Employee</h2>
+            <form id="onboard-user-form">
+                <div class="form-group">
+                    <label for="existing-employee-select">Select Employee</label>
+                    <select id="existing-employee-select" required></select>
+                </div>
+                <div id="assigned-task-list-info" style="margin-top: 10px; font-size: 0.9em;"></div>
+                <p id="onboard-modal-status-message" role="alert" aria-live="polite"></p>
+                <div class="modal-buttons">
+                    <button type="submit" class="btn btn-primary">Assign Task List</button>
+                    <button type="button" id="modal-cancel-onboard" class="btn btn-secondary">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="dist/js/bundle.js"></script>
     <script>
         window.initializePage();

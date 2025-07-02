@@ -20,7 +20,48 @@
             <a href="suite-hub.html">App Hub</a>
             <a href="scheduling.html" class="active">Scheduling</a>
         </nav>
-        <section>
+        <section class="scheduler-container">
+            <div class="card scheduler-controls">
+                <button id="prev-week-btn" class="btn btn-secondary">Previous</button>
+                <h3 id="current-week-display"></h3>
+                <button id="next-week-btn" class="btn btn-secondary">Next</button>
+            </div>
+            <div class="card calendar-card">
+                <div id="calendar-grid"></div>
+            </div>
+            <div class="card create-shift-card">
+                <h3>Create New Shift</h3>
+                <form id="create-shift-form">
+                    <div class="form-group">
+                        <label for="employee-select">Employee</label>
+                        <select id="employee-select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="location-select">Location</label>
+                        <select id="location-select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="start-time-input">Start Time</label>
+                        <input type="datetime-local" id="start-time-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end-time-input">End Time</label>
+                        <input type="datetime-local" id="end-time-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="notes-input">Notes</label>
+                        <textarea id="notes-input" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Shift</button>
+                </form>
+            </div>
+            <div class="card scheduler-toggles">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="toggle-availability">
+                    <span class="slider"></span>
+                </label>
+                <span>Show Employee Availability</span>
+            </div>
         </section>
     </div>
     <script src="dist/js/bundle.js"></script>

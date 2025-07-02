@@ -21,6 +21,37 @@
             <a href="hiring.html" class="active">Hiring</a>
         </nav>
         <section>
+            <div class="card">
+                <h3>Create New Job Posting</h3>
+                <form id="new-job-posting-form">
+                    <div class="form-group">
+                        <label for="job-title">Job Title</label>
+                        <input type="text" id="job-title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="job-description">Job Description</label>
+                        <textarea id="job-description" rows="5" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="job-requirements">Requirements</label>
+                        <textarea id="job-requirements" rows="5"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="job-location-select">Location</label>
+                        <select id="job-location-select" required></select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Posting</button>
+                    <p id="job-posting-status-message"></p>
+                </form>
+            </div>
+            <div class="card">
+                <h3>Current Job Postings</h3>
+                <div id="job-postings-list"></div>
+            </div>
+            <div class="card">
+                <h3>Recent Applicants</h3>
+                <div id="applicants-list"></div>
+            </div>
         </section>
     </div>
     <script src="dist/js/bundle.js"></script>
