@@ -1,71 +1,90 @@
-/* onboardflow/css/style.css */
-/* --- Global Styles & Variables --- */
 :root {
-    --bg-color: #111111;
-    --primary-accent: #C86DD7;
-    --primary-accent-glow: rgba(200, 109, 215, 0.4);
+    --primary-accent: #D88DE2; /* A slightly brighter purple for text */
     --text-light: #EAEAEA;
-    --text-medium: #999999;
-    --border-color: #333333;
-    --card-bg: #1A1A1A;
-    --font-family: 'Poppins', sans-serif;
+    --text-medium: #b0b0b0;
+    --card-border-color: rgba(255, 255, 255, 0.15);
+    --card-bg: rgba(30, 30, 30, 0.4);
 }
 
-/* Base styles are in theme.css, this file is for reusable components */
+.app-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 25px;
+    margin-top: 20px;
+}
 
-/* --- Buttons --- */
-.btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
+.app-card {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--card-border-color);
+    padding: 25px;
+    border-radius: 16px;
     text-decoration: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.btn-primary {
-    background-color: var(--primary-accent);
-    color: white;
-    box-shadow: 0 0 15px var(--primary-accent-glow);
-}
-
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0 25px var(--primary-accent-glow);
-}
-
-.btn-secondary {
-    background-color: transparent;
     color: var(--text-light);
-    border: 1px solid var(--border-color);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.btn-secondary:hover {
-    background-color: var(--card-bg);
-    border-color: var(--text-medium);
+.app-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
 }
 
-/* Global fix for settings button icon to prevent cutoff */
+.app-card h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 1.25rem;
+    color: var(--primary-accent);
+}
+
+.app-card p {
+    color: var(--text-medium);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Settings Menu */
+.settings-menu {
+    position: relative;
+}
+
 #settings-button {
-    display: flex; /* Use flexbox to center content */
-    align-items: center; /* Vertically center */
-    justify-content: center; /* Horizontally center */
-    padding: 8px; /* Ensure enough padding around the icon */
-    min-width: 40px; /* Ensure a minimum width */
-    min-height: 40px; /* Ensure a minimum height */
-    width: auto; /* Allow content to dictate width if needed, but min-width ensures size */
-    height: auto; /* Allow content to dictate height if needed, but min-height ensures size */
-    box-sizing: border-box; /* Include padding in the width/height */
+    background: rgba(30, 30, 30, 0.4);
+    border: 1px solid var(--card-border-color);
+    color: var(--text-light);
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
 }
 
-#settings-button svg {
-    display: block; /* Ensure SVG is a block element */
-    width: 24px; /* Set a consistent size for the SVG */
-    height: 24px;
-    flex-shrink: 0; /* Prevent SVG from shrinking */
+#settings-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 120%;
+    background-color: rgba(25, 25, 25, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 10px;
+    min-width: 180px;
+    z-index: 10;
+    border: 1px solid var(--card-border-color);
+}
+
+#settings-dropdown a, #settings-dropdown button {
+    display: block;
+    color: var(--text-light);
+    padding: 12px 15px;
+    text-decoration: none;
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+#settings-dropdown a:hover, #settings-dropdown button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
 }
