@@ -14,6 +14,7 @@ import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
 
+// This function definition is required by window.initializePage
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
     const settingsDropdown = document.getElementById("settings-dropdown");
