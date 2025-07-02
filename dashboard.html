@@ -157,10 +157,7 @@
                     <h3>Quick Actions</h3>
                     <div class="quick-actions">
                         <button id="show-onboard-modal" class="btn btn-primary">Onboard New Employee</button>
-                        <!-- Removed "View Job Postings" and "View Applicants" buttons -->
-                        <!-- <button id="view-job-postings-btn" class="btn btn-secondary">View Job Postings</button> -->
-                        <!-- <button id="view-applicants-btn" class="btn btn-secondary">View Applicants</button> -->
-                    </div>
+                        </div>
                 </div>
             </div>
             
@@ -169,19 +166,16 @@
                 <div class="activity-feed">
                     <p style="color: var(--text-medium);" id="activity-feed-placeholder">No recent activity.</p>
                     <ul id="activity-list">
-                        <!-- Activity items will be loaded here -->
-                    </ul>
+                        </ul>
                 </div>
             </div>
         </section>
     </div>
 
-    <!-- Modals -->
     <div id="onboard-user-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3>Onboard New Employee</h3>
             <form id="onboard-user-form">
-                <!-- Instruction message for Admin Settings -->
                 <p style="color: var(--text-light); margin-bottom: 20px;">To onboard an employee who is not yet in the system, first invite them via <a href="admin.html" style="color: var(--primary-accent); text-decoration: underline;">Admin Settings &gt; Manage Users</a>.</p>
                 <hr style="border-color: var(--border-color); margin: 20px 0;">
                 <p style="color: var(--text-light); margin-bottom: 15px;">Or, select an existing employee to assign their onboarding task list:</p>
@@ -189,25 +183,20 @@
                 <div class="form-group">
                     <label for="existing-employee-select">Select Employee</label>
                     <select id="existing-employee-select" required>
-                        <!-- Options will be populated by JavaScript -->
-                    </select>
+                        </select>
                 </div>
                 
-                <!-- Display the task list that will be assigned based on selected employee's position -->
                 <p id="assigned-task-list-info" style="color: var(--text-medium); font-size: 0.9em; margin-top: 10px; min-height: 20px;"></p>
 
-                <!-- Status message for onboarding form (within modal) -->
                 <p id="onboard-modal-status-message" class="status-message"></p> 
                 
                 <div class="modal-buttons">
                     <button type="button" class="btn btn-secondary" id="modal-cancel-onboard">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Assign Task List</button> <!-- Changed button text -->
-                </div>
+                    <button type="submit" class="btn btn-primary">Assign Task List</button> </div>
             </form>
         </div>
     </div>
     
-    <!-- Message Modal Overlay (for showModalMessage function) - included here for consistency -->
     <div id="message-modal-overlay" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <p id="modal-message-text"></p>
@@ -226,6 +215,10 @@
         </div>
     </div>
 
-    <script type="module" src="js/app.js"></script>
+    <script src="js/bundle.js"></script>
+    <script>
+        // Call the globally exposed initialization function
+        window.initializePage();
+    </script>
 </body>
 </html>

@@ -183,5 +183,12 @@
             </section>
         </main>
     </div>
+    <!-- FIX: Updated script tag to load bundle.js and initializePage -->
+    <script src="js/bundle.js"></script>
+    <script>
+        // Call the globally exposed initialization function
+        // This is important if index.html has any dynamic content or global setup managed by app.js
+        window.initializePage();
+    </script>
 </body>
 </html>

@@ -1,71 +1,43 @@
-// js/app.js (Main Router)
-import { handleLoginPage } from './pages/login.js';
-import { handleRegisterPage } from './pages/register.js';
-import { handleDashboardPage } from './pages/dashboard.js';
-import { handleChecklistsPage } from './pages/checklists.js';
-import { handleAdminPage } from './pages/admin.js';
-import { handleAccountPage } from './pages/account.js';
-import { handleDocumentsPage } from './pages/documents.js';
-import { handleHiringPage } from './pages/hiring.js';
-import { handleSchedulingPage } from './pages/scheduling.js';
-import { handleApplyPage } from './pages/apply.js';
-import { handleOnboardingViewPage } from './pages/onboardingView.js';
-import { handleSuiteHubPage } from './pages/suiteHub.js';
-
-function setupSettingsDropdown() {
-    const settingsButton = document.getElementById("settings-button");
-    const settingsDropdown = document.getElementById("settings-dropdown");
-    const logoutButton = document.getElementById("logout-button");
-
-    if (settingsButton && settingsDropdown) {
-        settingsButton.addEventListener("click", event => {
-            event.stopPropagation();
-            settingsDropdown.style.display = settingsDropdown.style.display === "block" ? "none" : "block";
-        });
-        document.addEventListener("click", event => {
-            if (settingsButton && !settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
-                settingsDropdown.style.display = "none";
-            }
-        });
-    }
-    if (logoutButton) {
-        logoutButton.addEventListener("click", () => {
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("userRole");
-            localStorage.removeItem('userId'); // Ensure userId is also removed on logout
-            console.log('User logged out. Local storage cleared.'); // Added for debugging
-            window.location.href = "login.html";
-        });
-    }
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node ./node_modules/mocha/bin/mocha --require @babel/register --timeout 5000 --extension cjs",
+    "build": "npm run build:js && npm run build:css",
+    "build:js": "babel js --out-file dist/js/bundle.js --copy-files --source-maps inline --verbose",
+    "build:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css",
+    "watch:js": "babel js --out-file dist/js/bundle.js --copy-files --source-maps inline --watch",
+    "watch:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css --watch",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@babel/cli": "^7.27.2",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.3.1",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.16.2",
+    "sqlite3": "^5.1.7",
+    "stripe": "^16.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.5",
+    "@babel/plugin-proposal-optional-chaining": "^7.21.0",
+    "@babel/preset-env": "^7.24.5",
+    "@babel/register": "^7.23.7",
+    "chai": "^5.1.1",
+    "clean-css-cli": "^5.6.3",
+    "mocha": "^10.4.0",
+    "supertest": "^7.0.0",
+    "uglify-js": "^3.17.4"
+  }
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    setupSettingsDropdown();
-    const path = window.location.pathname;
-
-    if (path.includes("login.html")) {
-        handleLoginPage();
-    } else if (path.includes("register.html")) {
-        handleRegisterPage();
-    } else if (path.includes("suite-hub.html")) {
-        handleSuiteHubPage();
-    } else if (path.includes("dashboard.html")) {
-        handleDashboardPage();
-    } else if (path.includes("checklists.html")) {
-        handleChecklistsPage();
-    } else if (path.includes("admin.html")) {
-        handleAdminPage();
-    } else if (path.includes("account.html")) {
-        handleAccountPage();
-    } else if (path.includes("documents.html")) {
-        handleDocumentsPage();
-    } else if (path.includes("hiring.html")) {
-        handleHiringPage();
-    } else if (path.includes("scheduling.html")) {
-        handleSchedulingPage();
-    } else if (path.includes("apply.html")) {
-        handleApplyPage();
-    } else if (path.includes("new-hire-view.html")) {
-        handleOnboardingViewPage();
-    }
-});

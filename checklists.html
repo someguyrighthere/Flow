@@ -156,7 +156,6 @@
         <section id="checklists-section">
             <h2 style="color: var(--text-light);">Your Task Lists</h2>
             <div id="checklist-list" style="margin-bottom: 40px;"><p style="color: var(--text-medium);">Task list functionality temporarily disabled.</p></div>
-            <!-- NEW: Status message for general checklist actions -->
             <p id="checklist-status-message" class="status-message"></p>
             <div class="card" style="margin-top: 30px;">
                 <h3>Create New Task List</h3>
@@ -183,7 +182,6 @@
                     </div>
                     <hr style="border-color: var(--border-color); margin: 20px 0;">
                     <div id="tasks-input-area">
-                        <!-- Initial task input for new checklist -->
                         <div class="form-group task-input-group">
                             <div class="task-input-container">
                                 <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
@@ -191,8 +189,7 @@
                                     <input type="text" id="task-input-0" class="task-description-input" placeholder="e.g., Complete HR paperwork" required>
                                 </div>
                                 <div class="task-actions" style="display: flex; align-items: flex-end; gap: 5px; margin-bottom: 0;">
-                                    <button type="button" class="btn btn-secondary btn-sm attach-file-btn">Attach</button> <!-- Re-enabled attach button -->
-                                    <button type="button" class="btn btn-secondary btn-sm remove-task-btn">Remove</button>
+                                    <button type="button" class="btn btn-secondary btn-sm attach-file-btn">Attach</button> <button type="button" class="btn btn-secondary btn-sm remove-task-btn">Remove</button>
                                 </div>
                             </div>
                             <div class="attached-document-info" style="font-size: 0.8rem; color: var(--text-medium); margin-top: 5px; height: 1.2em;"></div>
@@ -205,7 +202,6 @@
         </section>
     </div>
 
-    <!-- NEW: Attach Document Modal (re-introduced for checklist tasks) -->
     <div id="attach-document-modal-overlay" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3>Attach a Document</h3>
@@ -219,8 +215,6 @@
         </div>
     </div>
 
-    <!-- Standard message and confirm modals for other pages (if needed) -->
-    <!-- These are kept outside the admin/checklist HTML but are usually in app-wide HTML if used globally -->
     <div id="modal-message" class="modal" style="display: none;">
         <div class="modal-content">
             <p id="modal-text"></p>
@@ -239,6 +233,10 @@
         </div>
     </div>
     
-    <script type="module" src="js/app.js"></script>
+    <script src="js/bundle.js"></script>
+    <script>
+        // Call the globally exposed initialization function
+        window.initializePage();
+    </script>
 </body>
 </html>
