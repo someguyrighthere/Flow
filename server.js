@@ -43,23 +43,26 @@ const pool = new Pool({
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Parse JSON request bodies
 
-// !!! CRITICAL FIX: Mount apiRoutes router BEFORE static file serving !!!
-// This ensures that requests to /api/* are handled by your API routes
-// and not by the static file server or the fallback HTML route.
+// !!! CRITICAL: Mount apiRoutes router BEFORE any static file serving that might catch API paths !!!
 app.use('/api', apiRoutes); 
 
-// --- FIX: Serve static files from the 'dist' directory after build ---
+// --- FIX: Serve static assets from 'dist' AND HTML files from the root directory ---
 const distDir = path.join(__dirname, 'dist');
-if (!fs.existsSync(distDir)) {
-    console.warn('Dist directory not found. Running build locally might be necessary.');
-    // Fallback to serving from root if dist doesn't exist (e.g., during local dev without build)
-    app.use(express.static(path.join(__dirname)));
+
+// Serve the 'dist' directory first for built JS/CSS/other assets
+if (fs.existsSync(distDir)) {
+    app.use(express.static(distDir)); 
+    console.log('Serving static files from /dist');
 } else {
-    app.use(express.static(distDir)); // Serve built frontend assets
+    console.warn('Dist directory not found. Serving static files from root. Please ensure build process runs.');
 }
 
+// Serve static files (like HTML pages, css, js folders directly) from the root directory
+// This ensures your HTML files (e.g., login.html, dashboard.html) are found.
+app.use(express.static(path.join(__dirname)));
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded files
-// Removed specific /css and /js static routes as they are now handled by /dist
+
 
 // --- 5. Authentication Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -825,7 +828,7 @@ apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
         res.json({ message: 'Shift deleted successfully.' });
     } catch (err) {
         console.error('Error deleting shift:', err);
-        res.status(500).json({ error: 'Failed to delete shift.' });
+        res.status(500).json({ error: 'Failed to retrieve shift.' });
     }
     // FIX: Removed the finally block - no client to release as pool.query is used directly
 });
