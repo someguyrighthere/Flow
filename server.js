@@ -48,12 +48,18 @@ app.use(express.json()); // Parse JSON request bodies
 // and not by the static file server or the fallback HTML route.
 app.use('/api', apiRoutes); 
 
-// Static file serving - serves all files from the root directory
-// These should come AFTER apiRoutes mounting to avoid conflicts
-app.use(express.static(path.join(__dirname)));
+// --- FIX: Serve static files from the 'dist' directory after build ---
+const distDir = path.join(__dirname, 'dist');
+if (!fs.existsSync(distDir)) {
+    console.warn('Dist directory not found. Running build locally might be necessary.');
+    // Fallback to serving from root if dist doesn't exist (e.g., during local dev without build)
+    app.use(express.static(path.join(__dirname)));
+} else {
+    app.use(express.static(distDir)); // Serve built frontend assets
+}
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded files
-app.use('/css', express.static(path.join(__dirname, 'css'))); // Serve CSS files
-app.use('/js', express.static(path.join(__dirname, 'js'))); // Serve JavaScript files
+// Removed specific /css and /js static routes as they are now handled by /dist
 
 // --- 5. Authentication Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -794,7 +800,7 @@ apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         res.status(201).json({ message: 'Shift created successfully!', shift: result.rows[0] });
     } catch (err) {
         console.error('Error creating shift:', err);
-        res.status(500).json({ error: 'Failed to create shift.' });
+        res.status(500).json({ error: 'Failed to retrieve shift.' });
     }
 });
 

@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "scripts": {
     "test": "node ./node_modules/mocha/bin/mocha --require @babel/register --timeout 5000 --extension cjs",
-    "build": "echo 'Build step skipped'",
+    "build": "npm run build:js && npm run build:css",
+    "build:js": "babel js --out-dir dist/js --copy-files --source-maps inline --verbose",
+    "build:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css",
+    "watch:js": "babel js --out-dir dist/js --copy-files --source-maps inline --watch",
+    "watch:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css --watch",
     "start": "node server.js"
   },
   "keywords": [],
