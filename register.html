@@ -18,7 +18,39 @@
         </div>
     </header>
     <main class="main-content">
+        <div class="register-card">
+            <h2>Sign Up</h2>
+            <form id="register-form" class="register-form">
+                <div class="form-group">
+                    <label for="company-name">Company Name</label>
+                    <input type="text" id="company-name" required placeholder="Your Company Inc.">
+                </div>
+                <div class="form-group">
+                    <label for="full-name">Your Full Name</label>
+                    <input type="text" id="full-name" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required placeholder="you@company.com">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required minlength="6" placeholder="••••••••">
+                </div>
+                <p id="error-message" role="alert" aria-live="polite"></p>
+                <button type="submit" class="btn-register">Create Account</button>
+            </form>
+            <a href="login.html" class="switch-link">Already have an account? Log In</a>
+        </div>
     </main>
+    <div id="message-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
     <script src="dist/js/bundle.js"></script>
     <script>
         window.initializePage();

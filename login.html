@@ -18,7 +18,31 @@
         </div>
     </header>
     <main class="main-content">
+        <div class="login-card">
+            <h2>Login</h2>
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required placeholder="you@company.com">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required minlength="6" placeholder="••••••••">
+                </div>
+                <p id="error-message" role="alert" aria-live="polite"></p>
+                <button type="submit" class="btn-login">Sign In</button>
+            </form>
+            <a href="register.html" class="switch-link">Don't have an account? Sign Up</a>
+        </div>
     </main>
+    <div id="message-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-message-text"></p>
+            <div class="modal-buttons">
+                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
     <script src="dist/js/bundle.js"></script>
     <script>
         window.initializePage();
