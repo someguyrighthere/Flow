@@ -4,7 +4,7 @@
   "scripts": {
     "test": "node ./node_modules/mocha/bin/mocha --require @babel/register --timeout 5000 --extension cjs",
     "build": "npm run build:js && npm run build:css",
-    "build:js": "babel js --out-file dist/js/bundle.js --copy-files --source-maps inline --verbose",
+    "build:js": "esbuild js/app.js --bundle --outfile=dist/js/bundle.js --sourcemap",
     "build:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css",
     "watch:js": "babel js --out-file dist/js/bundle.js --copy-files --source-maps inline --watch",
     "watch:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css --watch",
@@ -36,6 +36,7 @@
     "@babel/register": "^7.23.7",
     "chai": "^5.1.1",
     "clean-css-cli": "^5.6.3",
+    "esbuild": "^0.23.0",
     "mocha": "^10.4.0",
     "supertest": "^7.0.0",
     "uglify-js": "^3.17.4"
