@@ -43,14 +43,28 @@ function setupSettingsDropdown() {
 
 // This function will be called globally by the HTML pages
 // It acts as the central router for client-side logic
-// We don't need to assign it to window.initializePage directly if we call it on DOMContentLoaded
-// The HTML script tag calls window.initializePage(), so we need to define it.
 window.initializePage = () => { // Expose initializePage globally
-    setupSettingsDropdown();
     const path = window.location.pathname;
 
-    // Use a switch-case or if-else if structure to call the appropriate handler
-    // The handlers themselves are imported and available within this module's scope.
+    // A list of pages that have the main header with the settings dropdown
+    const pagesWithSettings = [
+        "suite-hub.html",
+        "dashboard.html",
+        "checklists.html",
+        "admin.html",
+        "account.html",
+        "documents.html",
+        "hiring.html",
+        "scheduling.html",
+        "new-hire-view.html"
+    ];
+
+    // Check if the current page is one that should have the settings dropdown
+    if (pagesWithSettings.some(p => path.includes(p))) {
+        setupSettingsDropdown();
+    }
+
+    // Now, run the specific logic for the current page
     if (path.includes("login.html")) {
         handleLoginPage();
     } else if (path.includes("register.html")) {
@@ -76,22 +90,9 @@ window.initializePage = () => { // Expose initializePage globally
     } else if (path.includes("new-hire-view.html")) {
         handleOnboardingViewPage();
     }
-    // No default or else needed, if no path matches, no specific handler runs.
 };
 
-// The HTML pages explicitly call window.initializePage() after bundle.js loads.
-// So, we don't need a DOMContentLoaded listener here if the HTML ensures the call.
-// However, keeping it ensures it runs even if HTML misses the call.
-// For robustness, let's ensure it's called once.
 document.addEventListener("DOMContentLoaded", () => {
-    // Check if initializePage has already been called by the inline script
-    // This prevents double execution if both the HTML and this listener trigger it.
-    if (typeof window.initializePage === 'function') {
-        // If it's already defined and called by the HTML, do nothing here.
-        // If the HTML script is missing, this will ensure it runs.
-        // For now, let's assume HTML calls it.
-    } else {
-        // Fallback if HTML doesn't call it, but window.initializePage should be defined above.
-        // This scenario is less likely if bundle.js loads correctly.
-    }
+    // The HTML pages explicitly call window.initializePage(), so this listener
+    // is a fallback. To avoid double-execution, we assume the inline script works.
 });
