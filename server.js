@@ -170,7 +170,8 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
 // Job Posting Routes
 apiRoutes.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM job_postings WHERE is_active = true ORDER BY created_at DESC');
+        // CORRECTED QUERY: Removed "WHERE is_active = true"
+        const result = await pool.query('SELECT * FROM job_postings ORDER BY created_at DESC');
         res.json(result.rows);
     } catch(err) {
         console.error('Error fetching job postings:', err);
