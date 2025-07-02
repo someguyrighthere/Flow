@@ -1,3 +1,4 @@
+/* onboardflow/css/style.css */
 /* --- Global Styles & Variables --- */
 :root {
     --bg-color: #111111;
@@ -9,6 +10,8 @@
     --card-bg: #1A1A1A;
     --font-family: 'Poppins', sans-serif;
 }
+
+/* Base styles are in theme.css, this file is for reusable components */
 
 /* --- Buttons --- */
 .btn {
@@ -47,114 +50,22 @@
     border-color: var(--text-medium);
 }
 
-/* Global fix for settings button icon */
+/* Global fix for settings button icon to prevent cutoff */
 #settings-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px;
-    min-width: 40px;
-    min-height: 40px;
+    display: flex; /* Use flexbox to center content */
+    align-items: center; /* Vertically center */
+    justify-content: center; /* Horizontally center */
+    padding: 8px; /* Ensure enough padding around the icon */
+    min-width: 40px; /* Ensure a minimum width */
+    min-height: 40px; /* Ensure a minimum height */
+    width: auto; /* Allow content to dictate width if needed, but min-width ensures size */
+    height: auto; /* Allow content to dictate height if needed, but min-height ensures size */
+    box-sizing: border-box; /* Include padding in the width/height */
 }
 
-/* --- Main Content & Layout --- */
-.main-content {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding-top: 5vh;
-    padding-bottom: 5vh;
-}
-
-.card {
-    background: rgba(26, 26, 26, 0.7);
-    padding: 25px 30px;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    margin-bottom: 20px;
-}
-
-/* --- Forms & Inputs --- */
-.login-card, .register-card {
-    width: 100%;
-    max-width: 420px;
-    text-align: center;
-}
-
-.form-group {
-    margin-bottom: 20px;
-    text-align: left;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-    color: var(--text-light);
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-    width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background-color: var(--card-bg);
-    color: var(--text-light);
-    font-size: 1rem;
-    box-sizing: border-box;
-    font-family: var(--font-family);
-}
-
-.btn-login, .btn-register {
-    width: 100%;
-    margin-top: 10px;
-}
-
-.switch-link {
-    display: block;
-    margin-top: 20px;
-    color: var(--text-medium);
-    text-decoration: none;
-    transition: color 0.2s;
-}
-.switch-link:hover {
-    color: var(--primary-accent);
-}
-
-#error-message {
-    color: #ff8a80;
-    margin-bottom: 15px;
-    font-weight: 500;
-}
-
-/* --- App Hub Grid --- */
-.app-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-}
-.app-card {
-    background: var(--card-bg);
-    padding: 20px;
-    border-radius: 12px;
-    text-decoration: none;
-    color: var(--text-light);
-    border: 1px solid var(--border-color);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.app-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-}
-.app-card h3 {
-    margin-top: 0;
-    color: var(--primary-accent);
-}
-.app-card p {
-    color: var(--text-medium);
+#settings-button svg {
+    display: block; /* Ensure SVG is a block element */
+    width: 24px; /* Set a consistent size for the SVG */
+    height: 24px;
+    flex-shrink: 0; /* Prevent SVG from shrinking */
 }
