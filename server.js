@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const onboardingRoutes = require('./routes/onboardingRoutes');
 
 const app = express();
 const apiRoutes = express.Router();
@@ -60,7 +61,57 @@ const isAuthenticated = (req, res, next) => {
     });
 };
 
-// ... (Paste all of your other routes for login, register, etc. here) ...
+const isAdmin = (req, res, next) => {
+    if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
+        next();
+    } else {
+        return res.status(403).json({ error: 'Access denied.' });
+    }
+};
+
+// --- API Routes ---
+// Make sure all your routes are included here.
+// I am pasting in the user routes from your original file.
+apiRoutes.post('/register', async (req, res) => {
+    const { companyName, fullName, email, password } = req.body;
+    if (!companyName || !fullName || !email || !password) {
+        return res.status(400).json({ error: "All fields are required." });
+    }
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const locationRes = await client.query(`INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING location_id`,[`${companyName} HQ`, 'Default Address']);
+        const locationId = locationRes.rows[0].location_id;
+        const hash = await bcrypt.hash(password, 10);
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4)`, [fullName, email, hash, locationId]);
+        await client.query('COMMIT');
+        res.status(201).json({ message: "Registration successful! You can now log in." });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Registration error:', err);
+        if (err.code === '23505') return res.status(409).json({ error: "An account with this email already exists." });
+        res.status(500).json({ error: "An internal server error occurred during registration." });
+    } finally {
+        client.release();
+    }
+});
+
+apiRoutes.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
+        const user = result.rows[0];
+        if (!user) return res.status(401).json({ error: "Invalid credentials." });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+        res.json({ message: "Logged in successfully!", token: token, role: user.role, location_id: user.location_id });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
+});
 
 apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     try {
@@ -73,16 +124,23 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     }
 });
 
+// Re-enabling the onboarding routes
+onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
+
+// Fallback for serving index.html
 app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
+
 
 const startServer = async () => {
     try {
         const client = await pool.connect();
         console.log('Connected to the PostgreSQL database.');
+        // The schema creation logic from your original file should be here
         client.release();
+        
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Server is running on port ${PORT}`);
         });
