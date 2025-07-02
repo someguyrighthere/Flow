@@ -47,7 +47,6 @@
     border-color: var(--text-medium);
 }
 
-/* Global fix for settings button icon */
 #settings-button {
     display: flex;
     align-items: center;
