@@ -109,7 +109,7 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
  * @param {boolean} [isFormData=false] Whether the body is FormData.
  * @param {function} [onProgress=null] A progress event handler for uploads.
  * @param {boolean} [expectBlobResponse=false] Whether to expect a Blob in response.
- * @returns {Promise<any>} The JSON response from the API.
+ * @returns {Promise<any>} The JSON response from the API or a Blob.
  */
 export async function apiRequest(method, path, body = null, isFormData = false, onProgress = null, expectBlobResponse = false) {
     const token = localStorage.getItem('authToken');
@@ -122,7 +122,6 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         // Log a truncated token for security, or just its presence
         console.log(`[apiRequest] Auth Token (first 20 chars): ${token.substring(0, 20)}...`);
     }
-
 
     const handleAuthError = (errorMessage) => {
         localStorage.removeItem('authToken');
@@ -148,6 +147,8 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
                     handleAuthError('Your session has expired. Please log in again.');
                     reject(new Error('Authentication failed.'));
                 } else {
+                    // For XHR, we assume JSON if status is not 2xx, 401, 403
+                    // If it's not JSON, JSON.parse will throw, caught by outer try-catch
                     try { 
                         reject(new Error(JSON.parse(xhr.responseText).error || 'An unknown error occurred.')); 
                     } catch (e) { 
@@ -174,7 +175,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         
         if (response.status === 401 || response.status === 403) {
             // Debugging: Log fetch response for auth errors
-            const errorText = await response.text(); // Get raw text to see "Invalid token"
+            const errorText = await response.text(); // Get raw text to see "Invalid token" or HTML
             console.error(`[apiRequest Fetch] Auth Error Status: ${response.status}, Response: ${errorText}`);
             handleAuthError('Your session has expired. Please log in again.');
             throw new Error('Authentication failed.');
@@ -182,13 +183,25 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
 
         if (!response.ok) {
             let errorMsg = `HTTP error! Status: ${response.status}`;
-            try {
-                const errorData = await response.json(); // Try to parse JSON error
-                errorMsg = errorData.error || errorMsg;
-            } catch (e) {
-                // If response is not JSON (e.g., HTML "Invalid token"), use statusText or raw text
-                errorMsg = response.statusText || await response.text(); 
+            const contentType = response.headers.get('content-type');
+
+            // --- FIX: Check content type before parsing as JSON ---
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    const errorData = await response.json(); 
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    // If it claimed to be JSON but parsing still failed, get raw text
+                    errorMsg = await response.text(); 
+                    console.error('Failed to parse JSON error response:', e, 'Raw response:', errorMsg);
+                }
+            } else {
+                // If not JSON, read as plain text (e.g., HTML, plain error message)
+                errorMsg = await response.text(); 
+                console.warn('Non-JSON error response received. Raw response:', errorMsg);
             }
+            // --- END FIX ---
+            
             throw new Error(errorMsg);
         }
 
@@ -204,7 +217,8 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         return response.json(); // Parse and return JSON response
 
     } catch (error) {
-        // Re-throw the error after showing the modal so calling functions can catch it too
+        // The SyntaxError, after being caught and re-thrown inside the `if (!response.ok)` block,
+        // will then be caught by this outer catch block, and its message will be displayed.
         showModalMessage(error.message, true);
         throw error;
     }
