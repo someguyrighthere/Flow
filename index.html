@@ -4,190 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flow Business Suite - All-in-One Business Tools</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/Theme.css">
+    <link rel="stylesheet" href="dist/css/style.min.css">
+    <link rel="stylesheet" href="dist/css/Theme.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
-    <style>
-        /* Base styles (Mobile-first approach) */
-        .container {
-            z-index: 2;
-            padding: 20px 5%; /* Fluid padding */
-            box-sizing: border-box;
-        }
-
-        .dashboard-header {
-            display: flex;
-            flex-direction: column; /* Stack items vertically on small screens */
-            align-items: center;
-            text-align: center;
-            padding-top: 20px;
-            padding-bottom: 20px;
-        }
-
-        .app-title {
-            font-size: 1.8rem; /* Smaller title for mobile */
-            margin-bottom: 15px; /* Space between title and nav on mobile */
-        }
-
-        .public-nav {
-            display: flex;
-            flex-direction: column; /* Stack buttons vertically on small screens */
-            gap: 10px; /* Reduced gap for mobile */
-            width: 100%; /* Take full width */
-        }
-
-        .public-nav .btn {
-            width: 100%; /* Full width buttons */
-            padding: 10px 15px; /* Adjust padding */
-            font-size: 0.9rem; /* Smaller font for buttons */
-        }
-
-        .hero {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 60px 20px; /* Reduced padding for mobile */
-        }
-
-        .hero h1 {
-            font-size: 2.2rem; /* Smaller heading for mobile */
-            color: #fff;
-            margin-bottom: 15px; /* Adjusted margin */
-            max-width: 100%; /* Ensure it doesn't overflow */
-        }
-
-        .hero p {
-            font-size: 1rem; /* Smaller paragraph text for mobile */
-            color: var(--text-light);
-            max-width: 100%; /* Ensure it doesn't overflow */
-            margin-bottom: 30px; /* Adjusted margin */
-        }
-
-        .hero .btn-primary {
-            padding: 12px 25px !important; /* Adjusted padding and important to override inline */
-            font-size: 1rem !important; /* Adjusted font size and important to override inline */
-        }
-
-        .video-section {
-            padding: 40px 0; /* Reduced padding for mobile */
-            text-align: center;
-        }
-
-        .video-section h2 {
-            font-size: 2rem; /* Adjusted heading for mobile */
-            margin-bottom: 25px;
-        }
-
-        .video-placeholder {
-            width: 100%; /* Fluid width */
-            max-width: 800px;
-            margin: auto;
-            aspect-ratio: 16 / 9; /* Maintains aspect ratio */
-            background-color: #000;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem; /* Adjusted font size for mobile */
-            color: var(--text-medium);
-            border: 2px dashed var(--border-color);
-        }
-
-        /* Media queries for larger screens (e.g., tablets and desktops) */
-        @media (min-width: 768px) {
-            .container {
-                padding: 20px 5%; /* Restore original padding */
-            }
-
-            .dashboard-header {
-                flex-direction: row; /* Layout items horizontally */
-                justify-content: space-between; /* Space them out */
-                padding-top: 20px;
-                padding-bottom: 20px;
-            }
-
-            .app-title {
-                font-size: 2rem; /* Restore larger title */
-                margin-bottom: 0; /* Remove bottom margin */
-            }
-
-            .public-nav {
-                flex-direction: row; /* Layout buttons horizontally */
-                gap: 15px; /* Restore original gap */
-                width: auto; /* Allow content to dictate width */
-            }
-
-            .public-nav .btn {
-                width: auto; /* Allow buttons to size based on content */
-                padding: 12px 20px; /* Restore original padding */
-                font-size: 1rem; /* Restore original font size */
-            }
-
-            .hero {
-                padding: 100px 20px; /* Restore original padding */
-            }
-
-            .hero h1 {
-                font-size: 3.5rem; /* Restore original heading size */
-                margin-bottom: 20px;
-            }
-
-            .hero p {
-                font-size: 1.2rem; /* Restore original paragraph size */
-                margin-bottom: 40px;
-            }
-
-            .hero .btn-primary {
-                padding: 15px 30px !important; /* Restore original padding */
-                font-size: 1.2rem !important; /* Restore original font size */
-            }
-
-            .video-section {
-                padding: 80px 0; /* Restore original padding */
-            }
-
-            .video-placeholder {
-                font-size: 1.5rem; /* Restore original font size */
-            }
-        }
-    </style>
 </head>
 <body>
     <div class="background-animation"></div>
     <div class="container">
         <header class="dashboard-header">
             <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
-            <nav class="public-nav">
-                <a href="#features" class="btn btn-secondary">Features</a>
-                <a href="pricing.html" class="btn btn-secondary">Pricing</a>
-                <a href="login.html" class="btn btn-primary">Login / Sign Up</a>
-            </nav>
         </header>
         <main>
-            <section class="hero">
-                <h1>The All-in-One Suite for Your Growing Business</h1>
-                <p>From hiring and onboarding to scheduling and sales, get the tools you need to streamline your operations and focus on what matters most.</p>
-                <div>
-                    <a href="login.html" class="btn btn-primary" style="padding: 15px 30px; font-size: 1.2rem;">Get Started For Free</a>
-                </div>
-            </section>
-            <section id="features" class="video-section">
-                <h2>See How It Works</h2>
-                <div class="video-placeholder">
-                    <span>▶ Your Product Demo Video Here</span>
-                </div>
-            </section>
         </main>
     </div>
-    <!-- FIX: Updated script tag to load bundle.js and initializePage -->
-    <script src="js/bundle.js"></script>
+    <script src="dist/js/bundle.js"></script>
     <script>
-        // Call the globally exposed initialization function
-        // This is important if index.html has any dynamic content or global setup managed by app.js
         window.initializePage();
     </script>
 </body>

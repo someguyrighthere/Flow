@@ -13,8 +13,8 @@ import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
+import { handlePricingPage } from './pages/pricing.js'; // <-- ADD THIS LINE
 
-// This function definition is required by window.initializePage
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
     const settingsDropdown = document.getElementById("settings-dropdown");
@@ -90,6 +90,8 @@ window.initializePage = () => { // Expose initializePage globally
         handleApplyPage();
     } else if (path.includes("new-hire-view.html")) {
         handleOnboardingViewPage();
+    } else if (path.includes("pricing.html")) { // <-- ADD THIS LINE
+        handlePricingPage();                   // <-- ADD THIS LINE
     }
 };
 

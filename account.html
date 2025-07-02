@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>My Account - Flow Business Suite</title>
-  <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/Theme.css" />
+  <link rel="stylesheet" href="dist/css/style.min.css" />
+  <link rel="stylesheet" href="dist/css/Theme.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet" />
@@ -71,7 +71,6 @@
     </section>
   </div>
 
-  <!-- Modal for error messages -->
   <div id="message-modal" class="modal-overlay">
     <div class="modal-content">
       <p id="modal-text"></p>
@@ -81,10 +80,8 @@
     </div>
   </div>
 
-  <!-- FIX: Updated script tag to load bundle.js -->
-  <script src="js/bundle.js"></script>
+  <script src="dist/js/bundle.js"></script>
   <script>
-      // Call the globally exposed initialization function
       window.initializePage();
   </script>
 </body>
