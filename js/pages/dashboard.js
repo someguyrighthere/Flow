@@ -26,8 +26,9 @@ export function handleDashboardPage() {
     const completedCount = document.getElementById('completed-count');
     const activityList = document.getElementById('activity-list');
     const activityFeedPlaceholder = document.getElementById('activity-feed-placeholder');
-    const viewJobPostingsBtn = document.getElementById('view-job-postings-btn');
-    const viewApplicantsBtn = document.getElementById('view-applicants-btn');
+    // Removed references to viewJobPostingsBtn and viewApplicantsBtn as they are no longer needed
+    // const viewJobPostingsBtn = document.getElementById('view-job-postings-btn');
+    // const viewApplicantsBtn = document.getElementById('view-applicants-btn');
 
     // Store all checklists and users globally once fetched to avoid re-fetching
     let allChecklists = [];
@@ -93,7 +94,7 @@ export function handleDashboardPage() {
     async function fetchAllChecklists() {
         try {
             // Fetch all checklists (admin route, will be filtered by backend based on role)
-            const checklists = await apiRequest('GET', '/checklists');
+            const checklists = await apiRequest('GET', '/api/checklists'); // Ensure /api/ prefix
             allChecklists = checklists; // Store all fetched checklists globally
         } catch (error) {
             console.error('Error fetching all checklists:', error);
@@ -113,7 +114,8 @@ export function handleDashboardPage() {
 
         if (selectedEmployee && selectedEmployee.position) {
             const matchingChecklist = allChecklists.find(checklist => 
-                checklist.position && checklist.position.toLowerCase() === selectedEmployee.position.toLowerCase()
+                checklist.position && selectedEmployee.position && 
+                checklist.position.toLowerCase() === selectedEmployee.position.toLowerCase()
             );
 
             if (matchingChecklist) {
@@ -135,56 +137,9 @@ export function handleDashboardPage() {
     async function loadDashboardData() {
         try {
             // Fetch all onboarding tasks for the current user's scope (admin/location_admin)
-            const onboardingTasks = await apiRequest('GET', '/onboarding-tasks');
+            const onboardingTasks = await apiRequest('GET', '/api/onboarding-tasks'); // Ensure /api/ prefix
 
-            let pendingCount = 0;
-            let inProgressCountVal = 0;
-            let completedCountVal = 0;
-            const activityItems = [];
-
-            // Iterate through all onboarding tasks to calculate counts and build activity feed
-            onboardingTasks.forEach(task => {
-                if (task.completed) {
-                    completedCountVal++;
-                } else {
-                    // For 'in progress', we can assume any task not completed is 'in progress'
-                    // or 'pending'. A more granular backend might have a specific 'status' field.
-                    // For now, if it's not completed, it contributes to 'in progress' or 'pending'.
-                    // Let's refine: if it has an assigned_at date, it's either in progress or pending.
-                    // If it has a completed_at date, it's completed.
-                    // For simplicity, let's count all non-completed tasks as "Pending/In Progress"
-                    // and then divide them if needed.
-                    // For now, let's just count completed vs. not completed.
-                    // The current UI only has "Pending" and "In Progress" as separate counts,
-                    // which implies a more complex state tracking.
-                    // Let's simplify: if not completed, it's "Pending/In Progress".
-                    // For a true "In Progress" count, we'd need a way to mark a task as started.
-                    // Given the current schema, we'll just use pending for non-completed.
-                    pendingCount++; // Count all non-completed tasks as pending for now
-                }
-                
-                // Add to activity feed (get user name and checklist title)
-                const user = allUsers.find(u => String(u.user_id) === String(task.user_id));
-                const checklist = allChecklists.find(c => String(c.id) === String(task.checklist_id));
-
-                if (user && checklist) {
-                    const taskStatus = task.completed ? 'completed' : 'pending'; // Simplified status
-                    activityItems.push({
-                        timestamp: new Date(task.assigned_at || task.created_at).getTime(), // Use timestamp for sorting
-                        description: `<strong>${user.full_name}</strong>'s task "<em>${task.description}</em>" from list "<em>${checklist.title}</em>" is ${taskStatus}.`
-                    });
-                }
-            });
-
-            // The dashboard has Pending, In Progress, Completed.
-            // Let's adjust counts:
-            // Completed is straightforward.
-            // For "Pending" and "In Progress", we need a better definition.
-            // For now, let's assume 'Pending Onboards' are users who have tasks assigned but haven't completed any.
-            // 'In Progress' are users who have started but not finished.
-            // This requires joining user data with task data.
-
-            // Let's recalculate based on unique users and their overall task completion status
+            // Recalculate based on unique users and their overall task completion status
             const userOnboardingStatus = {}; // { userId: { totalTasks: N, completedTasks: M } }
             onboardingTasks.forEach(task => {
                 if (!userOnboardingStatus[task.user_id]) {
@@ -196,19 +151,34 @@ export function handleDashboardPage() {
                 }
             });
 
-            pendingCount = 0;
-            inProgressCountVal = 0;
-            completedCountVal = 0;
+            let pendingCount = 0;
+            let inProgressCountVal = 0;
+            let completedCountVal = 0;
+            const activityItems = [];
 
             for (const userId in userOnboardingStatus) {
                 const status = userOnboardingStatus[userId];
+                const user = allUsers.find(u => String(u.user_id) === String(userId)); // Find user for activity feed
+
                 if (status.total > 0) {
                     if (status.completed === 0) {
                         pendingCount++; // User has tasks, but none completed
+                        if (user) activityItems.push({
+                            timestamp: new Date(onboardingTasks.find(t => String(t.user_id) === String(userId))?.assigned_at || new Date()).getTime(),
+                            description: `<strong>${user.full_name}</strong> has pending onboarding tasks.`
+                        });
                     } else if (status.completed === status.total) {
                         completedCountVal++; // All tasks completed for this user
+                        if (user) activityItems.push({
+                            timestamp: new Date(onboardingTasks.find(t => String(t.user_id) === String(userId) && t.completed)?.completed_at || new Date()).getTime(),
+                            description: `<strong>${user.full_name}</strong> completed all onboarding tasks!`
+                        });
                     } else {
                         inProgressCountVal++; // Some tasks completed, but not all
+                        if (user) activityItems.push({
+                            timestamp: new Date(onboardingTasks.find(t => String(t.user_id) === String(userId) && t.completed)?.completed_at || new Date()).getTime(),
+                            description: `<strong>${user.full_name}</strong> is in progress with onboarding.`
+                        });
                     }
                 }
             }
@@ -305,7 +275,7 @@ export function handleDashboardPage() {
             }
 
             try {
-                await apiRequest('POST', '/onboarding-tasks', {
+                await apiRequest('POST', '/api/onboarding-tasks', { // Ensure /api/ prefix
                     user_id: selectedUserId,
                     checklist_id: matchingChecklist.id
                 }); 
@@ -323,19 +293,18 @@ export function handleDashboardPage() {
         });
     }
 
-    // Navigation for Job Postings/Applicants - assuming these links navigate to separate pages
-    if (viewJobPostingsBtn) {
-        viewJobPostingsBtn.addEventListener('click', () => {
-            window.location.href = 'hiring.html'; 
-        });
-    }
+    // Removed event listeners for viewJobPostingsBtn and viewApplicantsBtn
+    // if (viewJobPostingsBtn) {
+    //     viewJobPostingsBtn.addEventListener('click', () => {
+    //         window.location.href = 'hiring.html'; 
+    //     });
+    // }
 
-    if (viewApplicantsBtn) {
-        viewApplicantsBtn.addEventListener('click', () => {
-            // Direct to hiring.html as applicants are now managed there
-            window.location.href = 'hiring.html'; 
-        });
-    }
+    // if (viewApplicantsBtn) {
+    //     viewApplicantsBtn.addEventListener('click', () => {
+    //         window.location.href = 'hiring.html'; 
+    //     });
+    // }
 
 
     // --- Initial Page Load ---
