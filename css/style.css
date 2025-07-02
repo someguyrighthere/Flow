@@ -1,3 +1,62 @@
+/* --- Global Styles & Variables --- */
+:root {
+    --bg-color: #111111;
+    --primary-accent: #C86DD7;
+    --primary-accent-glow: rgba(200, 109, 215, 0.4);
+    --text-light: #EAEAEA;
+    --text-medium: #999999;
+    --border-color: #333333;
+    --card-bg: #1A1A1A;
+    --font-family: 'Poppins', sans-serif;
+}
+
+/* --- Buttons --- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary-accent);
+    color: white;
+    box-shadow: 0 0 15px var(--primary-accent-glow);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px var(--primary-accent-glow);
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: var(--text-light);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background-color: var(--card-bg);
+    border-color: var(--text-medium);
+}
+
+/* Global fix for settings button icon */
+#settings-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    min-width: 40px;
+    min-height: 40px;
+}
+
 /* --- Main Content & Layout --- */
 .main-content {
     display: flex;
