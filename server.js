@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
+const { promises: fsPromises } = require('fs'); // Use promises version of fs
 const path = require('path');
 const onboardingRoutes = require('./routes/onboardingRoutes');
 
@@ -70,7 +71,7 @@ const isAdmin = (req, res, next) => {
     }
 };
 
-// --- RESTORED API ROUTES ---
+// --- API Routes ---
 
 // User and Auth routes
 apiRoutes.post('/register', async (req, res) => {
@@ -193,8 +194,57 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
     }
 });
 
+// Corrected Document Delete Route
 apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
         const docResult = await pool.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
-        if (docResult.
+
+        if (docResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+
+        const fileName = docResult.rows[0].file_name;
+        const filePath = path.join(uploadsDir, fileName);
+
+        await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
+
+        try {
+            await fsPromises.unlink(filePath);
+        } catch (fileErr) {
+            console.error(`Filesystem deletion error, but DB entry was removed: ${filePath}`, fileErr);
+        }
+        
+        res.status(204).send();
+
+    } catch (error) {
+        console.error('Error deleting document:', error);
+        res.status(500).json({ error: 'Failed to delete document.' });
+    }
+});
+
+
+// Using the onboarding routes from the external file
+onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
+
+
+// Fallback for serving index.html
+app.get(/.*/, (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+const startServer = async () => {
+    try {
+        const client = await pool.connect();
+        console.log('Connected to the PostgreSQL database.');
+        client.release();
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (err) {
+        console.error('Failed to initialize database or start server:', err.stack);
+        process.exit(1);
+    }
+};
+
+startServer();
