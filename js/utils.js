@@ -185,7 +185,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
             let errorMsg = `HTTP error! Status: ${response.status}`;
             const contentType = response.headers.get('content-type');
 
-            // --- FIX: Check content type before parsing as JSON ---
+            // FIX: Check content type before parsing as JSON to prevent SyntaxError
             if (contentType && contentType.includes('application/json')) {
                 try {
                     const errorData = await response.json(); 
@@ -196,11 +196,11 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
                     console.error('Failed to parse JSON error response:', e, 'Raw response:', errorMsg);
                 }
             } else {
-                // If not JSON, read as plain text (e.g., HTML, plain error message)
+                // If not JSON (e.g., HTML, plain error message), read as plain text
                 errorMsg = await response.text(); 
                 console.warn('Non-JSON error response received. Raw response:', errorMsg);
             }
-            // --- END FIX ---
+            // END FIX
             
             throw new Error(errorMsg);
         }
@@ -217,8 +217,7 @@ export async function apiRequest(method, path, body = null, isFormData = false, 
         return response.json(); // Parse and return JSON response
 
     } catch (error) {
-        // The SyntaxError, after being caught and re-thrown inside the `if (!response.ok)` block,
-        // will then be caught by this outer catch block, and its message will be displayed.
+        // The error (including the one with HTML content) will be caught here
         showModalMessage(error.message, true);
         throw error;
     }

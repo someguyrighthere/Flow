@@ -821,7 +821,7 @@ apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
         console.error('Error deleting shift:', err);
         res.status(500).json({ error: 'Failed to delete shift.' });
     }
-    // ✅ Removed the finally block - no client to release as pool.query is used directly
+    // FIX: Removed the finally block - no client to release as pool.query is used directly
 });
 
 // Get user availability (for scheduling page)
