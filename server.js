@@ -42,9 +42,14 @@ const pool = new Pool({
 // --- 4. Middleware ---
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Parse JSON request bodies
-app.use('/api', apiRoutes); // Mount the API router at /api
+
+// !!! CRITICAL FIX: Mount apiRoutes router BEFORE static file serving !!!
+// This ensures that requests to /api/* are handled by your API routes
+// and not by the static file server or the fallback HTML route.
+app.use('/api', apiRoutes); 
 
 // Static file serving - serves all files from the root directory
+// These should come AFTER apiRoutes mounting to avoid conflicts
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded files
 app.use('/css', express.static(path.join(__dirname, 'css'))); // Serve CSS files
@@ -54,26 +59,31 @@ app.use('/js', express.static(path.join(__dirname, 'js'))); // Serve JavaScript 
 const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
-    if (token == null) return res.sendStatus(401); // No token, unauthorized
+    if (token == null) {
+        console.warn('Authentication: No token provided.');
+        return res.sendStatus(401); // No token, unauthorized
+    }
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
-            console.error('JWT verification error:', err.message); // Log JWT error
+            console.error('JWT verification error:', err.message); // Log JWT error details
             return res.sendStatus(403); // Token invalid/expired, forbidden
         }
-        req.user = user; // Attach user payload to request
+        req.user = user; // Attach user payload (id, role, location_id) to request
         next(); // Proceed to the next middleware/route handler
     });
 };
 
 const isAdmin = (req, res, next) => {
     // Debugging: Log the user role received by isAdmin middleware
-    console.log('[isAdmin Middleware] User Role:', req.user ? req.user.role : 'N/A (user object missing)');
+    console.log('[isAdmin Middleware] User Role:', req.user ? req.user.role : 'N/A (req.user missing)');
+    console.log('[isAdmin Middleware] User Location ID:', req.user ? req.user.location_id : 'N/A (req.user missing)');
 
     // Check if user role is super_admin or location_admin
     if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
         next(); // Proceed if authorized
     } else {
+        console.warn('[isAdmin Middleware] Access denied for user role:', req.user ? req.user.role : 'undefined');
         return res.status(403).json({ error: 'Access denied. Administrator privileges required.' }); // Not an admin, forbidden
     }
 };
@@ -144,7 +154,7 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
         if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
         res.json(result.rows[0]);
     } catch (err) {
-        console.error(err);
+        console.error('Error fetching user profile:', err);
         res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
 });
@@ -266,7 +276,7 @@ apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) =>
     }
     // Location admin can only invite employees to their own location
     if (req.user.role === 'location_admin' && req.user.location_id != location_id) {
-        return res.status(403).json({ error: 'Location admins can only invite employees to their assigned location.' });
+        return res.status(403).json({ error: 'You are not authorized to invite employees to this location.' });
     }
     try {
         const hash = await bcrypt.hash(password, 10);
@@ -579,7 +589,7 @@ apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => { // A
         // Super admin sees all documents, no location filter
         sql = `SELECT d.*, u.full_name as uploaded_by_name
                FROM documents d
-               LEFT JOIN users u ON d.uploaded_by = u.user_id`; // Use LEFT JOIN to show documents even if u.uploaded_by is NULL
+               LEFT JOIN users u ON d.uploaded_by = u.user_id`; // Use LEFT JOIN to show documents even if u.uploaded_by is NULL for some reason
     } else { // location_admin
         // Location admin sees documents uploaded by users in their assigned location
         sql = `SELECT d.*, u.full_name as uploaded_by_name
