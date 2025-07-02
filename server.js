@@ -42,10 +42,10 @@ app.use(cors());
 app.use(express.json());
 app.use('/api', apiRoutes);
 
-// Correctly serve static files
-const distDir = path.join(__dirname, 'dist');
-app.use('/dist', express.static(distDir)); // Serve anything in /dist from the /dist URL path
-app.use(express.static(path.join(__dirname))); // Serve root files like login.html
+// --- SIMPLIFIED STATIC FILE SERVING ---
+// This one line serves everything from your project's main directory.
+// This includes your HTML files, and the 'dist' folder.
+app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
@@ -69,10 +69,8 @@ const isAdmin = (req, res, next) => {
     }
 };
 
-// --- API Routes ---
-
-// All of your API routes from the previous version go here.
-// For brevity, only showing a few as an example.
+// --- Your API Routes ---
+// I am including all the routes from your original files here to ensure it's complete.
 apiRoutes.post('/register', async (req, res) => {
     const { companyName, fullName, email, password } = req.body;
     const client = await pool.connect();
@@ -125,12 +123,53 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     }
 });
 
-// All other API routes like /checklists, /documents, etc. would go here.
+apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM checklists ORDER BY title');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching checklists:', error);
+        res.status(500).json({ error: 'Failed to retrieve checklists.' });
+    }
+});
+
+apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, position, tasks, structure_type, time_group_count } = req.body;
+    try {
+        const result = await pool.query('INSERT INTO checklists (title, position, tasks, structure_type, time_group_count) VALUES ($1, $2, $3, $4, $5) RETURNING *', [title, position, JSON.stringify(tasks), structure_type, time_group_count]);
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error creating checklist:', error);
+        res.status(500).json({ error: 'Failed to create checklist.' });
+    }
+});
+
+apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name AS uploaded_by_name FROM documents d JOIN users u ON d.uploaded_by = u.user_id ORDER BY d.uploaded_at DESC`);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching documents:', error);
+        res.status(500).json({ error: 'Failed to retrieve documents.' });
+    }
+});
+
+apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
+    const { title, description } = req.body;
+    const { filename } = req.file;
+    const uploaded_by = req.user.id;
+    try {
+        const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *', [title, description, filename, uploaded_by]);
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error uploading document:', error);
+        res.status(500).json({ error: 'Failed to upload document.' });
+    }
+});
 
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
-// The incorrect SPA fallback route has been REMOVED.
-
+// The server startup logic
 const startServer = async () => {
     try {
         const client = await pool.connect();
