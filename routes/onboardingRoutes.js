@@ -19,7 +19,12 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             if (checklistRes.rows.length === 0) {
                 return res.status(404).json({ error: 'Checklist not found.' });
             }
-            const tasks = checklistRes.rows[0].tasks ? (typeof checklistRes.rows[0].tasks === 'string' ? JSON.parse(checklistRes.rows[0].tasks) : checklistRes.rows[0].tasks) : [];
+            
+            // Robustly parse tasks, whether it's a string or already an object
+            let tasks = [];
+            if (checklistRes.rows[0].tasks) {
+                tasks = typeof checklistRes.rows[0].tasks === 'string' ? JSON.parse(checklistRes.rows[0].tasks) : checklistRes.rows[0].tasks;
+            }
 
             await client.query('BEGIN');
             for (const task of tasks) {
@@ -39,7 +44,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
         }
     });
     
-    // --- THIS ROUTE IS NOW FIXED (isAdmin removed) ---
     app.get('/onboarding-tasks', isAuthenticated, async (req, res) => {
         const { user_id } = req.query;
         const requestingUserId = req.user.id;

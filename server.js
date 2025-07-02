@@ -49,6 +49,7 @@ if (fs.existsSync(distDir)) {
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+
 const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -69,14 +70,11 @@ const isAdmin = (req, res, next) => {
     }
 };
 
-// --- API Routes ---
-// Make sure all your routes are included here.
-// I am pasting in the user routes from your original file.
+// --- RESTORED API ROUTES ---
+
+// User and Auth routes
 apiRoutes.post('/register', async (req, res) => {
     const { companyName, fullName, email, password } = req.body;
-    if (!companyName || !fullName || !email || !password) {
-        return res.status(400).json({ error: "All fields are required." });
-    }
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -90,7 +88,7 @@ apiRoutes.post('/register', async (req, res) => {
         await client.query('ROLLBACK');
         console.error('Registration error:', err);
         if (err.code === '23505') return res.status(409).json({ error: "An account with this email already exists." });
-        res.status(500).json({ error: "An internal server error occurred during registration." });
+        res.status(500).json({ error: "An internal server error occurred." });
     } finally {
         client.release();
     }
@@ -106,7 +104,7 @@ apiRoutes.post('/login', async (req, res) => {
         if (!isMatch) return res.status(401).json({ error: "Invalid credentials." });
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ message: "Logged in successfully!", token: token, role: user.role, location_id: user.location_id });
+        res.json({ message: "Logged in successfully!", token, role: user.role, location_id: user.location_id });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "An internal server error occurred." });
@@ -116,38 +114,87 @@ apiRoutes.post('/login', async (req, res) => {
 apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
-        res.json(result.rows[0]);
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: 'User not found.' });
+        }
     } catch (err) {
         console.error('Error fetching user profile:', err);
         res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
 });
 
-// Re-enabling the onboarding routes
-onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
-
-
-// Fallback for serving index.html
-app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+// Checklist Routes
+apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM checklists ORDER BY title');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching checklists:', error);
+        res.status(500).json({ error: 'Failed to retrieve checklists.' });
+    }
 });
 
-
-const startServer = async () => {
+apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, position, tasks, structure_type, time_group_count } = req.body;
     try {
-        const client = await pool.connect();
-        console.log('Connected to the PostgreSQL database.');
-        // The schema creation logic from your original file should be here
-        client.release();
-        
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Server is running on port ${PORT}`);
-        });
-    } catch (err) {
-        console.error('Failed to initialize database or start server:', err.stack);
-        process.exit(1);
+        const result = await pool.query('INSERT INTO checklists (title, position, tasks, structure_type, time_group_count) VALUES ($1, $2, $3, $4, $5) RETURNING *', [title, position, JSON.stringify(tasks), structure_type, time_group_count]);
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error creating checklist:', error);
+        res.status(500).json({ error: 'Failed to create checklist.' });
     }
-};
+});
 
-startServer();
+apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM onboarding_tasks WHERE checklist_id = $1', [id]);
+        await client.query('DELETE FROM checklists WHERE id = $1', [id]);
+        await client.query('COMMIT');
+        res.status(204).send();
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error deleting checklist:', err);
+        res.status(500).json({ error: 'Failed to delete checklist.' });
+    } finally {
+        client.release();
+    }
+});
+
+// Document Routes
+apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name AS uploaded_by_name
+            FROM documents d
+            JOIN users u ON d.uploaded_by = u.user_id
+            ORDER BY d.uploaded_at DESC`);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching documents:', error);
+        res.status(500).json({ error: 'Failed to retrieve documents.' });
+    }
+});
+
+apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
+    const { title, description } = req.body;
+    const { filename } = req.file;
+    const uploaded_by = req.user.id;
+    try {
+        const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *', [title, description, filename, uploaded_by]);
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error uploading document:', error);
+        res.status(500).json({ error: 'Failed to upload document.' });
+    }
+});
+
+apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const docResult = await pool.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
+        if (docResult.
