@@ -112,6 +112,22 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
+// NEW: Subscription Status Endpoint
+// This endpoint will return the user's subscription plan.
+// You might fetch this from a 'subscriptions' table in a real application.
+apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
+    try {
+        // For now, return a hardcoded plan.
+        // In a real app, you'd query your database for the user's actual subscription.
+        // Example: const result = await pool.query('SELECT plan_name FROM subscriptions WHERE user_id = $1', [req.user.id]);
+        // const plan = result.rows[0]?.plan_name || 'Free Tier';
+        res.json({ plan: 'Pro Plan' }); // Placeholder: Always return 'Pro Plan'
+    } catch (err) {
+        console.error('Error fetching subscription status:', err);
+        res.status(500).json({ error: 'Failed to retrieve subscription status.' });
+    }
+});
+
 // Checklist Routes
 apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     try {
