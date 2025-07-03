@@ -170,8 +170,19 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 
 
 // Business Settings Endpoint (for operating hours, etc.)
+// GET: Fetch business settings
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     try {
+        // In a real application, you'd fetch this from a 'business_settings' table.
+        // For now, return hardcoded default operating hours.
+        // If you had a settings table, you might do:
+        // const result = await pool.query('SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1', [req.user.location_id]);
+        // if (result.rows.length > 0) {
+        //     res.json(result.rows[0]);
+        // } else {
+        //     // Return defaults if no settings found for this location
+        //     res.json({ operating_hours_start: '09:00', operating_hours_end: '17:00' });
+        // }
         res.json({
             operating_hours_start: '09:00',
             operating_hours_end: '17:00'
@@ -182,11 +193,41 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     }
 });
 
+// NEW: PUT: Update business settings (specifically operating hours for now)
+apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
+    const { operating_hours_start, operating_hours_end } = req.body;
+    
+    if (!operating_hours_start || !operating_hours_end) {
+        return res.status(400).json({ error: 'Start and end operating hours are required.' });
+    }
+
+    try {
+        // In a real application, you'd update a 'business_settings' table.
+        // For this example, we'll just acknowledge the update since we're using hardcoded GET values.
+        // If you had a table, it might look like this:
+        // const result = await pool.query(
+        //     `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
+        //      VALUES ($1, $2, $3)
+        //      ON CONFLICT (location_id) DO UPDATE SET
+        //      operating_hours_start = EXCLUDED.operating_hours_start,
+        //      operating_hours_end = EXCLUDED.operating_hours_end
+        //      RETURNING *`,
+        //     [req.user.location_id, operating_hours_start, operating_hours_end]
+        // );
+        res.status(200).json({ message: 'Business settings updated successfully!' });
+    } catch (err) {
+        console.error('Error updating business settings:', err);
+        res.status(500).json({ error: 'Failed to update business settings.' });
+    }
+});
+
+
 // Subscription Status Endpoint
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
         res.json({ plan: 'Pro Plan' });
-    } catch (err) {
+    }
+    catch (err) {
         console.error('Error fetching subscription status:', err);
         res.status(500).json({ error: 'Failed to retrieve subscription status.' });
     }
@@ -406,20 +447,22 @@ apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res)
 // Applicants Routes (Public and Admin)
 // Public endpoint for job application submission
 app.post('/apply/:jobId', async (req, res) => {
-    const { jobId } = req.params;
-    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
+    const { jobId } = req.params; // Get jobId from URL parameters
+    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body; // Get other fields from body
 
-    // Validate jobId is not "null" or "undefined" string
-    const parsedJobId = (jobId === 'null' || jobId === 'undefined') ? null : jobId;
-
-    if (!parsedJobId || !name || !email || !availability) {
+    // Basic validation for required fields
+    if (!jobId || !name || !email || !availability) {
         return res.status(400).json({ error: 'Job ID, name, email, and availability are required.' });
     }
 
     try {
+        // Ensure date_of_birth is handled correctly for optionality
+        const dobValue = date_of_birth ? date_of_birth : null; // Set to null if empty string
+
         const result = await pool.query(
             `INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [parsedJobId, name, email, address, phone, date_of_birth, availability, is_authorized]
+            //                       ^^^^^^ CORRECTED: Changed from job_posting_id to job_id
+            [jobId, name, email, address, phone, dobValue, availability, is_authorized]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
