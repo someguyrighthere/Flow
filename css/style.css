@@ -166,13 +166,24 @@
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.6);
-    display: none; /* CORRECTED: Changed from 'flex' to 'none' to hide by default */
+    display: none; /* Corrected: Changed from 'flex' to 'none' to hide by default */
     align-items: center;
     justify-content: center;
     z-index: 1000;
 }
 
 .modal-content {
-    width: 90%;
-    max-width: 500px;
+    /* Corrected: Added margin: auto for horizontal centering fallback */
+    /* Corrected: Adjusted max-width and padding for better responsiveness and centering */
+    width: 90%; /* Keep it responsive */
+    max-width: 400px; /* Set a more appropriate max-width for a pop-up */
+    background-color: var(--card-bg); 
+    padding: 30px; /* Increased padding for better spacing */
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+    position: relative; 
+    color: var(--text-light); 
+    animation: fadeIn 0.3s ease-out;
+    text-align: center; /* Center text within the modal */
 }
