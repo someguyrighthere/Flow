@@ -105,14 +105,27 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
 
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        let query = 'SELECT user_id, full_name, position, role, location_id FROM users';
+        let query = `
+            SELECT 
+                u.user_id, 
+                u.full_name, 
+                u.position, 
+                u.role, 
+                u.location_id,
+                l.location_name  -- NEW: Select location name
+            FROM users u
+            LEFT JOIN locations l ON u.location_id = l.location_id -- NEW: Join with locations table
+        `;
         const params = [];
+        let whereClause = '';
         // If location_admin, filter users by their assigned location
         if (req.user.role === 'location_admin') {
-            query += ' WHERE location_id = $1';
+            whereClause = ' WHERE u.location_id = $1';
             params.push(req.user.location_id);
         }
-        query += ' ORDER BY full_name';
+        query += whereClause; // Add the WHERE clause if applicable
+        query += ' ORDER BY u.full_name'; // Order by user full name
+        
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
@@ -122,7 +135,7 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 // Locations Routes
-// NEW: Endpoint to get all locations
+// Endpoint to get all locations
 apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     try {
         let query = 'SELECT location_id, location_name, location_address FROM locations';
@@ -141,7 +154,7 @@ apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     }
 });
 
-// NEW: Endpoint to add a new location (used by admin.js form)
+// Endpoint to add a new location (used by admin.js form)
 apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
     const { location_name, location_address } = req.body;
     if (!location_name || !location_address) {
@@ -160,7 +173,7 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 
-// NEW: Business Settings Endpoint (for operating hours, etc.)
+// Business Settings Endpoint (for operating hours, etc.)
 // This endpoint will return general business settings.
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     try {
