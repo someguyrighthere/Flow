@@ -105,23 +105,42 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
 
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const result = await pool.query('SELECT user_id, full_name, position, role FROM users ORDER BY full_name');
+        let query = 'SELECT user_id, full_name, position, role, location_id FROM users';
+        const params = [];
+        // If location_admin, filter users by their assigned location
+        if (req.user.role === 'location_admin') {
+            query += ' WHERE location_id = $1';
+            params.push(req.user.location_id);
+        }
+        query += ' ORDER BY full_name';
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
+        console.error('Error retrieving users:', err); // Log the actual error
         res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
 
-// NEW: Subscription Status Endpoint
-// This endpoint will return the user's subscription plan.
-// You might fetch this from a 'subscriptions' table in a real application.
+// NEW: Business Settings Endpoint (for operating hours, etc.)
+// This endpoint will return general business settings.
+apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
+    try {
+        // In a real application, you'd fetch this from a 'business_settings' table.
+        // For now, return hardcoded default operating hours.
+        res.json({
+            operating_hours_start: '09:00', // Example: 9 AM
+            operating_hours_end: '17:00'    // Example: 5 PM
+        });
+    } catch (err) {
+        console.error('Error fetching business settings:', err);
+        res.status(500).json({ error: 'Failed to retrieve business settings.' });
+    }
+});
+
+// Subscription Status Endpoint (already added)
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
-        // For now, return a hardcoded plan.
-        // In a real app, you'd query your database for the user's actual subscription.
-        // Example: const result = await pool.query('SELECT plan_name FROM subscriptions WHERE user_id = $1', [req.user.id]);
-        // const plan = result.rows[0]?.plan_name || 'Free Tier';
-        res.json({ plan: 'Pro Plan' }); // Placeholder: Always return 'Pro Plan'
+        res.json({ plan: 'Pro Plan' });
     } catch (err) {
         console.error('Error fetching subscription status:', err);
         res.status(500).json({ error: 'Failed to retrieve subscription status.' });
