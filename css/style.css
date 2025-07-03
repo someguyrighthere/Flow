@@ -2,8 +2,9 @@
     --primary-accent: #C86DD7;
     --text-light: #EAEAEA;
     --primary-accent: #C86DD7;
-    --primary-accent-glow: rgba(200, 109, 215, 0.6);
+    --primary-accent-glow: rgba(200, 109, 215, 0.4);
     --text-light: #EAEAEA;
+    --text-medium: #b0b0b0;
     --card-border-color: rgba(200, 255, 255, 0.15);
     --font-family: 'Poppins', sans-serif;
 }
