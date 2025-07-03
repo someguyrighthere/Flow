@@ -36,7 +36,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(uploadsDir)); // Serve uploaded files statically
 app.use('/api', apiRoutes);
 
 // --- Middleware ---
@@ -202,7 +202,6 @@ apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// NEW: Endpoint to create a new checklist
 apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     const { title, position, tasks } = req.body;
     if (!title || !position || !tasks || !Array.isArray(tasks) || tasks.length === 0) {
@@ -211,21 +210,19 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 
     const client = await pool.connect();
     try {
-        await client.query('BEGIN'); // Start transaction
-
-        // Insert the new checklist
+        await client.query('BEGIN');
         const checklistRes = await client.query(
             `INSERT INTO checklists (title, position, tasks, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [title, position, JSON.stringify(tasks), req.user.id] // Store tasks as JSON string
+            [title, position, JSON.stringify(tasks), req.user.id]
         );
         const newChecklist = checklistRes.rows[0];
 
-        await client.query('COMMIT'); // Commit transaction
+        await client.query('COMMIT');
         res.status(201).json({ message: 'Checklist created successfully!', checklist: newChecklist });
     } catch (err) {
-        await client.query('ROLLBACK'); // Rollback on error
+        await client.query('ROLLBACK');
         console.error('Error creating checklist:', err);
-        if (err.code === '23505') { // Unique violation, e.g., duplicate title/position
+        if (err.code === '23505') {
             return res.status(409).json({ error: 'A checklist with this title/position might already exist.' });
         }
         res.status(500).json({ error: 'Failed to create checklist.' });
@@ -234,6 +231,96 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
+
+// NEW: Document Routes
+// GET all documents
+apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
+    try {
+        // Fetch documents along with the name of the user who uploaded them
+        const result = await pool.query(`
+            SELECT 
+                d.document_id, 
+                d.title, 
+                d.description, 
+                d.file_name, 
+                d.uploaded_at,
+                u.full_name as uploaded_by_name
+            FROM documents d
+            LEFT JOIN users u ON d.uploaded_by = u.user_id
+            ORDER BY d.uploaded_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error retrieving documents:', err);
+        res.status(500).json({ error: 'Failed to retrieve documents.' });
+    }
+});
+
+// POST a new document (upload file)
+apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
+    const { title, description } = req.body;
+    const file = req.file; // Multer makes the file available here
+
+    if (!title || !file) {
+        // If file is missing, delete any partial upload from multer
+        if (file) {
+            await fsPromises.unlink(file.path).catch(e => console.error("Error deleting partially uploaded file:", e));
+        }
+        return res.status(400).json({ error: 'Title and file are required.' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *`,
+            [title, description, file.filename, req.user.id] // Use file.filename (what multer renamed it to)
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        // If database insert fails, attempt to delete the uploaded file
+        if (file) {
+            await fsPromises.unlink(file.path).catch(e => console.error("Error deleting uploaded file after DB error:", e));
+        }
+        console.error('Error uploading document to DB:', err);
+        res.status(500).json({ error: 'Failed to upload document.' });
+    }
+});
+
+// DELETE a document
+apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    let filePathToDelete = null;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN'); // Start transaction
+
+        // First, get the file_name to delete the actual file
+        const docRes = await client.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
+        if (docRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+        filePathToDelete = path.join(uploadsDir, docRes.rows[0].file_name);
+
+        // Delete the document record from the database
+        await client.query('DELETE FROM documents WHERE document_id = $1', [id]);
+
+        await client.query('COMMIT'); // Commit transaction
+
+        // After successful DB deletion, delete the physical file
+        if (filePathToDelete) {
+            await fsPromises.unlink(filePathToDelete).catch(e => console.error("Error deleting physical file:", e));
+        }
+        
+        res.status(204).send(); // 204 No Content for successful deletion
+    } catch (err) {
+        await client.query('ROLLBACK'); // Rollback on error
+        console.error('Error deleting document:', err);
+        res.status(500).json({ error: 'Failed to delete document.' });
+    } finally {
+        client.release();
+    }
+});
 
 // Onboarding Routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
