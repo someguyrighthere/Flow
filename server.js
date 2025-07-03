@@ -121,6 +121,45 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
+// Locations Routes
+// NEW: Endpoint to get all locations
+apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
+    try {
+        let query = 'SELECT location_id, location_name, location_address FROM locations';
+        const params = [];
+        // If location_admin, filter locations by their assigned location
+        if (req.user.role === 'location_admin') {
+            query += ' WHERE location_id = $1';
+            params.push(req.user.location_id);
+        }
+        query += ' ORDER BY location_name';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error retrieving locations:', err);
+        res.status(500).json({ error: 'Failed to retrieve locations.' });
+    }
+});
+
+// NEW: Endpoint to add a new location (used by admin.js form)
+apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_name, location_address } = req.body;
+    if (!location_name || !location_address) {
+        return res.status(400).json({ error: 'Location name and address are required.' });
+    }
+    try {
+        const result = await pool.query(
+            'INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *',
+            [location_name, location_address]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error adding new location:', err);
+        res.status(500).json({ error: 'Failed to add new location.' });
+    }
+});
+
+
 // NEW: Business Settings Endpoint (for operating hours, etc.)
 // This endpoint will return general business settings.
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
