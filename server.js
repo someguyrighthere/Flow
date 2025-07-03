@@ -232,11 +232,9 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 
-// NEW: Document Routes
-// GET all documents
+// Document Routes
 apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
     try {
-        // Fetch documents along with the name of the user who uploaded them
         const result = await pool.query(`
             SELECT 
                 d.document_id, 
@@ -256,13 +254,11 @@ apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
     }
 });
 
-// POST a new document (upload file)
 apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
     const { title, description } = req.body;
-    const file = req.file; // Multer makes the file available here
+    const file = req.file;
 
     if (!title || !file) {
-        // If file is missing, delete any partial upload from multer
         if (file) {
             await fsPromises.unlink(file.path).catch(e => console.error("Error deleting partially uploaded file:", e));
         }
@@ -272,11 +268,10 @@ apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (
     try {
         const result = await pool.query(
             `INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [title, description, file.filename, req.user.id] // Use file.filename (what multer renamed it to)
+            [title, description, file.filename, req.user.id]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        // If database insert fails, attempt to delete the uploaded file
         if (file) {
             await fsPromises.unlink(file.path).catch(e => console.error("Error deleting uploaded file after DB error:", e));
         }
@@ -285,16 +280,14 @@ apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (
     }
 });
 
-// DELETE a document
 apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     let filePathToDelete = null;
 
     const client = await pool.connect();
     try {
-        await client.query('BEGIN'); // Start transaction
+        await client.query('BEGIN');
 
-        // First, get the file_name to delete the actual file
         const docRes = await client.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
         if (docRes.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -302,25 +295,155 @@ apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
         }
         filePathToDelete = path.join(uploadsDir, docRes.rows[0].file_name);
 
-        // Delete the document record from the database
         await client.query('DELETE FROM documents WHERE document_id = $1', [id]);
 
-        await client.query('COMMIT'); // Commit transaction
+        await client.query('COMMIT');
 
-        // After successful DB deletion, delete the physical file
         if (filePathToDelete) {
             await fsPromises.unlink(filePathToDelete).catch(e => console.error("Error deleting physical file:", e));
         }
         
-        res.status(204).send(); // 204 No Content for successful deletion
+        res.status(204).send();
     } catch (err) {
-        await client.query('ROLLBACK'); // Rollback on error
+        await client.query('ROLLBACK');
         console.error('Error deleting document:', err);
         res.status(500).json({ error: 'Failed to delete document.' });
     } finally {
         client.release();
     }
 });
+
+
+// NEW: Job Postings Routes
+// GET all job postings
+apiRoutes.get('/job-postings', isAuthenticated, async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                jp.id, 
+                jp.title, 
+                jp.description, 
+                jp.requirements, 
+                jp.created_at,
+                l.location_name
+            FROM job_postings jp
+            LEFT JOIN locations l ON jp.location_id = l.location_id
+            ORDER BY jp.created_at DESC
+        `;
+        const params = [];
+        // If location_admin, filter job postings by their assigned location
+        if (req.user.role === 'location_admin') {
+            query += ' WHERE jp.location_id = $1';
+            params.push(req.user.location_id);
+        }
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error retrieving job postings:', err);
+        res.status(500).json({ error: 'Failed to retrieve job postings.' });
+    }
+});
+
+// POST a new job posting
+apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, description, requirements, location_id } = req.body;
+    if (!title || !description || !location_id) {
+        return res.status(400).json({ error: 'Title, description, and location are required.' });
+    }
+    try {
+        const result = await pool.query(
+            `INSERT INTO job_postings (title, description, requirements, location_id, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [title, description, requirements, location_id, req.user.id]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating job posting:', err);
+        res.status(500).json({ error: 'Failed to create job posting.' });
+    }
+});
+
+// DELETE a job posting
+apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM job_postings WHERE id = $1 RETURNING id', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Job posting not found.' });
+        }
+        res.status(204).send(); // 204 No Content for successful deletion
+    } catch (err) {
+        console.error('Error deleting job posting:', err);
+        res.status(500).json({ error: 'Failed to delete job posting.' });
+    }
+});
+
+// NEW: Applicants Routes (Public and Admin)
+// Public endpoint for job application submission
+app.post('/apply/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
+
+    if (!jobId || !name || !email || !availability) {
+        return res.status(400).json({ error: 'Job ID, name, email, and availability are required.' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO applicants (job_posting_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [jobId, name, email, address, phone, date_of_birth, availability, is_authorized]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error submitting application:', err);
+        res.status(500).json({ error: 'Failed to submit application.' });
+    }
+});
+
+// GET all applicants (Admin only)
+apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                a.id, 
+                a.name, 
+                a.email, 
+                a.phone, 
+                a.applied_at,
+                jp.title AS job_title,
+                jp.location_id
+            FROM applicants a
+            LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
+        `;
+        const params = [];
+        // If location_admin, filter applicants by their job posting's location
+        if (req.user.role === 'location_admin') {
+            query += ' WHERE jp.location_id = $1';
+            params.push(req.user.location_id);
+        }
+        query += ' ORDER BY a.applied_at DESC';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error retrieving applicants:', err);
+        res.status(500).json({ error: 'Failed to retrieve applicants.' });
+    }
+});
+
+// DELETE an applicant (archive)
+apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM applicants WHERE id = $1 RETURNING id', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Applicant not found.' });
+        }
+        res.status(204).send(); // 204 No Content for successful deletion
+    } catch (err) {
+        console.error('Error deleting applicant:', err);
+        res.status(500).json({ error: 'Failed to delete applicant.' });
+    }
+});
+
 
 // Onboarding Routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
