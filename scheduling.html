@@ -4,17 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scheduling - Flow Business Suite</title>
-    <link rel="stylesheet" href="dist/css/style.min.css">
-    <link rel="stylesheet" href="dist/css/Theme.min.css">
+    <link rel="stylesheet" href="/dist/css/Theme.min.css">
+    <link rel="stylesheet" href="/dist/css/style.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="background-animation"></div>
     <div class="container">
         <header class="dashboard-header">
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <div class="settings-menu">
+                <button id="settings-button" class="btn btn-secondary">
+                  ⚙
+                </button>
+                <div id="settings-dropdown" class="settings-dropdown">
+                  <a href="account.html">My Account</a>
+                  <a href="admin.html">Admin Settings</a>
+                  <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
+                  <button id="logout-button">Logout</button>
+                </div>
+            </div>
         </header>
         <nav class="main-nav">
             <a href="suite-hub.html">App Hub</a>
@@ -64,7 +74,7 @@
             </div>
         </section>
     </div>
-    <script src="dist/js/bundle.js"></script>
+    <script src="/dist/js/bundle.js"></script>
     <script>
         window.initializePage();
     </script>
