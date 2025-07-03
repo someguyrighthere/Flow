@@ -1,8 +1,10 @@
 :root {
-    --primary-accent: #D88DE2;
+    --primary-accent: #C86DD7;
     --text-light: #EAEAEA;
-    --text-medium: #b0b0b0;
+    --primary-accent-glow: rgba(200, 109, 215, 0.4);
+    --text-light: #EAEAEA;
     --card-border-color: rgba(255, 255, 255, 0.15);
+    --font-family: 'Poppins', sans-serif;
 }
 .main-nav {
     display: flex;
