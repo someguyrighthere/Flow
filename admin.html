@@ -41,7 +41,35 @@
             margin-bottom: 0; /* Remove default margin from form-group within this flex container */
         }
 
-        /* NEW: Styles for delete buttons within list items for better alignment */
+        /* NEW: Styles for list items to align content and delete button */
+        .list-item {
+            display: flex; /* Enable flexbox for horizontal alignment */
+            justify-content: space-between; /* Pushes content to left, button to right */
+            align-items: center; /* Vertically centers items */
+            gap: 10px; /* Space between text content and button */
+            /* Inherited styles from style.css for .list-item */
+            background-color: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .list-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border-left: 4px solid var(--primary-accent);
+        }
+
+        .list-item span {
+            flex-grow: 1; /* Allow the text content to take up available space */
+            word-break: break-word; /* Ensure long text wraps */
+        }
+
+        /* Styles for delete buttons within list items for better alignment */
         .list-item .btn-delete {
             display: flex; /* Use flexbox to center content */
             align-items: center; /* Vertically center SVG */
@@ -50,14 +78,25 @@
             height: 36px; /* Fixed height for consistent button size */
             padding: 0; /* Remove padding as width/height are fixed */
             flex-shrink: 0; /* Prevent button from shrinking */
-            margin-left: 10px; /* Add some space between content and button */
+            /* margin-left: 10px; */ /* Removed, gap handles spacing now */
             border-radius: 50%; /* Make it circular */
+            background-color: rgba(255, 255, 255, 0.1); /* Match btn-secondary background */
+            border: 1px solid rgba(255, 255, 255, 0.25); /* Match btn-secondary border */
+            color: var(--text-light); /* Match btn-secondary text color */
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .list-item .btn-delete:hover {
+            background-color: rgba(255, 255, 255, 0.2); /* Match btn-secondary hover */
+            transform: translateY(-1px); /* Slight lift on hover */
         }
 
         .list-item .btn-delete svg {
             display: block; /* Ensure SVG behaves as a block element */
             width: 18px; /* Adjust SVG size */
             height: 18px; /* Adjust SVG size */
+            fill: currentColor; /* Inherit color from parent */
         }
     </style>
 </head>
