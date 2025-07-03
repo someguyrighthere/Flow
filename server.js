@@ -173,27 +173,25 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 // GET: Fetch business settings
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     try {
-        // In a real application, you'd fetch this from a 'business_settings' table.
-        // For now, return hardcoded default operating hours.
-        // If you had a settings table, you might do:
-        // const result = await pool.query('SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1', [req.user.location_id]);
-        // if (result.rows.length > 0) {
-        //     res.json(result.rows[0]);
-        // } else {
-        //     // Return defaults if no settings found for this location
-        //     res.json({ operating_hours_start: '09:00', operating_hours_end: '17:00' });
-        // }
-        res.json({
-            operating_hours_start: '09:00',
-            operating_hours_end: '17:00'
-        });
+        // Fetch settings for the user's location, or a default if none exist
+        const result = await pool.query(
+            'SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1',
+            [req.user.location_id]
+        );
+        
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            // Return default values if no settings found for this location
+            res.json({ operating_hours_start: '09:00', operating_hours_end: '17:00' });
+        }
     } catch (err) {
         console.error('Error fetching business settings:', err);
         res.status(500).json({ error: 'Failed to retrieve business settings.' });
     }
 });
 
-// NEW: PUT: Update business settings (specifically operating hours for now)
+// PUT: Update business settings (specifically operating hours for now)
 apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
     const { operating_hours_start, operating_hours_end } = req.body;
     
@@ -202,19 +200,18 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
     }
 
     try {
-        // In a real application, you'd update a 'business_settings' table.
-        // For this example, we'll just acknowledge the update since we're using hardcoded GET values.
-        // If you had a table, it might look like this:
-        // const result = await pool.query(
-        //     `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
-        //      VALUES ($1, $2, $3)
-        //      ON CONFLICT (location_id) DO UPDATE SET
-        //      operating_hours_start = EXCLUDED.operating_hours_start,
-        //      operating_hours_end = EXCLUDED.operating_hours_end
-        //      RETURNING *`,
-        //     [req.user.location_id, operating_hours_start, operating_hours_end]
-        // );
-        res.status(200).json({ message: 'Business settings updated successfully!' });
+        // Use INSERT ON CONFLICT DO UPDATE to either create or update settings for a location
+        const result = await pool.query(
+            `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (location_id) DO UPDATE SET
+             operating_hours_start = EXCLUDED.operating_hours_start,
+             operating_hours_end = EXCLUDED.operating_hours_end,
+             updated_at = CURRENT_TIMESTAMP
+             RETURNING *`,
+            [req.user.location_id, operating_hours_start, operating_hours_end]
+        );
+        res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
     } catch (err) {
         console.error('Error updating business settings:', err);
         res.status(500).json({ error: 'Failed to update business settings.' });
