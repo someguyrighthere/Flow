@@ -74,6 +74,16 @@ export function handleAdminPage() {
         }, 5000); // Clear message after 5 seconds
     }
 
+    // NEW: Helper function to convert 24-hour time string to 12-hour format
+    function convertTo12Hour(time24) {
+        if (!time24) return 'N/A';
+        const [hour, minute] = time24.split(':');
+        const h = parseInt(hour, 10);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h % 12 === 0 ? 12 : h % 12;
+        return `${displayHour}:${minute} ${ampm}`;
+    }
+
     // --- Data Loading Functions ---
 
     /**
@@ -220,7 +230,7 @@ export function handleAdminPage() {
 
     /**
      * Fetches business operating hours to set the range for availability inputs.
-     * NEW: Also displays current hours.
+     * Also displays current hours.
      */
     async function fetchBusinessHours() {
         if (!currentOperatingHoursDisplay || !operatingHoursStartInput || !operatingHoursEndInput) return;
@@ -233,12 +243,14 @@ export function handleAdminPage() {
                 businessOperatingStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
                 businessOperatingEndHour = parseInt((settings.operating_hours_end || '24:00').split(':')[0], 10);
                 
-                // Set the form input values
+                // Set the form input values (still 24-hour format for input type="time")
                 operatingHoursStartInput.value = settings.operating_hours_start || '';
                 operatingHoursEndInput.value = settings.operating_hours_end || '';
 
-                // Display current hours
-                currentOperatingHoursDisplay.textContent = `Current: ${settings.operating_hours_start || 'N/A'} - ${settings.operating_hours_end || 'N/A'}`;
+                // Display current hours in 12-hour format
+                const displayStart = convertTo12Hour(settings.operating_hours_start);
+                const displayEnd = convertTo12Hour(settings.operating_hours_end);
+                currentOperatingHoursDisplay.textContent = `Current: ${displayStart} - ${displayEnd}`;
                 currentOperatingHoursDisplay.style.color = 'var(--text-light)'; // Reset color if it was an error before
 
                 generateAvailabilityInputs(); // Regenerate inputs with correct hours
@@ -293,9 +305,12 @@ export function handleAdminPage() {
     function generateTimeOptions(startHour = 0, endHour = 24) {
         let options = '<option value="">Not Available</option>'; // Default "Not Available"
         for (let i = startHour; i <= endHour; i++) { // Include endHour for full range, e.g., 17:00
-            const hour = i < 10 ? '0' + i : '' + i;
-            const displayTime = `${hour}:00`;
-            options += `<option value="${displayTime}">${displayTime}</option>`;
+            const hour24 = i;
+            const displayHour = hour24 % 12 === 0 ? 12 : hour24 % 12;
+            const ampm = hour24 < 12 ? 'AM' : 'PM';
+            const timeValue = `${String(hour24).padStart(2, '0')}:00`; // Value for input type="time" (24-hour)
+            const displayText = `${displayHour}:00 ${ampm}`; // Text for display (12-hour)
+            options += `<option value="${timeValue}">${displayText}</option>`;
         }
         return options;
     }
@@ -381,7 +396,7 @@ export function handleAdminPage() {
                 displayStatusMessage(inviteAdminStatusMessage, 'Admin invited successfully!', false);
                 inviteAdminForm.reset(); // Clear the form
                 loadUsers(); // Reload user list to show new admin
-            } catch (error) {
+            } /* Added the closing brace for the handleDelete function */ catch (error) {
                 displayStatusMessage(inviteAdminStatusMessage, `Error: ${error.message}`, true);
                 console.error('Error inviting admin:', error);
             }
