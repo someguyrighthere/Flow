@@ -409,18 +409,29 @@ app.post('/apply/:jobId', async (req, res) => {
     const { jobId } = req.params;
     const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
 
-    if (!jobId || !name || !email || !availability) {
+    // Validate jobId is not "null" or "undefined" string
+    const parsedJobId = (jobId === 'null' || jobId === 'undefined') ? null : jobId;
+
+    if (!parsedJobId || !name || !email || !availability) {
         return res.status(400).json({ error: 'Job ID, name, email, and availability are required.' });
     }
 
     try {
         const result = await pool.query(
             `INSERT INTO applicants (job_posting_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [jobId, name, email, address, phone, date_of_birth, availability, is_authorized]
+            [parsedJobId, name, email, address, phone, date_of_birth, availability, is_authorized]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('Error submitting application:', err);
+        // Check for specific PostgreSQL error codes
+        if (err.code === '23502') { // not_null_violation
+            return res.status(400).json({ error: `Missing required data: ${err.column} cannot be null.` });
+        } else if (err.code === '23503') { // foreign_key_violation
+            return res.status(400).json({ error: 'Invalid Job Posting ID. The job you are applying for does not exist.' });
+        } else if (err.code === '22P02') { // invalid_text_representation (e.g., trying to insert non-UUID into UUID column)
+            return res.status(400).json({ error: 'Invalid data format for one or more fields.' });
+        }
         res.status(500).json({ error: 'Failed to submit application.' });
     }
 });
