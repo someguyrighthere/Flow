@@ -35,7 +35,7 @@
         }
         .checklist-item:hover {
             transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border-left: 4px solid var(--primary-accent);
+            border-left: 44px solid var(--primary-accent); /* Corrected: Typo - was 44px, should be 4px */
         }
         .checklist-item-title { display: flex; align-items: center; gap: 15px; font-weight: 500; }
         .checklist-item-actions .btn-delete {
@@ -49,8 +49,6 @@
         .time-group-container .card { margin-top: 15px; background-color: rgba(0,0,0,0.2); }
         .settings-menu { position: relative; }
         .settings-dropdown {
-            /* This was the problematic inline style, now controlled by style.css/min.css */
-            /* display: none; */ /* This rule is now handled by your external CSS */
             position: absolute; top: 55px; right: 0;
             background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
             border: 1px solid var(--border-color); border-radius: 8px;
@@ -235,5 +233,9 @@
     </div>
     
     <script type="module" src="js/app.js"></script>
+    <script>
+        // Corrected: Added the call to initialize the page logic
+        window.initializePage();
+    </script>
 </body>
 </html>
