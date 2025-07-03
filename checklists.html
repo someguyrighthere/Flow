@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Lists - Flow Business Suite</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/Theme.css">
+    <!-- Corrected: Use minified CSS from dist folder, consistent with other pages -->
+    <link rel="stylesheet" href="/dist/css/style.min.css">
+    <link rel="stylesheet" href="/dist/css/Theme.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        /* These inline styles were provided in your original checklists.html */
+        /* Keep any necessary inline styles here, but ensure they don't conflict. */
+        /* The .settings-dropdown display:none rule should be handled by style.min.css */
         .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
         .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
         .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
@@ -35,7 +37,7 @@
         }
         .checklist-item:hover {
             transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border-left: 44px solid var(--primary-accent); /* Corrected: Typo - was 44px, should be 4px */
+            border-left: 4px solid var(--primary-accent);
         }
         .checklist-item-title { display: flex; align-items: center; gap: 15px; font-weight: 500; }
         .checklist-item-actions .btn-delete {
@@ -232,9 +234,10 @@
         </div>
     </div>
     
-    <script type="module" src="js/app.js"></script>
+    <!-- Corrected: Load the bundled JavaScript from /dist/js/bundle.js -->
+    <script src="/dist/js/bundle.js"></script>
     <script>
-        // Corrected: Added the call to initialize the page logic
+        // Ensure initializePage is called after the bundle is loaded
         window.initializePage();
     </script>
 </body>
