@@ -112,35 +112,32 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
                 u.position, 
                 u.role, 
                 u.location_id,
-                l.location_name  -- NEW: Select location name
+                l.location_name  
             FROM users u
-            LEFT JOIN locations l ON u.location_id = l.location_id -- NEW: Join with locations table
+            LEFT JOIN locations l ON u.location_id = l.location_id 
         `;
         const params = [];
         let whereClause = '';
-        // If location_admin, filter users by their assigned location
         if (req.user.role === 'location_admin') {
             whereClause = ' WHERE u.location_id = $1';
             params.push(req.user.location_id);
         }
-        query += whereClause; // Add the WHERE clause if applicable
-        query += ' ORDER BY u.full_name'; // Order by user full name
+        query += whereClause;
+        query += ' ORDER BY u.full_name';
         
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
-        console.error('Error retrieving users:', err); // Log the actual error
+        console.error('Error retrieving users:', err);
         res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
 
 // Locations Routes
-// Endpoint to get all locations
 apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     try {
         let query = 'SELECT location_id, location_name, location_address FROM locations';
         const params = [];
-        // If location_admin, filter locations by their assigned location
         if (req.user.role === 'location_admin') {
             query += ' WHERE location_id = $1';
             params.push(req.user.location_id);
@@ -154,7 +151,6 @@ apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     }
 });
 
-// Endpoint to add a new location (used by admin.js form)
 apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
     const { location_name, location_address } = req.body;
     if (!location_name || !location_address) {
@@ -174,14 +170,11 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 
 
 // Business Settings Endpoint (for operating hours, etc.)
-// This endpoint will return general business settings.
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     try {
-        // In a real application, you'd fetch this from a 'business_settings' table.
-        // For now, return hardcoded default operating hours.
         res.json({
-            operating_hours_start: '09:00', // Example: 9 AM
-            operating_hours_end: '17:00'    // Example: 5 PM
+            operating_hours_start: '09:00',
+            operating_hours_end: '17:00'
         });
     } catch (err) {
         console.error('Error fetching business settings:', err);
@@ -189,7 +182,7 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     }
 });
 
-// Subscription Status Endpoint (already added)
+// Subscription Status Endpoint
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
         res.json({ plan: 'Pro Plan' });
@@ -208,6 +201,39 @@ apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve checklists.' });
     }
 });
+
+// NEW: Endpoint to create a new checklist
+apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, position, tasks } = req.body;
+    if (!title || !position || !tasks || !Array.isArray(tasks) || tasks.length === 0) {
+        return res.status(400).json({ error: 'Title, position, and at least one task are required.' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN'); // Start transaction
+
+        // Insert the new checklist
+        const checklistRes = await client.query(
+            `INSERT INTO checklists (title, position, tasks, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
+            [title, position, JSON.stringify(tasks), req.user.id] // Store tasks as JSON string
+        );
+        const newChecklist = checklistRes.rows[0];
+
+        await client.query('COMMIT'); // Commit transaction
+        res.status(201).json({ message: 'Checklist created successfully!', checklist: newChecklist });
+    } catch (err) {
+        await client.query('ROLLBACK'); // Rollback on error
+        console.error('Error creating checklist:', err);
+        if (err.code === '23505') { // Unique violation, e.g., duplicate title/position
+            return res.status(409).json({ error: 'A checklist with this title/position might already exist.' });
+        }
+        res.status(500).json({ error: 'Failed to create checklist.' });
+    } finally {
+        client.release();
+    }
+});
+
 
 // Onboarding Routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
