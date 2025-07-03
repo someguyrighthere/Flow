@@ -418,7 +418,7 @@ app.post('/apply/:jobId', async (req, res) => {
 
     try {
         const result = await pool.query(
-            `INSERT INTO applicants (job_posting_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            `INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
             [parsedJobId, name, email, address, phone, date_of_birth, availability, is_authorized]
         );
         res.status(201).json(result.rows[0]);
