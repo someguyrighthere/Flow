@@ -4,25 +4,147 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Lists - Flow Business Suite</title>
-    <link rel="stylesheet" href="/dist/css/Theme.min.css">
-    <link rel="stylesheet" href="/dist/css/style.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/Theme.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
+        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
+        .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
+        .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
+        .card {
+             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
+             border: 1px solid rgba(255, 255, 255, 0.15); padding: 25px; border-radius: 8px;
+        }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        .form-group label { font-weight: 600; margin-bottom: 5px; display: block; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%; padding: 12px; border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-light); box-sizing: border-box;
+        }
+        .form-group select option { background-color: #2a2a2e; color: #f0f0f0; }
+        .checklist-item {
+            display: flex; align-items: center; justify-content: space-between;
+            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15); padding: 15px 20px; border-radius: 8px;
+            margin-bottom: 10px; border-left: 4px solid transparent; transition: all 0.3s ease;
+        }
+        .checklist-item:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border-left: 4px solid var(--primary-accent);
+        }
+        .checklist-item-title { display: flex; align-items: center; gap: 15px; font-weight: 500; }
+        .checklist-item-actions .btn-delete {
+            background: none; border: none; color: var(--text-medium); cursor: pointer;
+            opacity: 0.7; transition: opacity 0.3s ease;
+        }
+        .checklist-item:hover .btn-delete { opacity: 1; color: #e74c3c; transform: scale(1.1); }
+        .checklist-item-actions .btn-delete svg {
+            fill: currentColor;
+        }
+        .time-group-container .card { margin-top: 15px; background-color: rgba(0,0,0,0.2); }
+        .settings-menu { position: relative; }
+        .settings-dropdown {
+            display: none; position: absolute; top: 55px; right: 0;
+            background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            min-width: 180px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 10; padding: 10px 0;
+        }
+        .settings-dropdown a, .settings-dropdown button {
+            color: var(--text-light); padding: 12px 16px; text-decoration: none;
+            display: block; width: 100%; text-align: left; background: none;
+            border: none; font-family: 'Poppins', sans-serif; font-size: 1rem; cursor: pointer;
+        }
+        .settings-dropdown a:hover, .settings-dropdown button:hover { background-color: rgba(255,255,255,0.1); }
+        /* New style for inline status messages */
+        .status-message {
+            text-align: center;
+            margin-top: 15px;
+            min-height: 20px; /* Ensure space even when empty */
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .status-message.success {
+            color: var(--primary-accent); /* Use your accent color for success */
+        }
+        .status-message.error {
+            color: #e74c3c; /* Red color for errors */
+        }
+
+        .task-input-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .task-input-container .form-group {
+            flex-grow: 1;
+            margin-bottom: 0;
+        }
+        .attached-document-info {
+            font-size: 0.8rem;
+            color: var(--text-medium);
+            margin-top: 5px;
+        }
+
+        /* --- Modal Styles (needed for attach document modal) --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 1000; /* High z-index for modals */
+        }
+        .modal-content {
+            background-color: var(--card-bg); 
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%; 
+            max-width: 500px; 
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; 
+            color: var(--text-light); 
+            animation: fadeIn 0.3s ease-out;
+        }
+        /* Styles specific to the document list inside the modal */
+        .document-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+        }
+        .document-list-item:hover {
+            background-color: rgba(255,255,255,0.05);
+        }
+        .document-list-item:last-child {
+            border-bottom: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
 </head>
 <body>
+    <div class="background-animation"></div>
     <div class="container">
         <header class="dashboard-header">
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                  ⚙
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
-                  <a href="account.html">My Account</a>
-                  <a href="admin.html">Admin Settings</a>
-                  <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
-                  <button id="logout-button">Logout</button>
+                    <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
+                    <button id="logout-button">Logout</button>
                 </div>
             </div>
         </header>
@@ -32,23 +154,91 @@
             <a href="checklists.html" class="active">Task Lists</a>
         </nav>
         <section id="checklists-section">
-            <div class="card">
+            <h2 style="color: var(--text-light);">Your Task Lists</h2>
+            <div id="checklist-list" style="margin-bottom: 40px;"><p style="color: var(--text-medium);">Task list functionality temporarily disabled.</p></div>
+            <!-- NEW: Status message for general checklist actions -->
+            <p id="checklist-status-message" class="status-message"></p>
+            <div class="card" style="margin-top: 30px;">
                 <h3>Create New Task List</h3>
                 <form id="new-checklist-form">
                     <div class="form-group">
-                        <label for="new-checklist-title">Task List Title</label>
-                        <input type="text" id="new-checklist-title" placeholder="e.g., New Hire Onboarding" required>
+                        <label for="new-checklist-position">Task List for Position</label>
+                        <input type="text" id="new-checklist-position" placeholder="e.g., Sales, Developer" required>
                     </div>
                     <div class="form-group">
-                        <label for="new-checklist-position">For Position</label>
-                        <input type="text" id="new-checklist-position" placeholder="e.g., Sales Associate" required>
+                        <label for="new-checklist-title">Task List Title</label>
+                        <input type="text" id="new-checklist-title" placeholder="e.g., Q3 Sales Team Onboarding" required>
                     </div>
+                    <div class="form-group">
+                        <label for="structure-type-select">Task Structure</label>
+                        <select id="structure-type-select" name="structure_type">
+                            <option value="single_list">Single List</option>
+                            <option value="daily">Group by Day</option>
+                            <option value="weekly">Group by Week</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="time-group-count-container" style="display: none;">
+                        <label id="time-group-count-label" for="time-group-count">Number of Weeks</label>
+                        <input type="number" id="time-group-count" min="1" value="1">
+                    </div>
+                    <hr style="border-color: var(--border-color); margin: 20px 0;">
                     <div id="tasks-input-area">
+                        <!-- Initial task input for new checklist -->
+                        <div class="form-group task-input-group">
+                            <div class="task-input-container">
+                                <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
+                                    <label for="task-input-0">Task Description</label>
+                                    <input type="text" id="task-input-0" class="task-description-input" placeholder="e.g., Complete HR paperwork" required>
+                                </div>
+                                <div class="task-actions" style="display: flex; align-items: flex-end; gap: 5px; margin-bottom: 0;">
+                                    <button type="button" class="btn btn-secondary btn-sm attach-file-btn">Attach</button> <!-- Re-enabled attach button -->
+                                    <button type="button" class="btn btn-secondary btn-sm remove-task-btn">Remove</button>
+                                </div>
+                            </div>
+                            <div class="attached-document-info" style="font-size: 0.8rem; color: var(--text-medium); margin-top: 5px; height: 1.2em;"></div>
                         </div>
-                    <button type="button" id="add-task-btn" class="btn btn-secondary">Add Another Task</button>
-                    <hr>
-                    <button type="submit" class="btn btn-primary">Create Task List</button>
-                    <p id="checklist-status-message" role="alert" aria-live="polite"></p>
+                        <button type="button" id="add-task-btn" class="btn btn-secondary" style="margin-top: 10px;">Add Another Task</button>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Create Task List</button>
                 </form>
             </div>
-            <div class="card">
+        </section>
+    </div>
+
+    <!-- NEW: Attach Document Modal (re-introduced for checklist tasks) -->
+    <div id="attach-document-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Attach a Document</h3>
+            <p>Select a document from your library to attach to this task.</p>
+            <div id="attach-document-list" style="max-height: 300px; overflow-y: auto; text-align: left;">
+                <p style="color: var(--text-medium);">Loading documents...</p>
+            </div>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                 <button id="attach-document-cancel-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Standard message and confirm modals for other pages (if needed) -->
+    <!-- These are kept outside the admin/checklist HTML but are usually in app-wide HTML if used globally -->
+    <div id="modal-message" class="modal" style="display: none;">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
