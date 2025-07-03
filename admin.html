@@ -40,6 +40,25 @@
             flex: 1; /* Each input group takes equal space */
             margin-bottom: 0; /* Remove default margin from form-group within this flex container */
         }
+
+        /* NEW: Styles for delete buttons within list items for better alignment */
+        .list-item .btn-delete {
+            display: flex; /* Use flexbox to center content */
+            align-items: center; /* Vertically center SVG */
+            justify-content: center; /* Horizontally center SVG */
+            width: 36px; /* Fixed width for consistent button size */
+            height: 36px; /* Fixed height for consistent button size */
+            padding: 0; /* Remove padding as width/height are fixed */
+            flex-shrink: 0; /* Prevent button from shrinking */
+            margin-left: 10px; /* Add some space between content and button */
+            border-radius: 50%; /* Make it circular */
+        }
+
+        .list-item .btn-delete svg {
+            display: block; /* Ensure SVG behaves as a block element */
+            width: 18px; /* Adjust SVG size */
+            height: 18px; /* Adjust SVG size */
+        }
     </style>
 </head>
 <body>
