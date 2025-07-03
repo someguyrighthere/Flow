@@ -26,7 +26,7 @@
 .card, .app-card {
     /* --- Glass Effect --- */
     background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--card-border-color);
 
