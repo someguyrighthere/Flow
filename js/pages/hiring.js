@@ -83,10 +83,8 @@ export function handleHiringPage() {
                     postItem.className = 'job-posting-item';
                     postItem.innerHTML = `
                         <h4>${post.title}</h4>
-                        <p>${post.description}</p>
-                        ${post.requirements ? `<p><strong>Requirements:</strong> ${post.requirements}</p>` : ''}
-                        <p style="font-size: 0.8em; color: var(--text-medium);">Location: ${post.location_name || 'Company Wide'}</p>
-                        <p style="font-size: 0.8em; color: var(--text-medium);">Posted: ${new Date(post.created_at).toLocaleDateString()}</p>
+                        <!-- Removed: Job Description and Requirements -->
+                        <p style="font-size: 0.8em; color: var(--text-medium);">Location: ${post.location_name || 'Company Wide'} | Posted: ${new Date(post.created_at).toLocaleDateString()}</p>
                         <div class="job-posting-actions">
                             <a href="apply.html?jobId=${post.id}" class="btn btn-secondary btn-sm" target="_blank">View Public Ad</a>
                             <button class="btn btn-secondary btn-sm btn-delete-job-posting" data-id="${post.id}">Delete</button>
