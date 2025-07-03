@@ -1,6 +1,7 @@
 :root {
     --primary-accent: #C86DD7;
     --text-light: #EAEAEA;
+    --primary-accent: #C86DD7;
     --primary-accent-glow: rgba(200, 109, 215, 0.6);
     --text-light: #EAEAEA;
     --card-border-color: rgba(200, 255, 255, 0.15);
@@ -25,7 +26,7 @@
 }
 .card, .app-card {
     /* --- Glass Effect --- */
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--card-border-color);
