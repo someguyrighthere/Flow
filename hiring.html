@@ -127,6 +127,19 @@
             height: 18px;
             fill: currentColor;
         }
+
+        /* NEW: Styles for the main hiring grid layout */
+        .hiring-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Responsive 3-column grid */
+            gap: 30px; /* Space between columns and rows */
+            margin-top: 20px; /* Space below the nav bar */
+        }
+
+        /* Remove default margin-bottom from cards when they are inside the grid */
+        .hiring-grid .card {
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -150,36 +163,44 @@
             <a href="hiring.html" class="active">Hiring</a>
         </nav>
         <section>
-            <div class="card">
-                <h3>Create New Job Posting</h3>
-                <form id="new-job-posting-form">
-                    <div class="form-group">
-                        <label for="job-title">Job Title</label>
-                        <input type="text" id="job-title" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="job-description">Job Description</label>
-                        <textarea id="job-description" rows="5" required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="job-requirements">Requirements</label>
-                        <textarea id="job-requirements" rows="5"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="job-location-select">Location</label>
-                        <select id="job-location-select" required></select>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Create Posting</button>
-                    <p id="job-posting-status-message"></p>
-                </form>
-            </div>
-            <div class="card">
-                <h3>Current Job Postings</h3>
-                <div id="job-postings-list"></div>
-            </div>
-            <div class="card">
-                <h3>Recent Applicants</h3>
-                <div id="applicants-list"></div>
+            <h2 style="color: var(--text-light);">Hiring Management</h2> <!-- Added a main heading -->
+            <div class="hiring-grid">
+                <!-- Section 1: Create New Job Posting -->
+                <div class="card">
+                    <h3>Create New Job Posting</h3>
+                    <form id="new-job-posting-form">
+                        <div class="form-group">
+                            <label for="job-title">Job Title</label>
+                            <input type="text" id="job-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-description">Job Description</label>
+                            <textarea id="job-description" rows="5" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-requirements">Requirements</label>
+                            <textarea id="job-requirements" rows="5"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-location-select">Location</label>
+                            <select id="job-location-select" required></select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Posting</button>
+                        <p id="job-posting-status-message"></p>
+                    </form>
+                </div>
+
+                <!-- Section 2: Current Job Postings -->
+                <div class="card">
+                    <h3>Current Job Postings</h3>
+                    <div id="job-postings-list"></div>
+                </div>
+
+                <!-- Section 3: Recent Applicants -->
+                <div class="card">
+                    <h3>Recent Applicants</h3>
+                    <div id="applicants-list"></div>
+                </div>
             </div>
         </section>
     </div>
