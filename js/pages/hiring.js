@@ -84,7 +84,7 @@ export function handleHiringPage() {
                     postItem.innerHTML = `
                         <h4>${post.title}</h4>
                         <p style="font-size: 0.8em; color: var(--text-medium);">
-                            Location: ${post.location_name || 'Company Wide'}<br> <!-- Added <br> here -->
+                            Location: ${post.location_name || 'Company Wide'}<br>
                             Posted: ${new Date(post.created_at).toLocaleDateString()}
                         </p>
                         <div class="job-posting-actions">
@@ -120,13 +120,15 @@ export function handleHiringPage() {
             if (applicants && applicants.length > 0) {
                 applicants.forEach(applicant => {
                     const applicantItem = document.createElement('div');
-                    applicantItem.className = 'job-posting-item'; // Re-use styling for consistency
+                    applicantItem.className = 'applicant-item'; // Use 'applicant-item' for specific styling
                     applicantItem.innerHTML = `
-                        <h4>${applicant.name} <span style="font-size:0.8em; color:var(--text-medium);">(${applicant.job_title || 'N/A'})</span></h4>
-                        <p>Email: ${applicant.email}</p>
-                        <p>Phone: ${applicant.phone || 'N/A'}</p>
-                        <p style="font-size: 0.8em; color: var(--text-medium);">Applied: ${new Date(applicant.applied_at).toLocaleDateString()}</p>
-                        <div class="job-posting-actions">
+                        <div>
+                            <h4>${applicant.name} <span style="font-size:0.8em; color:var(--text-medium);">(${applicant.job_title || 'N/A'})</span></h4>
+                            <p style="font-size: 0.8em; color: var(--text-medium); margin-bottom: 5px;">Email: ${applicant.email}</p>
+                            ${applicant.phone ? `<p style="font-size: 0.8em; color: var(--text-medium); margin-bottom: 5px;">Phone: ${applicant.phone}</p>` : ''}
+                            <p style="font-size: 0.8em; color: var(--text-medium);">Applied: ${new Date(applicant.applied_at).toLocaleDateString()}</p>
+                        </div>
+                        <div class="job-posting-actions"> <!-- Re-using class for consistent button styling -->
                             <button class="btn btn-secondary btn-sm btn-delete-applicant" data-id="${applicant.id}">Archive</button>
                         </div>
                     `;
