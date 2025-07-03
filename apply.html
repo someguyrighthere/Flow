@@ -9,6 +9,82 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        /* Add styles for the apply card and form to ensure proper layout */
+        .apply-card {
+            max-width: 700px; /* Limit width for readability */
+            margin: 40px auto; /* Center the card */
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            color: var(--text-light);
+        }
+
+        .apply-card h2 {
+            color: var(--primary-accent);
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .apply-card .form-group {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .apply-card label {
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-light);
+            display: block;
+        }
+
+        .apply-card input[type="text"],
+        .apply-card input[type="email"],
+        .apply-card input[type="tel"],
+        .apply-card input[type="date"],
+        .apply-card textarea,
+        .apply-card select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-light);
+            box-sizing: border-box;
+        }
+
+        .apply-card textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .apply-card .btn-primary {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1rem;
+            margin-top: 30px;
+        }
+
+        .job-details {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .job-details h2 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .job-details p {
+            font-size: 1em;
+            margin-bottom: 8px;
+            color: var(--text-medium);
+        }
+    </style>
 </head>
 <body>
     <div class="background-animation"></div>
@@ -19,8 +95,59 @@
     </header>
     <main class="main-content">
         <div id="apply-card" class="apply-card">
-             </div>
+            <!-- Content will be dynamically loaded here by apply.js -->
+            <!-- This container will hold the job details -->
+            <div id="job-details-container">
+                <!-- Loading message or job details will appear here -->
+            </div>
+
+            <!-- This form will be displayed after job details are loaded -->
+            <form id="apply-form" style="display: none;"> <!-- Hidden by default -->
+                <h2>Apply for this Position</h2>
+                <div class="form-group">
+                    <label for="applicant-name">Full Name</label>
+                    <input type="text" id="applicant-name" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="applicant-email">Email Address</label>
+                    <input type="email" id="applicant-email" required placeholder="john.doe@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="applicant-address">Address (Optional)</label>
+                    <input type="text" id="applicant-address" placeholder="123 Main St, Anytown, USA">
+                </div>
+                <div class="form-group">
+                    <label for="applicant-phone">Phone Number (Optional)</label>
+                    <input type="tel" id="applicant-phone" placeholder="(123) 456-7890">
+                </div>
+                <div class="form-group">
+                    <label for="applicant-dob">Date of Birth (Optional)</label>
+                    <input type="date" id="applicant-dob">
+                </div>
+                <div class="form-group">
+                    <label for="applicant-availability">Availability</label>
+                    <textarea id="applicant-availability" rows="3" required placeholder="e.g., Mon-Fri, 9am-5pm"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="applicant-authorized">Are you legally authorized to work?</label>
+                    <select id="applicant-authorized" required>
+                        <option value="">Select</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Submit Application</button>
+            </form>
+        </div>
     </main>
+    <div id="message-modal" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
     <script src="dist/js/bundle.js"></script>
     <script>
         window.initializePage();
