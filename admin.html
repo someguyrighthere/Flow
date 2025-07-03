@@ -30,7 +30,7 @@
             width: 100%;
         }
 
-        /* NEW: General form group styling for all forms within cards */
+        /* General form group styling for all forms within cards */
         .card form .form-group {
             margin-bottom: 25px; /* Increased space between form groups */
             display: flex;
@@ -78,7 +78,7 @@
             margin-bottom: 0; /* Remove default margin from form-group within this flex container */
         }
 
-        /* NEW: Specific styling for the availability grid */
+        /* Specific styling for the availability grid */
         #employee-availability-grid {
             display: grid;
             grid-template-columns: 1fr 1fr; /* Two columns for day and time range */
@@ -188,7 +188,6 @@
         <section id="admin-settings-content">
             <h2 style="color: var(--text-light);">Admin Settings</h2>
             <div class="admin-grid">
-                <!-- Column 1: Business Settings & Manage Locations -->
                 <div>
                     <div class="card" id="business-settings-card">
                         <h3>Business Settings</h3>
@@ -204,6 +203,7 @@
                                     <input type="time" id="operating-hours-end" required>
                                 </div>
                             </div>
+                            <p id="current-operating-hours-display" style="font-size: 0.9em; color: var(--text-medium); margin-top: 15px; text-align: center;">Loading current hours...</p>
                             <button type="submit" class="btn btn-primary">Save Settings</button>
                             <p id="business-settings-status-message"></p>
                         </form>
@@ -229,7 +229,6 @@
                     </div>
                 </div>
 
-                <!-- Column 2: Invite New Admin & Invite New Employee -->
                 <div>
                     <div class="card" id="invite-admin-card">
                         <h3>Invite New Location Admin</h3>
@@ -273,7 +272,6 @@
                     </div>
                 </div>
 
-                <!-- Column 3: Manage Users -->
                 <div>
                     <div class="card" id="manage-users-card">
                         <h3>Manage Users</h3>
