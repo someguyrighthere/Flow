@@ -8,6 +8,9 @@ export function handleApplyPage() {
     const jobDetailsContainer = document.getElementById('job-details-container');
     const applyForm = document.getElementById('apply-form');
     const applyCard = document.getElementById('apply-card');
+
+    // Debugging logs to confirm elements are found
+    console.log("[apply.js] Elements found:", { jobDetailsContainer, applyForm, applyCard });
     
     // Get the jobId from the URL query parameters
     const urlParams = new URLSearchParams(window.location.search);
@@ -17,7 +20,10 @@ export function handleApplyPage() {
     if (!jobId) {
         if (jobDetailsContainer) {
             jobDetailsContainer.innerHTML = '<h2>Job Not Found</h2><p>No job ID was provided in the URL.</p>';
+        } else if (applyCard) { // Fallback if jobDetailsContainer is not found
+            applyCard.innerHTML = '<h2>Job Not Found</h2><p>No job ID was provided in the URL.</p>';
         }
+        console.error("[apply.js] No jobId found in URL.");
         return;
     }
 
@@ -25,34 +31,61 @@ export function handleApplyPage() {
      * Loads job details from the API based on the jobId and displays them.
      */
     async function loadJobDetails() {
-        if (!jobDetailsContainer) return;
+        if (!jobDetailsContainer) {
+            console.error("[apply.js] jobDetailsContainer not found. Cannot load job details.");
+            // If jobDetailsContainer is missing, display error in applyCard or as modal
+            if (applyCard) {
+                applyCard.innerHTML = '<h2>Error</h2><p>Page structure missing. Please contact support.</p>';
+            } else {
+                showModalMessage('Page structure missing. Please contact support.', true);
+            }
+            return;
+        }
 
         jobDetailsContainer.innerHTML = '<p style="color: var(--text-medium);">Loading job details...</p>'; // Show loading state
         try {
             // Fetch job posting details from the public endpoint
             const job = await apiRequest('GET', `/job-postings/${jobId}`);
+            
             if (job) {
                 document.title = `Apply for ${job.title} - Flow Business Suite`; // Update page title
-                const detailsEl = document.createElement('div');
-                detailsEl.className = 'job-details';
-                detailsEl.innerHTML = `
+                
+                // Construct job details HTML
+                const detailsHtml = `
                     <h2>${job.title}</h2>
                     <p><strong>Location:</strong> ${job.location_name || 'Company Wide'}</p>
-                    <p><strong>Description:</strong><br>${job.description.replace(/\n/g, '<br>')}</p>
+                    <p><strong>Description:</strong><br>${job.description ? job.description.replace(/\n/g, '<br>') : 'N/A'}</p>
                     ${job.requirements ? `<p><strong>Requirements:</strong><br>${job.requirements.replace(/\n/g, '<br>')}</p>` : ''}
                 `;
-                jobDetailsContainer.innerHTML = ''; // Clear loading message
-                jobDetailsContainer.appendChild(detailsEl);
+                jobDetailsContainer.innerHTML = detailsHtml; // Display job details
+
+                // After successfully loading job details, show the application form
+                if (applyForm) {
+                    applyForm.style.display = 'block'; // Make the form visible
+                    console.log("[apply.js] Application form set to display: block.");
+                } else {
+                    console.warn("[apply.js] applyForm element not found, cannot make it visible.");
+                }
             } else {
                  jobDetailsContainer.innerHTML = '<h2>Job Not Found</h2><p>The job you are looking for does not exist.</p>';
+                 console.warn("[apply.js] Job not found for ID:", jobId);
+                 // If job not found, ensure form remains hidden
+                 if (applyForm) {
+                     applyForm.style.display = 'none';
+                 }
             }
         } catch (error) {
             jobDetailsContainer.innerHTML = `<h2>Error</h2><p>Could not load job details. ${error.message}</p>`;
             console.error('Error loading job details:', error);
+            // On error, ensure form remains hidden
+            if (applyForm) {
+                applyForm.style.display = 'none';
+            }
         }
     }
 
     // Event listener for the application form submission
+    // This listener is now attached only if applyForm is found at script initialization
     if (applyForm) {
         applyForm.addEventListener('submit', async (e) => {
             e.preventDefault(); // Prevent default form submission
@@ -93,6 +126,8 @@ export function handleApplyPage() {
                 console.error('Error submitting application:', error);
             }
         });
+    } else {
+        console.error("[apply.js] Application form element (id='apply-form') not found. Submission listener not attached.");
     }
 
     // --- Initial Page Load Actions ---
