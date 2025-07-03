@@ -22,10 +22,13 @@
     border-bottom-color: var(--primary-accent);
 }
 .card, .app-card {
+    /* --- Glass Effect --- */
     background: rgba(30, 30, 30, 0.4);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--card-border-color);
+
+    /* --- Other Styles --- */
     padding: 25px;
     border-radius: 16px;
     text-decoration: none;
@@ -123,4 +126,31 @@
 }
 #settings-dropdown a:hover, #settings-dropdown button:hover {
     background-color: rgba(255, 255, 255, 0.1);
+}
+.btn {
+    padding: 12px 24px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+.btn-primary {
+    background-color: rgba(200, 109, 215, 0.5);
+    color: white;
+}
+.btn-primary:hover {
+    background-color: rgba(200, 109, 215, 0.7);
+    transform: translateY(-2px);
+}
+.btn-secondary {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-light);
+}
+.btn-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.2);
 }
