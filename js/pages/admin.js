@@ -329,8 +329,8 @@ export function handleAdminPage() {
                     console.error(`Error deleting ${type}:`, error);
                 }
             }
-        });
-    }
+        }; // <-- This is the closing brace for the handleDelete function
+    } // <-- This is the extra brace that caused the build error. It needs to be removed.
 
     // Attach delegated event listeners to the parent containers
     if (locationListDiv) locationListDiv.addEventListener('click', handleDelete);
