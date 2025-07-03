@@ -30,6 +30,43 @@
             width: 100%;
         }
 
+        /* NEW: General form group styling for all forms within cards */
+        .card form .form-group {
+            margin-bottom: 25px; /* Increased space between form groups */
+            display: flex;
+            flex-direction: column; /* Stack label and input vertically */
+            align-items: flex-start; /* Align label/input to the left */
+        }
+
+        .card form label {
+            margin-bottom: 8px; /* Space between label and input */
+            font-weight: 600;
+            color: var(--text-light);
+            display: block; /* Ensure label takes its own line */
+        }
+
+        .card form input[type="text"],
+        .card form input[type="email"],
+        .card form input[type="password"],
+        .card form input[type="time"], /* Added time input */
+        .card form select {
+            width: 100%; /* Inputs take full width of their container */
+            max-width: 450px; /* Limit overall width for better readability */
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-light);
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+
+        /* Adjust button margin for better spacing below the form */
+        .card form .btn-primary {
+            margin-top: 20px;
+            max-width: 450px; /* Match input width */
+            width: 100%; /* Ensure it's responsive */
+        }
+
         /* Styles for the business settings time inputs to align them horizontally */
         .time-input-group {
             display: flex;
@@ -41,7 +78,34 @@
             margin-bottom: 0; /* Remove default margin from form-group within this flex container */
         }
 
-        /* NEW: Styles for list items to align content and delete button */
+        /* NEW: Specific styling for the availability grid */
+        #employee-availability-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two columns for day and time range */
+            gap: 15px 20px; /* Vertical and horizontal gap */
+            margin-bottom: 25px; /* Space below the grid */
+            max-width: 450px; /* Match form input width */
+        }
+
+        #employee-availability-grid .availability-day {
+            display: flex;
+            flex-direction: column; /* Stack label and time range */
+            align-items: flex-start;
+        }
+
+        #employee-availability-grid .time-range {
+            display: flex;
+            gap: 10px; /* Space between start time, hyphen, and end time */
+            align-items: center;
+            width: 100%; /* Ensure time range takes full width */
+        }
+
+        #employee-availability-grid .time-range select {
+            flex: 1; /* Allow selects to grow and shrink */
+            max-width: none; /* Override max-width from general input rule */
+        }
+
+        /* Styles for list items to align content and delete button */
         .list-item {
             display: flex; /* Enable flexbox for horizontal alignment */
             justify-content: space-between; /* Pushes content to left, button to right */
@@ -56,6 +120,7 @@
             margin-bottom: 10px;
             border-left: 4px solid transparent;
             transition: all 0.3s ease;
+            flex-wrap: wrap; /* Allow content to wrap on smaller screens */
         }
 
         .list-item:hover {
@@ -78,7 +143,6 @@
             height: 36px; /* Fixed height for consistent button size */
             padding: 0; /* Remove padding as width/height are fixed */
             flex-shrink: 0; /* Prevent button from shrinking */
-            /* margin-left: 10px; */ /* Removed, gap handles spacing now */
             border-radius: 50%; /* Make it circular */
             background-color: rgba(255, 255, 255, 0.1); /* Match btn-secondary background */
             border: 1px solid rgba(255, 255, 255, 0.25); /* Match btn-secondary border */
@@ -88,15 +152,16 @@
         }
 
         .list-item .btn-delete:hover {
-            background-color: rgba(255, 255, 255, 0.2); /* Match btn-secondary hover */
-            transform: translateY(-1px); /* Slight lift on hover */
+            opacity: 1;
+            color: #e74c3c; /* Red color for delete on hover */
+            transform: scale(1.1); /* Slight enlarge on hover */
+            background-color: rgba(255, 255, 255, 0.2);
         }
 
         .list-item .btn-delete svg {
-            display: block; /* Ensure SVG behaves as a block element */
-            width: 18px; /* Adjust SVG size */
-            height: 18px; /* Adjust SVG size */
-            fill: currentColor; /* Inherit color from parent */
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
         }
     </style>
 </head>
@@ -121,7 +186,7 @@
             <a href="admin.html" class="active">Admin Settings</a>
         </nav>
         <section id="admin-settings-content">
-            <h2 style="color: var(--text-light);">Admin Settings</h2> <!-- Added a main heading -->
+            <h2 style="color: var(--text-light);">Admin Settings</h2>
             <div class="admin-grid">
                 <!-- Column 1: Business Settings & Manage Locations -->
                 <div>
