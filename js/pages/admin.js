@@ -171,18 +171,26 @@ export function handleAdminPage() {
                         userListDiv.appendChild(groupHeader);
                         
                         group.forEach(user => {
-                            // Ensure position and location_name are displayed as 'N/A' or empty if null/undefined/empty string
-                            const userPosition = (user.position && user.position.trim() !== '') ? user.position : 'N/A';
+                            let userDisplayTitle;
+                            // Determine the title to display based on role or position
+                            // NEW LOGIC: Use role for Super Admin and Location Admin
+                            if (user.role === 'super_admin') {
+                                userDisplayTitle = 'Super Admin';
+                            } else if (user.role === 'location_admin') {
+                                userDisplayTitle = 'Location Admin';
+                            } else { // employee role
+                                userDisplayTitle = (user.position && user.position.trim() !== '') ? user.position : 'N/A';
+                            }
+
                             const userLocationDisplay = (user.location_name && user.location_name.trim() !== '') 
                                 ? `<br><small style="color:var(--text-medium);">Location: ${user.location_name}</small>` 
                                 : ''; // Only display location line if location_name exists
 
                             const listItem = document.createElement('div');
                             listItem.className = 'list-item';
-                            // Re-structured template literal for clarity and to avoid potential parsing issues
                             listItem.innerHTML = `
                                 <span>
-                                    <strong>${user.full_name}</strong> (${userPosition}) 
+                                    <strong>${user.full_name}</strong> (${userDisplayTitle}) 
                                     ${userLocationDisplay}
                                 </span>
                                 <button class="btn-delete" data-id="${user.user_id}" data-type="user" title="Delete User">
@@ -321,8 +329,8 @@ export function handleAdminPage() {
                     console.error(`Error deleting ${type}:`, error);
                 }
             }
-        }
-    };
+        });
+    }
 
     // Attach delegated event listeners to the parent containers
     if (locationListDiv) locationListDiv.addEventListener('click', handleDelete);
