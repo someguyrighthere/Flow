@@ -186,7 +186,8 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
         res.json({ plan: 'Pro Plan' });
-    } catch (err) {
+    }
+    catch (err) {
         console.error('Error fetching subscription status:', err);
         res.status(500).json({ error: 'Failed to retrieve subscription status.' });
     }
@@ -358,7 +359,6 @@ apiRoutes.get('/job-postings', isAuthenticated, async (req, res) => {
             ORDER BY jp.created_at DESC
         `;
         const params = [];
-        // If location_admin, filter job postings by their assigned location
         if (req.user.role === 'location_admin') {
             query += ' WHERE jp.location_id = $1';
             params.push(req.user.location_id);
@@ -407,21 +407,30 @@ apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res)
 // Applicants Routes (Public and Admin)
 // Public endpoint for job application submission
 app.post('/apply/:jobId', async (req, res) => {
-    const { jobId } = req.params;
-    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
+    const { jobId } = req.params; // Get jobId from URL parameters
+    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body; // Get other fields from body
 
+    // Basic validation for required fields
     if (!jobId || !name || !email || !availability) {
         return res.status(400).json({ error: 'Job ID, name, email, and availability are required.' });
     }
 
     try {
+        // Ensure date_of_birth is handled correctly for optionality
+        const dobValue = date_of_birth ? date_of_birth : null; // Set to null if empty string
+
         const result = await pool.query(
-            `INSERT INTO applicants (job_posting_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [jobId, name, email, address, phone, date_of_birth, availability, is_authorized]
+            `INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            //                       ^^^^^^ CORRECTED: Changed from job_posting_id to job_id
+            [jobId, name, email, address, phone, dobValue, availability, is_authorized]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('Error submitting application:', err);
+        // Check for specific database errors if needed, e.g., foreign key violation
+        if (err.code === '23503') { // PostgreSQL foreign key violation error code
+            return res.status(400).json({ error: 'Invalid Job ID. The job posting may not exist.' });
+        }
         res.status(500).json({ error: 'Failed to submit application.' });
     }
 });
@@ -452,40 +461,4 @@ apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     }
     catch (err) {
         console.error('Error retrieving applicants:', err);
-        res.status(500).json({ error: 'Failed to retrieve applicants.' });
-    }
-});
-
-// DELETE an applicant (archive)
-apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM applicants WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Applicant not found.' });
-        }
-        res.status(204).send(); // 204 No Content for successful deletion
-    } catch (err) {
-        console.error('Error deleting applicant:', err);
-        res.status(500).json({ error: 'Failed to delete applicant.' });
-    }
-});
-
-
-// Onboarding Routes
-onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
-
-// The server startup logic
-const startServer = async () => {
-    try {
-        const client = await pool.connect();
-        console.log('Connected to the PostgreSQL database.');
-        client.release();
-        app.listen(PORT, '0.0.0.0', () => console.log(`Server is running on port ${PORT}`));
-    } catch (err) {
-        console.error('Failed to start server:', err.stack);
-        process.exit(1);
-    }
-};
-
-startServer();
+        res.status(
