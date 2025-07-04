@@ -42,6 +42,9 @@ export function handleSchedulingPage() {
     const START_HOUR = 0;  // Display calendar from 00:00 (12 AM)
     const END_HOUR = 24;   // Display calendar until 24:00 (end of day, effectively covers up to 11:59 PM)
 
+    // Key for storing Super Admin's preferred location in localStorage
+    const SUPER_ADMIN_PREF_LOCATION_KEY = 'superAdminPrefLocationId';
+
     /**
      * Helper function to robustly parse a "YYYY-MM-DD HH:MM:SS" string as a local Date object.
      * This avoids timezone interpretation issues with `new Date()` directly.
@@ -235,9 +238,6 @@ export function handleSchedulingPage() {
                     durationMinutes += (24 * 60); // Add 24 hours if end time is on the next day
                 }
 
-                // IMPORTANT: Since START_HOUR is now 0 and END_HOUR is 24,
-                // shifts should theoretically always fit without "clipping" against the calendar boundaries.
-                // However, the logic below still calculates relative to START_HOUR for positioning.
                 const calendarDisplayStartMinutes = START_HOUR * 60; 
 
                 // The `top` position is relative to START_HOUR (which is 00:00).
@@ -259,9 +259,7 @@ export function handleSchedulingPage() {
                     
                     targetColumn.appendChild(shiftBlock);
                 } else {
-                    // This else block should now ideally only hit for extremely short shifts,
-                    // or negative durations (if not handled by `durationMinutes`), or outside the new 0-24 range.
-                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid calculated rendering size. Start: ${shiftStart.toLocaleTimeString()}, End: ${shiftEnd.toLocaleTimeString()}. Calculated top: ${top}, height: ${height}`);
+                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid calculated rendering size. Start: ${formattedStartTime}, End: ${formattedEndTime}. Calculated top: ${top}, height: ${height}`);
                 }
             } else {
                 console.warn(`Could not find target column for dayIndex: ${dayIndex} for shift ID: ${shift.id}. (Shift might be on a different day than the displayed week)`);
@@ -309,24 +307,28 @@ export function handleSchedulingPage() {
         const endTime = endTimeSelect.value;
 
         if (!startDate || !startTime || !endDate || !endTime) {
-            return showModalMessage('Please select a valid date and time for both start and end.', true);
+            return showModalMessage('Please provide all date and time fields for the shift.', true); // More specific message
         }
 
-        // Combine date and time inputs into full ISO format strings (without Z for UTC)
-        // These will be saved to the database as `timestamp without time zone`
-        const startDateTime = `${startDate}T${startTime}:00`; // Append :00 for seconds
-        const endDateTime = `${endDate}T${endTime}:00`; // Append :00 for seconds
+        // Basic validation: Ensure end time is after start time
+        const shiftStartDateTimeString = `${startDate}T${startTime}:00`;
+        const shiftEndDateTimeString = `${endDate}T${endTime}:00`;
+        
+        if (new Date(shiftStartDateTimeString).getTime() >= new Date(shiftEndDateTimeString).getTime()) {
+             showModalMessage('Shift end time must be after start time.', true);
+             return;
+        }
 
         const shiftData = {
             employee_id: employeeSelect.value,
             location_id: locationSelect.value,
-            start_time: startDateTime,
-            end_time: endDateTime,
+            start_time: shiftStartDateTimeString,
+            end_time: shiftEndDateTimeString,
             notes: document.getElementById('notes-input').value
         };
 
         if (!shiftData.employee_id || !shiftData.location_id) {
-            return showModalMessage('Please select an employee and location.', true);
+            return showModalMessage('Please select an employee and location for the shift.', true); // More specific message
         }
         
         try {
@@ -345,14 +347,16 @@ export function handleSchedulingPage() {
     if (locationSelector) {
         locationSelector.addEventListener('change', () => {
             const newLocationId = locationSelector.value;
+            // Store selected location ID in localStorage for Super Admin persistence
             if (newLocationId) {
+                localStorage.setItem(SUPER_ADMIN_PREF_LOCATION_KEY, newLocationId);
                 currentLocationId = newLocationId; // Update the module-level state
                 loadAndRenderWeeklySchedule(newLocationId);
             } else {
-                 // If "Select a Location" is chosen, clear the schedule view
-                currentLocationId = null;
-                currentWeekDisplay.textContent = 'Select a location';
-                calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
+                 localStorage.removeItem(SUPER_ADMIN_PREF_LOCATION_KEY); // Clear preference if "Select Location" is chosen
+                 currentLocationId = null;
+                 currentWeekDisplay.textContent = 'Select a location';
+                 calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
             }
         });
     }
@@ -369,18 +373,26 @@ export function handleSchedulingPage() {
                 if (locationSelector) {
                     locationSelector.innerHTML = '<option value="">Select a Location</option>';
                     if (locations && locations.length > 0) {
-                        // Iterate over the 'locations' array received from the API.
                         locations.forEach(loc => {
                             locationSelector.add(new Option(loc.location_name, loc.location_id));
                         });
-                        // Set the initial location to the first one available for super_admin
-                        const initialLocationId = locations[0].location_id; 
-                        locationSelector.value = initialLocationId; // Pre-select in the top dropdown
-                        
-                        // THIS IS THE CRUCIAL LINE FOR SUPER_ADMIN INITIALIZATION:
-                        currentLocationId = initialLocationId; // Set the module-level state variable for the initial load
 
+                        // Attempt to retrieve Super Admin's preferred location from localStorage
+                        const savedLocationId = localStorage.getItem(SUPER_ADMIN_PREF_LOCATION_KEY);
+                        let initialLocationId = null;
+
+                        if (savedLocationId && locations.some(loc => String(loc.location_id) === savedLocationId)) {
+                            // Use saved location if it exists and is still a valid location
+                            initialLocationId = savedLocationId;
+                        } else {
+                            // Otherwise, default to the first available location
+                            initialLocationId = locations[0].location_id; 
+                        }
+                        
+                        locationSelector.value = initialLocationId; // Pre-select in the top dropdown
+                        currentLocationId = initialLocationId; // Set the module-level state variable
                         loadAndRenderWeeklySchedule(initialLocationId); // Load schedule for this initial location
+
                     } else {
                         currentWeekDisplay.textContent = 'No Locations';
                         calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please create a location in Admin Settings.</p>';
