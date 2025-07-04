@@ -223,8 +223,7 @@
             flex-direction: column;
             position: relative; 
             
-            /* Apply horizontal scrolling here */
-            overflow-x: auto; 
+            overflow-x: auto; /* Apply horizontal scrolling here */
             scrollbar-width: thin; /* Firefox */
             scrollbar-color: var(--primary-accent) rgba(255, 255, 255, 0.1); /* Firefox */
         }
@@ -248,18 +247,16 @@
 
 
         .calendar-grid {
-            display: flex;
+            display: flex; /* Changed to flex for simpler layout */
             flex-direction: column;
-            /* NEW: Ensure grid cells expand to fill available space */
-            width: 100%; /* Take full width of parent */
-            min-width: calc(80px + (7 * 200px)); /* Minimum total width (time column + 7 days * min 200px/day) */
-            height: auto;
+            width: 100%; /* Take full width of its container */
+            min-width: 1500px; /* Maintain a minimum width for content overflow */
+            height: auto; /* Allow height to expand for scrolling */
         }
 
         .calendar-grid-header {
-            display: grid;
-            /* NEW: Use flexible fr units for days to expand, 80px for time column */
-            grid-template-columns: 80px repeat(7, 1fr);
+            display: grid; /* Keep grid for internal columns */
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Defines all 8 columns */
             position: sticky;
             top: 0;
             z-index: 6;
@@ -269,16 +266,15 @@
         }
 
         .calendar-body {
-            display: grid;
-            /* NEW: Use flexible fr units for days to expand, 80px for time column */
-            grid-template-columns: 80px repeat(7, 1fr);
+            display: grid; /* Keep grid for internal columns */
+            grid-template-columns: 80px repeat(7, minmax(200px, 1fr)); /* Defines all 8 columns */
             flex-grow: 1;
             overflow-y: scroll; 
             position: relative; 
-            max-height: 600px; /* Adjust this value as needed, e.g., 600px or 70vh */
-            min-height: 300px; /* Ensure a minimum visible area */
-            box-sizing: content-box;
-            padding: 0;
+            height: 1440px; /* Force 24 hours * 60px/hour = 1440px total height */
+            min-height: 1440px; 
+            box-sizing: content-box; 
+            padding: 0; 
             margin: 0;
         }
 
@@ -299,8 +295,8 @@
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
-            grid-column: 1;
-            height: 100%; 
+            grid-column: 1; /* Still relevant as child of grid */
+            height: 1440px; /* Explicitly set to match total calendar body height */
             display: flex;
             flex-direction: column;
             box-sizing: content-box; 
@@ -328,7 +324,7 @@
         .day-column {
             position: relative; /* CRUCIAL for absolute positioning of shifts/blocks */
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-            height: 100%; /* Will inherit the max-height from calendar-body for positioning context */
+            height: 100%; /* Will inherit the 1440px from calendar-body for positioning context */
             overflow: hidden; 
             box-sizing: content-box; 
             padding: 0;
@@ -353,8 +349,8 @@
         /* All these blocks are positioned absolutely within .day-column */
         .calendar-shift, .availability-block, .business-hours-block {
             position: absolute;
-            width: calc(100% - 4px); /* Full width of column minus padding */
-            left: 2px; /* Small offset from left border */
+            width: calc(100% - 4px); 
+            left: 2px; 
             box-sizing: border-box;
             border-radius: 4px;
         }
@@ -369,9 +365,9 @@
             z-index: 3;
             cursor: pointer;
             overflow: hidden;
-            white-space: nowrap; /* Keep text on one line */
-            text-overflow: ellipsis; /* Add ellipsis for overflow */
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3); /* Subtle shadow */
+            white-space: nowrap; 
+            text-overflow: ellipsis; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); 
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
         .calendar-shift:hover {
@@ -593,4 +589,107 @@
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.46
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                </button>
+                <div id="settings-dropdown" class="settings-dropdown">
+                    <a href="account.html">My Account</a>
+                    <a href="admin.html">Admin Settings</a>
+                    <a href="pricing.html">Upgrade Plan</a>
+                    <button id="logout-button">Logout</button>
+                </div>
+            </div>
+        </header>
+        <nav class="main-nav">
+            <a href="suite-hub.html">App Hub</a>
+            <a href="scheduling.html" class="active">Scheduling</a>
+        </nav>
+
+        <section>
+            <h2 style="color: var(--text-light);">Employee Scheduling</h2>
+            <div class="scheduling-layout">
+                <div class="sidebar">
+                    <div id="super-admin-location-selector" class="form-group super-admin-location-selector" style="display: none;">
+                        <label for="super-admin-location-select">View Schedule For:</label>
+                        <select id="super-admin-location-select"></select>
+                    </div>
+
+                    <h3>Create New Shift</h3>
+                    <form id="create-shift-form">
+                        <div class="form-group">
+                            <label for="employee-select">Employee</label>
+                            <select id="employee-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="location-select">Location</label>
+                            <select id="location-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="start-time-input">Start Time</label>
+                            <input type="datetime-local" id="start-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-time-input">End Time</label>
+                            <input type="datetime-local" id="end-time-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes-input">Notes (Optional)</label>
+                            <textarea id="notes-input" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Shift</button>
+                    </form>
+
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-availability" checked>
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="color: var(--text-light);">Show Employee Availability</span>
+                    </div>
+                </div>
+
+                <div class="calendar-main">
+                    <div class="calendar-header">
+                        <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
+                        <h3 id="current-week-display">Loading...</h3>
+                        <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
+                    </div>
+                    <div class="calendar-grid-container">
+                        <div id="calendar-grid">
+                            </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mobile-calendar-view">
+                <div class="mobile-calendar-header">
+                    <button id="mobile-prev-day-btn" class="btn btn-secondary">◀</button>
+                    <h3 id="mobile-current-day-display" class="mobile-calendar-day-display">Loading...</h3>
+                    <button id="mobile-next-day-btn" class="btn btn-secondary">▶</button>
+                </div>
+                <div id="mobile-day-column" class="mobile-day-column">
+                    </div>
+            </div>
+        </section>
+    </div>
+    
+    <div id="modal-message" class="modal">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="dist/js/bundle.js"></script>
+</body>
+</html>
