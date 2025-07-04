@@ -77,11 +77,14 @@ apiRoutes.post('/register', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        // For super_admin registration, create a location but do NOT assign it to the super_admin
+        // Super admins are global and manage locations, not belong to one.
         const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`,[`${companyName} HQ`]);
-        const locationId = locationRes.rows[0].location_id;
+        const locationId = locationRes.rows[0].location_id; // Store this for potential future use or reference
+
         const hash = await bcrypt.hash(password, 10);
-        // Ensure location_id is set for the super_admin during registration
-        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, locationId]);
+        // Set location_id to NULL for super_admin during registration
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', NULL) RETURNING user_id`, [fullName, email, hash]);
         await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
@@ -225,19 +228,23 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     let targetLocationId;
 
-    // Super Admin: If location_id is provided in query, use it. Otherwise, use their assigned location_id.
+    // Super Admin: If location_id is provided in query, use it. Otherwise, their location_id in JWT might be NULL.
+    // If no location_id is explicitly requested by query param and super admin has no assigned location,
+    // we return default null settings gracefully.
     if (req.user.role === 'super_admin') {
-        targetLocationId = req.query.location_id || req.user.location_id;
-    } else { // location_admin or employee (though employee shouldn't access this)
+        targetLocationId = req.query.location_id; // Only use query param for super admin
+    } else { // location_admin or employee (though employee shouldn't access this route due to isAdmin middleware)
         targetLocationId = req.user.location_id;
     }
 
-    // If, after all checks, targetLocationId is still null, it's an issue.
+    // If targetLocationId is still null here, it means a super_admin didn't specify a location_id
+    // and they don't have one assigned. In this case, we return default empty settings.
     if (targetLocationId == null) {
-        console.warn("[Backend] GET /settings/business: Could not determine a target location_id for settings.");
-        return res.status(400).json({ error: 'A valid location must be associated with the user or specified to retrieve business settings.' });
+        console.log("[Backend] GET /settings/business: Super admin not tied to a specific location and no location_id query param provided. Returning default null settings.");
+        return res.json({ operating_hours_start: null, operating_hours_end: null });
     }
 
+    // Proceed with fetching settings for the determined targetLocationId
     try {
         const result = await pool.query(
             'SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1',
@@ -249,8 +256,7 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
             res.json(result.rows[0]); // Return actual settings if found
         } else {
             console.log("[Backend] No business settings found for location:", targetLocationId, "Returning nulls.");
-            // If no settings exist for this location, return default empty values, not an error
-            res.json({ operating_hours_start: null, operating_hours_end: null }); 
+            res.json({ operating_hours_start: null, operating_hours_end: null });
         }
     } catch (err) {
         console.error('[Backend] Error fetching business settings:', err);
@@ -264,7 +270,7 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
     
     let targetLocationId;
     if (req.user.role === 'super_admin') {
-        targetLocationId = requestedLocationId || req.user.location_id;
+        targetLocationId = requestedLocationId || req.user.location_id; // Super admin can specify or use their assigned if exists
     } else {
         targetLocationId = req.user.location_id;
     }
