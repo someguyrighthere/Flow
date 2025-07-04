@@ -250,34 +250,36 @@
         .calendar-grid {
             display: flex;
             flex-direction: column;
-            width: 100%; /* Ensure it takes full width of its container */
-            min-width: 1500px; /* Maintain a minimum width for content overflow */
-            height: auto; /* Allow height to expand for scrolling */
+            /* NEW: Ensure grid cells expand to fill available space */
+            width: 100%; /* Take full width of parent */
+            min-width: calc(80px + (7 * 200px)); /* Minimum total width (time column + 7 days * min 200px/day) */
+            height: auto;
         }
 
         .calendar-grid-header {
             display: grid;
-            grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
-            position: sticky; /* Make header sticky vertically within its scrollable parent */
-            top: 0; /* Stick to the top */
+            /* NEW: Use flexible fr units for days to expand, 80px for time column */
+            grid-template-columns: 80px repeat(7, 1fr);
+            position: sticky;
+            top: 0;
             z-index: 6;
             background-color: #1a1a1a;
             border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0; /* Prevent shrinking when scrolling */
+            flex-shrink: 0;
         }
 
         .calendar-body {
             display: grid;
-            grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
+            /* NEW: Use flexible fr units for days to expand, 80px for time column */
+            grid-template-columns: 80px repeat(7, 1fr);
             flex-grow: 1;
             overflow-y: scroll; 
             position: relative; 
-            /* NEW: Set a max-height instead of fixed height for better usability */
             max-height: 600px; /* Adjust this value as needed, e.g., 600px or 70vh */
             min-height: 300px; /* Ensure a minimum visible area */
-            box-sizing: content-box; /* Crucial for pixel-perfect top/height calculations */
-            padding: 0; /* Remove any default padding */
-            margin: 0; /* Remove any default margin */
+            box-sizing: content-box;
+            padding: 0;
+            margin: 0;
         }
 
         .calendar-day-header {
@@ -297,13 +299,13 @@
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
-            /* NEW: Height should be 100% to match calendar-body's scrollable height */
+            grid-column: 1;
             height: 100%; 
             display: flex;
             flex-direction: column;
             box-sizing: content-box; 
-            padding: 0; /* Remove default padding */
-            margin: 0; /* Remove default padding */
+            padding: 0;
+            margin: 0;
         }
         .time-slot {
             height: 60px; /* Each time slot represents one hour, 60px height */
@@ -316,7 +318,6 @@
             font-size: 0.8rem;
             color: var(--text-medium);
             flex-shrink: 0;
-            /* Ensure no extra space inside time slots */
             padding: 0;
             margin: 0;
         }
@@ -330,8 +331,8 @@
             height: 100%; /* Will inherit the max-height from calendar-body for positioning context */
             overflow: hidden; 
             box-sizing: content-box; 
-            padding: 0; /* Ensure no padding */
-            margin: 0; /* Ensure no margin */
+            padding: 0;
+            margin: 0;
         }
         .day-column:last-child {
             border-right: none;
@@ -341,8 +342,8 @@
             height: 60px; /* Should match time-slot height for alignment */
             border-bottom: 1px dashed rgba(255, 255, 255, 0.05); /* Made more subtle */
             box-sizing: content-box; 
-            padding: 0; /* Ensure no padding */
-            margin: 0; /* Ensure no margin */
+            padding: 0;
+            margin: 0;
         }
         .hour-line:last-child {
             border-bottom: none;
@@ -588,118 +589,8 @@
 <body>
     <div class="background-animation"></div>
     <div class="container">
-        <!-- Main Navigation (Corrected Structure as per previous request) -->
         <header class="dashboard-header">
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
                 <button id="settings-button" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z"/></svg>
-                </button>
-                <div id="settings-dropdown" class="settings-dropdown">
-                    <a href="account.html">My Account</a>
-                    <a href="admin.html">Admin Settings</a>
-                    <a href="pricing.html">Upgrade Plan</a>
-                    <button id="logout-button">Logout</button>
-                </div>
-            </div>
-        </header>
-        <nav class="main-nav">
-            <a href="suite-hub.html">App Hub</a>
-            <a href="scheduling.html" class="active">Scheduling</a>
-        </nav>
-
-        <section>
-            <h2 style="color: var(--text-light);">Employee Scheduling</h2>
-            <div class="scheduling-layout">
-                <div class="sidebar">
-                    <!-- NEW: Super Admin Location Selector (hidden by default) -->
-                    <div id="super-admin-location-selector" class="form-group super-admin-location-selector" style="display: none;">
-                        <label for="super-admin-location-select">View Schedule For:</label>
-                        <select id="super-admin-location-select"></select>
-                    </div>
-
-                    <h3>Create New Shift</h3>
-                    <form id="create-shift-form">
-                        <div class="form-group">
-                            <label for="employee-select">Employee</label>
-                            <select id="employee-select" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="location-select">Location</label>
-                            <select id="location-select" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="start-time-input">Start Time</label>
-                            <input type="datetime-local" id="start-time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="end-time-input">End Time</label>
-                            <input type="datetime-local" id="end-time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="notes-input">Notes (Optional)</label>
-                            <textarea id="notes-input" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Add Shift</button>
-                    </form>
-
-                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-availability" checked>
-                            <span class="slider round"></span>
-                        </label>
-                        <span style="color: var(--text-light);">Show Employee Availability</span>
-                    </div>
-                </div>
-
-                <div class="calendar-main">
-                    <div class="calendar-header">
-                        <button id="prev-week-btn" class="btn btn-secondary">◀ Previous</button>
-                        <h3 id="current-week-display">Loading...</h3>
-                        <button id="next-week-btn" class="btn btn-secondary">Next ▶</button>
-                    </div>
-                    <div class="calendar-grid-container">
-                        <div id="calendar-grid">
-                            <!-- JS will build the header (.calendar-grid-header) 
-                                 and body (.calendar-body) with time/day columns here -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- NEW: Mobile-specific calendar view -->
-            <div class="mobile-calendar-view">
-                <div class="mobile-calendar-header">
-                    <button id="mobile-prev-day-btn" class="btn btn-secondary">◀</button>
-                    <h3 id="mobile-current-day-display" class="mobile-calendar-day-display">Loading...</h3>
-                    <button id="mobile-next-day-btn" class="btn btn-secondary">▶</button>
-                </div>
-                <div id="mobile-day-column" class="mobile-day-column">
-                    <!-- Mobile time slots, shifts, availability, business hours will be rendered here by JS -->
-                </div>
-            </div>
-        </section>
-    </div>
-    
-    <!-- Modals (message and confirmation) -->
-    <div id="modal-message" class="modal">
-        <div class="modal-content">
-            <p id="modal-text"></p>
-            <div class="modal-actions">
-                <button id="modal-ok-button" class="btn btn-primary">OK</button>
-            </div>
-        </div>
-    </div>
-    <div id="confirm-modal" class="modal">
-        <div class="modal-content">
-            <p id="confirm-modal-text"></p>
-            <div class="modal-actions">
-                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
-                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
-            </div>
-        </div>
-    </div>
-    
-    <script type="module" src="dist/js/bundle.js"></script>
-</body>
-</html>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.46
