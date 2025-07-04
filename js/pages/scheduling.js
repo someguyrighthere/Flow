@@ -22,15 +22,11 @@ export function handleSchedulingPage() {
     const locationSelect = document.getElementById('location-select');
 
     const availabilityToggle = document.getElementById('toggle-availability');
-    // Removed: dailyHoursInputsDiv, autoGenerateScheduleBtn, autoScheduleStatusMessage
 
     // Initialize currentStartDate to the beginning of the current week (Sunday)
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0); // Set to midnight for consistent date comparison
-
-    // Removed: dailyTargetHours state variable
-    // Removed: displayAutoScheduleStatus helper function
 
     /**
      * Renders the calendar grid for a given week.
@@ -104,6 +100,77 @@ export function handleSchedulingPage() {
     }
 
     /**
+     * Helper function to detect overlaps and calculate positions for shifts.
+     * @param {Array<Object>} shifts - An array of shift objects for a single day.
+     * @returns {Array<Object>} Shifts with added 'column' and 'totalColumns' properties.
+     */
+    function calculateShiftPositions(shifts) {
+        // Sort shifts by start time, then by end time (for consistent overlap detection)
+        shifts.sort((a, b) => {
+            const startA = new Date(a.start_time).getTime();
+            const startB = new Date(b.start_time).getTime();
+            if (startA !== startB) return startA - startB;
+            const endA = new Date(a.end_time).getTime();
+            const endB = new Date(b.end_time).getTime();
+            return endA - endB;
+        });
+
+        // This array will hold "columns" of non-overlapping shifts
+        const columns = [];
+
+        shifts.forEach(shift => {
+            const shiftStart = new Date(shift.start_time).getTime();
+            const shiftEnd = new Date(shift.end_time).getTime();
+            
+            let placed = false;
+            // Try to place the shift in an existing column
+            for (let i = 0; i < columns.length; i++) {
+                const column = columns[i];
+                // Check if this shift overlaps with any shift already in this column
+                const overlapsInColumn = column.some(existingShift => {
+                    const existingStart = new Date(existingShift.start_time).getTime();
+                    const existingEnd = new Date(existingShift.end_time).getTime();
+                    // Overlap if (startA < endB && endA > startB)
+                    return (shiftStart < existingEnd && shiftEnd > existingStart);
+                });
+
+                if (!overlapsInColumn) {
+                    column.push(shift);
+                    shift.column = i; // Assign column index
+                    placed = true;
+                    break;
+                }
+            }
+
+            // If it couldn't be placed in an existing column, create a new one
+            if (!placed) {
+                columns.push([shift]);
+                shift.column = columns.length - 1; // Assign new column index
+            }
+        });
+
+        // Now, iterate through all shifts again to set totalColumns for proper width calculation
+        shifts.forEach(shift => {
+            // Find all shifts that overlap with the current shift
+            const overlappingShifts = shifts.filter(otherShift => {
+                if (shift === otherShift) return false; // Don't compare with itself
+                const startA = new Date(shift.start_time).getTime();
+                const endA = new Date(shift.end_time).getTime();
+                const startB = new Date(otherShift.start_time).getTime();
+                const endB = new Date(otherShift.end_time).getTime();
+                return (startA < endB && endA > startB);
+            });
+
+            // The total number of columns needed for this specific set of overlapping shifts
+            // is the maximum column index among them (including itself) + 1
+            const maxColumnIndex = Math.max(shift.column, ...overlappingShifts.map(s => s.column));
+            shift.totalColumns = maxColumnIndex + 1;
+        });
+
+        return shifts;
+    }
+
+    /**
      * Fetches shift data from the backend API for the current week and renders each shift as a visual block.
      * @param {Date} start - The start date for fetching shifts (beginning of the week).
      * @param {Date} end - The end date for fetching shifts (end of the week).
@@ -123,40 +190,62 @@ export function handleSchedulingPage() {
             const shifts = await apiRequest('GET', `/api/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
             
             if (shifts && shifts.length > 0) {
+                // Group shifts by day
+                const shiftsByDay = {};
                 shifts.forEach(shift => {
-                    const shiftStart = new Date(shift.start_time);
-                    const shiftEnd = new Date(shift.end_time);
-                    
-                    const dayIndex = shiftStart.getDay(); // 0 for Sunday, 1 for Monday, etc.
-                    const dayColumn = document.getElementById(`day-column-${dayIndex}`);
-
-                    if (dayColumn) {
-                        // Calculate top and height for the shift block in pixels (1 minute = 1 pixel)
-                        const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
-                        const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
-                        const heightMinutes = endMinutes - startMinutes;
-                        
-                        const shiftElement = document.createElement('div');
-                        shiftElement.className = 'calendar-shift';
-                        shiftElement.style.top = `${startMinutes}px`;
-                        shiftElement.style.height = `${heightMinutes}px`;
-                        
-                        const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                        const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
-                        const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
-
-                        shiftElement.innerHTML = `
-                            <strong>${shift.employee_name}</strong><br>
-                            <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
-                            <span style="color: #ddd;">${shift.location_name || ''}</span>
-                            <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
-                            </button>
-                        `;
-                        shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
-                        
-                        dayColumn.appendChild(shiftElement);
+                    const shiftDate = new Date(shift.start_time);
+                    const dayKey = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                    if (!shiftsByDay[dayKey]) {
+                        shiftsByDay[dayKey] = [];
                     }
+                    shiftsByDay[dayKey].push(shift);
+                });
+
+                // Process each day's shifts for overlaps
+                Object.keys(shiftsByDay).forEach(dayKey => {
+                    const dailyShifts = shiftsByDay[dayKey];
+                    const processedShifts = calculateShiftPositions(dailyShifts);
+
+                    processedShifts.forEach(shift => {
+                        const shiftStart = new Date(shift.start_time);
+                        const shiftEnd = new Date(shift.end_time);
+                        
+                        const dayIndex = shiftStart.getDay(); // 0 for Sunday, 1 for Monday, etc.
+                        const dayColumn = document.getElementById(`day-column-${dayIndex}`);
+
+                        if (dayColumn) {
+                            // Calculate top and height for the shift block in pixels (1 minute = 1 pixel)
+                            const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
+                            const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
+                            const heightMinutes = endMinutes - startMinutes;
+                            
+                            const shiftElement = document.createElement('div');
+                            shiftElement.className = 'calendar-shift';
+                            shiftElement.style.top = `${startMinutes}px`;
+                            shiftElement.style.height = `${heightMinutes}px`;
+
+                            // Apply positioning for overlapping shifts
+                            const columnWidth = 100 / shift.totalColumns;
+                            shiftElement.style.width = `calc(${columnWidth}% - 4px)`; // Adjust width for columns
+                            shiftElement.style.left = `calc(2px + ${shift.column * columnWidth}%)`; // Position in its column
+                            
+                            const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
+                            const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
+                            const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
+
+                            shiftElement.innerHTML = `
+                                <strong>${shift.employee_name}</strong><br>
+                                <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
+                                <span style="color: #ddd;">${shift.location_name || ''}</span>
+                                <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                                </button>
+                            `;
+                            shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
+                            
+                            dayColumn.appendChild(shiftElement);
+                        }
+                    });
                 });
             }
         }
@@ -280,10 +369,6 @@ export function handleSchedulingPage() {
         }
     }
 
-    // Removed: generateDailyHoursInputs function
-    // Removed: loadDailyHours function
-    // Removed: saveDailyHours function
-
     // --- Event Handlers ---
 
     // Event listener for deleting shifts using event delegation on the calendar grid
@@ -377,11 +462,8 @@ export function handleSchedulingPage() {
             }
         });
     }
-
-    // Removed: Event listener for the "Auto-Generate Schedule" button
     
     // --- Initial Page Load Actions ---
     renderCalendar(currentStartDate); // Render the initial calendar view
     populateDropdowns(); // Populate employee and location dropdowns
-    // Removed: loadDailyHours()
 }
