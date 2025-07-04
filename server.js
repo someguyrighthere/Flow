@@ -62,6 +62,7 @@ app.use(express.static(path.join(__dirname))); // Serve static files from the ro
 app.use('/uploads', express.static(uploadsDir)); // Serve files from the 'uploads' directory statically
 
 // Mount API routes under the '/api' prefix
+// THIS LINE IS CRITICAL FOR YOUR ROUTES TO BE ACCESSIBLE UNDER /api
 app.use('/api', apiRoutes); 
 
 // --- Authentication & Authorization Middleware ---
@@ -112,7 +113,7 @@ apiRoutes.post('/register', async (req, res) => {
         // Create the super_admin user, linking them to their first created location
         await client.query(
             `INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, 
-            [fullName, email, hash, newLocationId]
+            [fullName, email, hash, newLocationId] // Link super_admin to their first location
         );
         await client.query('COMMIT'); // Commit transaction
         console.log(`[Auth/Register] Registration successful for "${email}" under company "${companyName}".`);
@@ -204,15 +205,16 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
 
     } catch (err) {
         console.error(`[Users/Me] Error updating profile for user ${userId}:`, err);
-        if (err.code === '23505') { // Unique violation for email
+        if (err.code === '23505') { 
             return res.status(409).json({ error: 'Email address is already in use by another account.' });
         }
         res.status(500).json({ error: 'Failed to update profile.' });
     }
 });
 
+
 apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_id } = req.query; // Super admin can pass location_id
+    const { location_id } = req.query; 
     console.log(`[Users/Availability] Request. User ID: ${req.user.id}, Role: ${req.user.role}, Query Location ID: ${location_id || 'N/A'}.`);
     try {
         let query = `SELECT user_id, full_name, availability, location_id FROM users`;
@@ -229,17 +231,16 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
             params.push(location_id);
             console.log(`[Users/Availability] Super admin filtering by provided query location: ${location_id}.`);
         } else if (req.user.role === 'super_admin' && !location_id) {
-            // Super admin requests all users, no location filter applies
             console.log(`[Users/Availability] Super admin fetching all users (no location filter applied).`);
         } else {
             console.log(`[Users/Availability] Non-admin user attempting to fetch availability, returning empty array.`);
-            return res.json([]); // Only admins should fetch availability for others
+            return res.json([]); 
         }
 
         if (whereClauses.length > 0) {
             query += ' WHERE ' + whereClauses.join(' AND ');
         }
-        query += ' ORDER BY full_name'; // Order results alphabetically by full name
+        query += ' ORDER BY full_name'; 
 
         console.log(`[Users/Availability] Executing SQL query: "${query}" with params: [${params.join(', ')}].`);
         const result = await pool.query(query, params);
@@ -252,7 +253,7 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
 });
 
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_id } = req.query; // Super admin can pass location_id
+    const { location_id } = req.query; 
     console.log(`[GET /api/users] Request. User ID: ${req.user.id}, Role: ${req.user.role}, Query Location ID: ${location_id || 'N/A'}.`);
     try {
         let query = `
@@ -264,7 +265,7 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         let paramIndex = 1;
 
         if (req.user.role === 'location_admin') {
-            whereClauses.push(`u.location_id = $${paramIndex++}`);
+            whereClaues.push(`u.location_id = $${paramIndex++}`);
             params.push(req.user.location_id);
             console.log(`[GET /api/users] Filtering by location admin's assigned location: ${req.user.location_id}.`);
         } else if (req.user.role === 'super_admin' && location_id) { 
@@ -272,18 +273,17 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
             params.push(location_id);
             console.log(`[GET /api/users] Super admin filtering by provided query location: ${location_id}.`);
         } else if (req.user.role === 'super_admin' && !location_id) {
-            // Super admin requests all users, no location filter applies
             console.log(`[GET /api/users] Super admin fetching all users (no location filter applied).`);
         } else {
             console.log(`[GET /api/users] Non-admin user attempting to fetch all users, returning empty array.`);
-            return res.json([]); // Only admins should fetch users list
+            return res.json([]); 
         }
 
         if (whereClauses.length > 0) {
             query += ' WHERE ' + whereClauses.join(' AND ');
         }
-        query += ' ORDER BY u.full_name'; // Order results alphabetically by full name
-        
+        query += ' ORDER BY u.full_name'; 
+
         console.log(`[GET /api/users] Executing SQL query: "${query}" with params: [${params.join(', ')}].`);
         const result = await pool.query(query, params);
         console.log(`[GET /api/users] Query successful. Returning ${result.rows.length} users.`);
@@ -297,17 +297,15 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
 apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     console.log(`[DELETE /api/users/:id] Request to delete user ID: ${id}. By user ${req.user.id} (${req.user.role}).`);
-    // Prevent user from deleting their own account
     if (req.user.id === parseInt(id, 10)) {
         console.log(`[DELETE /api/users/:id] User ${req.user.id} attempted to delete their own account. Denied.`);
         return res.status(400).json({ error: "You cannot delete your own account. Please contact another Super Admin." });
     }
 
-    const client = await pool.connect(); // Use a client from pool for transaction
+    const client = await pool.connect(); 
     try {
-        await client.query('BEGIN'); // Start transaction
+        await client.query('BEGIN'); 
 
-        // Check if user to be deleted is the last super_admin
         const userToDeleteRes = await client.query('SELECT role FROM users WHERE user_id = $1', [id]);
         if (userToDeleteRes.rows.length === 0) {
             console.log(`[DELETE /api/users/:id] User ${id} not found for deletion.`);
@@ -322,17 +320,11 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
                 return res.status(400).json({ error: 'Cannot delete the last Super Admin. Please create another Super Admin first.' });
             }
         }
-        
-        // Delete associated onboarding tasks first (to avoid foreign key issues)
+
         await client.query('DELETE FROM onboarding_tasks WHERE user_id = $1', [id]);
         console.log(`[DELETE /api/users/:id] Deleted onboarding tasks for user ${id}.`);
 
-        // IMPORTANT: Consider other tables that might have foreign key references to users (e.g., shifts, job applications).
-        // Depending on your schema, you might need to:
-        // 1. Delete associated records (e.g., DELETE FROM shifts WHERE employee_id = $1)
-        // 2. Set foreign keys to NULL (e.g., UPDATE shifts SET employee_id = NULL WHERE employee_id = $1)
-        // For simplicity, assuming direct deletion is okay for now, or handled by DB cascade rules.
-        await client.query('DELETE FROM shifts WHERE employee_id = $1', [id]); // Example: delete associated shifts
+        await client.query('DELETE FROM shifts WHERE employee_id = $1', [id]); 
         console.log(`[DELETE /api/users/:id] Deleted associated shifts for user ${id}.`);
 
 
@@ -343,14 +335,14 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
             return res.status(404).json({ error: 'User not found.' });
         }
         console.log(`[DELETE /api/users/:id] User ${id} deleted successfully.`);
-        await client.query('COMMIT'); // Commit transaction
-        res.status(204).send(); // 204 No Content for successful deletion
+        await client.query('COMMIT'); 
+        res.status(204).send(); 
     } catch (err) {
-        await client.query('ROLLBACK'); // Rollback on error
+        await client.query('ROLLBACK'); 
         console.error(`[DELETE /api/users/:id] Error deleting user ${id}:`, err);
         res.status(500).json({ error: 'Failed to delete user.' });
     } finally {
-        client.release(); // Release client back to pool
+        client.release(); 
     }
 });
 
@@ -402,7 +394,6 @@ apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) =>
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        // Before deleting a location, check for associated users or shifts
         const usersAtLocation = await client.query('SELECT user_id FROM users WHERE location_id = $1', [id]);
         if (usersAtLocation.rows.length > 0) {
             console.log(`[DELETE /api/locations/:id] Cannot delete location ${id}: ${usersAtLocation.rows.length} users are still assigned.`);
@@ -439,8 +430,7 @@ apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) =>
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     let targetLocationId = req.user.role === 'super_admin' ? req.query.location_id : req.user.location_id;
     console.log(`[GET /api/settings/business] Request. User Role: ${req.user.role}, Target Location ID: ${targetLocationId || 'N/A'}.`);
-    
-    // For super_admin, if no location_id is specified in query, we can try to find the first one or return global settings
+
     if (!targetLocationId && req.user.role === 'super_admin') {
         const firstLocationRes = await pool.query('SELECT location_id FROM locations ORDER BY location_id ASC LIMIT 1');
         targetLocationId = firstLocationRes.rows[0]?.location_id;
@@ -497,7 +487,7 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
 apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { startDate, endDate, location_id } = req.query;
     console.log(`[GET /api/shifts] Request. User ID: ${req.user.id}, Role: ${req.user.role}. Query params: startDate=${startDate}, endDate=${endDate}, location_id=${location_id || 'N/A'}.`);
-    
+
     if (!startDate || !endDate) {
         console.log('[GET /api/shifts] Missing startDate or endDate. Sending 400.');
         return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
@@ -533,13 +523,12 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
             console.log(`[GET /api/shifts] Super admin fetching shifts for ALL locations (no location_id provided in query).`);
             // No additional WHERE clause needed
         }
-        
-        query += ' ORDER BY s.start_time ASC'; // Order results by start time
-        
+
+        query += ' ORDER BY s.start_time ASC'; 
+
         console.log(`[GET /api/shifts] Executing SQL query: "${query}" with params: [${params.join(', ')}].`);
         const result = await pool.query(query, params);
         console.log(`[GET /api/shifts] Query successful. Returning ${result.rows.length} shifts.`);
-        // console.log(`[GET /api/shifts] Returned shifts data:`, result.rows); // Uncomment for very detailed data debugging
         res.json(result.rows);
     } catch (err) {
         console.error(`[Shifts] Error retrieving shifts:`, err);
@@ -550,18 +539,16 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
 apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { employee_id, location_id, start_time, end_time, notes } = req.body;
     console.log(`[POST /api/shifts] Request to create shift. Employee ID: ${employee_id}, Location ID: ${location_id}, Start: ${start_time}, End: ${end_time}.`);
-    
+
     if (!employee_id || !location_id || !start_time || !end_time) {
         console.log('[POST /api/shifts] Missing required fields. Sending 400.');
         return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
     }
-    // Basic backend validation: Ensure end time is after start time
     if (new Date(start_time).getTime() >= new Date(end_time).getTime()) {
         console.log('[POST /api/shifts] End time is not after start time. Sending 400.');
         return res.status(400).json({ error: 'End time must be after start time.' });
     }
 
-    // Location Admin specific authorization check for creating shifts
     if (req.user.role === 'location_admin' && String(req.user.location_id) !== String(location_id)) {
         console.log(`[POST /api/shifts] Location Admin ${req.user.id} tried to post to location ${location_id}, but is assigned to ${req.user.location_id}. Access denied.`);
         return res.status(403).json({ error: 'Location Admin can only create shifts for their assigned location.' });
@@ -583,11 +570,9 @@ apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
 apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     console.log(`[DELETE /api/shifts/:id] Request to delete shift ID: ${id}. By user ${req.user.id} (${req.user.role}).`);
-    const client = await pool.connect(); // Use a client from pool for transaction
+    const client = await pool.connect(); 
     try {
-        await client.query('BEGIN'); // Start transaction
-
-        // Location Admin specific authorization check for deleting shifts
+        await client.query('BEGIN'); 
         if (req.user.role === 'location_admin') {
             const shiftRes = await client.query('SELECT location_id FROM shifts WHERE id = $1', [id]);
             if (shiftRes.rows.length === 0) {
@@ -609,14 +594,14 @@ apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
             return res.status(404).json({ error: 'Shift not found.' });
         }
         console.log(`[DELETE /api/shifts/:id] Shift ID ${id} deleted successfully.`);
-        await client.query('COMMIT'); // Commit transaction
-        res.status(204).send(); // 204 No Content for successful deletion
+        await client.query('COMMIT'); 
+        res.status(204).send(); 
     } catch (err) {
-        await client.query('ROLLBACK'); // Rollback on error
+        await client.query('ROLLBACK'); 
         console.error(`[DELETE /api/shifts/:id] Error deleting shift ${id}:`, err);
         res.status(500).json({ error: 'Failed to delete shift.' });
     } finally {
-        client.release(); // Release client back to pool
+        client.release();
     }
 });
 
@@ -627,23 +612,21 @@ onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 // --- Server Startup Logic ---
 const startServer = async () => {
     try {
-        // Attempt to connect to the database to verify credentials before starting Express server
         console.log('[Server Startup] Attempting to connect to database...');
         const client = await pool.connect();
-        console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); // Clear success message for DB connection
-        client.release(); // Release client back to the pool immediately after testing connection
+        console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); 
+        client.release(); 
 
-        // Start Express server after successful DB connection
-        app.listen(PORT, '0.0.0.0', () => { // Bind to 0.0.0.0 for Render deployment
-            console.log(`--- SERVER: Express app listening on port ${PORT}! ---`); // Clear success message for server startup
+        app.listen(PORT, '0.0.0.0', () => { 
+            console.log(`--- SERVER: Express app listening on port ${PORT}! ---`);
             console.log(`Access your app locally at: http://localhost:${PORT}`);
             console.log(`Access your deployed app at your Render URL.`);
         });
 
     } catch (err) {
-        console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack); // Enhanced error message
-        process.exit(1); // Exit process if critical startup failure
+        console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack);
+        process.exit(1); 
     }
 };
 
-startServer(); // Initiate server startup sequence
+startServer();
