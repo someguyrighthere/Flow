@@ -60,11 +60,11 @@ const isAuthenticated = (req, res, next) => {
     });
 };
 const isAdmin = (req, res, next) => {
-    // Also consider req.user.location_id here if admin roles are location-specific
+    // This middleware checks if the user has super_admin or location_admin role
     if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
         next();
     } else {
-        console.warn("[Auth] Access denied for user:", req.user?.id, "Role:", req.user?.role);
+        console.warn("[Auth] Access denied for user:", req.user?.id, "Role:", req.user?.role, ". Required: super_admin or location_admin.");
         return res.status(403).json({ error: 'Access denied.' });
     }
 };
@@ -80,6 +80,7 @@ apiRoutes.post('/register', async (req, res) => {
         const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`,[`${companyName} HQ`]);
         const locationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
+        // Ensure location_id is set for the super_admin during registration
         await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, locationId]);
         await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
@@ -135,6 +136,8 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         `;
         const params = [];
         let whereClause = '';
+        // Admins (super_admin or location_admin) can see all users or users within their location
+        // For super_admin, no location filter applies here.
         if (req.user.role === 'location_admin') {
             whereClause = ' WHERE u.location_id = $1';
             params.push(req.user.location_id);
@@ -151,10 +154,12 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 // Locations Routes
+// Super Admins can see all locations. Location Admins can only see their assigned location.
 apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     try {
         let query = 'SELECT location_id, location_name, location_address FROM locations';
         const params = [];
+        // If location_admin, filter locations by their assigned location
         if (req.user.role === 'location_admin') {
             query += ' WHERE location_id = $1';
             params.push(req.user.location_id);
@@ -190,26 +195,29 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 
 
 // Business Settings Endpoint (for operating hours, etc.)
-// GET: Fetch business settings
+// GET: Fetch business settings for a specific location (or user's location)
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
-    // Ensure user has a valid location_id in their token
-    if (!req.user || req.user.location_id == null) {
-        console.warn("[Backend] GET /settings/business: User's location_id is null. Cannot fetch settings.");
-        return res.status(400).json({ error: 'User is not associated with a location. Cannot retrieve business settings.' });
+    // Super Admin can specify location_id via query param, otherwise use user's location_id
+    const targetLocationId = req.user.role === 'super_admin' && req.query.location_id
+        ? req.query.location_id
+        : req.user.location_id;
+
+    if (targetLocationId == null) { // Use == null to catch both null and undefined
+        console.warn("[Backend] GET /settings/business: No target location_id provided for Super Admin or user's location_id is null.");
+        return res.status(400).json({ error: 'A location must be specified to retrieve business settings.' });
     }
 
     try {
-        // Fetch settings for the user's location
         const result = await pool.query(
             'SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1',
-            [req.user.location_id]
+            [targetLocationId]
         );
         
         if (result.rows.length > 0) {
-            console.log("[Backend] Found business settings for location:", req.user.location_id, result.rows[0]);
+            console.log("[Backend] Found business settings for location:", targetLocationId, result.rows[0]);
             res.json(result.rows[0]); // Return actual settings if found
         } else {
-            console.log("[Backend] No business settings found for location:", req.user.location_id, "Returning nulls.");
+            console.log("[Backend] No business settings found for location:", targetLocationId, "Returning nulls.");
             res.json({ operating_hours_start: null, operating_hours_end: null }); // Return nulls if no settings found
         }
     } catch (err) {
@@ -218,14 +226,18 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     }
 });
 
-// PUT: Update business settings (specifically operating hours for now)
+// PUT: Update business settings for a specific location (or user's location)
 apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
-    const { operating_hours_start, operating_hours_end } = req.body;
+    const { operating_hours_start, operating_hours_end, location_id: requestedLocationId } = req.body; // Super Admin can send location_id in body
     
-    // Ensure user has a valid location_id in their token before proceeding with DB operations
-    if (!req.user || req.user.location_id == null) {
-        console.error("[Backend] PUT /settings/business: User's location_id is null. Cannot save business settings.");
-        return res.status(400).json({ error: 'User is not associated with a location. Cannot save business settings.' });
+    // Determine the target location_id for the update
+    const targetLocationId = req.user.role === 'super_admin' && requestedLocationId
+        ? requestedLocationId
+        : req.user.location_id;
+
+    if (targetLocationId == null) { // Use == null to catch both null and undefined
+        console.error("[Backend] PUT /settings/business: No target location_id provided for Super Admin or user's location_id is null. Cannot save settings.");
+        return res.status(400).json({ error: 'A location must be specified to save business settings.' });
     }
 
     if (!operating_hours_start || !operating_hours_end) {
@@ -233,7 +245,7 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
     }
 
     try {
-        console.log("[Backend] Attempting to save business settings for location:", req.user.location_id);
+        console.log("[Backend] Attempting to save business settings for location:", targetLocationId);
         const result = await pool.query(
             `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
              VALUES ($1, $2, $3)
@@ -242,7 +254,7 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
              operating_hours_end = EXCLUDED.operating_hours_end,
              updated_at = CURRENT_TIMESTAMP
              RETURNING *`,
-            [req.user.location_id, operating_hours_start, operating_hours_end]
+            [targetLocationId, operating_hours_start, operating_hours_end]
         );
         console.log("[Backend] Business settings saved/updated:", result.rows[0]);
         res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
