@@ -35,7 +35,7 @@ export function handleSchedulingPage() {
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
-    let currentLocationId = null; // Will be set during initialization
+    let currentLocationId = null; // Will be set during initialization based on user role or selection
 
     // --- Constants ---
     const PIXELS_PER_HOUR = 60;
@@ -46,20 +46,23 @@ export function handleSchedulingPage() {
      * Main function to initialize and render the calendar for a specific location and week.
      */
     const loadAndRenderWeeklySchedule = async (locationId) => {
+        // Essential check: If no locationId is provided or set, display a message and exit.
         if (!locationId) {
             currentWeekDisplay.textContent = 'Select a location';
             calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
             return;
         }
-        currentLocationId = locationId; // Update the module-level state variable
+        
+        currentLocationId = locationId; // Update the module-level state variable for the current location
         currentWeekDisplay.textContent = 'Loading...';
         calendarGridWrapper.innerHTML = ''; // Clear previous grid
 
         try {
+            // Fetch users and shifts for the *currently selected* location
             const [users, shifts, allLocations] = await Promise.all([
-                apiRequest('GET', `/api/users?location_id=${locationId}`),
-                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${locationId}`),
-                apiRequest('GET', '/api/locations')
+                apiRequest('GET', `/api/users?location_id=${currentLocationId}`), // Use currentLocationId here
+                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${currentLocationId}`), // And here
+                apiRequest('GET', '/api/locations') // Fetch all locations for dropdowns
             ]);
 
             populateSidebarDropdowns(users, allLocations);
@@ -77,15 +80,16 @@ export function handleSchedulingPage() {
      * Populates the Employee and Location dropdowns in the sidebar.
      */
     const populateSidebarDropdowns = (users, locations) => {
+        // Populate the Employee dropdown
         employeeSelect.innerHTML = '<option value="">Select Employee</option>';
         if (users) {
+            // Filter for 'employee' or 'location_admin' roles, as these can be assigned shifts.
             users.filter(u => u.role === 'employee' || u.role === 'location_admin').forEach(user => {
                 employeeSelect.add(new Option(user.full_name, user.user_id));
             });
         }
 
-        // Only populate locationSelector (top dropdown) if it's visible (for super_admin)
-        // The create shift form's locationSelect will always be populated
+        // Populate the top 'View Schedule For' location dropdown (only visible for super_admin)
         if (locationSelectorContainer && locationSelectorContainer.style.display !== 'none' && locationSelector) {
             locationSelector.innerHTML = '<option value="">Select a Location</option>';
             if (locations) {
@@ -93,12 +97,13 @@ export function handleSchedulingPage() {
                     locationSelector.add(new Option(loc.location_name, loc.location_id));
                 });
             }
-            // Ensure the displayed location selector matches the current schedule
+            // Ensure the displayed location selector matches the current schedule's location
             if (currentLocationId) {
                 locationSelector.value = currentLocationId;
             }
         }
 
+        // Populate the 'Create New Shift' form's Location dropdown
         locationSelect.innerHTML = '<option value="">Select Location</option>';
         if (locations) {
             locations.forEach(loc => {
@@ -140,64 +145,81 @@ export function handleSchedulingPage() {
         const grid = document.createElement('div');
         grid.className = 'calendar-grid';
 
+        // Add empty header for time column, then headers for days
         grid.innerHTML += `<div class="grid-header time-slot-header"></div>`;
         weekDates.forEach(date => {
             grid.innerHTML += `<div class="grid-header">${date.toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})}</div>`;
         });
 
+        // Add time slots to the first column
         for (let hour = START_HOUR; hour < END_HOUR; hour++) {
             const displayHour = hour % 12 === 0 ? 12 : hour % 12;
             const ampm = hour < 12 ? 'AM' : 'PM';
             grid.innerHTML += `<div class="time-slot">${displayHour} ${ampm}</div>`;
         }
 
+        // Add empty day columns for shift placement
         for (let i = 0; i < 7; i++) {
             const dayCol = document.createElement('div');
             dayCol.className = 'day-column';
-            dayCol.style.gridColumn = `${i + 2}`;
-            dayCol.style.gridRow = `2 / span ${END_HOUR - START_HOUR}`;
-            dayCol.dataset.dayIndex = i;
+            // Grid column starts at 2 because the first column is for time slots
+            dayCol.style.gridColumn = `${i + 2}`; 
+            // Grid row starts at 2 because the first row is for day headers
+            dayCol.style.gridRow = `2 / span ${END_HOUR - START_HOUR}`; 
+            dayCol.dataset.dayIndex = i; // Store day index for identifying column
             grid.appendChild(dayCol);
         }
 
-        calendarGridWrapper.innerHTML = '';
-        calendarGridWrapper.appendChild(grid);
+        calendarGridWrapper.innerHTML = ''; // Clear existing content
+        calendarGridWrapper.appendChild(grid); // Append the newly created grid
     };
 
     /**
      * Renders the shift blocks onto the calendar grid.
+     * @param {Array} shifts - An array of shift objects.
      */
     const renderShifts = (shifts) => {
-        if (!shifts) return;
+        if (!shifts || shifts.length === 0) {
+            console.log("No shifts to render or shifts array is empty.");
+            return;
+        }
 
         shifts.forEach(shift => {
             const shiftStart = new Date(shift.start_time);
             const shiftEnd = new Date(shift.end_time);
-            const dayIndex = shiftStart.getDay();
+            const dayIndex = shiftStart.getDay(); // 0 for Sunday, 1 for Monday, etc.
             
+            // Find the correct day column in the rendered grid
             const targetColumn = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
 
             if (targetColumn) {
+                // Calculate position and height of the shift block
+                // Convert shift start/end times to minutes from the calendar's START_HOUR
                 const startMinutes = (shiftStart.getHours() * 60 + shiftStart.getMinutes()) - (START_HOUR * 60);
                 const endMinutes = (shiftEnd.getHours() * 60 + shiftEnd.getMinutes()) - (START_HOUR * 60);
 
                 const top = (startMinutes / 60) * PIXELS_PER_HOUR;
                 const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;
 
+                // Only render if shift has a valid duration and starts within or after calendar view
                 if (height > 0 && top >= 0) {
                     const shiftBlock = document.createElement('div');
                     shiftBlock.className = 'shift-block';
                     shiftBlock.style.top = `${top}px`;
                     shiftBlock.style.height = `${height}px`;
                     shiftBlock.innerHTML = `<strong>${shift.employee_name}</strong><br><small>${shift.location_name}</small>`;
-                    shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
+                    shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name} from ${shiftStart.toLocaleTimeString()} to ${shiftEnd.toLocaleTimeString()}. Notes: ${shift.notes || 'None'}`;
                     targetColumn.appendChild(shiftBlock);
+                } else {
+                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid time/height. Start: ${shiftStart.toLocaleTimeString()}, End: ${shiftEnd.toLocaleTimeString()}`);
                 }
+            } else {
+                console.warn(`Could not find target column for dayIndex: ${dayIndex} for shift ID: ${shift.id}`);
             }
         });
     };
 
-    // --- Helper Functions ---
+    // --- Helper Functions for Dates ---
     const getWeekDates = (startDate) => Array.from({ length: 7 }).map((_, i) => {
         const date = new Date(startDate);
         date.setDate(date.getDate() + i);
@@ -206,23 +228,30 @@ export function handleSchedulingPage() {
 
     const getEndDate = (startDate) => {
         const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 7); // Get date 7 days from start (end of the week)
+        endDate.setDate(endDate.getDate() + 7); // Get date 7 days from start (exclusive end for API)
         return endDate;
     };
     
+    // Formats a Date object into 'YYYY-MM-DD' for API requests
     const getApiDate = (d) => d.toISOString().split('T')[0];
 
     // --- Event Handlers ---
     const handleWeekChange = (days) => {
         currentStartDate.setDate(currentStartDate.getDate() + days);
-        loadAndRenderWeeklySchedule(currentLocationId);
+        // Ensure currentLocationId is valid before trying to load a new week
+        if (currentLocationId) {
+            loadAndRenderWeeklySchedule(currentLocationId);
+        } else {
+            showModalMessage('Please select a location first.', true);
+        }
     };
 
     prevWeekBtn.addEventListener('click', () => handleWeekChange(-7));
     nextWeekBtn.addEventListener('click', () => handleWeekChange(7));
 
+    // Event listener for creating a new shift
     createShiftForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Prevent default form submission
         
         const startDate = startDateInput.value;
         const startTime = startTimeSelect.value;
@@ -233,8 +262,9 @@ export function handleSchedulingPage() {
             return showModalMessage('Please select a valid date and time for both start and end.', true);
         }
 
-        const startDateTime = `${startDate}T${startTime}`;
-        const endDateTime = `${endDate}T${endTime}`;
+        // Combine date and time inputs into full ISO format strings (without Z for UTC)
+        const startDateTime = `${startDate}T${startTime}:00`; // Append :00 for seconds
+        const endDateTime = `${endDate}T${endTime}:00`; // Append :00 for seconds
 
         const shiftData = {
             employee_id: employeeSelect.value,
@@ -251,23 +281,24 @@ export function handleSchedulingPage() {
         try {
             await apiRequest('POST', '/api/shifts', shiftData);
             showModalMessage('Shift created successfully!', false);
-            createShiftForm.reset();
-            // After successful creation, re-render the schedule for the current location
-            loadAndRenderWeeklySchedule(currentLocationId);
+            createShiftForm.reset(); // Clear the form
+            // Crucial: After successful creation, re-render the schedule for the current location
+            // This will fetch the newly created shift and display it.
+            loadAndRenderWeeklySchedule(currentLocationId); 
         } catch (error) {
             showModalMessage(`Error creating shift: ${error.message}`, true);
         }
     });
     
+    // Event listener for the top 'View Schedule For' location selector (for super_admin)
     if (locationSelector) {
         locationSelector.addEventListener('change', () => {
             const newLocationId = locationSelector.value;
             if (newLocationId) {
-                // Update currentLocationId state when dropdown changes
-                currentLocationId = newLocationId; 
+                currentLocationId = newLocationId; // Update the module-level state
                 loadAndRenderWeeklySchedule(newLocationId);
             } else {
-                 // Clear schedule if "Select a Location" is chosen
+                 // If "Select a Location" is chosen, clear the schedule view
                 currentLocationId = null;
                 currentWeekDisplay.textContent = 'Select a location';
                 calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
@@ -278,6 +309,7 @@ export function handleSchedulingPage() {
     // --- Initial Page Load ---
     const initializePage = async () => {
         populateTimeSelects(); // Populate time dropdowns on page load
+
         try {
             const locations = await apiRequest('GET', '/api/locations');
             
@@ -289,33 +321,32 @@ export function handleSchedulingPage() {
                         locations.forEach(loc => {
                             locationSelector.add(new Option(loc.location_name, loc.location_id));
                         });
-                        // IMPORTANT FIX: Set currentLocationId and call loadAndRenderWeeklySchedule
-                        // with the initial location ID when the page loads for super_admin.
+                        // Set the initial location to the first one available for super_admin
                         const initialLocationId = locations[0].location_id; 
-                        locationSelector.value = initialLocationId; // Pre-select the first location in the dropdown
-                        currentLocationId = initialLocationId; // Set the module-level state variable
-                        loadAndRenderWeeklySchedule(initialLocationId); // Load schedule for this location
+                        locationSelector.value = initialLocationId; // Pre-select in the top dropdown
+                        currentLocationId = initialLocationId; // Crucial: Set the module-level state
+                        loadAndRenderWeeklySchedule(initialLocationId); // Load schedule for this initial location
                     } else {
                         currentWeekDisplay.textContent = 'No Locations';
                         calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please create a location in Admin Settings.</p>';
                     }
                 }
-            } else { // For location_admin
-                if(locationSelectorContainer) locationSelectorContainer.style.display = 'none';
-                const user = await apiRequest('GET', '/api/users/me');
+            } else { // For location_admin role
+                if(locationSelectorContainer) locationSelectorContainer.style.display = 'none'; // Hide location selector for location_admin
+                const user = await apiRequest('GET', '/api/users/me'); // Get the location_admin's assigned location
                 if (user && user.location_id) {
-                    // IMPORTANT FIX: Set currentLocationId for location_admin as well.
-                    currentLocationId = user.location_id;
-                    loadAndRenderWeeklySchedule(user.location_id);
+                    currentLocationId = user.location_id; // Set the module-level state
+                    loadAndRenderWeeklySchedule(user.location_id); // Load schedule for their assigned location
                 } else {
-                    showModalMessage('Your account is not assigned to a location.', true);
+                    showModalMessage('Your account is not assigned to a location. Please contact your administrator.', true);
                     currentWeekDisplay.textContent = 'No Location Assigned';
                 }
             }
         } catch (error) {
-             showModalMessage(`Failed to initialize page: ${error.message}`, true);
+             showModalMessage(`Failed to initialize scheduling page: ${error.message}`, true);
+             console.error('Failed to initialize scheduling page:', error);
         }
     };
 
-    initializePage();
+    initializePage(); // Call the initialization function when the script loads
 }
