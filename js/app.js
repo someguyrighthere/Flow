@@ -13,7 +13,7 @@ import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
-import { handlePricingPage } from './pages/pricing.js'; // <-- ADD THIS LINE
+import { handlePricingPage } from './pages/pricing.js';
 
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
@@ -42,9 +42,8 @@ function setupSettingsDropdown() {
     }
 }
 
-// This function will be called globally by the HTML pages
-// It acts as the central router for client-side logic
-window.initializePage = () => { // Expose initializePage globally
+// This function will contain the central routing logic
+const initializePage = () => { // No longer assigned to window
     const path = window.location.pathname;
 
     // A list of pages that have the main header with the settings dropdown
@@ -90,12 +89,12 @@ window.initializePage = () => { // Expose initializePage globally
         handleApplyPage();
     } else if (path.includes("new-hire-view.html")) {
         handleOnboardingViewPage();
-    } else if (path.includes("pricing.html")) { // <-- ADD THIS LINE
-        handlePricingPage();                   // <-- ADD THIS LINE
+    } else if (path.includes("pricing.html")) {
+        handlePricingPage();
     }
 };
 
+// Call initializePage when the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", () => {
-    // The HTML pages explicitly call window.initializePage(), so this listener
-    // is a fallback. To avoid double-execution, we assume the inline script works.
+    initializePage(); // Call the routing function directly
 });
