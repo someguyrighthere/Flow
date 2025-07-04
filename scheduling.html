@@ -51,7 +51,7 @@
             color: var(--text-light);
             box-sizing: border-box;
         }
-
+        
         /* NEW: Style for combining date and time inputs */
         .datetime-group {
             display: flex;
@@ -140,6 +140,7 @@
         .day-column {
             position: relative;
             border-right: 1px solid var(--border-color);
+            /* CORRECTED: Added repeating background for grid lines */
             background-image: linear-gradient(to bottom, var(--border-color) 1px, transparent 1px);
             background-size: 100% 60px; /* Horizontal lines every hour */
         }
