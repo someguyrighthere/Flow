@@ -7,7 +7,7 @@ const multer = require('multer');
 const fs = require('fs');
 const { promises: fsPromises } = require('fs');
 const path = require('path');
-const onboardingRoutes = require('./routes/onboardingRoutes');
+const onboardingRoutes = require('./routes/onboardingRoutes'); // Make sure this path is correct
 
 const app = express();
 const apiRoutes = express.Router();
@@ -24,11 +24,14 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-if (!DATABASE_URL) throw new Error("DATABASE_URL environment variable is not set.");
+if (!DATABASE_URL) {
+    console.error("DATABASE_URL environment variable is not set. Please set it in your .env file or Render environment variables.");
+    process.exit(1); // Exit if no database connection string
+}
 
 const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: false }, // Use rejectUnauthorized: false for Render's managed PostgreSQL
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 20000,
 });
@@ -43,17 +46,25 @@ app.use('/api', apiRoutes);
 const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
+    if (token == null) {
+        console.warn("[Auth] No token provided. Sending 401.");
+        return res.sendStatus(401); // Unauthorized
+    }
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
+        if (err) {
+            console.warn("[Auth] Invalid token provided. Sending 403. Error:", err.message);
+            return res.sendStatus(403); // Forbidden
+        }
+        req.user = user; // Attach user payload from token to request
         next();
     });
 };
 const isAdmin = (req, res, next) => {
+    // Also consider req.user.location_id here if admin roles are location-specific
     if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
         next();
     } else {
+        console.warn("[Auth] Access denied for user:", req.user?.id, "Role:", req.user?.role);
         return res.status(403).json({ error: 'Access denied.' });
     }
 };
@@ -69,12 +80,13 @@ apiRoutes.post('/register', async (req, res) => {
         const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`,[`${companyName} HQ`]);
         const locationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4)`, [fullName, email, hash, locationId]);
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, locationId]);
         await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: "An internal server error occurred." });
+        console.error('[Register] Error during registration:', err);
+        res.status(500).json({ error: "An internal server error occurred during registration." });
     } finally {
         client.release();
     }
@@ -82,23 +94,28 @@ apiRoutes.post('/register', async (req, res) => {
 apiRoutes.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
+        const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
         const user = result.rows[0];
-        if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid credentials." });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ error: "Invalid credentials." });
+        }
+        // Ensure user_id and location_id are sent in payload, even if null from DB (frontend handles null)
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ token, role: user.role });
+        res.json({ token, role: user.role, userId: user.user_id }); // Added userId to response for convenience
     } catch (err) {
-        res.status(500).json({ error: "An internal server error occurred." });
+        console.error('[Login] Error during login:', err);
+        res.status(500).json({ error: "An internal server error occurred during login." });
     }
 });
 
 // User Routes
 apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     try {
-        const result = await pool.query('SELECT user_id, full_name, email, role FROM users WHERE user_id = $1', [req.user.id]);
+        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
         res.json(result.rows[0]);
     } catch (err) {
+        console.error('[Users] Failed to retrieve user profile:', err);
         res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
 });
@@ -127,9 +144,8 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         
         const result = await pool.query(query, params);
         res.json(result.rows);
-    }
-    catch (err) {
-        console.error('Error retrieving users:', err);
+    } catch (err) {
+        console.error('[Users] Error retrieving users:', err);
         res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
@@ -147,7 +163,7 @@ apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
-        console.error('Error retrieving locations:', err);
+        console.error('[Locations] Error retrieving locations:', err);
         res.status(500).json({ error: 'Failed to retrieve locations.' });
     }
 });
@@ -164,7 +180,10 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        console.error('Error adding new location:', err);
+        console.error('[Locations] Error adding new location:', err);
+        if (err.code === '23505') { // Unique violation for location_name
+            return res.status(409).json({ error: 'Location name already exists.' });
+        }
         res.status(500).json({ error: 'Failed to add new location.' });
     }
 });
@@ -173,6 +192,12 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 // Business Settings Endpoint (for operating hours, etc.)
 // GET: Fetch business settings
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
+    // Ensure user has a valid location_id in their token
+    if (!req.user || req.user.location_id == null) {
+        console.warn("[Backend] GET /settings/business: User's location_id is null. Cannot fetch settings.");
+        return res.status(400).json({ error: 'User is not associated with a location. Cannot retrieve business settings.' });
+    }
+
     try {
         // Fetch settings for the user's location
         const result = await pool.query(
@@ -181,14 +206,14 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
         );
         
         if (result.rows.length > 0) {
-            console.log("[Backend] Found business settings for location:", req.user.location_id, result.rows[0]); // NEW LOG
+            console.log("[Backend] Found business settings for location:", req.user.location_id, result.rows[0]);
             res.json(result.rows[0]); // Return actual settings if found
         } else {
-            console.log("[Backend] No business settings found for location:", req.user.location_id, "Returning nulls."); // NEW LOG
+            console.log("[Backend] No business settings found for location:", req.user.location_id, "Returning nulls.");
             res.json({ operating_hours_start: null, operating_hours_end: null }); // Return nulls if no settings found
         }
     } catch (err) {
-        console.error('[Backend] Error fetching business settings:', err); // NEW LOG
+        console.error('[Backend] Error fetching business settings:', err);
         res.status(500).json({ error: 'Failed to retrieve business settings.' });
     }
 });
@@ -197,12 +222,18 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
 apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
     const { operating_hours_start, operating_hours_end } = req.body;
     
+    // Ensure user has a valid location_id in their token before proceeding with DB operations
+    if (!req.user || req.user.location_id == null) {
+        console.error("[Backend] PUT /settings/business: User's location_id is null. Cannot save business settings.");
+        return res.status(400).json({ error: 'User is not associated with a location. Cannot save business settings.' });
+    }
+
     if (!operating_hours_start || !operating_hours_end) {
         return res.status(400).json({ error: 'Start and end operating hours are required.' });
     }
 
     try {
-        console.log("[Backend] Attempting to save business settings for location:", req.user.location_id); // NEW LOG
+        console.log("[Backend] Attempting to save business settings for location:", req.user.location_id);
         const result = await pool.query(
             `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
              VALUES ($1, $2, $3)
@@ -213,10 +244,10 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
              RETURNING *`,
             [req.user.location_id, operating_hours_start, operating_hours_end]
         );
-        console.log("[Backend] Business settings saved/updated:", result.rows[0]); // NEW LOG
+        console.log("[Backend] Business settings saved/updated:", result.rows[0]);
         res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
     } catch (err) {
-        console.error('[Backend] Error updating business settings:', err); // NEW LOG
+        console.error('[Backend] Error updating business settings:', err);
         res.status(500).json({ error: 'Failed to update business settings.' });
     }
 });
@@ -468,12 +499,8 @@ app.post('/apply/:jobId', async (req, res) => {
     } catch (err) {
         console.error('Error submitting application:', err);
         // Check for specific PostgreSQL error codes
-        if (err.code === '23502') { // not_null_violation
-            return res.status(400).json({ error: `Missing required data: ${err.column} cannot be null.` });
-        } else if (err.code === '23503') { // foreign_key_violation
+        if (err.code === '23503') { // PostgreSQL foreign key violation error code
             return res.status(400).json({ error: 'Invalid Job Posting ID. The job you are applying for does not exist.' });
-        } else if (err.code === '22P02') { // invalid_text_representation (e.g., trying to insert non-UUID into UUID column)
-            return res.status(400).json({ error: 'Invalid data format for one or more fields.' });
         }
         res.status(500).json({ error: 'Failed to submit application.' });
     }
