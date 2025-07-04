@@ -173,17 +173,18 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 // GET: Fetch business settings
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     try {
-        // Fetch settings for the user's location, or a default if none exist
+        // Fetch settings for the user's location
         const result = await pool.query(
             'SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1',
             [req.user.location_id]
         );
         
         if (result.rows.length > 0) {
-            res.json(result.rows[0]); // <--- Now correctly fetches from DB
+            res.json(result.rows[0]); // Return actual settings if found
         } else {
-            // Return default values if no settings found for this location
-            res.json({ operating_hours_start: '09:00', operating_hours_end: '17:00' });
+            // If no settings found for this location, return an empty object or default structure
+            // The frontend will then handle displaying 'N/A' or empty inputs
+            res.json({ operating_hours_start: null, operating_hours_end: null }); // NEW: Return nulls instead of hardcoded defaults
         }
     } catch (err) {
         console.error('Error fetching business settings:', err);
