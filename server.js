@@ -223,14 +223,19 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
 // Business Settings Endpoint (for operating hours, etc.)
 // GET: Fetch business settings for a specific location (or user's location)
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
-    // Super Admin can specify location_id via query param, otherwise use user's location_id
-    const targetLocationId = req.user.role === 'super_admin' && req.query.location_id
-        ? req.query.location_id
-        : req.user.location_id;
+    let targetLocationId;
 
-    if (targetLocationId == null) { // Use == null to catch both null and undefined
-        console.warn("[Backend] GET /settings/business: No target location_id provided for Super Admin or user's location_id is null.");
-        return res.status(400).json({ error: 'A location must be specified to retrieve business settings.' });
+    // Super Admin: If location_id is provided in query, use it. Otherwise, use their assigned location_id.
+    if (req.user.role === 'super_admin') {
+        targetLocationId = req.query.location_id || req.user.location_id;
+    } else { // location_admin or employee (though employee shouldn't access this)
+        targetLocationId = req.user.location_id;
+    }
+
+    // If, after all checks, targetLocationId is still null, it's an issue.
+    if (targetLocationId == null) {
+        console.warn("[Backend] GET /settings/business: Could not determine a target location_id for settings.");
+        return res.status(400).json({ error: 'A valid location must be associated with the user or specified to retrieve business settings.' });
     }
 
     try {
@@ -244,7 +249,8 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
             res.json(result.rows[0]); // Return actual settings if found
         } else {
             console.log("[Backend] No business settings found for location:", targetLocationId, "Returning nulls.");
-            res.json({ operating_hours_start: null, operating_hours_end: null }); // Return nulls if no settings found
+            // If no settings exist for this location, return default empty values, not an error
+            res.json({ operating_hours_start: null, operating_hours_end: null }); 
         }
     } catch (err) {
         console.error('[Backend] Error fetching business settings:', err);
@@ -256,14 +262,16 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
 apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
     const { operating_hours_start, operating_hours_end, location_id: requestedLocationId } = req.body; // Super Admin can send location_id in body
     
-    // Determine the target location_id for the update
-    const targetLocationId = req.user.role === 'super_admin' && requestedLocationId
-        ? requestedLocationId
-        : req.user.location_id;
+    let targetLocationId;
+    if (req.user.role === 'super_admin') {
+        targetLocationId = requestedLocationId || req.user.location_id;
+    } else {
+        targetLocationId = req.user.location_id;
+    }
 
-    if (targetLocationId == null) { // Use == null to catch both null and undefined
-        console.error("[Backend] PUT /settings/business: No target location_id provided for Super Admin or user's location_id is null. Cannot save settings.");
-        return res.status(400).json({ error: 'A location must be specified to save business settings.' });
+    if (targetLocationId == null) {
+        console.error("[Backend] PUT /settings/business: Could not determine a target location_id for settings. Cannot save settings.");
+        return res.status(400).json({ error: 'A valid location must be associated with the user or specified to save business settings.' });
     }
 
     if (!operating_hours_start || !operating_hours_end) {
@@ -474,7 +482,8 @@ apiRoutes.get('/job-postings', isAuthenticated, async (req, res) => {
         }
         const result = await pool.query(query, params);
         res.json(result.rows);
-    } catch (err) {
+    }
+    catch (err) {
         console.error('Error retrieving job postings:', err);
         res.status(500).json({ error: 'Failed to retrieve job postings.' });
     }
@@ -592,7 +601,7 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
 
 // NEW: Shift Management Routes
 apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate } = req.query; // Expect YYYY-MM-DD format
+    const { startDate, endDate } = req.query; // Expect ISO-formatted dates
     if (!startDate || !endDate) {
         return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
     }
