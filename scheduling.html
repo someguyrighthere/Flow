@@ -61,7 +61,7 @@
             margin-bottom: 15px;
         }
 
-        /* NEW: Styles for form groups within the sidebar forms for consistent spacing and alignment */
+        /* Styles for form groups within the sidebar forms for consistent spacing and alignment */
         .sidebar form .form-group {
             margin-bottom: 25px; /* Increased space between form groups */
             display: flex;
@@ -289,7 +289,7 @@
 
         .hour-line { /* Visual lines within day columns, one per hour */
             height: 60px; /* Should match time-slot height for alignment */
-            border-bottom: 1px dashed rgba(255, 255, 255, 0.1); 
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.05); /* Made more subtle */
             box-sizing: content-box; 
             padding: 0; /* Ensure no padding */
             margin: 0; /* Ensure no margin */
@@ -318,6 +318,8 @@
             z-index: 3;
             cursor: pointer;
             overflow: hidden;
+            white-space: nowrap; /* Keep text on one line */
+            text-overflow: ellipsis; /* Add ellipsis for overflow */
         }
         .delete-shift-btn {
             position: absolute; top: 2px; right: 2px;
