@@ -39,8 +39,8 @@ export function handleSchedulingPage() {
 
     // --- Constants ---
     const PIXELS_PER_HOUR = 60;
-    const START_HOUR = 7; // Display calendar from 7 AM
-    const END_HOUR = 22;  // Display calendar until 10 PM
+    const START_HOUR = 0;  // Display calendar from 00:00 (12 AM)
+    const END_HOUR = 24;   // Display calendar until 24:00 (end of day, effectively covers up to 11:59 PM)
 
     /**
      * Helper function to robustly parse a "YYYY-MM-DD HH:MM:SS" string as a local Date object.
@@ -50,7 +50,6 @@ export function handleSchedulingPage() {
      */
     const parseLocalTimeLiteral = (dateTimeString) => {
         // Replace space with 'T' for ISO 8601 compatibility without timezone.
-        // This is generally the most reliable way for new Date() to parse local times.
         const isoFormattedString = dateTimeString.replace(' ', 'T');
         const date = new Date(isoFormattedString);
 
@@ -80,8 +79,8 @@ export function handleSchedulingPage() {
         try {
             // Fetch users and shifts for the *currently selected* location
             const [users, shifts, allLocations] = await Promise.all([
-                apiRequest('GET', `/api/users?location_id=${currentLocationId}`), // Use currentLocationId here
-                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${currentLocationId}`), // And here
+                apiRequest('GET', `/api/users?location_id=${currentLocationId}`),
+                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${currentLocationId}`),
                 apiRequest('GET', '/api/locations') // Fetch all locations for dropdowns
             ]);
 
@@ -227,14 +226,26 @@ export function handleSchedulingPage() {
                 const endHourLocal = shiftEnd.getHours();
                 const endMinuteLocal = shiftEnd.getMinutes();
 
-                const startMinutes = (startHourLocal * 60 + startMinuteLocal) - (START_HOUR * 60);
-                const endMinutes = (endHourLocal * 60 + endMinuteLocal) - (START_HOUR * 60);
+                const totalStartMinutesFromMidnight = startHourLocal * 60 + startMinuteLocal;
+                const totalEndMinutesFromMidnight = endHourLocal * 60 + endMinuteLocal;
 
-                const top = (startMinutes / 60) * PIXELS_PER_HOUR;
-                const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;
+                // Handle shifts that span across midnight (e.g., 10 PM - 2 AM)
+                let durationMinutes = totalEndMinutesFromMidnight - totalStartMinutesFromMidnight;
+                if (durationMinutes < 0) {
+                    durationMinutes += (24 * 60); // Add 24 hours if end time is on the next day
+                }
 
-                // Only render if shift has a valid duration and starts within or after calendar view
-                if (height > 0 && top >= 0) {
+                // IMPORTANT: Since START_HOUR is now 0 and END_HOUR is 24,
+                // shifts should theoretically always fit without "clipping" against the calendar boundaries.
+                // However, the logic below still calculates relative to START_HOUR for positioning.
+                const calendarDisplayStartMinutes = START_HOUR * 60; 
+
+                // The `top` position is relative to START_HOUR (which is 00:00).
+                const top = (totalStartMinutesFromMidnight - calendarDisplayStartMinutes) / 60 * PIXELS_PER_HOUR;
+                const height = durationMinutes / 60 * PIXELS_PER_HOUR;
+
+                // Check for valid height (must be positive) and top (must be within grid bounds)
+                if (height > 0 && top >= 0 && (top + height) <= ((END_HOUR - START_HOUR) * PIXELS_PER_HOUR)) {
                     const shiftBlock = document.createElement('div');
                     shiftBlock.className = 'shift-block';
                     shiftBlock.style.top = `${top}px`;
@@ -248,10 +259,12 @@ export function handleSchedulingPage() {
                     
                     targetColumn.appendChild(shiftBlock);
                 } else {
-                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid time/height. Start: ${shiftStart.toLocaleTimeString()}, End: ${shiftEnd.toLocaleTimeString()}. Calculated top: ${top}, height: ${height}`);
+                    // This else block should now ideally only hit for extremely short shifts,
+                    // or negative durations (if not handled by `durationMinutes`), or outside the new 0-24 range.
+                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid calculated rendering size. Start: ${shiftStart.toLocaleTimeString()}, End: ${shiftEnd.toLocaleTimeString()}. Calculated top: ${top}, height: ${height}`);
                 }
             } else {
-                console.warn(`Could not find target column for dayIndex: ${dayIndex} for shift ID: ${shift.id}`);
+                console.warn(`Could not find target column for dayIndex: ${dayIndex} for shift ID: ${shift.id}. (Shift might be on a different day than the displayed week)`);
             }
         });
     };
@@ -349,7 +362,7 @@ export function handleSchedulingPage() {
         populateTimeSelects(); // Populate time dropdowns on page load
 
         try {
-            const locations = await apiRequest('GET', '/api/locations'); //
+            const locations = await apiRequest('GET', '/api/locations');
             
             if (userRole === 'super_admin') {
                 if(locationSelectorContainer) locationSelectorContainer.style.display = 'block';
