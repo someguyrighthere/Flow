@@ -1,3 +1,4 @@
+// js/pages/scheduling.js
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
@@ -34,7 +35,7 @@ export function handleSchedulingPage() {
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
-    let currentLocationId = null;
+    let currentLocationId = null; // Will be set during initialization
 
     // --- Constants ---
     const PIXELS_PER_HOUR = 60;
@@ -50,7 +51,7 @@ export function handleSchedulingPage() {
             calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
             return;
         }
-        currentLocationId = locationId;
+        currentLocationId = locationId; // Update the module-level state variable
         currentWeekDisplay.textContent = 'Loading...';
         calendarGridWrapper.innerHTML = ''; // Clear previous grid
 
@@ -83,11 +84,30 @@ export function handleSchedulingPage() {
             });
         }
 
+        // Only populate locationSelector (top dropdown) if it's visible (for super_admin)
+        // The create shift form's locationSelect will always be populated
+        if (locationSelectorContainer && locationSelectorContainer.style.display !== 'none' && locationSelector) {
+            locationSelector.innerHTML = '<option value="">Select a Location</option>';
+            if (locations) {
+                locations.forEach(loc => {
+                    locationSelector.add(new Option(loc.location_name, loc.location_id));
+                });
+            }
+            // Ensure the displayed location selector matches the current schedule
+            if (currentLocationId) {
+                locationSelector.value = currentLocationId;
+            }
+        }
+
         locationSelect.innerHTML = '<option value="">Select Location</option>';
         if (locations) {
             locations.forEach(loc => {
                 locationSelect.add(new Option(loc.location_name, loc.location_id));
             });
+        }
+        // If currentLocationId is set, pre-select it in the create shift form's location dropdown
+        if (currentLocationId) {
+            locationSelect.value = currentLocationId;
         }
     };
 
@@ -169,7 +189,6 @@ export function handleSchedulingPage() {
                     shiftBlock.className = 'shift-block';
                     shiftBlock.style.top = `${top}px`;
                     shiftBlock.style.height = `${height}px`;
-                    // CORRECTED: Added employee_name to the innerHTML of the shift block.
                     shiftBlock.innerHTML = `<strong>${shift.employee_name}</strong><br><small>${shift.location_name}</small>`;
                     shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
                     targetColumn.appendChild(shiftBlock);
@@ -187,7 +206,7 @@ export function handleSchedulingPage() {
 
     const getEndDate = (startDate) => {
         const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 7);
+        endDate.setDate(endDate.getDate() + 7); // Get date 7 days from start (end of the week)
         return endDate;
     };
     
@@ -233,6 +252,7 @@ export function handleSchedulingPage() {
             await apiRequest('POST', '/api/shifts', shiftData);
             showModalMessage('Shift created successfully!', false);
             createShiftForm.reset();
+            // After successful creation, re-render the schedule for the current location
             loadAndRenderWeeklySchedule(currentLocationId);
         } catch (error) {
             showModalMessage(`Error creating shift: ${error.message}`, true);
@@ -243,7 +263,14 @@ export function handleSchedulingPage() {
         locationSelector.addEventListener('change', () => {
             const newLocationId = locationSelector.value;
             if (newLocationId) {
+                // Update currentLocationId state when dropdown changes
+                currentLocationId = newLocationId; 
                 loadAndRenderWeeklySchedule(newLocationId);
+            } else {
+                 // Clear schedule if "Select a Location" is chosen
+                currentLocationId = null;
+                currentWeekDisplay.textContent = 'Select a location';
+                calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
             }
         });
     }
@@ -262,8 +289,12 @@ export function handleSchedulingPage() {
                         locations.forEach(loc => {
                             locationSelector.add(new Option(loc.location_name, loc.location_id));
                         });
-                        locationSelector.value = locations[0].location_id;
-                        loadAndRenderWeeklySchedule(locations[0].location_id);
+                        // IMPORTANT FIX: Set currentLocationId and call loadAndRenderWeeklySchedule
+                        // with the initial location ID when the page loads for super_admin.
+                        const initialLocationId = locations[0].location_id; 
+                        locationSelector.value = initialLocationId; // Pre-select the first location in the dropdown
+                        currentLocationId = initialLocationId; // Set the module-level state variable
+                        loadAndRenderWeeklySchedule(initialLocationId); // Load schedule for this location
                     } else {
                         currentWeekDisplay.textContent = 'No Locations';
                         calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please create a location in Admin Settings.</p>';
@@ -273,6 +304,8 @@ export function handleSchedulingPage() {
                 if(locationSelectorContainer) locationSelectorContainer.style.display = 'none';
                 const user = await apiRequest('GET', '/api/users/me');
                 if (user && user.location_id) {
+                    // IMPORTANT FIX: Set currentLocationId for location_admin as well.
+                    currentLocationId = user.location_id;
                     loadAndRenderWeeklySchedule(user.location_id);
                 } else {
                     showModalMessage('Your account is not assigned to a location.', true);
