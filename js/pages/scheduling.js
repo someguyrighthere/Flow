@@ -1,366 +1,289 @@
-const express = require('express');
-const { Pool } = require('pg');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const multer = require('multer');
-const fs = require('fs');
-const { promises: fsPromises } = require('fs');
-const path = require('path');
-const onboardingRoutes = require('./routes/onboardingRoutes');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
-const app = express();
-const apiRoutes = express.Router();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
-const DATABASE_URL = process.env.DATABASE_URL;
-
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsDir),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage: storage });
-
-if (!DATABASE_URL) {
-    console.error("DATABASE_URL environment variable is not set. Please set it in your .env file or Render environment variables.");
-    process.exit(1);
-}
-
-const pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 20000,
-});
-
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(uploadsDir));
-app.use('/api', apiRoutes);
-
-// --- Middleware ---
-const isAuthenticated = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) {
-        return res.sendStatus(401);
+/**
+ * Handles all logic for the NEW "Classic Week" scheduling page.
+ * This version uses separate date and time inputs with 15-minute increments.
+ */
+export function handleSchedulingPage() {
+    // --- Security & Role Check ---
+    const authToken = localStorage.getItem("authToken");
+    const userRole = localStorage.getItem('userRole');
+    if (!authToken) {
+        window.location.href = "login.html";
+        return;
     }
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.sendStatus(403);
+
+    // --- DOM Element References ---
+    const currentWeekDisplay = document.getElementById('current-week-display');
+    const prevWeekBtn = document.getElementById('prev-week-btn');
+    const nextWeekBtn = document.getElementById('next-week-btn');
+    const calendarGridWrapper = document.getElementById('calendar-grid-wrapper');
+    const employeeSelect = document.getElementById('employee-select');
+    const locationSelect = document.getElementById('location-select');
+    const createShiftForm = document.getElementById('create-shift-form');
+    const locationSelectorContainer = document.getElementById('location-selector-container');
+    const locationSelector = document.getElementById('location-selector');
+    
+    // NEW: References for separate date and time inputs
+    const startDateInput = document.getElementById('start-date-input');
+    const startTimeSelect = document.getElementById('start-time-select');
+    const endDateInput = document.getElementById('end-date-input');
+    const endTimeSelect = document.getElementById('end-time-select');
+
+
+    // --- State Management ---
+    let currentStartDate = new Date();
+    currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
+    currentStartDate.setHours(0, 0, 0, 0);
+    let currentLocationId = null;
+
+    // --- Constants ---
+    const PIXELS_PER_HOUR = 60;
+    const START_HOUR = 7; // Display calendar from 7 AM
+    const END_HOUR = 22;  // Display calendar until 10 PM
+
+    /**
+     * Main function to initialize and render the calendar for a specific location and week.
+     */
+    const loadAndRenderWeeklySchedule = async (locationId) => {
+        if (!locationId) {
+            currentWeekDisplay.textContent = 'Select a location';
+            calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
+            return;
         }
-        req.user = user;
-        next();
+        currentLocationId = locationId;
+        currentWeekDisplay.textContent = 'Loading...';
+        calendarGridWrapper.innerHTML = ''; // Clear previous grid
+
+        try {
+            const [users, shifts, allLocations] = await Promise.all([
+                apiRequest('GET', `/api/users?location_id=${locationId}`),
+                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${locationId}`),
+                apiRequest('GET', '/api/locations')
+            ]);
+
+            populateSidebarDropdowns(users, allLocations);
+            renderCalendarGrid();
+            renderShifts(shifts);
+
+        } catch (error) {
+            showModalMessage(`Error loading schedule: ${error.message}`, true);
+            console.error("Error loading schedule data:", error);
+            currentWeekDisplay.textContent = 'Error';
+        }
+    };
+
+    /**
+     * Populates the Employee and Location dropdowns in the sidebar.
+     */
+    const populateSidebarDropdowns = (users, locations) => {
+        employeeSelect.innerHTML = '<option value="">Select Employee</option>';
+        if (users) {
+            users.filter(u => u.role === 'employee' || u.role === 'location_admin').forEach(user => {
+                employeeSelect.add(new Option(user.full_name, user.user_id));
+            });
+        }
+
+        locationSelect.innerHTML = '<option value="">Select Location</option>';
+        if (locations) {
+            locations.forEach(loc => {
+                locationSelect.add(new Option(loc.location_name, loc.location_id));
+            });
+        }
+    };
+
+    /**
+     * NEW: Generates and populates the time dropdowns with 15-minute increments.
+     */
+    const populateTimeSelects = () => {
+        let optionsHtml = '<option value="">Select Time</option>';
+        for (let hour = 0; hour < 24; hour++) {
+            for (let minute = 0; minute < 60; minute += 15) {
+                const timeValue = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+                const ampm = hour < 12 ? 'AM' : 'PM';
+                const displayText = `${displayHour}:${String(minute).padStart(2, '0')} ${ampm}`;
+                optionsHtml += `<option value="${timeValue}">${displayText}</option>`;
+            }
+        }
+        startTimeSelect.innerHTML = optionsHtml;
+        endTimeSelect.innerHTML = optionsHtml;
+    };
+
+    /**
+     * Renders the main calendar grid structure (headers, time slots, day columns).
+     */
+    const renderCalendarGrid = () => {
+        const weekDates = getWeekDates(currentStartDate);
+        const dateRangeString = `${weekDates[0].toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} - ${weekDates[6].toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}`;
+        currentWeekDisplay.textContent = dateRangeString;
+
+        const grid = document.createElement('div');
+        grid.className = 'calendar-grid';
+
+        grid.innerHTML += `<div class="grid-header time-slot-header"></div>`;
+        weekDates.forEach(date => {
+            grid.innerHTML += `<div class="grid-header">${date.toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})}</div>`;
+        });
+
+        for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+            const ampm = hour < 12 ? 'AM' : 'PM';
+            grid.innerHTML += `<div class="time-slot">${displayHour} ${ampm}</div>`;
+        }
+
+        for (let i = 0; i < 7; i++) {
+            const dayCol = document.createElement('div');
+            dayCol.className = 'day-column';
+            dayCol.style.gridColumn = `${i + 2}`;
+            dayCol.style.gridRow = `2 / span ${END_HOUR - START_HOUR}`;
+            dayCol.dataset.dayIndex = i;
+            grid.appendChild(dayCol);
+        }
+
+        calendarGridWrapper.innerHTML = '';
+        calendarGridWrapper.appendChild(grid);
+    };
+
+    /**
+     * Renders the shift blocks onto the calendar grid.
+     */
+    const renderShifts = (shifts) => {
+        if (!shifts) return;
+
+        shifts.forEach(shift => {
+            const shiftStart = new Date(shift.start_time);
+            const shiftEnd = new Date(shift.end_time);
+            const dayIndex = shiftStart.getDay();
+            
+            const targetColumn = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
+
+            if (targetColumn) {
+                const startMinutes = (shiftStart.getHours() * 60 + shiftStart.getMinutes()) - (START_HOUR * 60);
+                const endMinutes = (shiftEnd.getHours() * 60 + shiftEnd.getMinutes()) - (START_HOUR * 60);
+
+                const top = (startMinutes / 60) * PIXELS_PER_HOUR;
+                const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;
+
+                if (height > 0 && top >= 0) {
+                    const shiftBlock = document.createElement('div');
+                    shiftBlock.className = 'shift-block';
+                    shiftBlock.style.top = `${top}px`;
+                    shiftBlock.style.height = `${height}px`;
+                    shiftBlock.innerHTML = `<strong>${shift.employee_name}</strong><br><small>${shift.location_name}</small>`;
+                    shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
+                    targetColumn.appendChild(shiftBlock);
+                }
+            }
+        });
+    };
+
+    // --- Helper Functions ---
+    const getWeekDates = (startDate) => Array.from({ length: 7 }).map((_, i) => {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        return date;
     });
-};
 
-const isAdmin = (req, res, next) => {
-    if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
-        next();
-    } else {
-        return res.status(403).json({ error: 'Access denied.' });
-    }
-};
+    const getEndDate = (startDate) => {
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 7);
+        return endDate;
+    };
+    
+    const getApiDate = (d) => d.toISOString().split('T')[0];
 
-// --- API ROUTES ---
+    // --- Event Handlers ---
+    const handleWeekChange = (days) => {
+        currentStartDate.setDate(currentStartDate.getDate() + days);
+        loadAndRenderWeeklySchedule(currentLocationId);
+    };
 
-// Auth Routes
-apiRoutes.post('/register', async (req, res) => {
-    const { companyName, fullName, email, password } = req.body;
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`,[`${companyName} HQ`]);
-        const hash = await bcrypt.hash(password, 10);
-        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', NULL) RETURNING user_id`, [fullName, email, hash]);
-        await client.query('COMMIT');
-        res.status(201).json({ message: "Registration successful!" });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('[Register] Error during registration:', err);
-        res.status(500).json({ error: "An internal server error occurred during registration." });
-    } finally {
-        client.release();
-    }
-});
+    prevWeekBtn.addEventListener('click', () => handleWeekChange(-7));
+    nextWeekBtn.addEventListener('click', () => handleWeekChange(7));
 
-apiRoutes.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    try {
-        const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
-        const user = result.rows[0];
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ error: "Invalid credentials." });
-        }
-        const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ token, role: user.role, userId: user.user_id });
-    } catch (err) {
-        console.error('[Login] Error during login:', err);
-        res.status(500).json({ error: "An internal server error occurred during login." });
-    }
-});
+    createShiftForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // CORRECTED: Read from separate date and time inputs
+        const startDate = startDateInput.value;
+        const startTime = startTimeSelect.value;
+        const endDate = endDateInput.value;
+        const endTime = endTimeSelect.value;
 
-// --- User Routes (CORRECTED ORDER) ---
-
-// Specific user routes first
-apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('[Users] Failed to retrieve user profile:', err);
-        res.status(500).json({ error: 'Failed to retrieve user profile.' });
-    }
-});
-
-apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_id } = req.query;
-    try {
-        let query = `SELECT user_id, full_name, availability, location_id FROM users`;
-        const params = [];
-        let whereClauses = [];
-        let paramIndex = 1;
-
-        if (req.user.role === 'super_admin' && location_id) {
-            whereClauses.push(`location_id = $${paramIndex++}`);
-            params.push(location_id);
-        } else if (req.user.role === 'location_admin') {
-            whereClauses.push(`location_id = $${paramIndex++}`);
-            params.push(req.user.location_id);
+        if (!startDate || !startTime || !endDate || !endTime) {
+            return showModalMessage('Please select a valid date and time for both start and end.', true);
         }
 
-        if (whereClauses.length > 0) {
-            query += ' WHERE ' + whereClauses.join(' AND ');
-        }
+        const startDateTime = `${startDate}T${startTime}`;
+        const endDateTime = `${endDate}T${endTime}`;
 
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Users Availability] Error retrieving user availability:', err);
-        res.status(500).json({ error: 'Failed to retrieve user availability.' });
-    }
-});
+        const shiftData = {
+            employee_id: employeeSelect.value,
+            location_id: locationSelect.value,
+            start_time: startDateTime,
+            end_time: endDateTime,
+            notes: document.getElementById('notes-input').value
+        };
 
-// Generic /users route last
-apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    console.log(`[GET /api/users] Received request. Query:`, req.query); // Added logging
-    const { location_id } = req.query;
-    try {
-        let query = `
-            SELECT u.user_id, u.full_name, u.position, u.role, u.location_id, u.availability, l.location_name
-            FROM users u LEFT JOIN locations l ON u.location_id = l.location_id
-        `;
-        const params = [];
-        let whereClauses = [];
-        let paramIndex = 1;
-
-        if (req.user.role === 'location_admin') {
-            whereClauses.push(`u.location_id = $${paramIndex++}`);
-            params.push(req.user.location_id);
-        } else if (req.user.role === 'super_admin' && location_id) {
-            whereClauses.push(`u.location_id = $${paramIndex++}`);
-            params.push(location_id);
-        }
-
-        if (whereClauses.length > 0) {
-            query += ' WHERE ' + whereClauses.join(' AND ');
+        if (!shiftData.employee_id || !shiftData.location_id) {
+            return showModalMessage('Please select an employee and location.', true);
         }
         
-        query += ' ORDER BY u.full_name';
-        
-        console.log(`[GET /api/users] Executing query: ${query} with params: ${params}`);
-        const result = await pool.query(query, params);
-        console.log(`[GET /api/users] Query successful, returning ${result.rows.length} users.`);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Users] Error retrieving users:', err);
-        res.status(500).json({ error: 'Failed to retrieve users.' });
-    }
-});
-
-// ADDED: The missing DELETE route for users
-apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    // Add logic to prevent users from deleting themselves
-    if (req.user.id === parseInt(id, 10)) {
-        return res.status(400).json({ error: "You cannot delete your own account." });
-    }
-    try {
-        const result = await pool.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id', [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'User not found.' });
+        try {
+            await apiRequest('POST', '/api/shifts', shiftData);
+            showModalMessage('Shift created successfully!', false);
+            createShiftForm.reset();
+            loadAndRenderWeeklySchedule(currentLocationId);
+        } catch (error) {
+            showModalMessage(`Error creating shift: ${error.message}`, true);
         }
-        res.status(204).send();
-    } catch (err) {
-        console.error('Error deleting user:', err);
-        res.status(500).json({ error: 'Failed to delete user.' });
+    });
+    
+    if (locationSelector) {
+        locationSelector.addEventListener('change', () => {
+            const newLocationId = locationSelector.value;
+            if (newLocationId) {
+                loadAndRenderWeeklySchedule(newLocationId);
+            }
+        });
     }
-});
 
-
-// --- Other Routes ---
-// (The rest of the file remains the same)
-
-// Locations Routes
-apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
-    try {
-        let query = 'SELECT location_id, location_name, location_address FROM locations ORDER BY location_name';
-        const params = [];
-        if (req.user.role === 'location_admin') {
-            query = 'SELECT location_id, location_name, location_address FROM locations WHERE location_id = $1 ORDER BY location_name';
-            params.push(req.user.location_id);
+    // --- Initial Page Load ---
+    const initializePage = async () => {
+        populateTimeSelects(); // Populate time dropdowns on page load
+        try {
+            const locations = await apiRequest('GET', '/api/locations');
+            
+            if (userRole === 'super_admin') {
+                if(locationSelectorContainer) locationSelectorContainer.style.display = 'block';
+                if (locationSelector) {
+                    locationSelector.innerHTML = '<option value="">Select a Location</option>';
+                    if (locations && locations.length > 0) {
+                        locations.forEach(loc => {
+                            locationSelector.add(new Option(loc.location_name, loc.location_id));
+                        });
+                        locationSelector.value = locations[0].location_id;
+                        loadAndRenderWeeklySchedule(locations[0].location_id);
+                    } else {
+                        currentWeekDisplay.textContent = 'No Locations';
+                        calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please create a location in Admin Settings.</p>';
+                    }
+                }
+            } else { // For location_admin
+                if(locationSelectorContainer) locationSelectorContainer.style.display = 'none';
+                const user = await apiRequest('GET', '/api/users/me');
+                if (user && user.location_id) {
+                    loadAndRenderWeeklySchedule(user.location_id);
+                } else {
+                    showModalMessage('Your account is not assigned to a location.', true);
+                    currentWeekDisplay.textContent = 'No Location Assigned';
+                }
+            }
+        } catch (error) {
+             showModalMessage(`Failed to initialize page: ${error.message}`, true);
         }
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Locations] Error retrieving locations:', err);
-        res.status(500).json({ error: 'Failed to retrieve locations.' });
-    }
-});
+    };
 
-apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_name, location_address } = req.body;
-    if (!location_name || !location_address) {
-        return res.status(400).json({ error: 'Location name and address are required.' });
-    }
-    try {
-        const result = await pool.query('INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *', [location_name, location_address]);
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('[Locations] Error adding new location:', err);
-        if (err.code === '23505') {
-            return res.status(409).json({ error: 'Location name already exists.' });
-        }
-        res.status(500).json({ error: 'Failed to add new location.' });
-    }
-});
-
-// Business Settings Endpoint
-apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
-    let targetLocationId = req.user.role === 'super_admin' ? req.query.location_id : req.user.location_id;
-    if (!targetLocationId) {
-        return res.json({ operating_hours_start: null, operating_hours_end: null });
-    }
-    try {
-        const result = await pool.query('SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1', [targetLocationId]);
-        res.json(result.rows[0] || { operating_hours_start: null, operating_hours_end: null });
-    } catch (err) {
-        console.error('[Backend] Error fetching business settings:', err);
-        res.status(500).json({ error: 'Failed to retrieve business settings.' });
-    }
-});
-
-apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
-    const { operating_hours_start, operating_hours_end, location_id: requestedLocationId } = req.body;
-    let targetLocationId = req.user.role === 'super_admin' ? requestedLocationId : req.user.location_id;
-    if (!targetLocationId) {
-        return res.status(400).json({ error: 'A valid location must be specified or associated with the user.' });
-    }
-    if (!operating_hours_start || !operating_hours_end) {
-        return res.status(400).json({ error: 'Start and end operating hours are required.' });
-    }
-    try {
-        const result = await pool.query(
-            `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end) VALUES ($1, $2, $3)
-             ON CONFLICT (location_id) DO UPDATE SET operating_hours_start = EXCLUDED.operating_hours_start, operating_hours_end = EXCLUDED.operating_hours_end, updated_at = CURRENT_TIMESTAMP
-             RETURNING *`,
-            [targetLocationId, operating_hours_start, operating_hours_end]
-        );
-        res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
-    } catch (err) {
-        console.error('[Backend] Error updating business settings:', err);
-        res.status(500).json({ error: 'Failed to update business settings.' });
-    }
-});
-
-// Stripe and Subscription Routes...
-// (All other routes like /shifts, /documents, /job-postings, etc., remain the same)
-
-// Shift Management Routes
-apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate, location_id } = req.query;
-    if (!startDate || !endDate) {
-        return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
-    }
-    try {
-        let query = `
-            SELECT s.id, s.employee_id, u.full_name AS employee_name, s.location_id, l.location_name, s.start_time, s.end_time, s.notes
-            FROM shifts s JOIN users u ON s.employee_id = u.user_id JOIN locations l ON s.location_id = l.location_id
-            WHERE s.start_time < $2 AND s.end_time > $1
-        `;
-        const params = [startDate, endDate];
-        let paramIndex = 3;
-
-        const effectiveLocationId = req.user.role === 'super_admin' ? location_id : req.user.location_id;
-        if (effectiveLocationId) {
-            query += ` AND s.location_id = $${paramIndex++}`;
-            params.push(effectiveLocationId);
-        }
-        
-        query += ' ORDER BY s.start_time ASC';
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Shifts] Error retrieving shifts:', err);
-        res.status(500).json({ error: 'Failed to retrieve shifts.' });
-    }
-});
-
-apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { employee_id, location_id, start_time, end_time, notes } = req.body;
-    if (!employee_id || !location_id || !start_time || !end_time) {
-        return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
-    }
-    if (new Date(start_time) >= new Date(end_time)) {
-        return res.status(400).json({ error: 'End time must be after start time.' });
-    }
-    try {
-        const result = await pool.query(
-            `INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [employee_id, location_id, start_time, end_time, notes]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('[Shifts] Error creating shift:', err);
-        res.status(500).json({ error: 'Failed to create shift.' });
-    }
-});
-
-apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM shifts WHERE id = $1 RETURNING id', [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Shift not found.' });
-        }
-        res.status(204).send();
-    } catch (err) {
-        console.error('[Shifts] Error deleting shift:', err);
-        res.status(500).json({ error: 'Failed to delete shift.' });
-    }
-});
-
-
-// Onboarding Routes
-onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
-
-// Server Startup
-const startServer = async () => {
-    try {
-        const client = await pool.connect();
-        console.log('Connected to the PostgreSQL database.');
-        client.release();
-        app.listen(PORT, '0.0.0.0', () => console.log(`Server is running on port ${PORT}`));
-    } catch (err) {
-        console.error('Failed to start server:', err.stack);
-        process.exit(1);
-    }
-};
-
-startServer();
+    initializePage();
+}
