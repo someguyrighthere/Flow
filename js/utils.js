@@ -14,31 +14,23 @@ export function showModalMessage(message, isError = false) {
     const modalOkButton = document.getElementById("modal-ok-button");
 
     if (modalOverlay && modalMessageText && modalOkButton) {
-        // Define hide functions first, before attaching/removing listeners
         const hideModal = () => { modalOverlay.style.display = "none"; };
         const hideModalOutside = (event) => { 
             if (event.target === modalOverlay) hideModal(); 
         };
 
-        // Ensure listeners are removed before re-adding to prevent duplicates
         modalOkButton.removeEventListener("click", hideModal);
         modalOverlay.removeEventListener("click", hideModalOutside);
 
         modalMessageText.textContent = message;
         modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
-        modalOverlay.style.display = "flex"; // Show the modal
+        modalOverlay.style.display = "flex";
 
-        // Add event listeners
         modalOkButton.addEventListener("click", hideModal);
         modalOverlay.addEventListener("click", hideModalOutside);
 
     } else {
         console.error("Modal elements not found for showModalMessage:", message);
-        if (isError) {
-            console.error(`ERROR: ${message}`);
-        } else {
-            console.log(`MESSAGE: ${message}`);
-        }
     }
 }
 
@@ -56,17 +48,15 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         const modalCancelButton = document.getElementById("confirm-modal-cancel");
 
         if (!confirmModalOverlay || !confirmModalMessage || !modalConfirmButton || !modalCancelButton) {
-            console.error("Confirmation modal elements not found in showConfirmModal. Falling back to browser's confirm.");
+            console.error("Confirmation modal elements not found. Falling back to browser's confirm.");
             resolve(window.confirm(message));
             return;
         }
 
         confirmModalMessage.innerHTML = message;
         modalConfirmButton.textContent = confirmButtonText;
-        confirmModalOverlay.style.display = "flex"; // Show the modal
+        confirmModalOverlay.style.display = "flex";
 
-        // Define event handlers right inside this Promise's scope
-        // This ensures unique references for add/removeEventListener for each modal instance
         const handleConfirm = () => {
             cleanup();
             resolve(true);
@@ -80,21 +70,17 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
         const handleClickOutside = (event) => {
             if (event.target === confirmModalOverlay) {
                 cleanup();
-                resolve(false); // Treat clicking outside as cancellation
+                resolve(false);
             }
         };
 
-        // Function to clean up listeners and hide modal
         const cleanup = () => {
-            // Remove event listeners added by addEventListener
             modalConfirmButton.removeEventListener('click', handleConfirm);
             modalCancelButton.removeEventListener('click', handleCancel);
             confirmModalOverlay.removeEventListener('click', handleClickOutside);
-            
-            confirmModalOverlay.style.display = 'none'; // Hide the modal
+            confirmModalOverlay.style.display = 'none';
         };
 
-        // Attach listeners for this specific modal instance
         modalConfirmButton.addEventListener('click', handleConfirm);
         modalCancelButton.addEventListener('click', handleCancel);
         confirmModalOverlay.addEventListener('click', handleClickOutside);
@@ -107,117 +93,60 @@ export function showConfirmModal(message, confirmButtonText = "Confirm") {
  * @param {string} path The API endpoint path (e.g., "/login").
  * @param {object} [body=null] The request body for POST/PUT requests.
  * @param {boolean} [isFormData=false] Whether the body is FormData.
- * @param {function} [onProgress=null] A progress event handler for uploads.
- * @param {boolean} [expectBlobResponse=false] Whether to expect a Blob in response.
- * @returns {Promise<any>} The JSON response from the API or a Blob.
+ * @returns {Promise<any>} The JSON response from the API.
  */
-export async function apiRequest(method, path, body = null, isFormData = false, onProgress = null, expectBlobResponse = false) {
+export async function apiRequest(method, path, body = null, isFormData = false) {
     const token = localStorage.getItem('authToken');
     const endpoint = `${API_BASE_URL}${path}`;
-
-    // Debugging: Log the token being sent
-    console.log(`[apiRequest] Sending request to: ${endpoint}`);
-    console.log(`[apiRequest] Token present: ${!!token}`);
-    if (token) {
-        // Log a truncated token for security, or just its presence
-        console.log(`[apiRequest] Auth Token (first 20 chars): ${token.substring(0, 20)}...`);
-    }
 
     const handleAuthError = (errorMessage) => {
         localStorage.removeItem('authToken');
         localStorage.removeItem('userRole');
-        localStorage.removeItem('userId'); // Ensure userId is also cleared
+        localStorage.removeItem('userId');
         showModalMessage(errorMessage, true);
         setTimeout(() => { window.location.href = 'login.html?sessionExpired=true'; }, 1500); 
     };
 
-    if (isFormData) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open(method, endpoint);
-            if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-            if (onProgress && xhr.upload) xhr.upload.addEventListener('progress', onProgress);
-            
-            xhr.onload = function () {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try { resolve(JSON.parse(xhr.responseText || '{}')); } catch (e) { resolve({}); }
-                } else if (xhr.status === 401 || xhr.status === 403) {
-                    // Debugging: Log XHR response for auth errors
-                    console.error(`[apiRequest XHR] Auth Error Status: ${xhr.status}, Response: ${xhr.responseText}`);
-                    handleAuthError('Your session has expired. Please log in again.');
-                    reject(new Error('Authentication failed.'));
-                } else {
-                    // For XHR, we assume JSON if status is not 2xx, 401, 403
-                    // If it's not JSON, JSON.parse will throw, caught by outer try-catch
-                    try { 
-                        reject(new Error(JSON.parse(xhr.responseText).error || 'An unknown error occurred.')); 
-                    } catch (e) { 
-                        reject(new Error(`HTTP error ${xhr.status} - ${xhr.statusText}`)); 
-                    }
-                }
-            };
-            xhr.onerror = () => reject(new Error('Network error. Check connection or CORS policy.'));
-            xhr.send(body);
-        });
-    }
+    const options = { 
+        method, 
+        headers: {},
+        // DEFINITIVE FIX: Tells the browser to always fetch a fresh copy from the server.
+        cache: 'no-cache' 
+    };
 
-    const options = { method, headers: {} };
     if (token) {
         options.headers['Authorization'] = `Bearer ${token}`;
     }
-    if (body && !isFormData) {
-        options.headers['Content-Type'] = 'application/json';
-        options.body = JSON.stringify(body);
+
+    if (body) {
+        if (isFormData) {
+            options.body = body;
+        } else {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
     }
 
     try {
         const response = await fetch(endpoint, options);
         
         if (response.status === 401 || response.status === 403) {
-            // Debugging: Log fetch response for auth errors
-            const errorText = await response.text(); // Get raw text to see "Invalid token" or HTML
-            console.error(`[apiRequest Fetch] Auth Error Status: ${response.status}, Response: ${errorText}`);
             handleAuthError('Your session has expired. Please log in again.');
             throw new Error('Authentication failed.');
         }
 
         if (!response.ok) {
-            let errorMsg = `HTTP error! Status: ${response.status}`;
-            const contentType = response.headers.get('content-type');
-
-            // FIX: Check content type before parsing as JSON to prevent SyntaxError
-            if (contentType && contentType.includes('application/json')) {
-                try {
-                    const errorData = await response.json(); 
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    // If it claimed to be JSON but parsing still failed, get raw text
-                    errorMsg = await response.text(); 
-                    console.error('Failed to parse JSON error response:', e, 'Raw response:', errorMsg);
-                }
-            } else {
-                // If not JSON (e.g., HTML, plain error message), read as plain text
-                errorMsg = await response.text(); 
-                console.warn('Non-JSON error response received. Raw response:', errorMsg);
-            }
-            // END FIX
-            
-            throw new Error(errorMsg);
+            const errorData = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
         }
 
-        if (expectBlobResponse) {
-            return response.blob();
+        if (response.status === 204) {
+            return null; // No content
         }
 
-        const contentLength = response.headers.get("content-length");
-        if (response.status === 204 || contentLength === "0") {
-            return null; // No content expected
-        }
-
-        return response.json(); // Parse and return JSON response
+        return response.json();
 
     } catch (error) {
-        // The error (including the one with HTML content) will be caught here
         showModalMessage(error.message, true);
         throw error;
     }
