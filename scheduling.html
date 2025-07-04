@@ -61,10 +61,46 @@
             margin-bottom: 15px;
         }
 
-        /* Removed: Styles for the daily hours inputs */
-        /* Removed: Styles for Auto-Generate Schedule button */
+        /* NEW: Styles for form groups within the sidebar forms for consistent spacing and alignment */
+        .sidebar form .form-group {
+            margin-bottom: 25px; /* Increased space between form groups */
+            display: flex;
+            flex-direction: column; /* Stack label and input vertically */
+            align-items: flex-start; /* Align label/input to the left */
+        }
 
-        /* NEW: Styling for the toggle switch */
+        .sidebar form label {
+            margin-bottom: 8px; /* Space between label and input */
+            font-weight: 600;
+            color: var(--text-light);
+            display: block; /* Ensure label takes its own line */
+        }
+
+        .sidebar form input[type="datetime-local"],
+        .sidebar form textarea,
+        .sidebar form select {
+            width: 100%; /* Ensure inputs take full width of their container */
+            max-width: 400px; /* Limit overall width for better readability */
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-light);
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+
+        .sidebar form textarea {
+            min-height: 100px; /* Give text areas a bit more height */
+            resize: vertical; /* Allow vertical resizing */
+        }
+
+        /* Adjust button margin for better spacing below the form */
+        .sidebar form .btn-primary {
+            margin-top: 20px;
+            width: 100%; /* Make button full width in the sidebar */
+        }
+
+        /* Styling for the toggle switch */
         .toggle-switch {
             position: relative;
             display: inline-block;
@@ -428,7 +464,6 @@
                         <button type="submit" class="btn btn-primary">Add Shift</button>
                     </form>
 
-                    <!-- Removed Auto-Scheduling Settings section -->
                     <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
                         <label class="toggle-switch">
                             <input type="checkbox" id="toggle-availability" checked>
