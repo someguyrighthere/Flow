@@ -16,10 +16,38 @@
             padding: 0;
         }
 
-        .container { z-index: 2; padding: 20px 5%; box-sizing: border-box; }
-        .main-nav { display: flex; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 30px; }
-        .main-nav a { padding: 10px 15px; text-decoration: none; color: var(--text-medium); font-weight: 600; border-bottom: 3px solid transparent; }
-        .main-nav a.active { color: var(--text-light); border-bottom-color: var(--primary-accent); }
+        /* Adjusted container padding for better overall spacing */
+        .container { 
+            z-index: 2; 
+            padding: 20px 3%; /* Slightly reduced horizontal padding on larger screens */
+            box-sizing: border-box; 
+            max-width: 1400px; /* Max width to prevent content from stretching too wide */
+            margin: 0 auto; /* Center the container */
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px; /* More generous padding on smaller screens */
+            }
+        }
+
+        .main-nav { 
+            display: flex; 
+            gap: 10px; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
+            margin-bottom: 30px; 
+            padding-bottom: 10px; /* Added padding below nav links */
+        }
+        .main-nav a { 
+            padding: 10px 15px; 
+            text-decoration: none; 
+            color: var(--text-medium); 
+            font-weight: 600; 
+            border-bottom: 3px solid transparent; 
+        }
+        .main-nav a.active { 
+            color: var(--text-light); 
+            border-bottom-color: var(--primary-accent); 
+        }
         .settings-menu { position: relative; }
         .settings-dropdown {
             display: none; position: absolute; top: 55px; right: 0;
@@ -229,7 +257,7 @@
             padding: 0; /* Remove any default padding */
             margin: 0; /* Remove any default margin */
 
-            /* NEW: Custom Scrollbar Styling */
+            /* Custom Scrollbar Styling */
             scrollbar-width: thin; /* Firefox */
             scrollbar-color: var(--primary-accent) rgba(255, 255, 255, 0.1); /* Firefox */
         }
@@ -519,7 +547,7 @@
             left: 90px; /* Position after time column + padding */
         }
 
-        /* NEW: Styles for the Super Admin Location Selector */
+        /* Styles for the Super Admin Location Selector */
         .super-admin-location-selector {
             margin-top: 30px; /* Space above this section */
             padding-top: 20px; /* Padding inside the section */
