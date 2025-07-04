@@ -151,7 +151,9 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
+// CORRECTED: This route now handles location_id from query parameters for super_admin.
 apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_id } = req.query; // Get location_id from query
     try {
         let query = `
             SELECT
@@ -162,10 +164,23 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
             FROM users
         `;
         const params = [];
-        if (req.user.role === 'location_admin') {
-            query += ' WHERE location_id = $1';
+        let whereClauses = [];
+        let paramIndex = 1;
+
+        // If super_admin, filter by the location_id passed in the query.
+        // If location_admin, filter by their own location_id from the token.
+        if (req.user.role === 'super_admin' && location_id) {
+            whereClauses.push(`location_id = $${paramIndex++}`);
+            params.push(location_id);
+        } else if (req.user.role === 'location_admin') {
+            whereClauses.push(`location_id = $${paramIndex++}`);
             params.push(req.user.location_id);
         }
+
+        if (whereClauses.length > 0) {
+            query += ' WHERE ' + whereClauses.join(' AND ');
+        }
+
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
@@ -627,22 +642,19 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
 });
 
 // Shift Management Routes
+// CORRECTED: This route now handles location_id from query parameters for super_admin.
 apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, location_id } = req.query; // Get location_id from query
     if (!startDate || !endDate) {
         return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
     }
+
     try {
         let query = `
             SELECT
-                s.id,
-                s.employee_id,
-                u.full_name AS employee_name,
-                s.location_id,
-                l.location_name,
-                s.start_time,
-                s.end_time,
-                s.notes
+                s.id, s.employee_id, u.full_name AS employee_name,
+                s.location_id, l.location_name, s.start_time,
+                s.end_time, s.notes
             FROM shifts s
             JOIN users u ON s.employee_id = u.user_id
             JOIN locations l ON s.location_id = l.location_id
@@ -650,10 +662,17 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         `;
         const params = [startDate, endDate];
         let paramIndex = 3;
-        if (req.user.role === 'location_admin') {
+
+        // If super_admin, filter by the location_id passed in the query.
+        // If location_admin, filter by their own location_id from the token.
+        if (req.user.role === 'super_admin' && location_id) {
+            query += ` AND s.location_id = $${paramIndex++}`;
+            params.push(location_id);
+        } else if (req.user.role === 'location_admin') {
             query += ` AND s.location_id = $${paramIndex++}`;
             params.push(req.user.location_id);
         }
+        
         query += ' ORDER BY s.start_time ASC';
         const result = await pool.query(query, params);
         res.json(result.rows);
