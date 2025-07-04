@@ -318,6 +318,7 @@ export function handleSchedulingPage() {
                 if (locationSelector) {
                     locationSelector.innerHTML = '<option value="">Select a Location</option>';
                     if (locations && locations.length > 0) {
+                        // Corrected: Iterate over the 'locations' array received from the API.
                         locations.forEach(loc => {
                             locationSelector.add(new Option(loc.location_name, loc.location_id));
                         });
