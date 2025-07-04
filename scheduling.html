@@ -412,6 +412,79 @@
             from { opacity: 0; transform: scale(0.9); }
             to { opacity: 1; transform: scale(1); }
         }
+
+        /* --- Mobile-Specific Styles --- */
+        .mobile-calendar-view {
+            display: none; /* Hidden by default, shown via media query */
+            background-color: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 8px;
+            flex-direction: column;
+            overflow: hidden;
+            margin-top: 30px;
+        }
+
+        .mobile-calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: var(--text-light);
+            flex-shrink: 0;
+        }
+
+        .mobile-calendar-day-display {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            flex-grow: 1;
+        }
+
+        .mobile-day-column {
+            position: relative;
+            height: 1440px; /* 24 hours * 60px/hour */
+            overflow-y: scroll; /* Enable scrolling for the single day */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px; /* Add some padding inside the day column */
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mobile-time-slot {
+            height: 60px;
+            line-height: 60px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.8rem;
+            color: var(--text-medium);
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .mobile-time-slot:last-child {
+            border-bottom: none;
+        }
+
+        /* Adjust shift/availability blocks for mobile single day view */
+        .mobile-day-column .calendar-shift,
+        .mobile-day-column .availability-block,
+        .mobile-day-column .business-hours-block {
+            width: calc(100% - 20px); /* Account for padding */
+            left: 10px; /* Match padding */
+        }
+
+        /* Media Query for Mobile View */
+        @media (max-width: 768px) {
+            .scheduling-layout {
+                display: none; /* Hide the desktop layout */
+            }
+            .mobile-calendar-view {
+                display: flex; /* Show the mobile layout */
+            }
+            .sidebar {
+                margin-bottom: 30px; /* Add space below sidebar when stacked */
+            }
+        }
     </style>
 </head>
 <body>
@@ -487,6 +560,18 @@
                                  and body (.calendar-body) with time/day columns here -->
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- NEW: Mobile-specific calendar view -->
+            <div class="mobile-calendar-view">
+                <div class="mobile-calendar-header">
+                    <button id="mobile-prev-day-btn" class="btn btn-secondary">◀</button>
+                    <h3 id="mobile-current-day-display" class="mobile-calendar-day-display">Loading...</h3>
+                    <button id="mobile-next-day-btn" class="btn btn-secondary">▶</button>
+                </div>
+                <div id="mobile-day-column" class="mobile-day-column">
+                    <!-- Mobile time slots, shifts, availability, business hours will be rendered here by JS -->
                 </div>
             </div>
         </section>
