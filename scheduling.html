@@ -51,6 +51,18 @@
             color: var(--text-light);
             box-sizing: border-box;
         }
+
+        /* NEW: Style for combining date and time inputs */
+        .datetime-group {
+            display: flex;
+            gap: 10px;
+        }
+        .datetime-group input[type="date"] {
+            flex-basis: 60%;
+        }
+        .datetime-group select {
+            flex-basis: 40%;
+        }
         
         .calendar-container {
             display: flex;
@@ -221,7 +233,6 @@
         <section class="scheduling-layout">
             <!-- Sidebar for creating shifts -->
             <div class="sidebar">
-                <!-- ADDED: Location selector for admins -->
                 <div id="location-selector-container" class="form-group" style="display: none;">
                     <label for="location-selector">View Schedule For</label>
                     <select id="location-selector"></select>
@@ -238,14 +249,18 @@
                         <select id="location-select" required></select>
                     </div>
                     <div class="form-group">
-                        <label for="start-time-input">Start Time</label>
-                        <!-- CORRECTED: Added step="900" for 15-minute increments -->
-                        <input type="datetime-local" id="start-time-input" required step="900">
+                        <label for="start-date-input">Start Time</label>
+                        <div class="datetime-group">
+                            <input type="date" id="start-date-input" required>
+                            <select id="start-time-select" required></select>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label for="end-time-input">End Time</label>
-                        <!-- CORRECTED: Added step="900" for 15-minute increments -->
-                        <input type="datetime-local" id="end-time-input" required step="900">
+                        <label for="end-date-input">End Time</label>
+                        <div class="datetime-group">
+                            <input type="date" id="end-date-input" required>
+                            <select id="end-time-select" required></select>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="notes-input">Notes (Optional)</label>
