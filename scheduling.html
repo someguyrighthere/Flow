@@ -228,7 +228,29 @@
             box-sizing: content-box; /* Crucial for pixel-perfect top/height calculations */
             padding: 0; /* Remove any default padding */
             margin: 0; /* Remove any default margin */
+
+            /* NEW: Custom Scrollbar Styling */
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: var(--primary-accent) rgba(255, 255, 255, 0.1); /* Firefox */
         }
+
+        /* Webkit (Chrome, Safari) scrollbar styling */
+        .calendar-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .calendar-body::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .calendar-body::-webkit-scrollbar-thumb {
+            background-color: var(--primary-accent);
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        .calendar-body::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(200, 109, 215, 0.8); /* Slightly darker on hover */
+        }
+
 
         .calendar-day-header {
             padding: 10px 0;
@@ -320,7 +342,14 @@
             overflow: hidden;
             white-space: nowrap; /* Keep text on one line */
             text-overflow: ellipsis; /* Add ellipsis for overflow */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); /* Subtle shadow */
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
+        .calendar-shift:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
         .delete-shift-btn {
             position: absolute; top: 2px; right: 2px;
             background: rgba(0,0,0,0.3); border: none;
