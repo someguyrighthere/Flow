@@ -6,7 +6,7 @@
     "build": "npm run build:js && npm run build:css",
     "build:js": "esbuild js/app.js --bundle --outfile=dist/js/bundle.js --sourcemap",
     "build:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css",
-    "watch:js": "babel js --out-file dist/js/bundle.js --copy-files --source-maps inline --watch",
+    "watch:js": "esbuild js/app.js --bundle --outfile=dist/js/bundle.js --sourcemap --watch",
     "watch:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css --watch",
     "start": "node server.js"
   },
