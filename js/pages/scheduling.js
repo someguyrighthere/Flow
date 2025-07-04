@@ -22,11 +22,15 @@ export function handleSchedulingPage() {
     const locationSelect = document.getElementById('location-select');
 
     const availabilityToggle = document.getElementById('toggle-availability');
+    // Removed: dailyHoursInputsDiv, autoGenerateScheduleBtn, autoScheduleStatusMessage
 
     // Initialize currentStartDate to the beginning of the current week (Sunday)
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0); // Set to midnight for consistent date comparison
+
+    // Removed: dailyTargetHours state variable
+    // Removed: displayAutoScheduleStatus helper function
 
     /**
      * Renders the calendar grid for a given week.
@@ -182,19 +186,20 @@ export function handleSchedulingPage() {
                     if (dayAvailability && dayAvailability.start && dayAvailability.end) {
                         const dayColumn = document.getElementById(`day-column-${index}`);
                         if(dayColumn) {
-                            const startHour = parseInt(dayAvailability.start.split(':')[0], 10);
-                            const endHour = parseInt(dayAvailability.end.split(':')[0], 10);
-                            const duration = endHour - startHour;
+                            // Convert time strings to minutes from midnight for positioning
+                            const startMinutes = parseInt(dayAvailability.start.split(':')[0], 10) * 60 + parseInt(dayAvailability.start.split(':')[1], 10);
+                            const endMinutes = parseInt(dayAvailability.end.split(':')[0], 10) * 60 + parseInt(dayAvailability.end.split(':')[1], 10);
+                            const heightMinutes = endMinutes - startMinutes;
                             
-                            if (duration > 0) {
+                            if (heightMinutes > 0) {
                                 const availabilityBlock = document.createElement('div');
                                 availabilityBlock.className = 'availability-block';
                                 // Hide if the toggle is off
                                 if (availabilityToggle && !availabilityToggle.checked) {
                                     availabilityBlock.classList.add('hidden');
                                 }
-                                availabilityBlock.style.top = `${startHour * 60}px`; // Convert hours to pixels
-                                availabilityBlock.style.height = `${duration * 60}px`; // Convert hours to pixels
+                                availabilityBlock.style.top = `${startMinutes}px`; // Position in pixels
+                                availabilityBlock.style.height = `${heightMinutes}px`; // Height in pixels
                                 dayColumn.appendChild(availabilityBlock);
                             }
                         }
@@ -274,6 +279,10 @@ export function handleSchedulingPage() {
             console.error('Error populating dropdowns:', error);
         }
     }
+
+    // Removed: generateDailyHoursInputs function
+    // Removed: loadDailyHours function
+    // Removed: saveDailyHours function
 
     // --- Event Handlers ---
 
@@ -368,8 +377,11 @@ export function handleSchedulingPage() {
             }
         });
     }
+
+    // Removed: Event listener for the "Auto-Generate Schedule" button
     
     // --- Initial Page Load Actions ---
     renderCalendar(currentStartDate); // Render the initial calendar view
     populateDropdowns(); // Populate employee and location dropdowns
+    // Removed: loadDailyHours()
 }
