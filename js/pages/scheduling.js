@@ -2,7 +2,7 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
  * Handles all logic for the NEW "Classic Week" scheduling page.
- * This version includes corrected data fetching to ensure the schedule updates properly.
+ * This version uses separate date and time inputs with 15-minute increments.
  */
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
@@ -23,6 +23,12 @@ export function handleSchedulingPage() {
     const createShiftForm = document.getElementById('create-shift-form');
     const locationSelectorContainer = document.getElementById('location-selector-container');
     const locationSelector = document.getElementById('location-selector');
+    
+    // NEW: References for separate date and time inputs
+    const startDateInput = document.getElementById('start-date-input');
+    const startTimeSelect = document.getElementById('start-time-select');
+    const endDateInput = document.getElementById('end-date-input');
+    const endTimeSelect = document.getElementById('end-time-select');
 
 
     // --- State Management ---
@@ -38,7 +44,6 @@ export function handleSchedulingPage() {
 
     /**
      * Main function to initialize and render the calendar for a specific location and week.
-     * This function is now self-contained and fetches all data it needs to render.
      */
     const loadAndRenderWeeklySchedule = async (locationId) => {
         if (!locationId) {
@@ -51,17 +56,13 @@ export function handleSchedulingPage() {
         calendarGridWrapper.innerHTML = ''; // Clear previous grid
 
         try {
-            // CORRECTED: Fetch all necessary data, including locations, every time.
             const [users, shifts, allLocations] = await Promise.all([
                 apiRequest('GET', `/api/users?location_id=${locationId}`),
                 apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${locationId}`),
-                apiRequest('GET', '/api/locations') // Also fetch all locations for the sidebar dropdown
+                apiRequest('GET', '/api/locations')
             ]);
 
-            // Populate the sidebar dropdowns with the freshly fetched data
             populateSidebarDropdowns(users, allLocations);
-
-            // Render the calendar structure and then the shifts
             renderCalendarGrid();
             renderShifts(shifts);
 
@@ -92,6 +93,24 @@ export function handleSchedulingPage() {
     };
 
     /**
+     * NEW: Generates and populates the time dropdowns with 15-minute increments.
+     */
+    const populateTimeSelects = () => {
+        let optionsHtml = '<option value="">Select Time</option>';
+        for (let hour = 0; hour < 24; hour++) {
+            for (let minute = 0; minute < 60; minute += 15) {
+                const timeValue = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+                const ampm = hour < 12 ? 'AM' : 'PM';
+                const displayText = `${displayHour}:${String(minute).padStart(2, '0')} ${ampm}`;
+                optionsHtml += `<option value="${timeValue}">${displayText}</option>`;
+            }
+        }
+        startTimeSelect.innerHTML = optionsHtml;
+        endTimeSelect.innerHTML = optionsHtml;
+    };
+
+    /**
      * Renders the main calendar grid structure (headers, time slots, day columns).
      */
     const renderCalendarGrid = () => {
@@ -102,13 +121,11 @@ export function handleSchedulingPage() {
         const grid = document.createElement('div');
         grid.className = 'calendar-grid';
 
-        // Create headers (Time + Sun-Sat)
         grid.innerHTML += `<div class="grid-header time-slot-header"></div>`;
         weekDates.forEach(date => {
             grid.innerHTML += `<div class="grid-header">${date.toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})}</div>`;
         });
 
-        // Create time slots and day columns
         for (let hour = START_HOUR; hour < END_HOUR; hour++) {
             const displayHour = hour % 12 === 0 ? 12 : hour % 12;
             const ampm = hour < 12 ? 'AM' : 'PM';
@@ -124,6 +141,7 @@ export function handleSchedulingPage() {
             grid.appendChild(dayCol);
         }
 
+        calendarGridWrapper.innerHTML = '';
         calendarGridWrapper.appendChild(grid);
     };
 
@@ -186,21 +204,37 @@ export function handleSchedulingPage() {
 
     createShiftForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        
+        // CORRECTED: Read from separate date and time inputs
+        const startDate = startDateInput.value;
+        const startTime = startTimeSelect.value;
+        const endDate = endDateInput.value;
+        const endTime = endTimeSelect.value;
+
+        if (!startDate || !startTime || !endDate || !endTime) {
+            return showModalMessage('Please select a valid date and time for both start and end.', true);
+        }
+
+        const startDateTime = `${startDate}T${startTime}`;
+        const endDateTime = `${endDate}T${endTime}`;
+
         const shiftData = {
             employee_id: employeeSelect.value,
             location_id: locationSelect.value,
-            start_time: document.getElementById('start-time-input').value,
-            end_time: document.getElementById('end-time-input').value,
+            start_time: startDateTime,
+            end_time: endDateTime,
             notes: document.getElementById('notes-input').value
         };
-        if (!shiftData.employee_id || !shiftData.location_id || !shiftData.start_time || !shiftData.end_time) {
-            return showModalMessage('Please fill all required fields.', true);
+
+        if (!shiftData.employee_id || !shiftData.location_id) {
+            return showModalMessage('Please select an employee and location.', true);
         }
+        
         try {
             await apiRequest('POST', '/api/shifts', shiftData);
             showModalMessage('Shift created successfully!', false);
             createShiftForm.reset();
-            loadAndRenderWeeklySchedule(currentLocationId); // Reload schedule for the current location
+            loadAndRenderWeeklySchedule(currentLocationId);
         } catch (error) {
             showModalMessage(`Error creating shift: ${error.message}`, true);
         }
@@ -215,10 +249,10 @@ export function handleSchedulingPage() {
 
     // --- Initial Page Load ---
     const initializePage = async () => {
+        populateTimeSelects(); // Populate time dropdowns on page load
         try {
-            // This initial fetch is primarily to populate the super_admin selector
             const locations = await apiRequest('GET', '/api/locations');
-
+            
             if (userRole === 'super_admin') {
                 locationSelectorContainer.style.display = 'block';
                 locationSelector.innerHTML = '<option value="">Select a Location</option>';
@@ -226,7 +260,6 @@ export function handleSchedulingPage() {
                     locations.forEach(loc => {
                         locationSelector.add(new Option(loc.location_name, loc.location_id));
                     });
-                    // Automatically load the first location
                     locationSelector.value = locations[0].location_id;
                     loadAndRenderWeeklySchedule(locations[0].location_id);
                 } else {
