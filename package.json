@@ -4,9 +4,9 @@
   "scripts": {
     "test": "node ./node_modules/mocha/bin/mocha --require @babel/register --timeout 5000 --extension cjs",
     "build": "npm run build:js && npm run build:css",
-    "build:js": "esbuild js/app.js --bundle --outfile=dist/js/bundle.js --sourcemap --platform=node",
+    "build:js": "esbuild js/app.js --bundle --outfile=dist/js/bundle.js --sourcemap --platform=browser --global-name=initializePage",
     "build:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css",
-    "watch:js": "esbuild js/app.js --bundle --outfile=dist/js/bundle.js --sourcemap --watch --platform=node",
+    "watch:js": "esbuild js/app.js --bundle --outfile=dist/js/bundle.js --sourcemap --watch --platform=browser --global-name=initializePage",
     "watch:css": "cleancss -o dist/css/style.min.css css/style.css && cleancss -o dist/css/Theme.min.css css/Theme.css --watch",
     "start": "node server.js"
   },
