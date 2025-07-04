@@ -180,7 +180,7 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
         );
         
         if (result.rows.length > 0) {
-            res.json(result.rows[0]);
+            res.json(result.rows[0]); // <--- Now correctly fetches from DB
         } else {
             // Return default values if no settings found for this location
             res.json({ operating_hours_start: '09:00', operating_hours_end: '17:00' });
