@@ -130,6 +130,7 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
                 u.position, 
                 u.role, 
                 u.location_id,
+                u.availability, -- Include availability for scheduling page
                 l.location_name  
             FROM users u
             LEFT JOIN locations l ON u.location_id = l.location_id 
@@ -152,6 +153,31 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
+
+// NEW: API route to get user availability (used by scheduling page)
+apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                user_id, 
+                full_name, 
+                availability,
+                location_id
+            FROM users
+        `;
+        const params = [];
+        if (req.user.role === 'location_admin') {
+            query += ' WHERE location_id = $1';
+            params.push(req.user.location_id);
+        }
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('[Users Availability] Error retrieving user availability:', err);
+        res.status(500).json({ error: 'Failed to retrieve user availability.' });
+    }
+});
+
 
 // Locations Routes
 // Super Admins can see all locations. Location Admins can only see their assigned location.
@@ -306,7 +332,7 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error creating checklist:', err);
-        if (err.code === '23505') {
+        if (err.code === '23505') { // Unique violation for title/position
             return res.status(409).json({ error: 'A checklist with this title/position might already exist.' });
         }
         res.status(500).json({ error: 'Failed to create checklist.' });
@@ -560,6 +586,86 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
     } catch (err) {
         console.error('Error deleting applicant:', err);
         res.status(500).json({ error: 'Failed to delete applicant.' });
+    }
+});
+
+
+// NEW: Shift Management Routes
+apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { startDate, endDate } = req.query; // Expect YYYY-MM-DD format
+    if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
+    }
+
+    try {
+        let query = `
+            SELECT 
+                s.id, 
+                s.employee_id, 
+                u.full_name AS employee_name,
+                s.location_id, 
+                l.location_name,
+                s.start_time, 
+                s.end_time, 
+                s.notes
+            FROM shifts s
+            JOIN users u ON s.employee_id = u.user_id
+            JOIN locations l ON s.location_id = l.location_id
+            WHERE s.start_time >= $1 AND s.end_time <= $2
+        `;
+        const params = [startDate, endDate];
+        let paramIndex = 3;
+
+        // Location admin filter
+        if (req.user.role === 'location_admin') {
+            query += ` AND s.location_id = $${paramIndex++}`;
+            params.push(req.user.location_id);
+        }
+        
+        query += ' ORDER BY s.start_time ASC';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('[Shifts] Error retrieving shifts:', err);
+        res.status(500).json({ error: 'Failed to retrieve shifts.' });
+    }
+});
+
+apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { employee_id, location_id, start_time, end_time, notes } = req.body;
+    if (!employee_id || !location_id || !start_time || !end_time) {
+        return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
+    }
+
+    // Basic validation: Ensure end_time is after start_time
+    if (new Date(start_time) >= new Date(end_time)) {
+        return res.status(400).json({ error: 'End time must be after start time.' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [employee_id, location_id, start_time, end_time, notes]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('[Shifts] Error creating shift:', err);
+        res.status(500).json({ error: 'Failed to create shift.' });
+    }
+});
+
+apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM shifts WHERE id = $1 RETURNING id', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Shift not found.' });
+        }
+        res.status(204).send(); // No Content
+    } catch (err) {
+        console.error('[Shifts] Error deleting shift:', err);
+        res.status(500).json({ error: 'Failed to delete shift.' });
     }
 });
 
