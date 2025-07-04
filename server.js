@@ -127,7 +127,8 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         
         const result = await pool.query(query, params);
         res.json(result.rows);
-    } catch (err) {
+    }
+    catch (err) {
         console.error('Error retrieving users:', err);
         res.status(500).json({ error: 'Failed to retrieve users.' });
     }
@@ -180,14 +181,14 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
         );
         
         if (result.rows.length > 0) {
+            console.log("[Backend] Found business settings for location:", req.user.location_id, result.rows[0]); // NEW LOG
             res.json(result.rows[0]); // Return actual settings if found
         } else {
-            // If no settings found for this location, return an empty object or default structure
-            // The frontend will then handle displaying 'N/A' or empty inputs
-            res.json({ operating_hours_start: null, operating_hours_end: null }); // NEW: Return nulls instead of hardcoded defaults
+            console.log("[Backend] No business settings found for location:", req.user.location_id, "Returning nulls."); // NEW LOG
+            res.json({ operating_hours_start: null, operating_hours_end: null }); // Return nulls if no settings found
         }
     } catch (err) {
-        console.error('Error fetching business settings:', err);
+        console.error('[Backend] Error fetching business settings:', err); // NEW LOG
         res.status(500).json({ error: 'Failed to retrieve business settings.' });
     }
 });
@@ -201,7 +202,7 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
     }
 
     try {
-        // Use INSERT ON CONFLICT DO UPDATE to either create or update settings for a location
+        console.log("[Backend] Attempting to save business settings for location:", req.user.location_id); // NEW LOG
         const result = await pool.query(
             `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
              VALUES ($1, $2, $3)
@@ -212,9 +213,10 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
              RETURNING *`,
             [req.user.location_id, operating_hours_start, operating_hours_end]
         );
+        console.log("[Backend] Business settings saved/updated:", result.rows[0]); // NEW LOG
         res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
     } catch (err) {
-        console.error('Error updating business settings:', err);
+        console.error('[Backend] Error updating business settings:', err); // NEW LOG
         res.status(500).json({ error: 'Failed to update business settings.' });
     }
 });
