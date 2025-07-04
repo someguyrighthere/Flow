@@ -1,4 +1,4 @@
-// js/app.js (Main Router - Designed for Bundling)
+// js/app.js (Main Router - Self-Starting)
 
 // Import all page handlers
 import { handleLoginPage } from './pages/login.js';
@@ -15,7 +15,9 @@ import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
 import { handlePricingPage } from './pages/pricing.js';
 
-// This function sets up the settings dropdown menu on pages that have it.
+/**
+ * Sets up the settings dropdown menu on pages that have it.
+ */
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
     const settingsDropdown = document.getElementById("settings-dropdown");
@@ -43,9 +45,12 @@ function setupSettingsDropdown() {
     }
 }
 
-// This function is the central router. It determines which page is currently active
-// and calls the appropriate handler function for it.
-function initializePage() {
+/**
+ * This is the main function for the application. It acts as a router,
+ * determining which page is currently active and calling the appropriate
+ * logic for it.
+ */
+function main() {
     const path = window.location.pathname;
 
     // A list of pages that have the main header with the settings dropdown
@@ -54,6 +59,7 @@ function initializePage() {
         "account.html", "documents.html", "hiring.html", "scheduling.html"
     ];
 
+    // Setup the dropdown if the current page needs it
     if (pagesWithSettings.some(p => path.includes(p))) {
         setupSettingsDropdown();
     }
@@ -76,6 +82,5 @@ function initializePage() {
 
 // --- AUTOMATIC STARTUP ---
 // This event listener waits for the HTML document to be fully loaded and ready,
-// and then it automatically calls our initializePage function.
-// This is the definitive fix that removes the need for an inline script call in the HTML.
-document.addEventListener('DOMContentLoaded', initializePage);
+// and then it automatically calls our main function. This is the definitive fix.
+document.addEventListener('DOMContentLoaded', main);
