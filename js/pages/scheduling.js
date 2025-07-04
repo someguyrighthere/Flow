@@ -2,6 +2,7 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
  * Handles all logic for the NEW "Classic Week" scheduling page.
+ * This version includes corrected data fetching to ensure the schedule updates properly.
  */
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
@@ -28,7 +29,6 @@ export function handleSchedulingPage() {
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
-    let allLocations = [];
     let currentLocationId = null;
 
     // --- Constants ---
@@ -38,6 +38,7 @@ export function handleSchedulingPage() {
 
     /**
      * Main function to initialize and render the calendar for a specific location and week.
+     * This function is now self-contained and fetches all data it needs to render.
      */
     const loadAndRenderWeeklySchedule = async (locationId) => {
         if (!locationId) {
@@ -50,13 +51,14 @@ export function handleSchedulingPage() {
         calendarGridWrapper.innerHTML = ''; // Clear previous grid
 
         try {
-            // Fetch all necessary data for the selected location and week
-            const [users, shifts] = await Promise.all([
+            // CORRECTED: Fetch all necessary data, including locations, every time.
+            const [users, shifts, allLocations] = await Promise.all([
                 apiRequest('GET', `/api/users?location_id=${locationId}`),
-                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${locationId}`)
+                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${locationId}`),
+                apiRequest('GET', '/api/locations') // Also fetch all locations for the sidebar dropdown
             ]);
 
-            // Populate the sidebar dropdowns with the fetched users and all locations
+            // Populate the sidebar dropdowns with the freshly fetched data
             populateSidebarDropdowns(users, allLocations);
 
             // Render the calendar structure and then the shifts
@@ -214,8 +216,8 @@ export function handleSchedulingPage() {
     // --- Initial Page Load ---
     const initializePage = async () => {
         try {
+            // This initial fetch is primarily to populate the super_admin selector
             const locations = await apiRequest('GET', '/api/locations');
-            allLocations = locations;
 
             if (userRole === 'super_admin') {
                 locationSelectorContainer.style.display = 'block';
