@@ -14,7 +14,8 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Assuming Str
 
 const app = express();
 const apiRoutes = express.Router();
-const PORT = process.env.PORT || 3000;
+// Use process.env.PORT as provided by Render, fallback to 3000 for local development
+const PORT = process.env.PORT || 3000; 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -34,7 +35,8 @@ const upload = multer({ storage: storage });
 // --- Database Connection Configuration ---
 if (!DATABASE_URL) {
     console.error("CRITICAL ERROR: DATABASE_URL environment variable is not set. Cannot connect to database.");
-    process.exit(1); // Exit process if no database URL
+    // Do not exit here; let the startServer catch the connection error if it's during actual connect
+    // process.exit(1);
 }
 console.log(`[DB] Attempting to connect to database using DATABASE_URL...`);
 const pool = new Pool({
@@ -270,9 +272,9 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         if (whereClauses.length > 0) {
             query += ' WHERE ' + whereClauses.join(' AND ');
         }
-
+        
         query += ' ORDER BY u.full_name';
-
+        
         console.log(`[GET /api/users] Executing SQL query: "${query}" with params: [${params.join(', ')}]`);
         const result = await pool.query(query, params);
         console.log(`[GET /api/users] Query successful, returning ${result.rows.length} users.`);
@@ -305,7 +307,7 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
                 return res.status(400).json({ error: 'Cannot delete the last Super Admin. Create another Super Admin first.' });
             }
         }
-
+        
         // Delete associated onboarding tasks
         await client.query('DELETE FROM onboarding_tasks WHERE user_id = $1', [id]);
         console.log(`[DELETE /api/users/:id] Deleted onboarding tasks for user ${id}.`);
@@ -332,3 +334,288 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
         client.release();
     }
 });
+
+// --- Locations Routes ---
+apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
+    console.log(`[GET /api/locations] Received request. User ID: ${req.user.id}, Role: ${req.user.role}.`);
+    try {
+        let query = 'SELECT location_id, location_name, location_address FROM locations ORDER BY location_name';
+        const params = [];
+        // location_admin can only see their own location
+        if (req.user.role === 'location_admin') {
+            query = 'SELECT location_id, location_name, location_address FROM locations WHERE location_id = $1 ORDER BY location_name';
+            params.push(req.user.location_id);
+            console.log(`[GET /api/locations] Filtering by location_admin's own location: ${req.user.location_id}`);
+        } else {
+            console.log(`[GET /api/locations] Super admin fetching all locations.`);
+        }
+        const result = await pool.query(query, params);
+        console.log(`[GET /api/locations] Query successful, returning ${result.rows.length} locations.`);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(`[Locations] Error retrieving locations:`, err);
+        res.status(500).json({ error: 'Failed to retrieve locations.' });
+    }
+});
+
+apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_name, location_address } = req.body;
+    console.log(`[POST /api/locations] Received request to create location: ${location_name}`);
+    if (!location_name || !location_address) {
+        console.log('[POST /api/locations] Missing location name or address, sending 400.');
+        return res.status(400).json({ error: 'Location name and address are required.' });
+    }
+    try {
+        const result = await pool.query('INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *', [location_name, location_address]);
+        console.log(`[POST /api/locations] Location "${location_name}" created successfully.`);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error(`[Locations] Error adding new location ${location_name}:`, err);
+        if (err.code === '23505') { // Unique violation
+            return res.status(409).json({ error: 'Location name already exists.' });
+        }
+        res.status(500).json({ error: 'Failed to add new location.' });
+    }
+});
+
+apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    console.log(`[DELETE /api/locations/:id] Request to delete location ID: ${id}.`);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        // Before deleting a location, check for associated users or shifts
+        const usersAtLocation = await client.query('SELECT user_id FROM users WHERE location_id = $1', [id]);
+        if (usersAtLocation.rows.length > 0) {
+            console.log(`[DELETE /api/locations/:id] Cannot delete location ${id}: ${usersAtLocation.rows.length} users are still assigned.`);
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Cannot delete location. ${usersAtLocation.rows.length} users are still assigned to it.` });
+        }
+        const shiftsAtLocation = await client.query('SELECT id FROM shifts WHERE location_id = $1', [id]);
+        if (shiftsAtLocation.rows.length > 0) {
+            console.log(`[DELETE /api/locations/:id] Cannot delete location ${id}: ${shiftsAtLocation.rows.length} shifts are associated.`);
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Cannot delete location. ${shiftsAtLocation.rows.length} shifts are associated with it.` });
+        }
+
+        const result = await client.query('DELETE FROM locations WHERE location_id = $1 RETURNING location_id', [id]);
+        if (result.rowCount === 0) {
+            console.log(`[DELETE /api/locations/:id] Location ${id} not found for deletion.`);
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Location not found.' });
+        }
+        console.log(`[DELETE /api/locations/:id] Location ${id} deleted successfully.`);
+        await client.query('COMMIT');
+        res.status(204).send();
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`[DELETE /api/locations/:id] Error deleting location ${id}:`, err);
+        res.status(500).json({ error: 'Failed to delete location.' });
+    } finally {
+        client.release();
+    }
+});
+
+
+// --- Business Settings Endpoint ---
+apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
+    let targetLocationId = req.user.role === 'super_admin' ? req.query.location_id : req.user.location_id;
+    console.log(`[GET /api/settings/business] Received request. User Role: ${req.user.role}, Target Location ID: ${targetLocationId}.`);
+    if (!targetLocationId && req.user.role !== 'super_admin') { // Super admin can get global settings if needed, but per-location is typical
+        console.log('[GET /api/settings/business] No targetLocationId for location_admin, returning null hours.');
+        return res.json({ operating_hours_start: null, operating_hours_end: null });
+    }
+    try {
+        // If super_admin and no location_id specified, fetch a global/default, or for the first location
+        const queryLocationId = targetLocationId || (req.user.role === 'super_admin' ? (await pool.query('SELECT location_id FROM locations LIMIT 1')).rows[0]?.location_id : null);
+        if (!queryLocationId) {
+            console.log('[GET /api/settings/business] No effective location to fetch settings for.');
+            return res.json({ operating_hours_start: null, operating_hours_end: null });
+        }
+        const result = await pool.query('SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1', [queryLocationId]);
+        console.log(`[GET /api/settings/business] Query successful for location ${queryLocationId}. Result:`, result.rows[0] || 'No settings found.');
+        res.json(result.rows[0] || { operating_hours_start: null, operating_hours_end: null });
+    } catch (err) {
+        console.error(`[GET /api/settings/business] Error fetching business settings:`, err);
+        res.status(500).json({ error: 'Failed to retrieve business settings.' });
+    }
+});
+
+apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
+    const { operating_hours_start, operating_hours_end, location_id: requestedLocationId } = req.body;
+    let targetLocationId = req.user.role === 'super_admin' ? requestedLocationId : req.user.location_id;
+    console.log(`[PUT /api/settings/business] Request to update. User Role: ${req.user.role}, Target Location ID: ${targetLocationId}.`);
+
+    if (!targetLocationId) {
+        console.log('[PUT /api/settings/business] Missing targetLocationId, sending 400.');
+        return res.status(400).json({ error: 'A valid location must be specified or associated with the user.' });
+    }
+    if (!operating_hours_start || !operating_hours_end) {
+        console.log('[PUT /api/settings/business] Missing start or end operating hours, sending 400.');
+        return res.status(400).json({ error: 'Start and end operating hours are required.' });
+    }
+    try {
+        const result = await pool.query(
+            `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end) VALUES ($1, $2, $3)
+             ON CONFLICT (location_id) DO UPDATE SET operating_hours_start = EXCLUDED.operating_hours_start, operating_hours_end = EXCLUDED.operating_hours_end, updated_at = CURRENT_TIMESTAMP
+             RETURNING *`,
+            [targetLocationId, operating_hours_start, operating_hours_end]
+        );
+        console.log(`[PUT /api/settings/business] Business settings updated successfully for location ${targetLocationId}.`);
+        res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
+    } catch (err) {
+        console.error(`[PUT /api/settings/business] Error updating business settings:`, err);
+        res.status(500).json({ error: 'Failed to update business settings.' });
+    }
+});
+
+// Shift Management Routes
+apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { startDate, endDate, location_id } = req.query;
+    console.log(`[GET /api/shifts] Request received. User ID: ${req.user.id}, Role: ${req.user.role}. Query params: startDate=${startDate}, endDate=${endDate}, location_id=${location_id}.`);
+    
+    if (!startDate || !endDate) {
+        console.log('[GET /api/shifts] Missing startDate or endDate, sending 400.');
+        return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
+    }
+    try {
+        let query = `
+            SELECT s.id, s.employee_id, u.full_name AS employee_name, s.location_id, l.location_name, s.start_time, s.end_time, s.notes
+            FROM shifts s JOIN users u ON s.employee_id = u.user_id JOIN locations l ON s.location_id = l.location_id
+            WHERE s.start_time >= $1 AND s.end_time <= $2
+        `;
+        const params = [startDate, endDate];
+        let paramIndex = 3;
+
+        // Determine the effective location_id for filtering based on user role and query params
+        let effectiveLocationId = null;
+        if (req.user.role === 'super_admin') {
+            effectiveLocationId = location_id; // Super admin can view any location provided in query
+            console.log(`[GET /api/shifts] Super admin viewing location_id from query: ${effectiveLocationId}.`);
+        } else if (req.user.role === 'location_admin') {
+            effectiveLocationId = req.user.location_id; // Location admin is restricted to their assigned location
+            console.log(`[GET /api/shifts] Location admin viewing assigned location_id: ${effectiveLocationId}.`);
+        } else {
+            console.log(`[GET /api/shifts] Non-admin user attempting to view shifts, access denied.`);
+            return res.status(403).json({ error: 'Access denied.' }); // Should be caught by isAdmin, but defensive
+        }
+
+        if (effectiveLocationId) {
+            query += ` AND s.location_id = $${paramIndex++}`;
+            params.push(effectiveLocationId);
+        } else if (req.user.role === 'super_admin' && !effectiveLocationId) {
+            // If super_admin but no location_id is provided, fetch all shifts (no location filter)
+            console.log(`[GET /api/shifts] Super admin fetching shifts for ALL locations (no location_id provided in query).`);
+            // No additional WHERE clause needed
+        }
+        
+        query += ' ORDER BY s.start_time ASC';
+        
+        console.log(`[GET /api/shifts] Executing SQL query: "${query}" with params: [${params.join(', ')}]`);
+        const result = await pool.query(query, params);
+        console.log(`[GET /api/shifts] Query successful, returning ${result.rows.length} shifts.`);
+        // console.log(`[GET /api/shifts] Returned shifts data:`, result.rows); // Optional: log full data, can be verbose
+        res.json(result.rows);
+    } catch (err) {
+        console.error(`[Shifts] Error retrieving shifts:`, err);
+        res.status(500).json({ error: 'Failed to retrieve shifts.' });
+    }
+});
+
+apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { employee_id, location_id, start_time, end_time, notes } = req.body;
+    console.log(`[POST /api/shifts] Received data from client. Employee ID: ${employee_id}, Location ID: ${location_id}, Start: ${start_time}, End: ${end_time}.`);
+    
+    if (!employee_id || !location_id || !start_time || !end_time) {
+        console.log('[POST /api/shifts] Missing required fields, sending 400.');
+        return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
+    }
+    // Basic backend validation for date order
+    if (new Date(start_time) >= new Date(end_time)) {
+        console.log('[POST /api/shifts] End time is not after start time, sending 400.');
+        return res.status(400).json({ error: 'End time must be after start time.' });
+    }
+
+    // Location Admin specific check for POSTing shifts
+    if (req.user.role === 'location_admin' && String(req.user.location_id) !== String(location_id)) {
+        console.log(`[POST /api/shifts] Location Admin ${req.user.id} tried to post to location ${location_id} but is assigned to ${req.user.location_id}. Access denied.`);
+        return res.status(403).json({ error: 'Location Admin can only create shifts for their assigned location.' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [employee_id, location_id, start_time, end_time, notes]
+        );
+        console.log('[POST /api/shifts] Shift created successfully in DB:', result.rows[0]);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error(`[Shifts] Error creating shift:`, err);
+        res.status(500).json({ error: 'Failed to create shift.' });
+    }
+});
+
+apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    console.log(`[DELETE /api/shifts/:id] Request received for ID: ${id}. By user ${req.user.id} (${req.user.role}).`);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        // Check if user has permission to delete this shift (location_admin can only delete shifts from their location)
+        if (req.user.role === 'location_admin') {
+            const shiftRes = await client.query('SELECT location_id FROM shifts WHERE id = $1', [id]);
+            if (shiftRes.rows.length === 0) {
+                console.log(`[DELETE /api/shifts/:id] Shift ${id} not found.`);
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Shift not found.' });
+            }
+            if (String(shiftRes.rows[0].location_id) !== String(req.user.location_id)) {
+                console.log(`[DELETE /api/shifts/:id] Location Admin ${req.user.id} tried to delete shift ${id} from location ${shiftRes.rows[0].location_id}, but is assigned to ${req.user.location_id}. Access denied.`);
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'Access denied. You can only delete shifts from your assigned location.' });
+            }
+        }
+
+        const result = await client.query('DELETE FROM shifts WHERE id = $1 RETURNING id', [id]);
+        if (result.rowCount === 0) {
+            console.log(`[DELETE /api/shifts/:id] Shift ID ${id} not found.`);
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Shift not found.' });
+        }
+        console.log(`[DELETE /api/shifts/:id] Shift ID ${id} deleted successfully.`);
+        await client.query('COMMIT');
+        res.status(204).send(); // No content
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`[DELETE /api/shifts/:id] Error deleting shift ${id}:`, err);
+        res.status(500).json({ error: 'Failed to delete shift.' });
+    } finally {
+        client.release();
+    }
+});
+
+
+// Onboarding Routes
+onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
+
+// --- Server Startup ---
+const startServer = async () => {
+    try {
+        // Attempt to connect to the database to verify credentials before starting server
+        const client = await pool.connect();
+        console.log('--- DATABASE: Connected to PostgreSQL! ---'); // Clear success message
+        client.release(); // Release client back to the pool immediately after testing connection
+
+        // Start Express server after successful DB connection
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server is running on port ${PORT}`);
+            console.log(`Access your app at: http://localhost:${PORT} (if local) or your Render URL.`);
+        });
+
+    } catch (err) {
+        console.error('CRITICAL ERROR: Failed to start server and connect to database:', err.stack); // Enhanced error message
+        process.exit(1); // Exit process if database connection fails
+    }
+};
+
+startServer(); // Initiate server startup
