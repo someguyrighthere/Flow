@@ -7,7 +7,8 @@ const multer = require('multer');
 const fs = require('fs');
 const { promises: fsPromises } = require('fs');
 const path = require('path');
-const onboardingRoutes = require('./routes/onboardingRoutes'); // Make sure this path is correct
+const onboardingRoutes = require('./routes/onboardingRoutes');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const apiRoutes = express.Router();
@@ -26,12 +27,12 @@ const upload = multer({ storage: storage });
 
 if (!DATABASE_URL) {
     console.error("DATABASE_URL environment variable is not set. Please set it in your .env file or Render environment variables.");
-    process.exit(1); // Exit if no database connection string
+    process.exit(1);
 }
 
 const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Use rejectUnauthorized: false for Render's managed PostgreSQL
+    ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 20000,
 });
@@ -39,7 +40,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(uploadsDir)); // Serve uploaded files statically
+app.use('/uploads', express.static(uploadsDir));
 app.use('/api', apiRoutes);
 
 // --- Middleware ---
@@ -48,19 +49,19 @@ const isAuthenticated = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
     if (token == null) {
         console.warn("[Auth] No token provided. Sending 401.");
-        return res.sendStatus(401); // Unauthorized
+        return res.sendStatus(401);
     }
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
             console.warn("[Auth] Invalid token provided. Sending 403. Error:", err.message);
-            return res.sendStatus(403); // Forbidden
+            return res.sendStatus(403);
         }
-        req.user = user; // Attach user payload from token to request
+        req.user = user;
         next();
     });
 };
+
 const isAdmin = (req, res, next) => {
-    // This middleware checks if the user has super_admin or location_admin role
     if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
         next();
     } else {
@@ -77,13 +78,9 @@ apiRoutes.post('/register', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        // For super_admin registration, create a location but do NOT assign it to the super_admin
-        // Super admins are global and manage locations, not belong to one.
         const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`,[`${companyName} HQ`]);
-        const locationId = locationRes.rows[0].location_id; // Store this for potential future use or reference
-
+        const locationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        // Set location_id to NULL for super_admin during registration
         await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', NULL) RETURNING user_id`, [fullName, email, hash]);
         await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
@@ -95,6 +92,7 @@ apiRoutes.post('/register', async (req, res) => {
         client.release();
     }
 });
+
 apiRoutes.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -103,10 +101,9 @@ apiRoutes.post('/login', async (req, res) => {
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ error: "Invalid credentials." });
         }
-        // Ensure user_id and location_id are sent in payload, even if null from DB (frontend handles null)
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ token, role: user.role, userId: user.user_id }); // Added userId to response for convenience
+        res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
         console.error('[Login] Error during login:', err);
         res.status(500).json({ error: "An internal server error occurred during login." });
@@ -127,28 +124,25 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
         let query = `
-            SELECT 
-                u.user_id, 
-                u.full_name, 
-                u.position, 
-                u.role, 
+            SELECT
+                u.user_id,
+                u.full_name,
+                u.position,
+                u.role,
                 u.location_id,
-                u.availability, -- Include availability for scheduling page
-                l.location_name  
+                u.availability,
+                l.location_name
             FROM users u
-            LEFT JOIN locations l ON u.location_id = l.location_id 
+            LEFT JOIN locations l ON u.location_id = l.location_id
         `;
         const params = [];
         let whereClause = '';
-        // Admins (super_admin or location_admin) can see all users or users within their location
-        // For super_admin, no location filter applies here.
         if (req.user.role === 'location_admin') {
             whereClause = ' WHERE u.location_id = $1';
             params.push(req.user.location_id);
         }
         query += whereClause;
         query += ' ORDER BY u.full_name';
-        
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
@@ -157,13 +151,12 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// NEW: API route to get user availability (used by scheduling page)
 apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
     try {
         let query = `
-            SELECT 
-                user_id, 
-                full_name, 
+            SELECT
+                user_id,
+                full_name,
                 availability,
                 location_id
             FROM users
@@ -181,14 +174,60 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
     }
 });
 
+// Invite a new Location Admin
+apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
+    if (req.user.role !== 'super_admin') {
+        return res.status(403).json({ error: 'Only Super Admins can invite new location admins.' });
+    }
+    const { full_name, email, password, location_id } = req.body;
+    if (!full_name || !email || !password || !location_id) {
+        return res.status(400).json({ error: 'Full name, email, password, and location are required.' });
+    }
+    try {
+        const hash = await bcrypt.hash(password, 10);
+        await pool.query(
+            `INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'location_admin', $4)`,
+            [full_name, email, hash, location_id]
+        );
+        res.status(201).json({ message: 'Location admin invited successfully!' });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'A user with this email already exists.' });
+        }
+        console.error('[Admin] Error inviting location admin:', err);
+        res.status(500).json({ error: 'Failed to invite location admin.' });
+    }
+});
+
+// Invite a new Employee
+apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) => {
+    const { full_name, email, password, position, employee_id, employment_type, location_id, availability } = req.body;
+    if (!full_name || !email || !password || !location_id) {
+        return res.status(400).json({ error: 'Full name, email, password, and location are required.' });
+    }
+    try {
+        const hash = await bcrypt.hash(password, 10);
+        await pool.query(
+            `INSERT INTO users (full_name, email, password, role, position, employee_identifier, employment_type, location_id, availability)
+             VALUES ($1, $2, $3, 'employee', $4, $5, $6, $7, $8)`,
+            [full_name, email, hash, position, employee_id, employment_type, location_id, availability]
+        );
+        res.status(201).json({ message: 'Employee invited successfully!' });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'A user with this email or employee ID already exists.' });
+        }
+        console.error('[Admin] Error inviting employee:', err);
+        res.status(500).json({ error: 'Failed to invite employee.' });
+    }
+});
+
 
 // Locations Routes
-// Super Admins can see all locations. Location Admins can only see their assigned location.
 apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     try {
         let query = 'SELECT location_id, location_name, location_address FROM locations';
         const params = [];
-        // If location_admin, filter locations by their assigned location
         if (req.user.role === 'location_admin') {
             query += ' WHERE location_id = $1';
             params.push(req.user.location_id);
@@ -215,47 +254,32 @@ apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('[Locations] Error adding new location:', err);
-        if (err.code === '23505') { // Unique violation for location_name
+        if (err.code === '23505') {
             return res.status(409).json({ error: 'Location name already exists.' });
         }
         res.status(500).json({ error: 'Failed to add new location.' });
     }
 });
 
-
-// Business Settings Endpoint (for operating hours, etc.)
-// GET: Fetch business settings for a specific location (or user's location)
+// Business Settings Endpoint
 apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     let targetLocationId;
-
-    // Super Admin: If location_id is provided in query, use it. Otherwise, their location_id in JWT might be NULL.
-    // If no location_id is explicitly requested by query param and super admin has no assigned location,
-    // we return default null settings gracefully.
     if (req.user.role === 'super_admin') {
-        targetLocationId = req.query.location_id; // Only use query param for super admin
-    } else { // location_admin or employee (though employee shouldn't access this route due to isAdmin middleware)
+        targetLocationId = req.query.location_id;
+    } else {
         targetLocationId = req.user.location_id;
     }
-
-    // If targetLocationId is still null here, it means a super_admin didn't specify a location_id
-    // and they don't have one assigned. In this case, we return default empty settings.
     if (targetLocationId == null) {
-        console.log("[Backend] GET /settings/business: Super admin not tied to a specific location and no location_id query param provided. Returning default null settings.");
         return res.json({ operating_hours_start: null, operating_hours_end: null });
     }
-
-    // Proceed with fetching settings for the determined targetLocationId
     try {
         const result = await pool.query(
             'SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1',
             [targetLocationId]
         );
-        
         if (result.rows.length > 0) {
-            console.log("[Backend] Found business settings for location:", targetLocationId, result.rows[0]);
-            res.json(result.rows[0]); // Return actual settings if found
+            res.json(result.rows[0]);
         } else {
-            console.log("[Backend] No business settings found for location:", targetLocationId, "Returning nulls.");
             res.json({ operating_hours_start: null, operating_hours_end: null });
         }
     } catch (err) {
@@ -264,28 +288,21 @@ apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
     }
 });
 
-// PUT: Update business settings for a specific location (or user's location)
 apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
-    const { operating_hours_start, operating_hours_end, location_id: requestedLocationId } = req.body; // Super Admin can send location_id in body
-    
+    const { operating_hours_start, operating_hours_end, location_id: requestedLocationId } = req.body;
     let targetLocationId;
     if (req.user.role === 'super_admin') {
-        targetLocationId = requestedLocationId || req.user.location_id; // Super admin can specify or use their assigned if exists
+        targetLocationId = requestedLocationId || req.user.location_id;
     } else {
         targetLocationId = req.user.location_id;
     }
-
     if (targetLocationId == null) {
-        console.error("[Backend] PUT /settings/business: Could not determine a target location_id for settings. Cannot save settings.");
         return res.status(400).json({ error: 'A valid location must be associated with the user or specified to save business settings.' });
     }
-
     if (!operating_hours_start || !operating_hours_end) {
         return res.status(400).json({ error: 'Start and end operating hours are required.' });
     }
-
     try {
-        console.log("[Backend] Attempting to save business settings for location:", targetLocationId);
         const result = await pool.query(
             `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
              VALUES ($1, $2, $3)
@@ -296,7 +313,6 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
              RETURNING *`,
             [targetLocationId, operating_hours_start, operating_hours_end]
         );
-        console.log("[Backend] Business settings saved/updated:", result.rows[0]);
         res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
     } catch (err) {
         console.error('[Backend] Error updating business settings:', err);
@@ -304,10 +320,43 @@ apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) =
     }
 });
 
+// --- Stripe Integration ---
+apiRoutes.post('/create-checkout-session', isAuthenticated, async (req, res) => {
+    const { plan } = req.body;
+    const userId = req.user.id;
+    const priceIds = {
+        basic: process.env.PRICE_ID_BASIC,
+        pro: process.env.PRICE_ID_PRO
+    };
+    const priceId = priceIds[plan];
+    if (!priceId) {
+        return res.status(400).json({ error: 'Invalid plan selected.' });
+    }
+    try {
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [{
+                price: priceId,
+                quantity: 1,
+            }],
+            mode: 'subscription',
+            success_url: `${process.env.YOUR_DOMAIN}/suite-hub.html?payment=success`,
+            cancel_url: `${process.env.YOUR_DOMAIN}/pricing.html?payment=cancelled`,
+            client_reference_id: userId
+        });
+        res.json({ id: session.id });
+    } catch (err) {
+        console.error("Stripe Error: Failed to create checkout session -", err.message);
+        res.status(500).json({ error: 'Failed to initiate checkout.' });
+    }
+});
 
 // Subscription Status Endpoint
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
+        // In a real app, you would look up the user's subscription status from your database
+        // which would be updated via Stripe webhooks.
+        // For now, we return a hardcoded plan.
         res.json({ plan: 'Pro Plan' });
     }
     catch (err) {
@@ -331,7 +380,6 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     if (!title || !position || !tasks || !Array.isArray(tasks) || tasks.length === 0) {
         return res.status(400).json({ error: 'Title, position, and at least one task are required.' });
     }
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -340,13 +388,12 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
             [title, position, JSON.stringify(tasks), req.user.id]
         );
         const newChecklist = checklistRes.rows[0];
-
         await client.query('COMMIT');
         res.status(201).json({ message: 'Checklist created successfully!', checklist: newChecklist });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error creating checklist:', err);
-        if (err.code === '23505') { // Unique violation for title/position
+        if (err.code === '23505') {
             return res.status(409).json({ error: 'A checklist with this title/position might already exist.' });
         }
         res.status(500).json({ error: 'Failed to create checklist.' });
@@ -355,16 +402,15 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-
 // Document Routes
 apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT 
-                d.document_id, 
-                d.title, 
-                d.description, 
-                d.file_name, 
+            SELECT
+                d.document_id,
+                d.title,
+                d.description,
+                d.file_name,
                 d.uploaded_at,
                 u.full_name as uploaded_by_name
             FROM documents d
@@ -381,14 +427,12 @@ apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
 apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
     const { title, description } = req.body;
     const file = req.file;
-
     if (!title || !file) {
         if (file) {
             await fsPromises.unlink(file.path).catch(e => console.error("Error deleting partially uploaded file:", e));
         }
         return res.status(400).json({ error: 'Title and file are required.' });
     }
-
     try {
         const result = await pool.query(
             `INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -407,26 +451,20 @@ apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (
 apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     let filePathToDelete = null;
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
         const docRes = await client.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
         if (docRes.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Document not found.' });
         }
         filePathToDelete = path.join(uploadsDir, docRes.rows[0].file_name);
-
         await client.query('DELETE FROM documents WHERE document_id = $1', [id]);
-
         await client.query('COMMIT');
-
         if (filePathToDelete) {
             await fsPromises.unlink(filePathToDelete).catch(e => console.error("Error deleting physical file:", e));
         }
-        
         res.status(204).send();
     } catch (err) {
         await client.query('ROLLBACK');
@@ -437,18 +475,16 @@ apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
     }
 });
 
-
 // Job Postings Routes
-// GET a single job posting by ID (publicly accessible for apply page)
 app.get('/job-postings/:id', async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query(`
-            SELECT 
-                jp.id, 
-                jp.title, 
-                jp.description, 
-                jp.requirements, 
+            SELECT
+                jp.id,
+                jp.title,
+                jp.description,
+                jp.requirements,
                 jp.created_at,
                 l.location_name
             FROM job_postings jp
@@ -465,16 +501,14 @@ app.get('/job-postings/:id', async (req, res) => {
     }
 });
 
-
-// GET all job postings (Admin only)
 apiRoutes.get('/job-postings', isAuthenticated, async (req, res) => {
     try {
         let query = `
-            SELECT 
-                jp.id, 
-                jp.title, 
-                jp.description, 
-                jp.requirements, 
+            SELECT
+                jp.id,
+                jp.title,
+                jp.description,
+                jp.requirements,
                 jp.created_at,
                 l.location_name
             FROM job_postings jp
@@ -495,7 +529,6 @@ apiRoutes.get('/job-postings', isAuthenticated, async (req, res) => {
     }
 });
 
-// POST a new job posting
 apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     const { title, description, requirements, location_id } = req.body;
     if (!title || !description || !location_id) {
@@ -513,7 +546,6 @@ apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// DELETE a job posting
 apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
@@ -521,58 +553,49 @@ apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res)
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Job posting not found.' });
         }
-        res.status(204).send(); // 204 No Content for successful deletion
+        res.status(204).send();
     } catch (err) {
         console.error('Error deleting job posting:', err);
         res.status(500).json({ error: 'Failed to delete job posting.' });
     }
 });
 
-// Applicants Routes (Public and Admin)
-// Public endpoint for job application submission
+// Applicants Routes
 app.post('/apply/:jobId', async (req, res) => {
-    const { jobId } = req.params; // Get jobId from URL parameters
-    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body; // Get other fields from body
-
-    // Basic validation for required fields
+    const { jobId } = req.params;
+    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
     if (!jobId || !name || !email || !availability) {
         return res.status(400).json({ error: 'Job ID, name, email, and availability are required.' });
     }
-
     try {
-        // Ensure date_of_birth is handled correctly for optionality
-        const dobValue = date_of_birth ? date_of_birth : null; // Set to null if empty string
-
+        const dobValue = date_of_birth ? date_of_birth : null;
         const result = await pool.query(
             `INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            //                       ^^^^^^ CORRECTED: Changed from job_posting_id to job_id
             [jobId, name, email, address, phone, dobValue, availability, is_authorized]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('Error submitting application:', err);
-        // Check for specific PostgreSQL error codes
-        if (err.code === '23503') { // PostgreSQL foreign key violation error code
+        if (err.code === '23503') {
             return res.status(400).json({ error: 'Invalid Job Posting ID. The job you are applying for does not exist.' });
         }
         res.status(500).json({ error: 'Failed to submit application.' });
     }
 });
 
-// GET all applicants (Admin only)
 apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     try {
         let query = `
-            SELECT 
-                a.id, 
-                a.name, 
-                a.email, 
-                a.phone, 
+            SELECT
+                a.id,
+                a.name,
+                a.email,
+                a.phone,
                 a.applied_at,
                 jp.title AS job_title,
                 jp.location_id
             FROM applicants a
-            LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
+            LEFT JOIN job_postings jp ON a.job_id = jp.id
         `;
         const params = [];
         if (req.user.role === 'location_admin') {
@@ -589,7 +612,6 @@ apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// DELETE an applicant (archive)
 apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
@@ -597,31 +619,29 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Applicant not found.' });
         }
-        res.status(204).send(); // 204 No Content for successful deletion
+        res.status(204).send();
     } catch (err) {
         console.error('Error deleting applicant:', err);
         res.status(500).json({ error: 'Failed to delete applicant.' });
     }
 });
 
-
-// NEW: Shift Management Routes
+// Shift Management Routes
 apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate } = req.query; // Expect ISO-formatted dates
+    const { startDate, endDate } = req.query;
     if (!startDate || !endDate) {
         return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
     }
-
     try {
         let query = `
-            SELECT 
-                s.id, 
-                s.employee_id, 
+            SELECT
+                s.id,
+                s.employee_id,
                 u.full_name AS employee_name,
-                s.location_id, 
+                s.location_id,
                 l.location_name,
-                s.start_time, 
-                s.end_time, 
+                s.start_time,
+                s.end_time,
                 s.notes
             FROM shifts s
             JOIN users u ON s.employee_id = u.user_id
@@ -630,13 +650,10 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         `;
         const params = [startDate, endDate];
         let paramIndex = 3;
-
-        // Location admin filter
         if (req.user.role === 'location_admin') {
             query += ` AND s.location_id = $${paramIndex++}`;
             params.push(req.user.location_id);
         }
-        
         query += ' ORDER BY s.start_time ASC';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -651,12 +668,9 @@ apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     if (!employee_id || !location_id || !start_time || !end_time) {
         return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
     }
-
-    // Basic validation: Ensure end_time is after start_time
     if (new Date(start_time) >= new Date(end_time)) {
         return res.status(400).json({ error: 'End time must be after start time.' });
     }
-
     try {
         const result = await pool.query(
             `INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
@@ -677,18 +691,17 @@ apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Shift not found.' });
         }
-        res.status(204).send(); // No Content
+        res.status(204).send();
     } catch (err) {
         console.error('[Shifts] Error deleting shift:', err);
         res.status(500).json({ error: 'Failed to delete shift.' });
     }
 });
 
-
 // Onboarding Routes
 onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
-// The server startup logic
+// Server Startup
 const startServer = async () => {
     try {
         const client = await pool.connect();
