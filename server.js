@@ -1,5 +1,4 @@
 // server.js - DEFINITIVE AND FINAL VERSION for Backend Stability and Logging
-// This version is designed to resolve server startup and database connection issues on Render.com.
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -166,10 +165,11 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
         }
         console.log(`[Users/Me] Profile fetched for user ${req.user.id}.`);
         res.json(result.rows[0]);
-    } catch (err) {
-        console.error(`[Users/Me] Failed to retrieve user profile for ${req.user.id}:`, err);
-        res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
+} catch (err) {
+    console.error(`[Users/Me] Failed to retrieve user profile for ${req.user.id}:`, err);
+    res.status(500).json({ error: 'Failed to retrieve user profile.' });
+}
 });
 
 apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
@@ -265,7 +265,7 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         let paramIndex = 1;
 
         if (req.user.role === 'location_admin') {
-            whereClaues.push(`u.location_id = $${paramIndex++}`);
+            whereClauses.push(`u.location_id = $${paramIndex++}`);
             params.push(req.user.location_id);
             console.log(`[GET /api/users] Filtering by location admin's assigned location: ${req.user.location_id}.`);
         } else if (req.user.role === 'super_admin' && location_id) { 
@@ -313,7 +313,7 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
             return res.status(404).json({ error: 'User not found.' });
         }
         if (userToDeleteRes.rows[0].role === 'super_admin') {
-            const superAdminsCountRes = await client.query("SELECT COUNT(*) FROM users WHERE role = 'super_admin'");
+            const superAdminsCountRes = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'super_admin'");
             if (parseInt(superAdminsCountRes.rows[0].count, 10) === 1) {
                 console.log(`[DELETE /api/users/:id] Cannot delete last super_admin (${id}).`);
                 await client.query('ROLLBACK');
@@ -328,7 +328,7 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
         console.log(`[DELETE /api/users/:id] Deleted associated shifts for user ${id}.`);
 
 
-        const result = await client.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id', [id]);
+        const result = await pool.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id', [id]);
         if (result.rowCount === 0) {
             console.log(`[DELETE /api/users/:id] User ${id} not found in DB for deletion.`);
             await client.query('ROLLBACK');
@@ -342,7 +342,7 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
         console.error(`[DELETE /api/users/:id] Error deleting user ${id}:`, err);
         res.status(500).json({ error: 'Failed to delete user.' });
     } finally {
-        client.release(); 
+        client.release();
     }
 });
 
@@ -400,7 +400,7 @@ apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) =>
             await client.query('ROLLBACK');
             return res.status(400).json({ error: `Cannot delete location. ${usersAtLocation.rows.length} users are still assigned to it. Please reassign or delete them first.` });
         }
-        const shiftsAtLocation = await client.query('SELECT id FROM shifts WHERE location_id = $1', [id]);
+        const shiftsAtLocation = await pool.query('SELECT id FROM shifts WHERE location_id = $1', [id]); // Changed from client.query
         if (shiftsAtLocation.rows.length > 0) {
             console.log(`[DELETE /api/locations/:id] Cannot delete location ${id}: ${shiftsAtLocation.rows.length} shifts are associated.`);
             await client.query('ROLLBACK');
@@ -504,10 +504,10 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         // Determine the effective location_id for filtering based on user role and query params
         let effectiveLocationId = null;
         if (req.user.role === 'super_admin') {
-            effectiveLocationId = location_id; // Super admin can view any location provided in query
+            effectiveLocationId = location_id; 
             console.log(`[GET /api/shifts] Super admin viewing location_id from query: ${effectiveLocationId || 'N/A'}.`);
         } else if (req.user.role === 'location_admin') {
-            effectiveLocationId = req.user.location_id; // Location admin is restricted to their assigned location
+            effectiveLocationId = req.user.location_id; 
             console.log(`[GET /api/shifts] Location admin viewing assigned location_id: ${effectiveLocationId}.`);
         } else {
             console.log(`[GET /api/shifts] Non-admin user (${req.user.role}) attempting to view shifts, access denied.`);
@@ -519,9 +519,7 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
             params.push(effectiveLocationId);
             console.log(`[GET /api/shifts] Filtering by effectiveLocationId: ${effectiveLocationId}.`);
         } else if (req.user.role === 'super_admin' && !effectiveLocationId) {
-            // If super_admin but no location_id is provided, fetch all shifts (no location filter)
             console.log(`[GET /api/shifts] Super admin fetching shifts for ALL locations (no location_id provided in query).`);
-            // No additional WHERE clause needed
         }
 
         query += ' ORDER BY s.start_time ASC'; 
@@ -574,7 +572,7 @@ apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
         await client.query('BEGIN'); 
         if (req.user.role === 'location_admin') {
-            const shiftRes = await client.query('SELECT location_id FROM shifts WHERE id = $1', [id]);
+            const shiftRes = await pool.query('SELECT location_id FROM shifts WHERE id = $1', [id]); // Changed from client.query to pool.query
             if (shiftRes.rows.length === 0) {
                 console.log(`[DELETE /api/shifts/:id] Shift ${id} not found in DB.`);
                 await client.query('ROLLBACK');
