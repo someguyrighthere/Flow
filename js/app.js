@@ -1,6 +1,6 @@
 // js/app.js (Main Router - Self-Starting)
 
-// Import all page handlers
+// Import all page handlers using ESM import syntax for browser compatibility
 import { handleLoginPage } from './pages/login.js';
 import { handleRegisterPage } from './pages/register.js';
 import { handleDashboardPage } from './pages/dashboard.js';
@@ -9,7 +9,7 @@ import { handleAdminPage } from './pages/admin.js';
 import { handleAccountPage } from './pages/account.js';
 import { handleDocumentsPage } from './pages/documents.js';
 import { handleHiringPage } from './pages/hiring.js';
-import { handleSchedulingPage } from './pages/scheduling.js'; // Ensure this is imported correctly
+import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
@@ -74,7 +74,7 @@ function main() {
     else if (path.includes("account.html")) handleAccountPage();
     else if (path.includes("documents.html")) handleDocumentsPage();
     else if (path.includes("hiring.html")) handleHiringPage();
-    else if (path.includes("scheduling.html")) handleSchedulingPage(); // This is the page we're focusing on
+    else if (path.includes("scheduling.html")) handleSchedulingPage();
     else if (path.includes("apply.html")) handleApplyPage();
     else if (path.includes("new-hire-view.html")) handleOnboardingViewPage();
     else if (path.includes("pricing.html")) handlePricingPage();
@@ -82,5 +82,5 @@ function main() {
 
 // --- AUTOMATIC STARTUP ---
 // This event listener waits for the HTML document to be fully loaded and ready,
-// and then it automatically calls our main function. This is the definitive fix.
+// and then it automatically calls our main function.
 document.addEventListener('DOMContentLoaded', main);
