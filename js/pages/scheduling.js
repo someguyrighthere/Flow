@@ -1,7 +1,7 @@
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
- * Handles all logic for the NEW horizontal timeline scheduling page.
+ * Handles all logic for the NEW "Classic Week" scheduling page.
  */
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
@@ -12,169 +12,183 @@ export function handleSchedulingPage() {
     }
 
     // --- DOM Element References ---
-    const currentDayDisplay = document.getElementById('current-day-display');
-    const prevDayBtn = document.getElementById('prev-day-btn');
-    const nextDayBtn = document.getElementById('next-day-btn');
-    const timelineHoursDiv = document.getElementById('timeline-hours');
-    const timelineEmployeesDiv = document.getElementById('timeline-employees');
-    const timelineGridDiv = document.getElementById('timeline-grid');
+    const currentWeekDisplay = document.getElementById('current-week-display');
+    const prevWeekBtn = document.getElementById('prev-week-btn');
+    const nextWeekBtn = document.getElementById('next-week-btn');
+    const calendarGridWrapper = document.getElementById('calendar-grid-wrapper');
+    const employeeSelect = document.getElementById('employee-select');
+    const locationSelect = document.getElementById('location-select');
+    const createShiftForm = document.getElementById('create-shift-form');
 
     // --- State Management ---
-    let currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0); // Normalize to the start of the day
+    let currentStartDate = new Date();
+    currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
+    currentStartDate.setHours(0, 0, 0, 0);
 
     // --- Constants ---
-    const PIXELS_PER_MINUTE = 2; // Each minute is 2px wide, so an hour is 120px
+    const PIXELS_PER_HOUR = 60;
+    const START_HOUR = 7; // Display calendar from 7 AM
+    const END_HOUR = 22;  // Display calendar until 10 PM
 
     /**
-     * Main function to initialize the calendar for a specific date.
-     * @param {Date} date - The date to display the schedule for.
+     * Main function to initialize and render the calendar for the week.
      */
-    const loadScheduleForDate = async (date) => {
-        currentDayDisplay.textContent = date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-        
-        // Clear previous state
-        timelineHoursDiv.innerHTML = 'Loading...';
-        timelineEmployeesDiv.innerHTML = '';
-        timelineGridDiv.innerHTML = '';
+    const loadAndRenderWeeklySchedule = async () => {
+        currentWeekDisplay.textContent = 'Loading...';
+        calendarGridWrapper.innerHTML = ''; // Clear previous grid
 
         try {
-            // For a daily view, we need all users and all shifts for that day
-            const [users, allShifts] = await Promise.all([
+            // Fetch all necessary data
+            const [users, shifts, locations] = await Promise.all([
                 apiRequest('GET', '/api/users'),
-                apiRequest('GET', `/api/shifts?startDate=${getApiDate(date)}&endDate=${getApiDate(getNextDay(date))}`)
+                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}`),
+                apiRequest('GET', '/api/locations')
             ]);
 
-            // Filter users to only include employees with assigned locations
-            const employees = users.filter(u => u.role === 'employee' && u.location_id);
-            
-            if (employees.length === 0) {
-                timelineGridDiv.innerHTML = '<p style="padding: 20px; color: var(--text-medium);">No employees found to schedule.</p>';
-                timelineHoursDiv.innerHTML = '';
-                return;
-            }
+            // Populate the sidebar dropdowns
+            populateSidebarDropdowns(users, locations);
 
-            // Render the timeline structure
-            renderTimelineHeaders();
-            renderEmployeeRows(employees);
-
-            // Filter shifts to only include those for the displayed employees
-            const employeeIds = employees.map(e => e.user_id);
-            const shiftsForDay = allShifts.filter(s => employeeIds.includes(s.employee_id));
-
-            // Place the shifts on the grid
-            renderShifts(shiftsForDay, employees);
+            // Render the calendar structure and then the shifts
+            renderCalendarGrid();
+            renderShifts(shifts);
 
         } catch (error) {
             showModalMessage(`Error loading schedule: ${error.message}`, true);
             console.error("Error loading schedule data:", error);
-            timelineGridDiv.innerHTML = `<p style="padding: 20px; color: #e74c3c;">Could not load schedule.</p>`;
+            currentWeekDisplay.textContent = 'Error';
         }
     };
 
     /**
-     * Renders the hour markers at the top of the timeline.
+     * Populates the Employee and Location dropdowns in the sidebar.
      */
-    const renderTimelineHeaders = () => {
-        timelineHoursDiv.innerHTML = '';
-        for (let hour = 0; hour < 24; hour++) {
-            const hourMarker = document.createElement('div');
-            hourMarker.className = 'hour-marker';
-            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-            const ampm = hour < 12 ? 'AM' : 'PM';
-            hourMarker.textContent = `${displayHour} ${ampm}`;
-            timelineHoursDiv.appendChild(hourMarker);
-        }
-    };
+    const populateSidebarDropdowns = (users, locations) => {
+        employeeSelect.innerHTML = '<option value="">Select Employee</option>';
+        users.filter(u => u.role === 'employee').forEach(user => {
+            employeeSelect.add(new Option(user.full_name, user.user_id));
+        });
 
-    /**
-     * Renders the employee name column and the empty grid rows.
-     * @param {Array} employees - The list of employees to display.
-     */
-    const renderEmployeeRows = (employees) => {
-        timelineEmployeesDiv.innerHTML = '';
-        timelineGridDiv.innerHTML = '';
-
-        employees.forEach(employee => {
-            // Add employee name to the left column
-            const employeeHeader = document.createElement('div');
-            employeeHeader.className = 'employee-row-header';
-            employeeHeader.textContent = employee.full_name;
-            timelineEmployeesDiv.appendChild(employeeHeader);
-
-            // Add a corresponding empty row in the grid
-            const employeeRow = document.createElement('div');
-            employeeRow.className = 'employee-row';
-            employeeRow.id = `employee-row-${employee.user_id}`; // ID for placing shifts
-            timelineGridDiv.appendChild(employeeRow);
+        locationSelect.innerHTML = '<option value="">Select Location</option>';
+        locations.forEach(loc => {
+            locationSelect.add(new Option(loc.location_name, loc.location_id));
         });
     };
 
     /**
-     * Places shift blocks onto the correct employee rows in the timeline.
-     * @param {Array} shifts - The shifts for the current day.
-     * @param {Array} employees - The list of employees.
+     * Renders the main calendar grid structure (headers, time slots, day columns).
      */
-    const renderShifts = (shifts, employees) => {
+    const renderCalendarGrid = () => {
+        const weekDates = getWeekDates(currentStartDate);
+        const dateRangeString = `${weekDates[0].toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} - ${weekDates[6].toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}`;
+        currentWeekDisplay.textContent = dateRangeString;
+
+        const grid = document.createElement('div');
+        grid.className = 'calendar-grid';
+
+        // Create headers (Time + Sun-Sat)
+        grid.innerHTML += `<div class="grid-header time-slot-header"></div>`;
+        weekDates.forEach(date => {
+            grid.innerHTML += `<div class="grid-header">${date.toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})}</div>`;
+        });
+
+        // Create time slots and day columns
+        for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+            const ampm = hour < 12 ? 'AM' : 'PM';
+            grid.innerHTML += `<div class="time-slot">${displayHour} ${ampm}</div>`;
+        }
+
+        for (let i = 0; i < 7; i++) {
+            const dayCol = document.createElement('div');
+            dayCol.className = 'day-column';
+            dayCol.style.gridColumn = `${i + 2}`;
+            dayCol.style.gridRow = `2 / span ${END_HOUR - START_HOUR}`;
+            dayCol.dataset.dayIndex = i;
+            grid.appendChild(dayCol);
+        }
+
+        calendarGridWrapper.appendChild(grid);
+    };
+
+    /**
+     * Renders the shift blocks onto the calendar grid.
+     */
+    const renderShifts = (shifts) => {
+        if (!shifts) return;
+
         shifts.forEach(shift => {
-            const targetRow = document.getElementById(`employee-row-${shift.employee_id}`);
-            if (targetRow) {
-                const shiftStart = new Date(shift.start_time);
-                const shiftEnd = new Date(shift.end_time);
+            const shiftStart = new Date(shift.start_time);
+            const shiftEnd = new Date(shift.end_time);
+            const dayIndex = shiftStart.getDay();
+            
+            const targetColumn = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
 
-                // Calculate position and width based on time
-                const startMinutes = shiftStart.getHours() * 60 + shiftStart.getMinutes();
-                const endMinutes = shiftEnd.getHours() * 60 + shiftEnd.getMinutes();
-                
-                const leftPosition = startMinutes * PIXELS_PER_MINUTE;
-                const width = (endMinutes - startMinutes) * PIXELS_PER_MINUTE;
+            if (targetColumn) {
+                const startMinutes = (shiftStart.getHours() * 60 + shiftStart.getMinutes()) - (START_HOUR * 60);
+                const endMinutes = (shiftEnd.getHours() * 60 + shiftEnd.getMinutes()) - (START_HOUR * 60);
 
-                if (width > 0) {
+                const top = (startMinutes / 60) * PIXELS_PER_HOUR;
+                const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;
+
+                if (height > 0) {
                     const shiftBlock = document.createElement('div');
                     shiftBlock.className = 'shift-block';
-                    shiftBlock.style.left = `${leftPosition}px`;
-                    shiftBlock.style.width = `${width}px`;
-                    
-                    const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                    const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
-                    const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
-
-                    shiftBlock.textContent = `${startTimeString} - ${endTimeString}`;
-                    shiftBlock.title = `Shift for ${shift.employee_name}\n${startTimeString} - ${endTimeString}\nLocation: ${shift.location_name}\nNotes: ${shift.notes || 'None'}`;
-                    
-                    targetRow.appendChild(shiftBlock);
+                    shiftBlock.style.top = `${top}px`;
+                    shiftBlock.style.height = `${height}px`;
+                    shiftBlock.innerHTML = `<strong>${shift.employee_name}</strong><br><small>${shift.location_name}</small>`;
+                    shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
+                    targetColumn.appendChild(shiftBlock);
                 }
             }
         });
     };
 
-    /**
-     * Helper to get the next day for API date range queries.
-     * @param {Date} d - The current date.
-     * @returns {Date} The next day.
-     */
-    const getNextDay = (d) => {
-        const next = new Date(d);
-        next.setDate(next.getDate() + 1);
-        return next;
-    };
+    // --- Helper Functions ---
+    const getWeekDates = (startDate) => Array.from({ length: 7 }).map((_, i) => {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        return date;
+    });
 
-    /**
-     * Helper to format a date as YYYY-MM-DD for the API.
-     * @param {Date} d - The date to format.
-     * @returns {string} The formatted date string.
-     */
+    const getEndDate = (startDate) => {
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 7);
+        return endDate;
+    };
+    
     const getApiDate = (d) => d.toISOString().split('T')[0];
 
     // --- Event Handlers ---
-    const handleDayChange = (days) => {
-        currentDate.setDate(currentDate.getDate() + days);
-        loadScheduleForDate(currentDate);
+    const handleWeekChange = (days) => {
+        currentStartDate.setDate(currentStartDate.getDate() + days);
+        loadAndRenderWeeklySchedule();
     };
 
-    prevDayBtn.addEventListener('click', () => handleDayChange(-1));
-    nextDayBtn.addEventListener('click', () => handleDayChange(1));
+    prevWeekBtn.addEventListener('click', () => handleWeekChange(-7));
+    nextWeekBtn.addEventListener('click', () => handleWeekChange(7));
+
+    createShiftForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const shiftData = {
+            employee_id: employeeSelect.value,
+            location_id: locationSelect.value,
+            start_time: document.getElementById('start-time-input').value,
+            end_time: document.getElementById('end-time-input').value,
+            notes: document.getElementById('notes-input').value
+        };
+        if (!shiftData.employee_id || !shiftData.location_id || !shiftData.start_time || !shiftData.end_time) {
+            return showModalMessage('Please fill all required fields.', true);
+        }
+        try {
+            await apiRequest('POST', '/api/shifts', shiftData);
+            showModalMessage('Shift created successfully!', false);
+            createShiftForm.reset();
+            loadAndRenderWeeklySchedule(); // Reload schedule
+        } catch (error) {
+            showModalMessage(`Error creating shift: ${error.message}`, true);
+        }
+    });
 
     // --- Initial Page Load ---
-    loadScheduleForDate(currentDate);
+    loadAndRenderWeeklySchedule();
 }
