@@ -3,7 +3,7 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
  * Handles all logic for the scheduling page.
- * This version has been rewritten for robust, sequential data loading to prevent server hangs.
+ * This version includes a safety check to prevent timing-related errors on load.
  */
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
@@ -296,8 +296,11 @@ export function handleSchedulingPage() {
 
     // --- INITIALIZATION LOGIC ---
     const initializePage = async () => {
+        // CORRECTED: Added safety checks (if element exists) before accessing .style
         if (userRole === 'super_admin') {
-            superAdminLocationSelectorDiv.style.display = 'block';
+            if (superAdminLocationSelectorDiv) {
+                superAdminLocationSelectorDiv.style.display = 'block';
+            }
             try {
                 const locations = await apiRequest('GET', '/api/locations');
                 allLocations = locations;
@@ -317,7 +320,9 @@ export function handleSchedulingPage() {
                 showModalMessage(`Could not load locations: ${error.message}`, true);
             }
         } else { // For location_admin
-            superAdminLocationSelectorDiv.style.display = 'none';
+            if (superAdminLocationSelectorDiv) {
+                superAdminLocationSelectorDiv.style.display = 'none';
+            }
             try {
                 const user = await apiRequest('GET', '/api/users/me');
                 if (user && user.location_id) {
