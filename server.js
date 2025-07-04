@@ -121,28 +121,39 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     }
 });
 
+// CORRECTED: This route now properly handles filtering by location_id for all roles.
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_id } = req.query; // Get location_id from the query string
     try {
         let query = `
             SELECT
-                u.user_id,
-                u.full_name,
-                u.position,
-                u.role,
-                u.location_id,
-                u.availability,
-                l.location_name
+                u.user_id, u.full_name, u.position, u.role,
+                u.location_id, u.availability, l.location_name
             FROM users u
             LEFT JOIN locations l ON u.location_id = l.location_id
         `;
         const params = [];
-        let whereClause = '';
+        let whereClauses = [];
+        let paramIndex = 1;
+
+        // If the user is a location_admin, they can ONLY see users from their own location.
         if (req.user.role === 'location_admin') {
-            whereClause = ' WHERE u.location_id = $1';
+            whereClauses.push(`u.location_id = $${paramIndex++}`);
             params.push(req.user.location_id);
+        } 
+        // If the user is a super_admin AND a location_id is provided in the query, filter by that location.
+        else if (req.user.role === 'super_admin' && location_id) {
+            whereClauses.push(`u.location_id = $${paramIndex++}`);
+            params.push(location_id);
         }
-        query += whereClause;
+        // If super_admin and no location_id is provided, they see all users (no WHERE clause).
+
+        if (whereClauses.length > 0) {
+            query += ' WHERE ' + whereClauses.join(' AND ');
+        }
+        
         query += ' ORDER BY u.full_name';
+        
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
@@ -151,9 +162,9 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// CORRECTED: This route now handles location_id from query parameters for super_admin.
+
 apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_id } = req.query; // Get location_id from query
+    const { location_id } = req.query;
     try {
         let query = `
             SELECT
@@ -167,8 +178,6 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
         let whereClauses = [];
         let paramIndex = 1;
 
-        // If super_admin, filter by the location_id passed in the query.
-        // If location_admin, filter by their own location_id from the token.
         if (req.user.role === 'super_admin' && location_id) {
             whereClauses.push(`location_id = $${paramIndex++}`);
             params.push(location_id);
@@ -189,7 +198,6 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
     }
 });
 
-// Invite a new Location Admin
 apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
     if (req.user.role !== 'super_admin') {
         return res.status(403).json({ error: 'Only Super Admins can invite new location admins.' });
@@ -214,7 +222,6 @@ apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// Invite a new Employee
 apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) => {
     const { full_name, email, password, position, employee_id, employment_type, location_id, availability } = req.body;
     if (!full_name || !email || !password || !location_id) {
@@ -369,9 +376,6 @@ apiRoutes.post('/create-checkout-session', isAuthenticated, async (req, res) => 
 // Subscription Status Endpoint
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
-        // In a real app, you would look up the user's subscription status from your database
-        // which would be updated via Stripe webhooks.
-        // For now, we return a hardcoded plan.
         res.json({ plan: 'Pro Plan' });
     }
     catch (err) {
@@ -422,12 +426,8 @@ apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT
-                d.document_id,
-                d.title,
-                d.description,
-                d.file_name,
-                d.uploaded_at,
-                u.full_name as uploaded_by_name
+                d.document_id, d.title, d.description, d.file_name,
+                d.uploaded_at, u.full_name as uploaded_by_name
             FROM documents d
             LEFT JOIN users u ON d.uploaded_by = u.user_id
             ORDER BY d.uploaded_at DESC
@@ -496,12 +496,8 @@ app.get('/job-postings/:id', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT
-                jp.id,
-                jp.title,
-                jp.description,
-                jp.requirements,
-                jp.created_at,
-                l.location_name
+                jp.id, jp.title, jp.description, jp.requirements,
+                jp.created_at, l.location_name
             FROM job_postings jp
             LEFT JOIN locations l ON jp.location_id = l.location_id
             WHERE jp.id = $1
@@ -520,12 +516,8 @@ apiRoutes.get('/job-postings', isAuthenticated, async (req, res) => {
     try {
         let query = `
             SELECT
-                jp.id,
-                jp.title,
-                jp.description,
-                jp.requirements,
-                jp.created_at,
-                l.location_name
+                jp.id, jp.title, jp.description, jp.requirements,
+                jp.created_at, l.location_name
             FROM job_postings jp
             LEFT JOIN locations l ON jp.location_id = l.location_id
             ORDER BY jp.created_at DESC
@@ -602,13 +594,8 @@ apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     try {
         let query = `
             SELECT
-                a.id,
-                a.name,
-                a.email,
-                a.phone,
-                a.applied_at,
-                jp.title AS job_title,
-                jp.location_id
+                a.id, a.name, a.email, a.phone, a.applied_at,
+                jp.title AS job_title, jp.location_id
             FROM applicants a
             LEFT JOIN job_postings jp ON a.job_id = jp.id
         `;
@@ -642,13 +629,11 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
 });
 
 // Shift Management Routes
-// CORRECTED: This route now handles location_id from query parameters for super_admin.
 apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate, location_id } = req.query; // Get location_id from query
+    const { startDate, endDate, location_id } = req.query;
     if (!startDate || !endDate) {
         return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
     }
-
     try {
         let query = `
             SELECT
@@ -663,8 +648,6 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         const params = [startDate, endDate];
         let paramIndex = 3;
 
-        // If super_admin, filter by the location_id passed in the query.
-        // If location_admin, filter by their own location_id from the token.
         if (req.user.role === 'super_admin' && location_id) {
             query += ` AND s.location_id = $${paramIndex++}`;
             params.push(location_id);
