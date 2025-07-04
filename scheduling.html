@@ -65,7 +65,8 @@
         
         .scheduling-layout {
             display: grid;
-            grid-template-columns: 320px 1fr;
+            /* NEW: Adjusted grid columns for wider calendar */
+            grid-template-columns: 280px 1fr; /* Reduced sidebar to 280px, calendar takes remaining space */
             gap: 30px;
             margin-top: 30px;
         }
@@ -280,7 +281,7 @@
             min-height: 1440px; 
             box-sizing: content-box; /* Crucial for pixel-perfect top/height calculations */
             padding: 0; /* Remove any default padding */
-            margin: 0; /* Remove any default margin */
+            margin: 0; /* Remove any default padding */
 
             /* Removed scrollbar styling from here, moved to calendar-main */
         }
@@ -593,6 +594,7 @@
 <body>
     <div class="background-animation"></div>
     <div class="container">
+        <!-- Main Navigation (Corrected Structure as per previous request) -->
         <header class="dashboard-header">
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
@@ -616,6 +618,7 @@
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
             <div class="scheduling-layout">
                 <div class="sidebar">
+                    <!-- NEW: Super Admin Location Selector (hidden by default) -->
                     <div id="super-admin-location-selector" class="form-group super-admin-location-selector" style="display: none;">
                         <label for="super-admin-location-select">View Schedule For:</label>
                         <select id="super-admin-location-select"></select>
@@ -663,11 +666,14 @@
                     </div>
                     <div class="calendar-grid-container">
                         <div id="calendar-grid">
-                            </div>
+                            <!-- JS will build the header (.calendar-grid-header) 
+                                 and body (.calendar-body) with time/day columns here -->
+                        </div>
                     </div>
                 </div>
             </div>
 
+            <!-- NEW: Mobile-specific calendar view -->
             <div class="mobile-calendar-view">
                 <div class="mobile-calendar-header">
                     <button id="mobile-prev-day-btn" class="btn btn-secondary">◀</button>
@@ -675,11 +681,13 @@
                     <button id="mobile-next-day-btn" class="btn btn-secondary">▶</button>
                 </div>
                 <div id="mobile-day-column" class="mobile-day-column">
-                    </div>
+                    <!-- Mobile time slots, shifts, availability, business hours will be rendered here by JS -->
+                </div>
             </div>
         </section>
     </div>
     
+    <!-- Modals (message and confirmation) -->
     <div id="modal-message" class="modal">
         <div class="modal-content">
             <p id="modal-text"></p>
