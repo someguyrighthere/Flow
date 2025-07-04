@@ -369,14 +369,17 @@ export function handleSchedulingPage() {
                 if (locationSelector) {
                     locationSelector.innerHTML = '<option value="">Select a Location</option>';
                     if (locations && locations.length > 0) {
-                        // Corrected: Iterate over the 'locations' array received from the API.
+                        // Iterate over the 'locations' array received from the API.
                         locations.forEach(loc => {
                             locationSelector.add(new Option(loc.location_name, loc.location_id));
                         });
                         // Set the initial location to the first one available for super_admin
                         const initialLocationId = locations[0].location_id; 
                         locationSelector.value = initialLocationId; // Pre-select in the top dropdown
-                        currentLocationId = initialLocationId; // Crucial: Set the module-level state
+                        
+                        // THIS IS THE CRUCIAL LINE THAT WAS MISSED/REMOVED:
+                        currentLocationId = initialLocationId; // Set the module-level state variable for the initial load
+
                         loadAndRenderWeeklySchedule(initialLocationId); // Load schedule for this initial location
                     } else {
                         currentWeekDisplay.textContent = 'No Locations';
