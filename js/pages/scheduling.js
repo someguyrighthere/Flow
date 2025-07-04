@@ -2,7 +2,7 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
  * Handles all logic for the NEW "Classic Week" scheduling page.
- * This version uses separate date and time inputs with 15-minute increments.
+ * This version includes a safety check to prevent errors on initialization.
  */
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
@@ -24,7 +24,6 @@ export function handleSchedulingPage() {
     const locationSelectorContainer = document.getElementById('location-selector-container');
     const locationSelector = document.getElementById('location-selector');
     
-    // NEW: References for separate date and time inputs
     const startDateInput = document.getElementById('start-date-input');
     const startTimeSelect = document.getElementById('start-time-select');
     const endDateInput = document.getElementById('end-date-input');
@@ -93,7 +92,7 @@ export function handleSchedulingPage() {
     };
 
     /**
-     * NEW: Generates and populates the time dropdowns with 15-minute increments.
+     * Generates and populates the time dropdowns with 15-minute increments.
      */
     const populateTimeSelects = () => {
         let optionsHtml = '<option value="">Select Time</option>';
@@ -205,7 +204,6 @@ export function handleSchedulingPage() {
     createShiftForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // CORRECTED: Read from separate date and time inputs
         const startDate = startDateInput.value;
         const startTime = startTimeSelect.value;
         const endDate = endDateInput.value;
@@ -240,12 +238,15 @@ export function handleSchedulingPage() {
         }
     });
     
-    locationSelector.addEventListener('change', () => {
-        const newLocationId = locationSelector.value;
-        if (newLocationId) {
-            loadAndRenderWeeklySchedule(newLocationId);
-        }
-    });
+    // CORRECTED: Added a safety check to ensure the locationSelector element exists before adding an event listener.
+    if (locationSelector) {
+        locationSelector.addEventListener('change', () => {
+            const newLocationId = locationSelector.value;
+            if (newLocationId) {
+                loadAndRenderWeeklySchedule(newLocationId);
+            }
+        });
+    }
 
     // --- Initial Page Load ---
     const initializePage = async () => {
@@ -254,20 +255,22 @@ export function handleSchedulingPage() {
             const locations = await apiRequest('GET', '/api/locations');
             
             if (userRole === 'super_admin') {
-                locationSelectorContainer.style.display = 'block';
-                locationSelector.innerHTML = '<option value="">Select a Location</option>';
-                if (locations && locations.length > 0) {
-                    locations.forEach(loc => {
-                        locationSelector.add(new Option(loc.location_name, loc.location_id));
-                    });
-                    locationSelector.value = locations[0].location_id;
-                    loadAndRenderWeeklySchedule(locations[0].location_id);
-                } else {
-                    currentWeekDisplay.textContent = 'No Locations';
-                    calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please create a location in Admin Settings.</p>';
+                if (locationSelectorContainer) locationSelectorContainer.style.display = 'block';
+                if (locationSelector) {
+                    locationSelector.innerHTML = '<option value="">Select a Location</option>';
+                    if (locations && locations.length > 0) {
+                        locations.forEach(loc => {
+                            locationSelector.add(new Option(loc.location_name, loc.location_id));
+                        });
+                        locationSelector.value = locations[0].location_id;
+                        loadAndRenderWeeklySchedule(locations[0].location_id);
+                    } else {
+                        currentWeekDisplay.textContent = 'No Locations';
+                        calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please create a location in Admin Settings.</p>';
+                    }
                 }
             } else { // For location_admin
-                locationSelectorContainer.style.display = 'none';
+                if (locationSelectorContainer) locationSelectorContainer.style.display = 'none';
                 const user = await apiRequest('GET', '/api/users/me');
                 if (user && user.location_id) {
                     loadAndRenderWeeklySchedule(user.location_id);
