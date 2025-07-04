@@ -435,9 +435,18 @@
 
         .mobile-calendar-day-display {
             text-align: center;
-            font-size: 1.5rem;
+            font-size: 1.5rem; /* Increased font size */
             font-weight: 600;
             flex-grow: 1;
+            color: var(--primary-accent); /* Highlight the current day */
+        }
+
+        /* Styling for mobile navigation buttons */
+        .mobile-calendar-header .btn-secondary {
+            padding: 8px 15px; /* Smaller padding for mobile buttons */
+            font-size: 1rem;
+            border-radius: 6px;
+            min-width: unset; /* Override min-width from general btn */
         }
 
         .mobile-day-column {
@@ -450,27 +459,35 @@
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
+            /* Ensure hour lines are visible within the scrollable area */
+            background-image: linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-size: 100% 60px; /* 60px per hour line */
         }
 
         .mobile-time-slot {
             height: 60px;
             line-height: 60px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            /* Removed border-bottom as background-image now handles lines */
             font-size: 0.8rem;
             color: var(--text-medium);
             text-align: center;
             flex-shrink: 0;
+            padding: 0;
+            margin: 0;
+            position: sticky; /* Make time slots sticky */
+            left: 0; /* Stick to the left */
+            background-color: rgba(26, 26, 26, 0.8); /* Background for sticky time slots */
+            z-index: 2; /* Ensure it's above shifts */
+            border-right: 1px solid rgba(255, 255, 255, 0.1); /* Separator line */
+            width: 80px; /* Fixed width for time column */
+            box-sizing: border-box;
         }
-        .mobile-time-slot:last-child {
-            border-bottom: none;
-        }
-
-        /* Adjust shift/availability blocks for mobile single day view */
+        /* Adjust for mobile time slot being part of the main column */
         .mobile-day-column .calendar-shift,
         .mobile-day-column .availability-block,
         .mobile-day-column .business-hours-block {
-            width: calc(100% - 20px); /* Account for padding */
-            left: 10px; /* Match padding */
+            width: calc(100% - 100px); /* Account for time column width + padding */
+            left: 90px; /* Position after time column + padding */
         }
 
         /* Media Query for Mobile View */
