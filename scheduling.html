@@ -151,9 +151,8 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
-        /* --- CORRECTED MODAL STYLES --- */
         .modal {
-            display: none; /* Hide by default */
+            display: none; 
             position: fixed;
             z-index: 1000;
             left: 0;
@@ -163,7 +162,6 @@
             overflow: auto;
             background-color: rgba(0,0,0,0.7);
             backdrop-filter: blur(5px);
-            /* Use flexbox to center the modal content */
             align-items: center;
             justify-content: center;
         }
@@ -182,12 +180,11 @@
         
         .modal-actions {
             display: flex;
-            justify-content: flex-end; /* Pushes buttons to the right */
+            justify-content: flex-end;
             gap: 15px;
             margin-top: 25px;
         }
         
-        /* Center the button in the single-button message modal */
         #modal-message .modal-actions {
             justify-content: center;
         }
@@ -224,6 +221,12 @@
         <section class="scheduling-layout">
             <!-- Sidebar for creating shifts -->
             <div class="sidebar">
+                <!-- ADDED: Location selector for admins -->
+                <div id="location-selector-container" class="form-group" style="display: none;">
+                    <label for="location-selector">View Schedule For</label>
+                    <select id="location-selector"></select>
+                </div>
+
                 <h3>Create New Shift</h3>
                 <form id="create-shift-form">
                     <div class="form-group">
@@ -264,7 +267,7 @@
         </section>
     </div>
     
-    <!-- Modals (now correctly styled) -->
+    <!-- Modals -->
     <div id="modal-message" class="modal">
         <div class="modal-content">
             <p id="modal-text"></p>
@@ -283,7 +286,6 @@
         </div>
     </div>
     
-    <!-- The self-starting script tag -->
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
 </html>

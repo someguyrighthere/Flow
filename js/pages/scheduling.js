@@ -6,6 +6,7 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
     const authToken = localStorage.getItem("authToken");
+    const userRole = localStorage.getItem('userRole');
     if (!authToken) {
         window.location.href = "login.html";
         return;
@@ -19,11 +20,16 @@ export function handleSchedulingPage() {
     const employeeSelect = document.getElementById('employee-select');
     const locationSelect = document.getElementById('location-select');
     const createShiftForm = document.getElementById('create-shift-form');
+    const locationSelectorContainer = document.getElementById('location-selector-container');
+    const locationSelector = document.getElementById('location-selector');
+
 
     // --- State Management ---
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
+    let allLocations = [];
+    let currentLocationId = null;
 
     // --- Constants ---
     const PIXELS_PER_HOUR = 60;
@@ -31,22 +37,27 @@ export function handleSchedulingPage() {
     const END_HOUR = 22;  // Display calendar until 10 PM
 
     /**
-     * Main function to initialize and render the calendar for the week.
+     * Main function to initialize and render the calendar for a specific location and week.
      */
-    const loadAndRenderWeeklySchedule = async () => {
+    const loadAndRenderWeeklySchedule = async (locationId) => {
+        if (!locationId) {
+            currentWeekDisplay.textContent = 'Select a location';
+            calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please select a location to view the schedule.</p>';
+            return;
+        }
+        currentLocationId = locationId;
         currentWeekDisplay.textContent = 'Loading...';
         calendarGridWrapper.innerHTML = ''; // Clear previous grid
 
         try {
-            // Fetch all necessary data
-            const [users, shifts, locations] = await Promise.all([
-                apiRequest('GET', '/api/users'),
-                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}`),
-                apiRequest('GET', '/api/locations')
+            // Fetch all necessary data for the selected location and week
+            const [users, shifts] = await Promise.all([
+                apiRequest('GET', `/api/users?location_id=${locationId}`),
+                apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${locationId}`)
             ]);
 
-            // Populate the sidebar dropdowns
-            populateSidebarDropdowns(users, locations);
+            // Populate the sidebar dropdowns with the fetched users and all locations
+            populateSidebarDropdowns(users, allLocations);
 
             // Render the calendar structure and then the shifts
             renderCalendarGrid();
@@ -64,14 +75,18 @@ export function handleSchedulingPage() {
      */
     const populateSidebarDropdowns = (users, locations) => {
         employeeSelect.innerHTML = '<option value="">Select Employee</option>';
-        users.filter(u => u.role === 'employee').forEach(user => {
-            employeeSelect.add(new Option(user.full_name, user.user_id));
-        });
+        if (users) {
+            users.filter(u => u.role === 'employee' || u.role === 'location_admin').forEach(user => {
+                employeeSelect.add(new Option(user.full_name, user.user_id));
+            });
+        }
 
         locationSelect.innerHTML = '<option value="">Select Location</option>';
-        locations.forEach(loc => {
-            locationSelect.add(new Option(loc.location_name, loc.location_id));
-        });
+        if (locations) {
+            locations.forEach(loc => {
+                locationSelect.add(new Option(loc.location_name, loc.location_id));
+            });
+        }
     };
 
     /**
@@ -130,7 +145,7 @@ export function handleSchedulingPage() {
                 const top = (startMinutes / 60) * PIXELS_PER_HOUR;
                 const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;
 
-                if (height > 0) {
+                if (height > 0 && top >= 0) {
                     const shiftBlock = document.createElement('div');
                     shiftBlock.className = 'shift-block';
                     shiftBlock.style.top = `${top}px`;
@@ -161,7 +176,7 @@ export function handleSchedulingPage() {
     // --- Event Handlers ---
     const handleWeekChange = (days) => {
         currentStartDate.setDate(currentStartDate.getDate() + days);
-        loadAndRenderWeeklySchedule();
+        loadAndRenderWeeklySchedule(currentLocationId);
     };
 
     prevWeekBtn.addEventListener('click', () => handleWeekChange(-7));
@@ -183,12 +198,53 @@ export function handleSchedulingPage() {
             await apiRequest('POST', '/api/shifts', shiftData);
             showModalMessage('Shift created successfully!', false);
             createShiftForm.reset();
-            loadAndRenderWeeklySchedule(); // Reload schedule
+            loadAndRenderWeeklySchedule(currentLocationId); // Reload schedule for the current location
         } catch (error) {
             showModalMessage(`Error creating shift: ${error.message}`, true);
         }
     });
+    
+    locationSelector.addEventListener('change', () => {
+        const newLocationId = locationSelector.value;
+        if (newLocationId) {
+            loadAndRenderWeeklySchedule(newLocationId);
+        }
+    });
 
     // --- Initial Page Load ---
-    loadAndRenderWeeklySchedule();
+    const initializePage = async () => {
+        try {
+            const locations = await apiRequest('GET', '/api/locations');
+            allLocations = locations;
+
+            if (userRole === 'super_admin') {
+                locationSelectorContainer.style.display = 'block';
+                locationSelector.innerHTML = '<option value="">Select a Location</option>';
+                if (locations && locations.length > 0) {
+                    locations.forEach(loc => {
+                        locationSelector.add(new Option(loc.location_name, loc.location_id));
+                    });
+                    // Automatically load the first location
+                    locationSelector.value = locations[0].location_id;
+                    loadAndRenderWeeklySchedule(locations[0].location_id);
+                } else {
+                    currentWeekDisplay.textContent = 'No Locations';
+                    calendarGridWrapper.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-medium);">Please create a location in Admin Settings.</p>';
+                }
+            } else { // For location_admin
+                locationSelectorContainer.style.display = 'none';
+                const user = await apiRequest('GET', '/api/users/me');
+                if (user && user.location_id) {
+                    loadAndRenderWeeklySchedule(user.location_id);
+                } else {
+                    showModalMessage('Your account is not assigned to a location.', true);
+                    currentWeekDisplay.textContent = 'No Location Assigned';
+                }
+            }
+        } catch (error) {
+             showModalMessage(`Failed to initialize page: ${error.message}`, true);
+        }
+    };
+
+    initializePage();
 }
