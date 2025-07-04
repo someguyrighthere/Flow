@@ -199,8 +199,29 @@
             border-radius: 8px;
             display: flex;
             flex-direction: column; 
-            overflow: hidden; 
+            /* overflow: hidden; */ /* Remove overflow:hidden from calendar-main */
+            overflow-x: auto; /* NEW: Add horizontal scrolling to calendar-main */
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: var(--primary-accent) rgba(255, 255, 255, 0.1); /* Firefox */
         }
+        /* Webkit scrollbar for calendar-main */
+        .calendar-main::-webkit-scrollbar {
+            height: 8px;
+        }
+        .calendar-main::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .calendar-main::-webkit-scrollbar-thumb {
+            background-color: var(--primary-accent);
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        .calendar-main::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(200, 109, 215, 0.8);
+        }
+
+
         .calendar-header {
             display: flex;
             justify-content: space-between;
@@ -220,29 +241,33 @@
 
         .calendar-grid-container {
             flex-grow: 1; 
-            overflow: hidden; 
+            /* overflow: hidden; */ /* Removed, horizontal scroll handled by calendar-main */
             display: flex;
             flex-direction: column;
             position: relative; 
             /* No fixed height here, let calendar-body define scrollable area */
+
+            /* Removed horizontal scrollbar styling from here, moved to calendar-main */
         }
 
         .calendar-grid {
             display: flex;
             flex-direction: column;
-            width: 100%;
-            min-width: 1500px; 
+            width: 100%; /* Keep 100% width relative to scroll container */
+            min-width: 1500px; /* Ensure content overflows to enable scrolling */
             height: auto; /* Allow height to expand for scrolling */
         }
 
         .calendar-grid-header {
             display: grid;
+            /* Use explicit px widths for time column and minmax for day columns to match calendar-body */
             grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
-            position: sticky;
-            top: 0;
+            /* position: sticky; */ /* Removed sticky as horizontal scrolling is on parent now */
+            /* top: 0; */ /* Removed */
             z-index: 6;
             background-color: #1a1a1a;
             border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0; /* Prevent shrinking when scrolling */
         }
 
         .calendar-body {
@@ -257,28 +282,8 @@
             padding: 0; /* Remove any default padding */
             margin: 0; /* Remove any default margin */
 
-            /* Custom Scrollbar Styling */
-            scrollbar-width: thin; /* Firefox */
-            scrollbar-color: var(--primary-accent) rgba(255, 255, 255, 0.1); /* Firefox */
+            /* Removed scrollbar styling from here, moved to calendar-main */
         }
-
-        /* Webkit (Chrome, Safari) scrollbar styling */
-        .calendar-body::-webkit-scrollbar {
-            width: 8px;
-        }
-        .calendar-body::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-        }
-        .calendar-body::-webkit-scrollbar-thumb {
-            background-color: var(--primary-accent);
-            border-radius: 10px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-        }
-        .calendar-body::-webkit-scrollbar-thumb:hover {
-            background-color: rgba(200, 109, 215, 0.8); /* Slightly darker on hover */
-        }
-
 
         .calendar-day-header {
             padding: 10px 0;
@@ -588,7 +593,6 @@
 <body>
     <div class="background-animation"></div>
     <div class="container">
-        <!-- Main Navigation (Corrected Structure as per previous request) -->
         <header class="dashboard-header">
             <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
             <div class="settings-menu">
@@ -612,7 +616,6 @@
             <h2 style="color: var(--text-light);">Employee Scheduling</h2>
             <div class="scheduling-layout">
                 <div class="sidebar">
-                    <!-- NEW: Super Admin Location Selector (hidden by default) -->
                     <div id="super-admin-location-selector" class="form-group super-admin-location-selector" style="display: none;">
                         <label for="super-admin-location-select">View Schedule For:</label>
                         <select id="super-admin-location-select"></select>
@@ -660,14 +663,11 @@
                     </div>
                     <div class="calendar-grid-container">
                         <div id="calendar-grid">
-                            <!-- JS will build the header (.calendar-grid-header) 
-                                 and body (.calendar-body) with time/day columns here -->
-                        </div>
+                            </div>
                     </div>
                 </div>
             </div>
 
-            <!-- NEW: Mobile-specific calendar view -->
             <div class="mobile-calendar-view">
                 <div class="mobile-calendar-header">
                     <button id="mobile-prev-day-btn" class="btn btn-secondary">◀</button>
@@ -675,13 +675,11 @@
                     <button id="mobile-next-day-btn" class="btn btn-secondary">▶</button>
                 </div>
                 <div id="mobile-day-column" class="mobile-day-column">
-                    <!-- Mobile time slots, shifts, availability, business hours will be rendered here by JS -->
-                </div>
+                    </div>
             </div>
         </section>
     </div>
     
-    <!-- Modals (message and confirmation) -->
     <div id="modal-message" class="modal">
         <div class="modal-content">
             <p id="modal-text"></p>
