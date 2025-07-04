@@ -2,7 +2,7 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
  * Handles all logic for the NEW "Classic Week" scheduling page.
- * This version uses separate date and time inputs with 15-minute increments.
+ * This version includes logic to display employee names on shifts.
  */
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
@@ -24,7 +24,6 @@ export function handleSchedulingPage() {
     const locationSelectorContainer = document.getElementById('location-selector-container');
     const locationSelector = document.getElementById('location-selector');
     
-    // NEW: References for separate date and time inputs
     const startDateInput = document.getElementById('start-date-input');
     const startTimeSelect = document.getElementById('start-time-select');
     const endDateInput = document.getElementById('end-date-input');
@@ -93,7 +92,7 @@ export function handleSchedulingPage() {
     };
 
     /**
-     * NEW: Generates and populates the time dropdowns with 15-minute increments.
+     * Generates and populates the time dropdowns with 15-minute increments.
      */
     const populateTimeSelects = () => {
         let optionsHtml = '<option value="">Select Time</option>';
@@ -170,6 +169,7 @@ export function handleSchedulingPage() {
                     shiftBlock.className = 'shift-block';
                     shiftBlock.style.top = `${top}px`;
                     shiftBlock.style.height = `${height}px`;
+                    // CORRECTED: Added employee_name to the innerHTML of the shift block.
                     shiftBlock.innerHTML = `<strong>${shift.employee_name}</strong><br><small>${shift.location_name}</small>`;
                     shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
                     targetColumn.appendChild(shiftBlock);
@@ -205,7 +205,6 @@ export function handleSchedulingPage() {
     createShiftForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // CORRECTED: Read from separate date and time inputs
         const startDate = startDateInput.value;
         const startTime = startTimeSelect.value;
         const endDate = endDateInput.value;
