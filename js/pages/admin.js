@@ -1,604 +1,483 @@
-// js/pages/scheduling.js
+// js/pages/admin.js
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
+// SVG icon for the delete button, extracted to a constant for cleaner template literals
+const DELETE_SVG_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>`;
+
 /**
- * Handles all logic for the scheduling page.
+ * Handles all logic for the admin settings page.
  */
-export function handleSchedulingPage() {
-    // Redirect to login page if no authentication token is found in local storage
-    if (!localStorage.getItem("authToken")) {
+export function handleAdminPage() {
+    // Security check: Redirect to login page if no authentication token is found in local storage
+    const authToken = localStorage.getItem("authToken");
+    const userRole = localStorage.getItem('userRole');
+
+    if (!authToken || (userRole !== 'super_admin' && userRole !== 'location_admin')) {
         window.location.href = "login.html";
         return;
     }
 
-    // Get references to key DOM elements for the scheduling page
-    const schedulingLayout = document.querySelector('.scheduling-layout'); // Desktop layout container
-    const mobileCalendarView = document.querySelector('.mobile-calendar-view'); // Mobile layout container
-
-    const calendarGrid = document.getElementById('calendar-grid'); // Desktop calendar grid
-    const currentWeekDisplay = document.getElementById('current-week-display');
-    const prevWeekBtn = document.getElementById('prev-week-btn');
-    const nextWeekBtn = document.getElementById('next-week-btn');
-    const createShiftForm = document.getElementById('create-shift-form');
-    
-    const employeeSelect = document.getElementById('employee-select');
-    const locationSelect = document.getElementById('location-select');
-
-    const availabilityToggle = document.getElementById('toggle-availability');
-
-    // Mobile specific elements
-    const mobilePrevDayBtn = document.getElementById('mobile-prev-day-btn');
-    const mobileNextDayBtn = document.getElementById('mobile-next-day-btn');
-    const mobileCurrentDayDisplay = document.getElementById('mobile-current-day-display');
-    const mobileDayColumn = document.getElementById('mobile-day-column');
-
-    // Initialize currentStartDate to the beginning of the current week (Sunday)
-    let currentStartDate = new Date();
-    currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
-    currentStartDate.setHours(0, 0, 0, 0); // Set to midnight for consistent date comparison
-
-    // Initialize currentMobileDay to today's date
-    let currentMobileDay = new Date();
-    currentMobileDay.setHours(0, 0, 0, 0);
-
-    // Define a breakpoint for mobile view
-    const MOBILE_BREAKPOINT = 768; // px
-
-    /**
-     * Checks if the current screen width is considered mobile.
-     * @returns {boolean} True if mobile, false otherwise.
-     */
-    function isMobileView() {
-        return window.innerWidth <= MOBILE_BREAKPOINT;
-    }
-
-    /**
-     * Main render function that decides which calendar view to render.
-     */
-    async function renderCalendar() {
-        if (isMobileView()) {
-            // Hide desktop view, show mobile view
-            if (schedulingLayout) schedulingLayout.style.display = 'none';
-            if (mobileCalendarView) mobileCalendarView.style.display = 'flex';
-            await renderMobileDayCalendar(currentMobileDay);
-        } else {
-            // Hide mobile view, show desktop view
-            if (schedulingLayout) schedulingLayout.style.display = 'grid'; // Use 'grid' as defined in CSS
-            if (mobileCalendarView) mobileCalendarView.style.display = 'none';
-            await renderWeeklyCalendar(currentStartDate);
+    // Hide sections based on user role for UI consistency (backend also enforces this)
+    if (userRole === 'location_admin') {
+        const inviteAdminCard = document.getElementById('invite-admin-card');
+        if (inviteAdminCard) {
+            inviteAdminCard.style.display = 'none';
+        }
+        const manageLocationsCard = document.getElementById('manage-locations-card');
+        if (manageLocationsCard) {
+            manageLocationsCard.style.display = 'none';
         }
     }
 
+    // --- DOM Element Selection ---
+    const locationListDiv = document.getElementById('location-list');
+    const newLocationForm = document.getElementById('new-location-form');
+    const newLocationNameInput = document.getElementById('new-location-name');
+    const newLocationAddressInput = document.getElementById('new-location-address');
+    const newLocationStatusMessage = document.getElementById('new-location-status-message');
+    const userListDiv = document.getElementById('user-list');
+    const inviteAdminForm = document.getElementById('invite-admin-form');
+    const adminLocationSelect = document.getElementById('admin-location-select');
+    const inviteAdminStatusMessage = document.getElementById('invite-admin-status-message');
+    const inviteEmployeeForm = document.getElementById('invite-employee-form');
+    const employeeLocationSelect = document.getElementById('employee-location-select'); 
+    const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
+    const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message');
+
+    // Business Settings Form Elements
+    const businessSettingsForm = document.getElementById('business-settings-form');
+    const operatingHoursStartInput = document.getElementById('operating-hours-start');
+    const operatingHoursEndInput = document.getElementById('operating-hours-end');
+    const currentOperatingHoursDisplay = document.getElementById('current-operating-hours-display');
+    const businessSettingsStatusMessage = document.getElementById('business-settings-status-message');
+
+
+    // Default business hours for availability generation, fetched from backend if available
+    let businessOperatingStartHour = 0; // Default to 00:00 (midnight)
+    let businessOperatingEndHour = 24; // Default to 24:00 (midnight next day)
+
+    // --- Helper function to display local status messages ---
     /**
-     * Renders the full weekly calendar grid for desktop.
-     * @param {Date} startDate - The Date object representing the first day (Sunday) of the week to render.
+     * Displays a status message on a specified DOM element.
+     * @param {HTMLElement} element - The DOM element to display the message in.
+     * @param {string} message - The message text.
+     * @param {boolean} [isError=false] - True if the message is an error, false for success.
      */
-    async function renderWeeklyCalendar(startDate) {
-        if (!calendarGrid || !currentWeekDisplay) return;
-        
-        // Calculate end date for the week display
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 6);
-        const options = { month: 'short', day: 'numeric' };
-        currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
-        
-        calendarGrid.innerHTML = ''; // Clear existing calendar content
-
-        // Create calendar header (Time column + 7 days)
-        const headerContainer = document.createElement('div');
-        headerContainer.className = 'calendar-grid-header';
-        calendarGrid.appendChild(headerContainer);
-
-        const timeHeader = document.createElement('div');
-        timeHeader.className = 'calendar-day-header';
-        timeHeader.innerHTML = `&nbsp;`; // Empty cell for time column header
-        headerContainer.appendChild(timeHeader);
-
-        for (let i = 0; i < 7; i++) {
-            const dayDate = new Date(startDate);
-            dayDate.setDate(startDate.getDate() + i);
-            const dayHeader = document.createElement('div');
-            dayHeader.className = 'calendar-day-header';
-            dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
-            headerContainer.appendChild(dayHeader);
-        }
-
-        // Create calendar body (Time column + 7 day columns with hour lines)
-        const calendarBody = document.createElement('div');
-        calendarBody.className = 'calendar-body';
-        calendarGrid.appendChild(calendarBody);
-
-        const timeColumn = document.createElement('div');
-        timeColumn.className = 'time-column';
-        for (let hour = 0; hour < 24; hour++) {
-            const timeSlot = document.createElement('div');
-            timeSlot.className = 'time-slot';
-            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-            const ampm = hour < 12 ? 'AM' : 'PM';
-            timeSlot.textContent = `${displayHour} ${ampm}`;
-            timeColumn.appendChild(timeSlot);
-        }
-        calendarBody.appendChild(timeColumn);
-
-        for (let i = 0; i < 7; i++) {
-            const dayColumn = document.createElement('div');
-            dayColumn.className = 'day-column';
-            dayColumn.id = `day-column-${i}`; // Assign ID for easy access
-            for (let j = 0; j < 24; j++) {
-                const hourLine = document.createElement('div');
-                hourLine.className = 'hour-line';
-                dayColumn.appendChild(hourLine);
-            }
-            calendarBody.appendChild(dayColumn);
-        }
-
-        // Load and display data (shifts, availability, business hours) concurrently
-        await Promise.all([
-            loadAndDisplayShifts(startDate, endDate, false), // Pass false for isMobile
-            loadAndRenderAvailability(false), // Pass false for isMobile
-            loadAndRenderBusinessHours(false) // Pass false for isMobile
-        ]);
+    function displayStatusMessage(element, message, isError = false) {
+        if (!element) return;
+        element.innerHTML = message;
+        element.classList.remove('success', 'error'); // Clear previous states
+        element.classList.add(isError ? 'error' : 'success');
+        setTimeout(() => {
+            element.textContent = '';
+            element.classList.remove('success', 'error');
+        }, 5000); // Clear message after 5 seconds
     }
 
-    /**
-     * Renders a single day calendar view for mobile.
-     * @param {Date} dayDate - The Date object representing the day to render.
-     */
-    async function renderMobileDayCalendar(dayDate) {
-        if (!mobileDayColumn || !mobileCurrentDayDisplay) return;
-
-        mobileCurrentDayDisplay.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-        mobileDayColumn.innerHTML = ''; // Clear existing content
-
-        // Create time slots for the mobile day column
-        for (let hour = 0; hour < 24; hour++) {
-            const timeSlot = document.createElement('div');
-            timeSlot.className = 'mobile-time-slot';
-            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-            const ampm = hour < 12 ? 'AM' : 'PM';
-            timeSlot.textContent = `${displayHour} ${ampm}`;
-            mobileDayColumn.appendChild(timeSlot);
-        }
-
-        // Load and display data for the single day
-        await Promise.all([
-            loadAndDisplayShifts(dayDate, dayDate, true), // Pass true for isMobile
-            loadAndRenderAvailability(true), // Pass true for isMobile
-            loadAndRenderBusinessHours(true) // Pass true for isMobile
-        ]);
+    // NEW: Helper function to convert 24-hour time string to 12-hour format
+    function convertTo12Hour(time24) {
+        if (!time24) return 'N/A';
+        const [hour, minute] = time24.split(':');
+        const h = parseInt(hour, 10);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h % 12 === 0 ? 12 : h % 12;
+        return `${displayHour}:${minute} ${ampm}`;
     }
 
+    // --- Data Loading Functions ---
 
     /**
-     * Helper function to detect overlaps and calculate positions for shifts.
-     * @param {Array<Object>} shifts - An array of shift objects for a single day.
-     * @returns {Array<Object>} Shifts with added 'column' and 'totalColumns' properties.
+     * Fetches and displays existing locations.
      */
-    function calculateShiftPositions(shifts) {
-        // Sort shifts by start time, then by end time (for consistent overlap detection)
-        shifts.sort((a, b) => {
-            const startA = new Date(a.start_time).getTime();
-            const startB = new Date(b.start_time).getTime();
-            if (startA !== startB) return startA - startB;
-            const endA = new Date(a.end_time).getTime();
-            const endB = new Date(b.end_time).getTime();
-            return endA - endB;
-        });
-
-        // This array will hold "columns" of non-overlapping shifts
-        const columns = [];
-
-        shifts.forEach(shift => {
-            const shiftStart = new Date(shift.start_time).getTime();
-            const shiftEnd = new Date(shift.end_time).getTime();
-            
-            let placed = false;
-            // Try to place the shift in an existing column
-            for (let i = 0; i < columns.length; i++) {
-                const column = columns[i];
-                // Check if this shift overlaps with any shift already in this column
-                const overlapsInColumn = column.some(existingShift => {
-                    const existingStart = new Date(existingShift.start_time).getTime();
-                    const existingEnd = new Date(existingShift.end_time).getTime();
-                    // Overlap if (startA < endB && endA > startB)
-                    return (shiftStart < existingEnd && shiftEnd > existingStart);
-                });
-
-                if (!overlapsInColumn) {
-                    column.push(shift);
-                    shift.column = i; // Assign column index
-                    placed = true;
-                    break;
-                }
-            }
-
-            // If it couldn't be placed in an existing column, create a new one
-            if (!placed) {
-                columns.push([shift]);
-                shift.column = columns.length - 1; // Assign new column index
-            }
-        });
-
-        // Now, iterate through all shifts again to set totalColumns for proper width calculation
-        shifts.forEach(shift => {
-            // Find all shifts that overlap with the current shift
-            const overlappingShifts = shifts.filter(otherShift => {
-                if (shift === otherShift) return false; // Don't compare with itself
-                const startA = new Date(shift.start_time).getTime();
-                const endA = new Date(shift.end_time).getTime();
-                const startB = new Date(otherShift.start_time).getTime();
-                const endB = new Date(otherShift.end_time).getTime();
-                return (startA < endB && endA > startB);
-            });
-
-            // The total number of columns needed for this specific set of overlapping shifts
-            // is the maximum column index among them (including itself) + 1
-            const maxColumnIndex = Math.max(shift.column, ...overlappingShifts.map(s => s.column));
-            shift.totalColumns = maxColumnIndex + 1;
-        });
-
-        return shifts;
-    }
-
-    /**
-     * Fetches shift data from the backend API for the current week/day and renders each shift as a visual block.
-     * @param {Date} start - The start date for fetching shifts.
-     * @param {Date} end - The end date for fetching shifts.
-     * @param {boolean} isMobile - True if rendering for mobile single day view.
-     */
-    async function loadAndDisplayShifts(start, end, isMobile) {
-        // Remove existing shifts before rendering new ones
-        document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
-        
-        // Format dates for API request (YYYY-MM-DD)
-        const formatDate = (d) => d.toISOString().split('T')[0];
-        
-        // Adjust end date to include the full last day for the API query
-        let endOfDay = new Date(end);
-        endOfDay.setDate(endOfDay.getDate() + 1); // Go to the start of the next day
-
+    async function loadLocations() {
+        if (!locationListDiv) return;
+        locationListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading locations...</p>'; // Show loading state
         try {
-            const shifts = await apiRequest('GET', `/api/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
+            // API call to get locations (backend filters by location_admin role)
+            const locations = await apiRequest('GET', '/api/locations');
+            locationListDiv.innerHTML = ''; // Clear loading message
+
+            if (locations && locations.length > 0) {
+                locations.forEach(loc => {
+                    const listItem = document.createElement('div');
+                    listItem.className = 'list-item';
+                    listItem.innerHTML = `
+                        <span><strong>${loc.location_name}</strong> (${loc.location_address})</span>
+                        <button class="btn-delete" data-id="${loc.location_id}" data-type="location" title="Delete Location">
+                            ${DELETE_SVG_ICON}
+                        </button>
+                    `;
+                    locationListDiv.appendChild(listItem);
+                });
+            } else {
+                locationListDiv.innerHTML = '<p style="color: var(--text-medium);">No locations added yet.</p>';
+            }
+        } catch (error) {
+            showModalMessage(`Error loading locations: ${error.message}`, true); 
+            console.error('Error loading locations:', error);
+        }
+    }
+
+    /**
+     * Populates the location dropdowns for inviting new admins and employees.
+     */
+    async function populateLocationDropdowns() {
+        if (!adminLocationSelect || !employeeLocationSelect) return;
+        try {
+            // API call to get locations (backend filters by location_admin role)
+            const locations = await apiRequest('GET', '/api/locations');
             
-            if (shifts && shifts.length > 0) {
-                // Group shifts by day
-                const shiftsByDay = {};
-                shifts.forEach(shift => {
-                    const shiftDate = new Date(shift.start_time);
-                    const dayKey = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
-                    if (!shiftsByDay[dayKey]) {
-                        shiftsByDay[dayKey] = [];
+            adminLocationSelect.innerHTML = '<option value="">Select Location</option>';
+            employeeLocationSelect.innerHTML = '<option value="">Select Location</option>';
+
+            if (locations && locations.length > 0) {
+                locations.forEach(loc => {
+                    const adminOption = new Option(loc.location_name, loc.location_id);
+                    const employeeOption = new Option(loc.location_name, loc.location_id);
+                    adminLocationSelect.add(adminOption);
+                    employeeLocationSelect.add(employeeOption);
+                });
+            } else {
+                adminLocationSelect.innerHTML = '<option value="">No locations available</option>';
+                employeeLocationSelect.innerHTML = '<option value="">No locations available</option>';
+            }
+        } catch (error) {
+            console.error("Failed to populate location dropdowns:", error);
+            // Display a message to the user if dropdowns can't be loaded
+            showModalMessage('Failed to load locations for dropdowns. Please try again.', true);
+        }
+    }
+
+    /**
+     * Fetches and displays all users (admins and employees).
+     */
+    async function loadUsers() {
+        if (!userListDiv) return;
+        userListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading users...</p>'; // Show loading state
+        try {
+            // API call to get users (backend filters by location_admin role)
+            const users = await apiRequest('GET', '/api/users');
+            userListDiv.innerHTML = ''; // Clear loading message
+
+            if (users && users.length > 0) {
+                const userGroups = {
+                    super_admin: [],
+                    location_admin: [],
+                    employee: []
+                };
+
+                // Categorize users by role
+                users.forEach(user => {
+                    if (userGroups[user.role]) {
+                        userGroups[user.role].push(user);
                     }
-                    shiftsByDay[dayKey].push(shift);
                 });
 
-                // Process each day's shifts for overlaps and render
-                Object.keys(shiftsByDay).forEach(dayKey => {
-                    const dailyShifts = shiftsByDay[dayKey];
-                    const processedShifts = calculateShiftPositions(dailyShifts);
+                const groupOrder = ['super_admin', 'location_admin', 'employee'];
+                const groupTitles = {
+                    super_admin: 'Super Admins',
+                    location_admin: 'Location Admins',
+                    employee: 'Employees'
+                };
 
-                    processedShifts.forEach(shift => {
-                        const shiftStart = new Date(shift.start_time);
-                        const shiftEnd = new Date(shift.end_time);
+                // Render users grouped by role
+                groupOrder.forEach(role => {
+                    const group = userGroups[role];
+                    if (group.length > 0) {
+                        const groupHeader = document.createElement('h4');
+                        groupHeader.textContent = groupTitles[role];
+                        userListDiv.appendChild(groupHeader);
                         
-                        let targetColumnElement;
-                        if (isMobile) {
-                            // For mobile, all shifts go into the single mobile-day-column
-                            targetColumnElement = mobileDayColumn;
-                        } else {
-                            // For desktop, shifts go into their respective day columns
-                            const dayIndex = shiftStart.getDay(); // 0 for Sunday, 1 for Monday, etc.
-                            targetColumnElement = document.getElementById(`day-column-${dayIndex}`);
-                        }
-
-                        if (targetColumnElement) {
-                            // Calculate top and height for the shift block in pixels (1 minute = 1 pixel)
-                            const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
-                            const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
-                            const heightMinutes = endMinutes - startMinutes;
-                            
-                            const shiftElement = document.createElement('div');
-                            shiftElement.className = 'calendar-shift';
-                            shiftElement.style.top = `${startMinutes}px`;
-                            shiftElement.style.height = `${heightMinutes}px`;
-
-                            if (!isMobile) { // Apply multi-column positioning only for desktop view
-                                const columnWidth = 100 / shift.totalColumns;
-                                shiftElement.style.width = `calc(${columnWidth}% - 4px)`; // Adjust width for columns
-                                shiftElement.style.left = `calc(2px + ${shift.column * columnWidth}%)`; // Position in its column
-                            } else { // For mobile, full width with padding
-                                shiftElement.style.width = `calc(100% - 20px)`; // Account for mobile-day-column padding
-                                shiftElement.style.left = `10px`; // Match mobile-day-column padding
+                        group.forEach(user => {
+                            let userDisplayTitle;
+                            // Determine the title to display based on role or position
+                            // NEW LOGIC: Use role for Super Admin and Location Admin
+                            if (user.role === 'super_admin') {
+                                userDisplayTitle = 'Super Admin';
+                            } else if (user.role === 'location_admin') {
+                                userDisplayTitle = 'Location Admin';
+                            } else { // employee role
+                                userDisplayTitle = (user.position && user.position.trim() !== '') ? user.position : 'N/A';
                             }
-                            
-                            const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
-                            const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
-                            const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
 
-                            shiftElement.innerHTML = `
-                                <strong>${shift.employee_name}</strong><br>
-                                <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
-                                <span style="color: #ddd;">${shift.location_name || ''}</span>
-                                <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                            const userLocationDisplay = (user.location_name && user.location_name.trim() !== '') 
+                                ? `<br><small style="color:var(--text-medium);">Location: ${user.location_name}</small>` 
+                                : ''; // Only display location line if location_name exists
+
+                            const listItem = document.createElement('div');
+                            listItem.className = 'list-item';
+                            listItem.innerHTML = `
+                                <span>
+                                    <strong>${user.full_name}</strong> (${userDisplayTitle}) 
+                                    ${userLocationDisplay}
+                                </span>
+                                <button class="btn-delete" data-id="${user.user_id}" data-type="user" title="Delete User">
+                                    ${DELETE_SVG_ICON}
                                 </button>
                             `;
-                            shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
-                            
-                            targetColumnElement.appendChild(shiftElement);
-                        }
-                    });
+                            userListDiv.appendChild(listItem);
+                        });
+                    }
                 });
+            } else {
+                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users found.</p>';
             }
-        }
-        catch (error) {
-            showModalMessage(`Error loading shifts: ${error.message}`, true);
-            console.error('Error loading shifts:', error);
-        }
-    }
-    
-    /**
-     * Fetches employee availability data and renders it as semi-transparent overlay blocks.
-     * These blocks visually indicate when an employee is available.
-     * @param {boolean} isMobile - True if rendering for mobile single day view.
-     */
-    async function loadAndRenderAvailability(isMobile) {
-        // Remove existing availability blocks before rendering new ones
-        document.querySelectorAll('.availability-block').forEach(el => el.remove());
-        
-        try {
-            const employees = await apiRequest('GET', '/api/users/availability');
-            const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-            employees.forEach(employee => {
-                if (!employee.availability) return; // Skip if no availability data
-
-                daysOfWeek.forEach((day, index) => {
-                    // Only render for the specific mobile day if in mobile view
-                    if (isMobile && index !== currentMobileDay.getDay()) {
-                        return;
-                    }
-
-                    const dayAvailability = employee.availability[day];
-                    if (dayAvailability && dayAvailability.start && dayAvailability.end) {
-                        let targetColumnElement;
-                        if (isMobile) {
-                            targetColumnElement = mobileDayColumn;
-                        } else {
-                            targetColumnElement = document.getElementById(`day-column-${index}`);
-                        }
-
-                        if(targetColumnElement) {
-                            // Convert time strings to minutes from midnight for positioning
-                            const startMinutes = parseInt(dayAvailability.start.split(':')[0], 10) * 60 + parseInt(dayAvailability.start.split(':')[1], 10);
-                            const endMinutes = parseInt(dayAvailability.end.split(':')[0], 10) * 60 + parseInt(dayAvailability.end.split(':')[1], 10);
-                            const heightMinutes = endMinutes - startMinutes;
-                            
-                            if (heightMinutes > 0) {
-                                const availabilityBlock = document.createElement('div');
-                                availabilityBlock.className = 'availability-block';
-                                // Hide if the toggle is off
-                                if (availabilityToggle && !availabilityToggle.checked) {
-                                    availabilityBlock.classList.add('hidden');
-                                }
-                                availabilityBlock.style.top = `${startMinutes}px`; // Position in pixels
-                                availabilityBlock.style.height = `${heightMinutes}px`; // Height in pixels
-                                
-                                if (isMobile) {
-                                    availabilityBlock.style.width = `calc(100% - 20px)`; // Account for mobile-day-column padding
-                                    availabilityBlock.style.left = `10px`; // Match mobile-day-column padding
-                                }
-                                targetColumnElement.appendChild(availabilityBlock);
-                            }
-                        }
-                    }
-                });
-            });
         } catch (error) {
-            console.error("Failed to load availability:", error);
-            // No modal message here as it's a background visual enhancement
+            showModalMessage(`Error loading users: ${error.message}`, true);
+            console.error('Error loading users:', error);
         }
     }
 
     /**
-     * Fetches and renders the business operating hours as a subtle background block.
-     * This visually indicates the standard business hours for the location.
-     * @param {boolean} isMobile - True if rendering for mobile single day view.
+     * Fetches business operating hours to set the range for availability inputs.
+     * Also displays current hours.
      */
-    async function loadAndRenderBusinessHours(isMobile) {
-        // Remove existing business hours blocks before rendering new ones
-        document.querySelectorAll('.business-hours-block').forEach(el => el.remove());
+    async function fetchBusinessHours() {
+        if (!currentOperatingHoursDisplay || !operatingHoursStartInput || !operatingHoursEndInput) return;
 
+        currentOperatingHoursDisplay.textContent = 'Loading current hours...';
         try {
             const settings = await apiRequest('GET', '/api/settings/business');
-            const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
-            const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
-            const durationHours = businessEndHour - businessStartHour;
+            if (settings) {
+                // Update internal variables for availability generation
+                businessOperatingStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
+                businessOperatingEndHour = parseInt((settings.operating_hours_end || '24:00').split(':')[0], 10);
+                
+                // Set the form input values (still 24-hour format for input type="time")
+                operatingHoursStartInput.value = settings.operating_hours_start || '';
+                operatingHoursEndInput.value = settings.operating_hours_end || '';
 
-            if (durationHours > 0) {
-                // Determine which columns to apply the business hours block to
-                let columnsToRender = [];
-                if (isMobile) {
-                    columnsToRender.push(mobileDayColumn); // Only the single mobile day column
-                } else {
-                    for (let i = 0; i < 7; i++) {
-                        columnsToRender.push(document.getElementById(`day-column-${i}`));
-                    }
-                }
+                // Display current hours in 12-hour format
+                const displayStart = convertTo12Hour(settings.operating_hours_start);
+                const displayEnd = convertTo12Hour(settings.operating_hours_end);
+                currentOperatingHoursDisplay.textContent = `Current: ${displayStart} - ${displayEnd}`;
+                currentOperatingHoursDisplay.style.color = 'var(--text-light)'; // Reset color if it was an error before
 
-                columnsToRender.forEach(dayColumn => {
-                    if (dayColumn) {
-                        const businessHoursBlock = document.createElement('div');
-                        businessHoursBlock.className = 'business-hours-block';
-                        businessHoursBlock.style.top = `${businessStartHour * 60}px`; // Convert hours to pixels
-                        businessHoursBlock.style.height = `${durationHours * 60}px`; // Convert hours to pixels
-                        
-                        if (isMobile) {
-                            businessHoursBlock.style.width = `calc(100% - 20px)`; // Account for mobile-day-column padding
-                            businessHoursBlock.style.left = `10px`; // Match mobile-day-column padding
-                        }
-                        dayColumn.appendChild(businessHoursBlock);
-                    }
-                });
+                generateAvailabilityInputs(); // Regenerate inputs with correct hours
+            } else {
+                currentOperatingHoursDisplay.textContent = 'Current hours: Not set';
+                currentOperatingHoursDisplay.style.color = 'var(--text-medium)';
+                generateAvailabilityInputs(); // Use defaults if no settings
             }
         } catch (error) {
-            console.error("Failed to load or render business operating hours:", error);
-            // No modal message here as it's a background visual
+            console.error("Failed to fetch business hours, using defaults:", error);
+            currentOperatingHoursDisplay.textContent = `Error loading current hours: ${error.message}`;
+            currentOperatingHoursDisplay.style.color = '#ff8a80'; // Error color
+            generateAvailabilityInputs(); // Continue with default 0-24 hours if fetch fails
         }
     }
 
     /**
-     * Populates the employee and location dropdowns in the shift creation form.
+     * Generates time input dropdowns for weekly availability.
      */
-    async function populateDropdowns() {
-        try {
-            // Fetch users and locations concurrently
-            const [users, locations] = await Promise.all([
-                apiRequest('GET', '/api/users'), // Get all users (backend filters by role/location)
-                apiRequest('GET', '/api/locations') // Get all locations (backend filters by role)
-            ]);
-            
-            // Populate Employee Select
-            if (employeeSelect) {
-                employeeSelect.innerHTML = '<option value="">Select Employee</option>'; // Default empty option
-                // Filter for employees and location_admins (who might also be scheduled)
-                const employees = users.filter(u => u.role === 'employee' || u.role === 'location_admin');
-                employees.forEach(user => {
-                    const option = new Option(user.full_name, user.user_id);
-                    employeeSelect.add(option);
-                });
-            }
+    function generateAvailabilityInputs() {
+        if (!employeeAvailabilityGrid) return;
+        employeeAvailabilityGrid.innerHTML = ''; // Clear existing inputs
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        days.forEach(day => {
+            const dayId = day.toLowerCase();
+            const availabilityHtml = `
+                <label for="avail-${dayId}-start">${day}</label>
+                <div class="time-range">
+                    <select id="avail-${dayId}-start" data-day="${dayId}" data-type="start">
+                        ${generateTimeOptions(businessOperatingStartHour, businessOperatingEndHour)}
+                    </select>
+                    <span>-</span>
+                    <select id="avail-${dayId}-end" data-day="${dayId}" data-type="end">
+                        ${generateTimeOptions(businessOperatingStartHour, businessOperatingEndHour)}
+                    </select>
+                </div>
+            `;
+            const div = document.createElement('div');
+            div.className = 'availability-day';
+            div.innerHTML = availabilityHtml;
+            employeeAvailabilityGrid.appendChild(div);
+        });
+    }
 
-            // Populate Location Select
-            if (locationSelect) {
-                locationSelect.innerHTML = '<option value="">Select Location</option>'; // Default empty option
-                locations.forEach(loc => {
-                    const option = new Option(loc.location_name, loc.location_id);
-                    locationSelect.add(option);
-                });
-            }
-        } catch (error) {
-            showModalMessage('Failed to load data for form dropdowns. Please try again.', true);
-            console.error('Error populating dropdowns:', error);
+    /**
+     * Generates <option> tags for time select dropdowns.
+     * @param {number} startHour - The starting hour (0-23).
+     * @param {number} endHour - The ending hour (0-24, where 24 means end of day).
+     * @returns {string} HTML string of option tags.
+     */
+    function generateTimeOptions(startHour = 0, endHour = 24) {
+        let options = '<option value="">Not Available</option>'; // Default "Not Available"
+        for (let i = startHour; i <= endHour; i++) { // Include endHour for full range, e.g., 17:00
+            const hour24 = i;
+            const displayHour = hour24 % 12 === 0 ? 12 : hour24 % 12;
+            const ampm = hour24 < 12 ? 'AM' : 'PM';
+            const timeValue = `${String(hour24).padStart(2, '0')}:00`; // Value for input type="time" (24-hour)
+            const displayText = `${displayHour}:00 ${ampm}`; // Text for display (12-hour)
+            options += `<option value="${timeValue}">${displayText}</option>`;
         }
+        return options;
     }
 
-    // --- Event Handlers ---
+    // --- Event Listeners ---
 
-    // Event listener for deleting shifts using event delegation on the calendar grid
-    if (calendarGrid) {
-        calendarGrid.addEventListener('click', async (e) => {
-            const deleteButton = e.target.closest('.delete-shift-btn');
-
-            if (deleteButton) {
-                e.stopPropagation(); // Prevent click from bubbling to parent elements
-                const shiftIdToDelete = String(deleteButton.dataset.shiftId); // Get shift ID from data attribute
-
-                if (!shiftIdToDelete || shiftIdToDelete === "undefined" || shiftIdToDelete === "null") {
-                    showModalMessage('Shift ID not found. Cannot delete.', true);
-                    return;
-                }
-                
-                const isConfirmed = await showConfirmModal('Are you sure you want to delete this shift? This action cannot be undone.');
-                
-                if (isConfirmed) {
-                    try {
-                        await apiRequest('DELETE', `/api/shifts/${shiftIdToDelete}`); // Call backend delete endpoint
-                        showModalMessage('Shift deleted successfully!', false); 
-                        renderCalendar(); // Re-render calendar to show updated shifts
-                    } catch (error) {
-                        showModalMessage(`Error deleting shift: ${error.message}`, true);
-                        console.error('Error deleting shift:', error);
-                    }
-                }
+    // Handle new location form submission
+    if (newLocationForm) {
+        newLocationForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const locationData = {
+                location_name: newLocationNameInput.value.trim(),
+                location_address: newLocationAddressInput.value.trim()
+            };
+            if (!locationData.location_name || !locationData.location_address) {
+                return displayStatusMessage(newLocationStatusMessage, 'Location name and address are required.', true);
+            }
+            try {
+                await apiRequest('POST', '/api/locations', locationData);
+                displayStatusMessage(newLocationStatusMessage, 'Location created successfully!', false);
+                newLocationForm.reset(); // Clear the form
+                loadLocations(); // Reload location list
+                populateLocationDropdowns(); // Update dropdowns
+            } catch (error) {
+                displayStatusMessage(newLocationStatusMessage, `Error creating location: ${error.message}`, true);
+                console.error('Error creating location:', error);
             }
         });
     }
 
-    // Event listener for the availability toggle switch
-    if (availabilityToggle) {
-        availabilityToggle.addEventListener('change', () => {
-            const blocks = document.querySelectorAll('.availability-block');
-            blocks.forEach(block => {
-                block.classList.toggle('hidden', !availabilityToggle.checked); // Toggle 'hidden' class
+    // Handle delete actions for locations and users using event delegation
+    const handleDelete = async (e) => {
+        const deleteBtn = e.target.closest('.btn-delete');
+        if (deleteBtn) {
+            const id = deleteBtn.dataset.id;
+            const type = deleteBtn.dataset.type; // 'user' or 'location'
+            
+            let confirmMessage = `Are you sure you want to delete this ${type}? This action cannot be undone.`;
+            if (type === 'location') {
+                confirmMessage = `Are you sure you want to delete this location? All users associated with this location must be reassigned or deleted first. This cannot be undone.`;
+            } else if (type === 'user') {
+                 confirmMessage = `Are you sure you want to delete this user? This will also remove any onboarding tasks assigned to them. This cannot be undone.`;
+            }
+
+            const confirmed = await showConfirmModal(confirmMessage);
+            if (confirmed) {
+                try {
+                    await apiRequest('DELETE', `/api/${type}s/${id}`); // Call the generic delete endpoint
+                    showModalMessage(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully.`, false);
+                    if (type === 'location') {
+                        loadLocations(); // Reload locations
+                        populateLocationDropdowns(); // Update dropdowns
+                    } else if (type === 'user') {
+                        loadUsers(); // Reload users
+                    }
+                } catch (error) {
+                    showModalMessage(`Error deleting ${type}: ${error.message}`, true);
+                    console.error(`Error deleting ${type}:`, error);
+                }
+            }
+        }
+    };
+
+    // Attach delegated event listeners to the parent containers
+    if (locationListDiv) locationListDiv.addEventListener('click', handleDelete);
+    if (userListDiv) userListDiv.addEventListener('click', handleDelete);
+
+    // Handle invite new admin form submission
+    if (inviteAdminForm) {
+        inviteAdminForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const adminData = {
+                full_name: document.getElementById('admin-name').value.trim(),
+                email: document.getElementById('admin-email').value.trim(),
+                password: document.getElementById('admin-password').value,
+                location_id: adminLocationSelect.value || null
+            };
+            if (!adminData.full_name || !adminData.email || !adminData.password || !adminData.location_id) {
+                return displayStatusMessage(inviteAdminStatusMessage, 'Full name, email, password, and location are required.', true);
+            }
+            try {
+                await apiRequest('POST', '/api/invite-admin', adminData);
+                displayStatusMessage(inviteAdminStatusMessage, 'Admin invited successfully!', false);
+                inviteAdminForm.reset(); // Clear the form
+                loadUsers(); // Reload user list to show new admin
+            } catch (error) {
+                displayStatusMessage(inviteAdminStatusMessage, `Error: ${error.message}`, true);
+                console.error('Error inviting admin:', error);
+            }
+        });
+    }
+
+    // Handle invite new employee form submission
+    if (inviteEmployeeForm) {
+        inviteEmployeeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const availability = {};
+            // Collect availability data from generated selects
+            document.querySelectorAll('#employee-availability-grid select').forEach(select => {
+                const day = select.dataset.day;
+                const type = select.dataset.type; // 'start' or 'end'
+                if (select.value) { // Only add if a time is selected (not "Not Available")
+                    if (!availability[day]) availability[day] = {};
+                    availability[day][type] = select.value;
+                }
             });
-        });
-    }
-    
-    // Event listener for "Previous Week" button (Desktop)
-    if (prevWeekBtn) {
-        prevWeekBtn.addEventListener('click', () => {
-            currentStartDate.setDate(currentStartDate.getDate() - 7); // Subtract 7 days
-            renderCalendar(); // Re-render calendar for the new week
-        });
-    }
 
-    // Event listener for "Next Week" button (Desktop)
-    if (nextWeekBtn) {
-        nextWeekBtn.addEventListener('click', () => { 
-            currentStartDate.setDate(currentStartDate.getDate() + 7); // Add 7 days
-            renderCalendar(); // Re-render calendar for the new week
-        });
-    } 
-
-    // Event listener for "Previous Day" button (Mobile)
-    if (mobilePrevDayBtn) {
-        mobilePrevDayBtn.addEventListener('click', () => {
-            currentMobileDay.setDate(currentMobileDay.getDate() - 1); // Subtract 1 day
-            renderCalendar(); // Re-render calendar for the new day
-        });
-    }
-
-    // Event listener for "Next Day" button (Mobile)
-    if (mobileNextDayBtn) {
-        mobileNextDayBtn.addEventListener('click', () => { 
-            currentMobileDay.setDate(currentMobileDay.getDate() + 1); // Add 1 day
-            renderCalendar(); // Re-render calendar for the new day
-        });
-    }
-    
-    // Event listener for the "Create New Shift" form submission
-    if (createShiftForm) {
-        createShiftForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); // Prevent default form submission
-            const shiftData = {
-                employee_id: employeeSelect.value,
-                location_id: locationSelect.value,
-                start_time: document.getElementById('start-time-input').value,
-                end_time: document.getElementById('end-time-input').value,
-                notes: document.getElementById('notes-input').value
+            const employeeData = {
+                full_name: document.getElementById('employee-name').value.trim(),
+                email: document.getElementById('employee-email').value.trim(),
+                password: document.getElementById('employee-password').value,
+                position: document.getElementById('employee-position').value.trim(),
+                employee_id: document.getElementById('employee-id').value.trim(),
+                employment_type: document.getElementById('employee-type').value,
+                location_id: employeeLocationSelect.value || null,
+                availability: Object.keys(availability).length > 0 ? availability : null // Send as JSON object or null
             };
 
-            // Basic validation
-            if (!shiftData.employee_id || !shiftData.location_id || !shiftData.start_time || !shiftData.end_time) {
-                showModalMessage('Please fill all required fields (Employee, Location, Start Time, End Time).', true);
-                return;
+            if (!employeeData.full_name || !employeeData.email || !employeeData.password || !employeeData.location_id) {
+                return displayStatusMessage(inviteEmployeeStatusMessage, 'Name, email, password, and location are required.', true);
             }
+            try {
+                await apiRequest('POST', '/api/invite-employee', employeeData);
+                displayStatusMessage(inviteEmployeeStatusMessage, 'Employee invited successfully!', false);
+                inviteEmployeeForm.reset(); // Clear the form
+                generateAvailabilityInputs(); // Regenerate default availability inputs
+                loadUsers(); // Reload user list to show new employee
+            } catch (error) {
+                displayStatusMessage(inviteEmployeeStatusMessage, `Error: ${error.message}`, true);
+                console.error('Error inviting employee:', error);
+            }
+        });
+    }
 
-            // Validate that end time is after start time
-            if (new Date(shiftData.start_time) >= new Date(shiftData.end_time)) {
-                showModalMessage('End time must be after start time.', true);
+    // Handle business settings form submission
+    if (businessSettingsForm) {
+        businessSettingsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const start_time = operatingHoursStartInput.value;
+            const end_time = operatingHoursEndInput.value;
+
+            if (!start_time || !end_time) {
+                displayStatusMessage(businessSettingsStatusMessage, 'Both start and end times are required.', true);
                 return;
             }
 
             try {
-                await apiRequest('POST', '/api/shifts', shiftData); // Send shift data to backend
-                showModalMessage('Shift created successfully!', false); 
-                createShiftForm.reset(); // Clear the form
-                renderCalendar(); // Re-render calendar to show the new shift
+                // Send update request to backend
+                await apiRequest('PUT', '/api/settings/business', {
+                    operating_hours_start: start_time,
+                    operating_hours_end: end_time
+                });
+                displayStatusMessage(businessSettingsStatusMessage, 'Operating hours updated successfully!', false);
+                fetchBusinessHours(); // Refresh displayed hours and availability inputs
             } catch (error) {
-                showModalMessage(`Error creating shift: ${error.message}`, true);
-                console.error('Error creating shift:', error);
+                displayStatusMessage(businessSettingsStatusMessage, `Error updating hours: ${error.message}`, true);
+                console.error('Error updating business settings:', error);
             }
         });
     }
 
-    // Event listener for window resize to switch between desktop and mobile views
-    window.addEventListener('resize', () => {
-        renderCalendar(); // Re-render calendar on resize
-    });
-    
     // --- Initial Page Load Actions ---
-    renderCalendar(); // Render the initial calendar view based on screen size
-    populateDropdowns(); // Populate employee and location dropdowns
+    // Fetch business hours first to correctly set availability input ranges
+    fetchBusinessHours().then(() => {
+        // Then load other data that might depend on business hours or just needs to be loaded
+        loadLocations();
+        populateLocationDropdowns();
+        loadUsers();
+    });
 }
