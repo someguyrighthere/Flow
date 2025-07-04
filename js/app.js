@@ -9,7 +9,7 @@ import { handleAdminPage } from './pages/admin.js';
 import { handleAccountPage } from './pages/account.js';
 import { handleDocumentsPage } from './pages/documents.js';
 import { handleHiringPage } from './pages/hiring.js';
-import { handleSchedulingPage } from './pages/scheduling.js';
+import { handleSchedulingPage } from './pages/scheduling.js'; // Ensure this is imported correctly
 import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
@@ -74,7 +74,7 @@ function main() {
     else if (path.includes("account.html")) handleAccountPage();
     else if (path.includes("documents.html")) handleDocumentsPage();
     else if (path.includes("hiring.html")) handleHiringPage();
-    else if (path.includes("scheduling.html")) handleSchedulingPage();
+    else if (path.includes("scheduling.html")) handleSchedulingPage(); // This is the page we're focusing on
     else if (path.includes("apply.html")) handleApplyPage();
     else if (path.includes("new-hire-view.html")) handleOnboardingViewPage();
     else if (path.includes("pricing.html")) handlePricingPage();
