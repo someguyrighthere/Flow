@@ -5,8 +5,11 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
  * Handles all logic for the scheduling page.
  */
 export function handleSchedulingPage() {
-    // Redirect to login page if no authentication token is found in local storage
-    if (!localStorage.getItem("authToken")) {
+    // Security check: Redirect to login page if no authentication token is found in local storage
+    const authToken = localStorage.getItem("authToken");
+    const userRole = localStorage.getItem('userRole'); // Get user role from local storage
+
+    if (!authToken) {
         window.location.href = "login.html";
         return;
     }
@@ -32,6 +35,10 @@ export function handleSchedulingPage() {
     const mobileCurrentDayDisplay = document.getElementById('mobile-current-day-display');
     const mobileDayColumn = document.getElementById('mobile-day-column');
 
+    // Super Admin specific elements
+    const superAdminLocationSelectorDiv = document.getElementById('super-admin-location-selector');
+    const superAdminLocationSelect = document.getElementById('super-admin-location-select');
+
     // Initialize currentStartDate to the beginning of the current week (Sunday)
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
@@ -44,6 +51,10 @@ export function handleSchedulingPage() {
     // Define a breakpoint for mobile view
     const MOBILE_BREAKPOINT = 768; // px
 
+    // State variable to hold the currently selected location ID for data fetching
+    let currentLocationId = null; 
+    let allLocations = []; // Store all locations for super admin selector
+
     /**
      * Checks if the current screen width is considered mobile.
      * @returns {boolean} True if mobile, false otherwise.
@@ -54,8 +65,19 @@ export function handleSchedulingPage() {
 
     /**
      * Main render function that decides which calendar view to render.
+     * It also ensures data is fetched for the correct location based on user role.
      */
     async function renderCalendar() {
+        // Only proceed if a location is selected/determined (for super_admin) or if it's a location_admin/employee
+        if (userRole === 'super_admin' && !currentLocationId) {
+            // If super admin and no location selected, don't render calendar yet
+            // The dropdown needs to be populated and a selection made first.
+            // We'll show a message or just keep it blank until a selection.
+            if (calendarGrid) calendarGrid.innerHTML = '<p style="color: var(--text-medium); text-align: center; padding-top: 50px;">Please select a location to view its schedule.</p>';
+            if (mobileDayColumn) mobileDayColumn.innerHTML = '<p style="color: var(--text-medium); text-align: center; padding-top: 50px;">Please select a location to view its schedule.</p>';
+            return;
+        }
+
         if (isMobileView()) {
             // Hide desktop view, show mobile view
             if (schedulingLayout) schedulingLayout.style.display = 'none';
@@ -134,9 +156,9 @@ export function handleSchedulingPage() {
 
         // Load and display data (shifts, availability, business hours) concurrently
         await Promise.all([
-            loadAndDisplayShifts(startDate, endDate, false), // Pass false for isMobile
-            loadAndRenderAvailability(false), // Pass false for isMobile
-            loadAndRenderBusinessHours(false) // Pass false for isMobile
+            loadAndDisplayShifts(startDate, endDate, false, currentLocationId), // Pass currentLocationId
+            loadAndRenderAvailability(false, currentLocationId), // Pass currentLocationId
+            loadAndRenderBusinessHours(false, currentLocationId) // Pass currentLocationId
         ]);
     }
 
@@ -162,9 +184,9 @@ export function handleSchedulingPage() {
 
         // Load and display data for the single day
         await Promise.all([
-            loadAndDisplayShifts(dayDate, dayDate, true), // Pass true for isMobile
-            loadAndRenderAvailability(true), // Pass true for isMobile
-            loadAndRenderBusinessHours(true) // Pass true for isMobile
+            loadAndDisplayShifts(dayDate, dayDate, true, currentLocationId), // Pass currentLocationId
+            loadAndRenderAvailability(true, currentLocationId), // Pass currentLocationId
+            loadAndRenderBusinessHours(true, currentLocationId) // Pass currentLocationId
         ]);
     }
 
@@ -245,8 +267,9 @@ export function handleSchedulingPage() {
      * @param {Date} start - The start date for fetching shifts.
      * @param {Date} end - The end date for fetching shifts.
      * @param {boolean} isMobile - True if rendering for mobile single day view.
+     * @param {string|null} locationId - The ID of the location to filter shifts by.
      */
-    async function loadAndDisplayShifts(start, end, isMobile) {
+    async function loadAndDisplayShifts(start, end, isMobile, locationId) {
         // Remove existing shifts before rendering new ones
         document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
         
@@ -257,8 +280,14 @@ export function handleSchedulingPage() {
         let endOfDay = new Date(end);
         endOfDay.setDate(endOfDay.getDate() + 1); // Go to the start of the next day
 
+        // Construct query parameters
+        let queryParams = `startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`;
+        if (locationId) {
+            queryParams += `&location_id=${locationId}`;
+        }
+
         try {
-            const shifts = await apiRequest('GET', `/api/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
+            const shifts = await apiRequest('GET', `/api/shifts?${queryParams}`); // Include location_id
             
             if (shifts && shifts.length > 0) {
                 // Group shifts by day
@@ -341,13 +370,19 @@ export function handleSchedulingPage() {
      * Fetches employee availability data and renders it as semi-transparent overlay blocks.
      * These blocks visually indicate when an employee is available.
      * @param {boolean} isMobile - True if rendering for mobile single day view.
+     * @param {string|null} locationId - The ID of the location to filter availability by.
      */
-    async function loadAndRenderAvailability(isMobile) {
+    async function loadAndRenderAvailability(isMobile, locationId) {
         // Remove existing availability blocks before rendering new ones
         document.querySelectorAll('.availability-block').forEach(el => el.remove());
         
+        let queryParams = '';
+        if (locationId) {
+            queryParams = `?location_id=${locationId}`;
+        }
+
         try {
-            const employees = await apiRequest('GET', '/api/users/availability');
+            const employees = await apiRequest('GET', `/api/users/availability${queryParams}`); // Include location_id
             const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
             employees.forEach(employee => {
@@ -404,13 +439,19 @@ export function handleSchedulingPage() {
      * Fetches and renders the business operating hours as a subtle background block.
      * This visually indicates the standard business hours for the location.
      * @param {boolean} isMobile - True if rendering for mobile single day view.
+     * @param {string|null} locationId - The ID of the location to filter business hours by.
      */
-    async function loadAndRenderBusinessHours(isMobile) {
+    async function loadAndRenderBusinessHours(isMobile, locationId) {
         // Remove existing business hours blocks before rendering new ones
         document.querySelectorAll('.business-hours-block').forEach(el => el.remove());
 
+        let queryParams = '';
+        if (locationId) {
+            queryParams = `?location_id=${locationId}`;
+        }
+
         try {
-            const settings = await apiRequest('GET', '/api/settings/business');
+            const settings = await apiRequest('GET', `/api/settings/business${queryParams}`); // Include location_id
             const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
             const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
             const durationHours = businessEndHour - businessStartHour;
@@ -449,13 +490,21 @@ export function handleSchedulingPage() {
 
     /**
      * Populates the employee and location dropdowns in the shift creation form.
+     * @param {string|null} filterLocationId - The ID of the location to filter users/locations by.
      */
-    async function populateDropdowns() {
+    async function populateDropdowns(filterLocationId) {
         try {
-            // Fetch users and locations concurrently
+            let userQueryParams = '';
+            let locationQueryParams = '';
+            if (filterLocationId) {
+                userQueryParams = `?location_id=${filterLocationId}`;
+                locationQueryParams = `?location_id=${filterLocationId}`;
+            }
+
+            // Fetch users and locations concurrently, filtered by locationId if provided
             const [users, locations] = await Promise.all([
-                apiRequest('GET', '/api/users'), // Get all users (backend filters by role/location)
-                apiRequest('GET', '/api/locations') // Get all locations (backend filters by role)
+                apiRequest('GET', `/api/users${userQueryParams}`), // Get all users (backend filters by role/location)
+                apiRequest('GET', `/api/locations${locationQueryParams}`) // Get all locations (backend filters by role)
             ]);
             
             // Populate Employee Select
@@ -469,14 +518,32 @@ export function handleSchedulingPage() {
                 });
             }
 
-            // Populate Location Select
+            // Populate Location Select (for Create New Shift form)
             if (locationSelect) {
                 locationSelect.innerHTML = '<option value="">Select Location</option>'; // Default empty option
                 locations.forEach(loc => {
                     const option = new Option(loc.location_name, loc.location_id);
                     locationSelect.add(option);
                 });
+                // If a location is pre-selected (e.g., by super admin selector), set it
+                if (filterLocationId) {
+                    locationSelect.value = filterLocationId;
+                }
             }
+
+            // Populate Super Admin Location Select (if visible)
+            if (userRole === 'super_admin' && superAdminLocationSelect) {
+                superAdminLocationSelect.innerHTML = '<option value="">Select a Location</option>';
+                locations.forEach(loc => {
+                    const option = new Option(loc.location_name, loc.location_id);
+                    superAdminLocationSelect.add(option);
+                });
+                // Set the selected value if currentLocationId is already set
+                if (currentLocationId) {
+                    superAdminLocationSelect.value = currentLocationId;
+                }
+            }
+
         } catch (error) {
             showModalMessage('Failed to load data for form dropdowns. Please try again.', true);
             console.error('Error populating dropdowns:', error);
@@ -593,12 +660,62 @@ export function handleSchedulingPage() {
         });
     }
 
+    // NEW: Event listener for Super Admin Location Selector
+    if (superAdminLocationSelect) {
+        superAdminLocationSelect.addEventListener('change', () => {
+            currentLocationId = superAdminLocationSelect.value; // Update selected location ID
+            renderCalendar(); // Re-render calendar with new location filter
+            populateDropdowns(currentLocationId); // Update create shift form dropdowns
+        });
+    }
+
     // Event listener for window resize to switch between desktop and mobile views
     window.addEventListener('resize', () => {
         renderCalendar(); // Re-render calendar on resize
     });
     
     // --- Initial Page Load Actions ---
-    renderCalendar(); // Render the initial calendar view based on screen size
-    populateDropdowns(); // Populate employee and location dropdowns
+    // Determine initial currentLocationId based on user role
+    const initializePageData = async () => {
+        if (userRole === 'super_admin') {
+            // Fetch all locations for super admin selector
+            try {
+                const locations = await apiRequest('GET', '/api/locations');
+                allLocations = locations; // Store all locations
+                if (allLocations && allLocations.length > 0) {
+                    // Default to the first location if super admin has no specific preference
+                    currentLocationId = allLocations[0].location_id; 
+                }
+                // Show the super admin selector and populate it
+                if (superAdminLocationSelectorDiv) superAdminLocationSelectorDiv.style.display = 'block';
+                populateDropdowns(currentLocationId); // Populate all dropdowns, including super admin selector
+                renderCalendar(); // Render calendar with initial location
+            } catch (error) {
+                console.error("Error initializing super admin locations:", error);
+                showModalMessage("Failed to load locations for super admin. Please try again.", true);
+                // Still attempt to render calendar, but it might be empty
+                populateDropdowns(currentLocationId);
+                renderCalendar();
+            }
+        } else {
+            // For location_admin or employee, get their assigned location_id from /users/me
+            try {
+                const userMe = await apiRequest('GET', '/api/users/me');
+                if (userMe && userMe.location_id) {
+                    currentLocationId = userMe.location_id;
+                } else {
+                    showModalMessage("Your account is not associated with a location. Please contact your administrator.", true);
+                    // Prevent further rendering if no location is found for non-super-admin
+                    return; 
+                }
+                populateDropdowns(currentLocationId); // Populate dropdowns for their location
+                renderCalendar(); // Render calendar for their location
+            } catch (error) {
+                console.error("Error fetching user location for initialization:", error);
+                showModalMessage("Failed to determine your assigned location. Please log in again or contact support.", true);
+            }
+        }
+    };
+
+    initializePageData(); // Call the async initialization function
 }
