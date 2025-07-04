@@ -43,6 +43,26 @@ export function handleSchedulingPage() {
     const END_HOUR = 22;  // Display calendar until 10 PM
 
     /**
+     * Helper function to robustly parse a "YYYY-MM-DD HH:MM:SS" string as a local Date object.
+     * This avoids timezone interpretation issues with `new Date()` directly.
+     * @param {string} dateTimeString - The date-time string from the database (e.g., "2025-07-04 09:00:00").
+     * @returns {Date} A Date object representing the local time, or an Invalid Date.
+     */
+    const parseLocalTimeLiteral = (dateTimeString) => {
+        // Replace space with 'T' for ISO 8601 compatibility without timezone.
+        // This is generally the most reliable way for new Date() to parse local times.
+        const isoFormattedString = dateTimeString.replace(' ', 'T');
+        const date = new Date(isoFormattedString);
+
+        // Verify if the parsed date is valid
+        if (isNaN(date.getTime())) {
+            console.error(`Failed to parse date string "${dateTimeString}". Resulted in Invalid Date.`);
+        }
+        return date;
+    };
+
+
+    /**
      * Main function to initialize and render the calendar for a specific location and week.
      */
     const loadAndRenderWeeklySchedule = async (locationId) => {
@@ -185,18 +205,30 @@ export function handleSchedulingPage() {
         }
 
         shifts.forEach(shift => {
-            const shiftStart = new Date(shift.start_time);
-            const shiftEnd = new Date(shift.end_time);
+            // Use the robust parser for database strings that might have spaces instead of 'T'
+            const shiftStart = parseLocalTimeLiteral(shift.start_time);
+            const shiftEnd = parseLocalTimeLiteral(shift.end_time);
+
+            // Check if dates are valid after parsing
+            if (isNaN(shiftStart.getTime()) || isNaN(shiftEnd.getTime())) {
+                console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered: Invalid date format from DB. Start: "${shift.start_time}", End: "${shift.end_time}"`);
+                return; // Skip rendering this problematic shift
+            }
+
             const dayIndex = shiftStart.getDay(); // 0 for Sunday, 1 for Monday, etc.
             
             // Find the correct day column in the rendered grid
             const targetColumn = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
 
             if (targetColumn) {
-                // Calculate position and height of the shift block
-                // Convert shift start/end times to minutes from the calendar's START_HOUR
-                const startMinutes = (shiftStart.getHours() * 60 + shiftStart.getMinutes()) - (START_HOUR * 60);
-                const endMinutes = (shiftEnd.getHours() * 60 + shiftEnd.getMinutes()) - (START_HOUR * 60);
+                // Calculate position and height of the shift block using local time components
+                const startHourLocal = shiftStart.getHours();
+                const startMinuteLocal = shiftStart.getMinutes();
+                const endHourLocal = shiftEnd.getHours();
+                const endMinuteLocal = shiftEnd.getMinutes();
+
+                const startMinutes = (startHourLocal * 60 + startMinuteLocal) - (START_HOUR * 60);
+                const endMinutes = (endHourLocal * 60 + endMinuteLocal) - (START_HOUR * 60);
 
                 const top = (startMinutes / 60) * PIXELS_PER_HOUR;
                 const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;
@@ -208,10 +240,15 @@ export function handleSchedulingPage() {
                     shiftBlock.style.top = `${top}px`;
                     shiftBlock.style.height = `${height}px`;
                     shiftBlock.innerHTML = `<strong>${shift.employee_name}</strong><br><small>${shift.location_name}</small>`;
-                    shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name} from ${shiftStart.toLocaleTimeString()} to ${shiftEnd.toLocaleTimeString()}. Notes: ${shift.notes || 'None'}`;
+                    
+                    // Format title to show local times as they appear in the database
+                    const formattedStartTime = shiftStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                    const formattedEndTime = shiftEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                    shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name} from ${formattedStartTime} to ${formattedEndTime}. Notes: ${shift.notes || 'None'}`;
+                    
                     targetColumn.appendChild(shiftBlock);
                 } else {
-                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid time/height. Start: ${shiftStart.toLocaleTimeString()}, End: ${shiftEnd.toLocaleTimeString()}`);
+                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid time/height. Start: ${shiftStart.toLocaleTimeString()}, End: ${shiftEnd.toLocaleTimeString()}. Calculated top: ${top}, height: ${height}`);
                 }
             } else {
                 console.warn(`Could not find target column for dayIndex: ${dayIndex} for shift ID: ${shift.id}`);
@@ -263,6 +300,7 @@ export function handleSchedulingPage() {
         }
 
         // Combine date and time inputs into full ISO format strings (without Z for UTC)
+        // These will be saved to the database as `timestamp without time zone`
         const startDateTime = `${startDate}T${startTime}:00`; // Append :00 for seconds
         const endDateTime = `${endDate}T${endTime}:00`; // Append :00 for seconds
 
@@ -311,7 +349,7 @@ export function handleSchedulingPage() {
         populateTimeSelects(); // Populate time dropdowns on page load
 
         try {
-            const locations = await apiRequest('GET', '/api/locations');
+            const locations = await apiRequest('GET', '/api/locations'); //
             
             if (userRole === 'super_admin') {
                 if(locationSelectorContainer) locationSelectorContainer.style.display = 'block';
