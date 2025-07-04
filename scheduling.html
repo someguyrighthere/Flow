@@ -65,8 +65,7 @@
         
         .scheduling-layout {
             display: grid;
-            /* NEW: Adjusted grid columns for wider calendar */
-            grid-template-columns: 280px 1fr; /* Reduced sidebar to 280px, calendar takes remaining space */
+            grid-template-columns: 280px 1fr; /* Sidebar 280px, calendar takes remaining space */
             gap: 30px;
             margin-top: 30px;
         }
@@ -200,29 +199,8 @@
             border-radius: 8px;
             display: flex;
             flex-direction: column; 
-            /* overflow: hidden; */ /* Remove overflow:hidden from calendar-main */
-            overflow-x: auto; /* NEW: Add horizontal scrolling to calendar-main */
-            scrollbar-width: thin; /* Firefox */
-            scrollbar-color: var(--primary-accent) rgba(255, 255, 255, 0.1); /* Firefox */
+            overflow: hidden; /* Keep this for overall main container */
         }
-        /* Webkit scrollbar for calendar-main */
-        .calendar-main::-webkit-scrollbar {
-            height: 8px;
-        }
-        .calendar-main::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-        }
-        .calendar-main::-webkit-scrollbar-thumb {
-            background-color: var(--primary-accent);
-            border-radius: 10px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-        }
-        .calendar-main::-webkit-scrollbar-thumb:hover {
-            background-color: rgba(200, 109, 215, 0.8);
-        }
-
-
         .calendar-header {
             display: flex;
             justify-content: space-between;
@@ -233,7 +211,6 @@
         }
         
         /* --- CALENDAR LAYOUT & ALIGNMENT FIXES (DEFINITIVE) --- */
-        /* Ensure no extra spacing pushes the calendar content down */
         section {
             padding: 0; /* Remove default section padding */
             margin-top: 0;
@@ -242,29 +219,47 @@
 
         .calendar-grid-container {
             flex-grow: 1; 
-            /* overflow: hidden; */ /* Removed, horizontal scroll handled by calendar-main */
             display: flex;
             flex-direction: column;
             position: relative; 
-            /* No fixed height here, let calendar-body define scrollable area */
-
-            /* Removed horizontal scrollbar styling from here, moved to calendar-main */
+            
+            /* Apply horizontal scrolling here */
+            overflow-x: auto; 
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: var(--primary-accent) rgba(255, 255, 255, 0.1); /* Firefox */
         }
+
+        /* Webkit (Chrome, Safari) scrollbar styling for calendar-grid-container */
+        .calendar-grid-container::-webkit-scrollbar {
+            height: 8px; /* Use height for horizontal scrollbar */
+        }
+        .calendar-grid-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .calendar-grid-container::-webkit-scrollbar-thumb {
+            background-color: var(--primary-accent);
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        .calendar-grid-container::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(200, 109, 215, 0.8);
+        }
+
 
         .calendar-grid {
             display: flex;
             flex-direction: column;
-            width: 100%; /* Keep 100% width relative to scroll container */
-            min-width: 1500px; /* Ensure content overflows to enable scrolling */
+            width: 100%; /* Ensure it takes full width of its container */
+            min-width: 1500px; /* Maintain a minimum width for content overflow */
             height: auto; /* Allow height to expand for scrolling */
         }
 
         .calendar-grid-header {
             display: grid;
-            /* Use explicit px widths for time column and minmax for day columns to match calendar-body */
             grid-template-columns: 80px repeat(7, minmax(200px, 1fr));
-            /* position: sticky; */ /* Removed sticky as horizontal scrolling is on parent now */
-            /* top: 0; */ /* Removed */
+            position: sticky; /* Make header sticky vertically within its scrollable parent */
+            top: 0; /* Stick to the top */
             z-index: 6;
             background-color: #1a1a1a;
             border-bottom: 1px solid var(--border-color);
@@ -277,13 +272,12 @@
             flex-grow: 1;
             overflow-y: scroll; 
             position: relative; 
-            height: 1440px; /* Force 24 hours * 60px/hour = 1440px total height */
-            min-height: 1440px; 
+            /* NEW: Set a max-height instead of fixed height for better usability */
+            max-height: 600px; /* Adjust this value as needed, e.g., 600px or 70vh */
+            min-height: 300px; /* Ensure a minimum visible area */
             box-sizing: content-box; /* Crucial for pixel-perfect top/height calculations */
             padding: 0; /* Remove any default padding */
-            margin: 0; /* Remove any default padding */
-
-            /* Removed scrollbar styling from here, moved to calendar-main */
+            margin: 0; /* Remove any default margin */
         }
 
         .calendar-day-header {
@@ -303,8 +297,8 @@
             left: 0;
             z-index: 5;
             background-color: #2a2a2e;
-            grid-column: 1;
-            height: 1440px; /* Explicitly set to match total calendar body height */
+            /* NEW: Height should be 100% to match calendar-body's scrollable height */
+            height: 100%; 
             display: flex;
             flex-direction: column;
             box-sizing: content-box; 
@@ -333,7 +327,7 @@
         .day-column {
             position: relative; /* CRUCIAL for absolute positioning of shifts/blocks */
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-            height: 100%; /* Will inherit the 1440px from calendar-body for positioning context */
+            height: 100%; /* Will inherit the max-height from calendar-body for positioning context */
             overflow: hidden; 
             box-sizing: content-box; 
             padding: 0; /* Ensure no padding */
