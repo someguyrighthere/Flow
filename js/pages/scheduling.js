@@ -1,689 +1,604 @@
-const express = require('express');
-const { Pool } = require('pg');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const multer = require('multer');
-const fs = require('fs');
-const { promises: fsPromises } = require('fs');
-const path = require('path');
-const onboardingRoutes = require('./routes/onboardingRoutes'); // Make sure this path is correct
+// js/pages/scheduling.js
+import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
-const app = express();
-const apiRoutes = express.Router();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
-const DATABASE_URL = process.env.DATABASE_URL;
-
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsDir),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage: storage });
-
-if (!DATABASE_URL) {
-    console.error("DATABASE_URL environment variable is not set. Please set it in your .env file or Render environment variables.");
-    process.exit(1); // Exit if no database connection string
-}
-
-const pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Use rejectUnauthorized: false for Render's managed PostgreSQL
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 20000,
-});
-
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(uploadsDir)); // Serve uploaded files statically
-app.use('/api', apiRoutes);
-
-// --- Middleware ---
-const isAuthenticated = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) {
-        console.warn("[Auth] No token provided. Sending 401.");
-        return res.sendStatus(401); // Unauthorized
-    }
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            console.warn("[Auth] Invalid token provided. Sending 403. Error:", err.message);
-            return res.sendStatus(403); // Forbidden
-        }
-        req.user = user; // Attach user payload from token to request
-        next();
-    });
-};
-const isAdmin = (req, res, next) => {
-    // This middleware checks if the user has super_admin or location_admin role
-    if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
-        next();
-    } else {
-        console.warn("[Auth] Access denied for user:", req.user?.id, "Role:", req.user?.role, ". Required: super_admin or location_admin.");
-        return res.status(403).json({ error: 'Access denied.' });
-    }
-};
-
-// --- API ROUTES ---
-
-// Auth Routes
-apiRoutes.post('/register', async (req, res) => {
-    const { companyName, fullName, email, password } = req.body;
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`,[`${companyName} HQ`]);
-        const locationId = locationRes.rows[0].location_id;
-        const hash = await bcrypt.hash(password, 10);
-        // Ensure location_id is set for the super_admin during registration
-        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, locationId]);
-        await client.query('COMMIT');
-        res.status(201).json({ message: "Registration successful!" });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('[Register] Error during registration:', err);
-        res.status(500).json({ error: "An internal server error occurred during registration." });
-    } finally {
-        client.release();
-    }
-});
-apiRoutes.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    try {
-        const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
-        const user = result.rows[0];
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ error: "Invalid credentials." });
-        }
-        // Ensure user_id and location_id are sent in payload, even if null from DB (frontend handles null)
-        const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
-        res.json({ token, role: user.role, userId: user.user_id }); // Added userId to response for convenience
-    } catch (err) {
-        console.error('[Login] Error during login:', err);
-        res.status(500).json({ error: "An internal server error occurred during login." });
-    }
-});
-
-// User Routes
-apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('[Users] Failed to retrieve user profile:', err);
-        res.status(500).json({ error: 'Failed to retrieve user profile.' });
-    }
-});
-
-apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        let query = `
-            SELECT 
-                u.user_id, 
-                u.full_name, 
-                u.position, 
-                u.role, 
-                u.location_id,
-                u.availability, -- Include availability for scheduling page
-                l.location_name  
-            FROM users u
-            LEFT JOIN locations l ON u.location_id = l.location_id 
-        `;
-        const params = [];
-        let whereClause = '';
-        // Admins (super_admin or location_admin) can see all users or users within their location
-        // For super_admin, no location filter applies here.
-        if (req.user.role === 'location_admin') {
-            whereClause = ' WHERE u.location_id = $1';
-            params.push(req.user.location_id);
-        }
-        query += whereClause;
-        query += ' ORDER BY u.full_name';
-        
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Users] Error retrieving users:', err);
-        res.status(500).json({ error: 'Failed to retrieve users.' });
-    }
-});
-
-// NEW: API route to get user availability (used by scheduling page)
-apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        let query = `
-            SELECT 
-                user_id, 
-                full_name, 
-                availability,
-                location_id
-            FROM users
-        `;
-        const params = [];
-        if (req.user.role === 'location_admin') {
-            query += ' WHERE location_id = $1';
-            params.push(req.user.location_id);
-        }
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Users Availability] Error retrieving user availability:', err);
-        res.status(500).json({ error: 'Failed to retrieve user availability.' });
-    }
-});
-
-
-// Locations Routes
-// Super Admins can see all locations. Location Admins can only see their assigned location.
-apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
-    try {
-        let query = 'SELECT location_id, location_name, location_address FROM locations';
-        const params = [];
-        // If location_admin, filter locations by their assigned location
-        if (req.user.role === 'location_admin') {
-            query += ' WHERE location_id = $1';
-            params.push(req.user.location_id);
-        }
-        query += ' ORDER BY location_name';
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Locations] Error retrieving locations:', err);
-        res.status(500).json({ error: 'Failed to retrieve locations.' });
-    }
-});
-
-apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_name, location_address } = req.body;
-    if (!location_name || !location_address) {
-        return res.status(400).json({ error: 'Location name and address are required.' });
-    }
-    try {
-        const result = await pool.query(
-            'INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *',
-            [location_name, location_address]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('[Locations] Error adding new location:', err);
-        if (err.code === '23505') { // Unique violation for location_name
-            return res.status(409).json({ error: 'Location name already exists.' });
-        }
-        res.status(500).json({ error: 'Failed to add new location.' });
-    }
-});
-
-
-// Business Settings Endpoint (for operating hours, etc.)
-// GET: Fetch business settings for a specific location (or user's location)
-apiRoutes.get('/settings/business', isAuthenticated, async (req, res) => {
-    // Super Admin can specify location_id via query param, otherwise use user's location_id
-    const targetLocationId = req.user.role === 'super_admin' && req.query.location_id
-        ? req.query.location_id
-        : req.user.location_id;
-
-    if (targetLocationId == null) { // Use == null to catch both null and undefined
-        console.warn("[Backend] GET /settings/business: No target location_id provided for Super Admin or user's location_id is null.");
-        return res.status(400).json({ error: 'A location must be specified to retrieve business settings.' });
+/**
+ * Handles all logic for the scheduling page.
+ */
+export function handleSchedulingPage() {
+    // Redirect to login page if no authentication token is found in local storage
+    if (!localStorage.getItem("authToken")) {
+        window.location.href = "login.html";
+        return;
     }
 
-    try {
-        const result = await pool.query(
-            'SELECT operating_hours_start, operating_hours_end FROM business_settings WHERE location_id = $1',
-            [targetLocationId]
-        );
-        
-        if (result.rows.length > 0) {
-            console.log("[Backend] Found business settings for location:", targetLocationId, result.rows[0]);
-            res.json(result.rows[0]); // Return actual settings if found
-        } else {
-            console.log("[Backend] No business settings found for location:", targetLocationId, "Returning nulls.");
-            res.json({ operating_hours_start: null, operating_hours_end: null }); // Return nulls if no settings found
-        }
-    } catch (err) {
-        console.error('[Backend] Error fetching business settings:', err);
-        res.status(500).json({ error: 'Failed to retrieve business settings.' });
-    }
-});
+    // Get references to key DOM elements for the scheduling page
+    const schedulingLayout = document.querySelector('.scheduling-layout'); // Desktop layout container
+    const mobileCalendarView = document.querySelector('.mobile-calendar-view'); // Mobile layout container
 
-// PUT: Update business settings for a specific location (or user's location)
-apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
-    const { operating_hours_start, operating_hours_end, location_id: requestedLocationId } = req.body; // Super Admin can send location_id in body
+    const calendarGrid = document.getElementById('calendar-grid'); // Desktop calendar grid
+    const currentWeekDisplay = document.getElementById('current-week-display');
+    const prevWeekBtn = document.getElementById('prev-week-btn');
+    const nextWeekBtn = document.getElementById('next-week-btn');
+    const createShiftForm = document.getElementById('create-shift-form');
     
-    // Determine the target location_id for the update
-    const targetLocationId = req.user.role === 'super_admin' && requestedLocationId
-        ? requestedLocationId
-        : req.user.location_id;
+    const employeeSelect = document.getElementById('employee-select');
+    const locationSelect = document.getElementById('location-select');
 
-    if (targetLocationId == null) { // Use == null to catch both null and undefined
-        console.error("[Backend] PUT /settings/business: No target location_id provided for Super Admin or user's location_id is null. Cannot save settings.");
-        return res.status(400).json({ error: 'A location must be specified to save business settings.' });
+    const availabilityToggle = document.getElementById('toggle-availability');
+
+    // Mobile specific elements
+    const mobilePrevDayBtn = document.getElementById('mobile-prev-day-btn');
+    const mobileNextDayBtn = document.getElementById('mobile-next-day-btn');
+    const mobileCurrentDayDisplay = document.getElementById('mobile-current-day-display');
+    const mobileDayColumn = document.getElementById('mobile-day-column');
+
+    // Initialize currentStartDate to the beginning of the current week (Sunday)
+    let currentStartDate = new Date();
+    currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
+    currentStartDate.setHours(0, 0, 0, 0); // Set to midnight for consistent date comparison
+
+    // Initialize currentMobileDay to today's date
+    let currentMobileDay = new Date();
+    currentMobileDay.setHours(0, 0, 0, 0);
+
+    // Define a breakpoint for mobile view
+    const MOBILE_BREAKPOINT = 768; // px
+
+    /**
+     * Checks if the current screen width is considered mobile.
+     * @returns {boolean} True if mobile, false otherwise.
+     */
+    function isMobileView() {
+        return window.innerWidth <= MOBILE_BREAKPOINT;
     }
 
-    if (!operating_hours_start || !operating_hours_end) {
-        return res.status(400).json({ error: 'Start and end operating hours are required.' });
-    }
-
-    try {
-        console.log("[Backend] Attempting to save business settings for location:", targetLocationId);
-        const result = await pool.query(
-            `INSERT INTO business_settings (location_id, operating_hours_start, operating_hours_end)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (location_id) DO UPDATE SET
-             operating_hours_start = EXCLUDED.operating_hours_start,
-             operating_hours_end = EXCLUDED.operating_hours_end,
-             updated_at = CURRENT_TIMESTAMP
-             RETURNING *`,
-            [targetLocationId, operating_hours_start, operating_hours_end]
-        );
-        console.log("[Backend] Business settings saved/updated:", result.rows[0]);
-        res.status(200).json({ message: 'Business settings updated successfully!', settings: result.rows[0] });
-    } catch (err) {
-        console.error('[Backend] Error updating business settings:', err);
-        res.status(500).json({ error: 'Failed to update business settings.' });
-    }
-});
-
-
-// Subscription Status Endpoint
-apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
-    try {
-        res.json({ plan: 'Pro Plan' });
-    }
-    catch (err) {
-        console.error('Error fetching subscription status:', err);
-        res.status(500).json({ error: 'Failed to retrieve subscription status.' });
-    }
-});
-
-// Checklist Routes
-apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM checklists ORDER BY title');
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve checklists.' });
-    }
-});
-
-apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
-    const { title, position, tasks } = req.body;
-    if (!title || !position || !tasks || !Array.isArray(tasks) || tasks.length === 0) {
-        return res.status(400).json({ error: 'Title, position, and at least one task are required.' });
-    }
-
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        const checklistRes = await client.query(
-            `INSERT INTO checklists (title, position, tasks, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [title, position, JSON.stringify(tasks), req.user.id]
-        );
-        const newChecklist = checklistRes.rows[0];
-
-        await client.query('COMMIT');
-        res.status(201).json({ message: 'Checklist created successfully!', checklist: newChecklist });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Error creating checklist:', err);
-        if (err.code === '23505') { // Unique violation for title/position
-            return res.status(409).json({ error: 'A checklist with this title/position might already exist.' });
+    /**
+     * Main render function that decides which calendar view to render.
+     */
+    async function renderCalendar() {
+        if (isMobileView()) {
+            // Hide desktop view, show mobile view
+            if (schedulingLayout) schedulingLayout.style.display = 'none';
+            if (mobileCalendarView) mobileCalendarView.style.display = 'flex';
+            await renderMobileDayCalendar(currentMobileDay);
+        } else {
+            // Hide mobile view, show desktop view
+            if (schedulingLayout) schedulingLayout.style.display = 'grid'; // Use 'grid' as defined in CSS
+            if (mobileCalendarView) mobileCalendarView.style.display = 'none';
+            await renderWeeklyCalendar(currentStartDate);
         }
-        res.status(500).json({ error: 'Failed to create checklist.' });
-    } finally {
-        client.release();
-    }
-});
-
-
-// Document Routes
-apiRoutes.get('/documents', isAuthenticated, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT 
-                d.document_id, 
-                d.title, 
-                d.description, 
-                d.file_name, 
-                d.uploaded_at,
-                u.full_name as uploaded_by_name
-            FROM documents d
-            LEFT JOIN users u ON d.uploaded_by = u.user_id
-            ORDER BY d.uploaded_at DESC
-        `);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error retrieving documents:', err);
-        res.status(500).json({ error: 'Failed to retrieve documents.' });
-    }
-});
-
-apiRoutes.post('/documents', isAuthenticated, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body;
-    const file = req.file;
-
-    if (!title || !file) {
-        if (file) {
-            await fsPromises.unlink(file.path).catch(e => console.error("Error deleting partially uploaded file:", e));
-        }
-        return res.status(400).json({ error: 'Title and file are required.' });
     }
 
-    try {
-        const result = await pool.query(
-            `INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [title, description, file.filename, req.user.id]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        if (file) {
-            await fsPromises.unlink(file.path).catch(e => console.error("Error deleting uploaded file after DB error:", e));
-        }
-        console.error('Error uploading document to DB:', err);
-        res.status(500).json({ error: 'Failed to upload document.' });
-    }
-});
-
-apiRoutes.delete('/documents/:id', isAuthenticated, async (req, res) => {
-    const { id } = req.params;
-    let filePathToDelete = null;
-
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        const docRes = await client.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
-        if (docRes.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Document not found.' });
-        }
-        filePathToDelete = path.join(uploadsDir, docRes.rows[0].file_name);
-
-        await client.query('DELETE FROM documents WHERE document_id = $1', [id]);
-
-        await client.query('COMMIT');
-
-        if (filePathToDelete) {
-            await fsPromises.unlink(filePathToDelete).catch(e => console.error("Error deleting physical file:", e));
-        }
+    /**
+     * Renders the full weekly calendar grid for desktop.
+     * @param {Date} startDate - The Date object representing the first day (Sunday) of the week to render.
+     */
+    async function renderWeeklyCalendar(startDate) {
+        if (!calendarGrid || !currentWeekDisplay) return;
         
-        res.status(204).send();
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Error deleting document:', err);
-        res.status(500).json({ error: 'Failed to delete document.' });
-    } finally {
-        client.release();
-    }
-});
-
-
-// Job Postings Routes
-// GET a single job posting by ID (publicly accessible for apply page)
-app.get('/job-postings/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query(`
-            SELECT 
-                jp.id, 
-                jp.title, 
-                jp.description, 
-                jp.requirements, 
-                jp.created_at,
-                l.location_name
-            FROM job_postings jp
-            LEFT JOIN locations l ON jp.location_id = l.location_id
-            WHERE jp.id = $1
-        `, [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Job posting not found.' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error retrieving single job posting:', err);
-        res.status(500).json({ error: 'Failed to retrieve job posting.' });
-    }
-});
-
-
-// GET all job postings (Admin only)
-apiRoutes.get('/job-postings', isAuthenticated, async (req, res) => {
-    try {
-        let query = `
-            SELECT 
-                jp.id, 
-                jp.title, 
-                jp.description, 
-                jp.requirements, 
-                jp.created_at,
-                l.location_name
-            FROM job_postings jp
-            LEFT JOIN locations l ON jp.location_id = l.location_id
-            ORDER BY jp.created_at DESC
-        `;
-        const params = [];
-        if (req.user.role === 'location_admin') {
-            query += ' WHERE jp.location_id = $1';
-            params.push(req.user.location_id);
-        }
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error retrieving job postings:', err);
-        res.status(500).json({ error: 'Failed to retrieve job postings.' });
-    }
-});
-
-// POST a new job posting
-apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
-    const { title, description, requirements, location_id } = req.body;
-    if (!title || !description || !location_id) {
-        return res.status(400).json({ error: 'Title, description, and location are required.' });
-    }
-    try {
-        const result = await pool.query(
-            `INSERT INTO job_postings (title, description, requirements, location_id, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [title, description, requirements, location_id, req.user.id]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error creating job posting:', err);
-        res.status(500).json({ error: 'Failed to create job posting.' });
-    }
-});
-
-// DELETE a job posting
-apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM job_postings WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Job posting not found.' });
-        }
-        res.status(204).send(); // 204 No Content for successful deletion
-    } catch (err) {
-        console.error('Error deleting job posting:', err);
-        res.status(500).json({ error: 'Failed to delete job posting.' });
-    }
-});
-
-// Applicants Routes (Public and Admin)
-// Public endpoint for job application submission
-app.post('/apply/:jobId', async (req, res) => {
-    const { jobId } = req.params; // Get jobId from URL parameters
-    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body; // Get other fields from body
-
-    // Basic validation for required fields
-    if (!jobId || !name || !email || !availability) {
-        return res.status(400).json({ error: 'Job ID, name, email, and availability are required.' });
-    }
-
-    try {
-        // Ensure date_of_birth is handled correctly for optionality
-        const dobValue = date_of_birth ? date_of_birth : null; // Set to null if empty string
-
-        const result = await pool.query(
-            `INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            //                       ^^^^^^ CORRECTED: Changed from job_posting_id to job_id
-            [jobId, name, email, address, phone, dobValue, availability, is_authorized]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error submitting application:', err);
-        // Check for specific PostgreSQL error codes
-        if (err.code === '23503') { // PostgreSQL foreign key violation error code
-            return res.status(400).json({ error: 'Invalid Job Posting ID. The job you are applying for does not exist.' });
-        }
-        res.status(500).json({ error: 'Failed to submit application.' });
-    }
-});
-
-// GET all applicants (Admin only)
-apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        let query = `
-            SELECT 
-                a.id, 
-                a.name, 
-                a.email, 
-                a.phone, 
-                a.applied_at,
-                jp.title AS job_title,
-                jp.location_id
-            FROM applicants a
-            LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
-        `;
-        const params = [];
-        if (req.user.role === 'location_admin') {
-            query += ' WHERE jp.location_id = $1';
-            params.push(req.user.location_id);
-        }
-        query += ' ORDER BY a.applied_at DESC';
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    }
-    catch (err) {
-        console.error('Error retrieving applicants:', err);
-        res.status(500).json({ error: 'Failed to retrieve applicants.' });
-    }
-});
-
-// DELETE an applicant (archive)
-apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM applicants WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Applicant not found.' });
-        }
-        res.status(204).send(); // 204 No Content for successful deletion
-    } catch (err) {
-        console.error('Error deleting applicant:', err);
-        res.status(500).json({ error: 'Failed to delete applicant.' });
-    }
-});
-
-
-// NEW: Shift Management Routes
-apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { startDate, endDate } = req.query; // Expect YYYY-MM-DD format
-    if (!startDate || !endDate) {
-        return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
-    }
-
-    try {
-        let query = `
-            SELECT 
-                s.id, 
-                s.employee_id, 
-                u.full_name AS employee_name,
-                s.location_id, 
-                l.location_name,
-                s.start_time, 
-                s.end_time, 
-                s.notes
-            FROM shifts s
-            JOIN users u ON s.employee_id = u.user_id
-            JOIN locations l ON s.location_id = l.location_id
-            WHERE s.start_time >= $1 AND s.end_time <= $2
-        `;
-        const params = [startDate, endDate];
-        let paramIndex = 3;
-
-        // Location admin filter
-        if (req.user.role === 'location_admin') {
-            query += ` AND s.location_id = $${paramIndex++}`;
-            params.push(req.user.location_id);
-        }
+        // Calculate end date for the week display
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 6);
+        const options = { month: 'short', day: 'numeric' };
+        currentWeekDisplay.textContent = `${startDate.toLocaleDateString(undefined, options)} - ${endDate.toLocaleDateString(undefined, options)}`;
         
-        query += ' ORDER BY s.start_time ASC';
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('[Shifts] Error retrieving shifts:', err);
-        res.status(500).json({ error: 'Failed to retrieve shifts.' });
-    }
-});
+        calendarGrid.innerHTML = ''; // Clear existing calendar content
 
-apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-    const { employee_id, location_id, start_time, end_time, notes } = req.body;
-    if (!employee_id || !location_id || !start_time || !end_time) {
-        return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
-    }
+        // Create calendar header (Time column + 7 days)
+        const headerContainer = document.createElement('div');
+        headerContainer.className = 'calendar-grid-header';
+        calendarGrid.appendChild(headerContainer);
 
-    // Basic validation: Ensure end_time is after start_time
-    if (new Date(start_time) >= new Date(end_time)) {
-        return res.status(400).json({ error: 'End time must be after start time.' });
-    }
+        const timeHeader = document.createElement('div');
+        timeHeader.className = 'calendar-day-header';
+        timeHeader.innerHTML = `&nbsp;`; // Empty cell for time column header
+        headerContainer.appendChild(timeHeader);
 
-    try {
-        const result = await pool.query(
-            `INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [employee_id, location_id, start_time, end_time, notes]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('[Shifts] Error creating shift:', err);
-        res.status(500).json({ error: 'Failed to create shift.' });
-    }
-});
-
-apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM shifts WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Shift not found.' });
+        for (let i = 0; i < 7; i++) {
+            const dayDate = new Date(startDate);
+            dayDate.setDate(startDate.getDate() + i);
+            const dayHeader = document.createElement('div');
+            dayHeader.className = 'calendar-day-header';
+            dayHeader.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+            headerContainer.appendChild(dayHeader);
         }
-        res.status(204).send(); // No Content
-    } catch (err) {
-        console.error('[Shifts] Error deleting shift:', err);
-        res.status(500).json({ error: 'Failed to delete shift.' });
+
+        // Create calendar body (Time column + 7 day columns with hour lines)
+        const calendarBody = document.createElement('div');
+        calendarBody.className = 'calendar-body';
+        calendarGrid.appendChild(calendarBody);
+
+        const timeColumn = document.createElement('div');
+        timeColumn.className = 'time-column';
+        for (let hour = 0; hour < 24; hour++) {
+            const timeSlot = document.createElement('div');
+            timeSlot.className = 'time-slot';
+            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+            const ampm = hour < 12 ? 'AM' : 'PM';
+            timeSlot.textContent = `${displayHour} ${ampm}`;
+            timeColumn.appendChild(timeSlot);
+        }
+        calendarBody.appendChild(timeColumn);
+
+        for (let i = 0; i < 7; i++) {
+            const dayColumn = document.createElement('div');
+            dayColumn.className = 'day-column';
+            dayColumn.id = `day-column-${i}`; // Assign ID for easy access
+            for (let j = 0; j < 24; j++) {
+                const hourLine = document.createElement('div');
+                hourLine.className = 'hour-line';
+                dayColumn.appendChild(hourLine);
+            }
+            calendarBody.appendChild(dayColumn);
+        }
+
+        // Load and display data (shifts, availability, business hours) concurrently
+        await Promise.all([
+            loadAndDisplayShifts(startDate, endDate, false), // Pass false for isMobile
+            loadAndRenderAvailability(false), // Pass false for isMobile
+            loadAndRenderBusinessHours(false) // Pass false for isMobile
+        ]);
     }
-});
 
+    /**
+     * Renders a single day calendar view for mobile.
+     * @param {Date} dayDate - The Date object representing the day to render.
+     */
+    async function renderMobileDayCalendar(dayDate) {
+        if (!mobileDayColumn || !mobileCurrentDayDisplay) return;
 
-// Onboarding Routes
-onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
+        mobileCurrentDayDisplay.textContent = dayDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        mobileDayColumn.innerHTML = ''; // Clear existing content
 
-// The server startup logic
-const startServer = async () => {
-    try {
-        const client = await pool.connect();
-        console.log('Connected to the PostgreSQL database.');
-        client.release();
-        app.listen(PORT, '0.0.0.0', () => console.log(`Server is running on port ${PORT}`));
-    } catch (err) {
-        console.error('Failed to start server:', err.stack);
-        process.exit(1);
+        // Create time slots for the mobile day column
+        for (let hour = 0; hour < 24; hour++) {
+            const timeSlot = document.createElement('div');
+            timeSlot.className = 'mobile-time-slot';
+            const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+            const ampm = hour < 12 ? 'AM' : 'PM';
+            timeSlot.textContent = `${displayHour} ${ampm}`;
+            mobileDayColumn.appendChild(timeSlot);
+        }
+
+        // Load and display data for the single day
+        await Promise.all([
+            loadAndDisplayShifts(dayDate, dayDate, true), // Pass true for isMobile
+            loadAndRenderAvailability(true), // Pass true for isMobile
+            loadAndRenderBusinessHours(true) // Pass true for isMobile
+        ]);
     }
-};
 
-startServer();
+
+    /**
+     * Helper function to detect overlaps and calculate positions for shifts.
+     * @param {Array<Object>} shifts - An array of shift objects for a single day.
+     * @returns {Array<Object>} Shifts with added 'column' and 'totalColumns' properties.
+     */
+    function calculateShiftPositions(shifts) {
+        // Sort shifts by start time, then by end time (for consistent overlap detection)
+        shifts.sort((a, b) => {
+            const startA = new Date(a.start_time).getTime();
+            const startB = new Date(b.start_time).getTime();
+            if (startA !== startB) return startA - startB;
+            const endA = new Date(a.end_time).getTime();
+            const endB = new Date(b.end_time).getTime();
+            return endA - endB;
+        });
+
+        // This array will hold "columns" of non-overlapping shifts
+        const columns = [];
+
+        shifts.forEach(shift => {
+            const shiftStart = new Date(shift.start_time).getTime();
+            const shiftEnd = new Date(shift.end_time).getTime();
+            
+            let placed = false;
+            // Try to place the shift in an existing column
+            for (let i = 0; i < columns.length; i++) {
+                const column = columns[i];
+                // Check if this shift overlaps with any shift already in this column
+                const overlapsInColumn = column.some(existingShift => {
+                    const existingStart = new Date(existingShift.start_time).getTime();
+                    const existingEnd = new Date(existingShift.end_time).getTime();
+                    // Overlap if (startA < endB && endA > startB)
+                    return (shiftStart < existingEnd && shiftEnd > existingStart);
+                });
+
+                if (!overlapsInColumn) {
+                    column.push(shift);
+                    shift.column = i; // Assign column index
+                    placed = true;
+                    break;
+                }
+            }
+
+            // If it couldn't be placed in an existing column, create a new one
+            if (!placed) {
+                columns.push([shift]);
+                shift.column = columns.length - 1; // Assign new column index
+            }
+        });
+
+        // Now, iterate through all shifts again to set totalColumns for proper width calculation
+        shifts.forEach(shift => {
+            // Find all shifts that overlap with the current shift
+            const overlappingShifts = shifts.filter(otherShift => {
+                if (shift === otherShift) return false; // Don't compare with itself
+                const startA = new Date(shift.start_time).getTime();
+                const endA = new Date(shift.end_time).getTime();
+                const startB = new Date(otherShift.start_time).getTime();
+                const endB = new Date(otherShift.end_time).getTime();
+                return (startA < endB && endA > startB);
+            });
+
+            // The total number of columns needed for this specific set of overlapping shifts
+            // is the maximum column index among them (including itself) + 1
+            const maxColumnIndex = Math.max(shift.column, ...overlappingShifts.map(s => s.column));
+            shift.totalColumns = maxColumnIndex + 1;
+        });
+
+        return shifts;
+    }
+
+    /**
+     * Fetches shift data from the backend API for the current week/day and renders each shift as a visual block.
+     * @param {Date} start - The start date for fetching shifts.
+     * @param {Date} end - The end date for fetching shifts.
+     * @param {boolean} isMobile - True if rendering for mobile single day view.
+     */
+    async function loadAndDisplayShifts(start, end, isMobile) {
+        // Remove existing shifts before rendering new ones
+        document.querySelectorAll('.calendar-shift').forEach(el => el.remove());
+        
+        // Format dates for API request (YYYY-MM-DD)
+        const formatDate = (d) => d.toISOString().split('T')[0];
+        
+        // Adjust end date to include the full last day for the API query
+        let endOfDay = new Date(end);
+        endOfDay.setDate(endOfDay.getDate() + 1); // Go to the start of the next day
+
+        try {
+            const shifts = await apiRequest('GET', `/api/shifts?startDate=${formatDate(start)}&endDate=${formatDate(endOfDay)}`);
+            
+            if (shifts && shifts.length > 0) {
+                // Group shifts by day
+                const shiftsByDay = {};
+                shifts.forEach(shift => {
+                    const shiftDate = new Date(shift.start_time);
+                    const dayKey = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                    if (!shiftsByDay[dayKey]) {
+                        shiftsByDay[dayKey] = [];
+                    }
+                    shiftsByDay[dayKey].push(shift);
+                });
+
+                // Process each day's shifts for overlaps and render
+                Object.keys(shiftsByDay).forEach(dayKey => {
+                    const dailyShifts = shiftsByDay[dayKey];
+                    const processedShifts = calculateShiftPositions(dailyShifts);
+
+                    processedShifts.forEach(shift => {
+                        const shiftStart = new Date(shift.start_time);
+                        const shiftEnd = new Date(shift.end_time);
+                        
+                        let targetColumnElement;
+                        if (isMobile) {
+                            // For mobile, all shifts go into the single mobile-day-column
+                            targetColumnElement = mobileDayColumn;
+                        } else {
+                            // For desktop, shifts go into their respective day columns
+                            const dayIndex = shiftStart.getDay(); // 0 for Sunday, 1 for Monday, etc.
+                            targetColumnElement = document.getElementById(`day-column-${dayIndex}`);
+                        }
+
+                        if (targetColumnElement) {
+                            // Calculate top and height for the shift block in pixels (1 minute = 1 pixel)
+                            const startMinutes = (shiftStart.getHours() * 60) + shiftStart.getMinutes();
+                            const endMinutes = (shiftEnd.getHours() * 60) + shiftEnd.getMinutes();
+                            const heightMinutes = endMinutes - startMinutes;
+                            
+                            const shiftElement = document.createElement('div');
+                            shiftElement.className = 'calendar-shift';
+                            shiftElement.style.top = `${startMinutes}px`;
+                            shiftElement.style.height = `${heightMinutes}px`;
+
+                            if (!isMobile) { // Apply multi-column positioning only for desktop view
+                                const columnWidth = 100 / shift.totalColumns;
+                                shiftElement.style.width = `calc(${columnWidth}% - 4px)`; // Adjust width for columns
+                                shiftElement.style.left = `calc(2px + ${shift.column * columnWidth}%)`; // Position in its column
+                            } else { // For mobile, full width with padding
+                                shiftElement.style.width = `calc(100% - 100px)`; // Account for mobile-day-column padding and sticky time column
+                                shiftElement.style.left = `90px`; // Position after time column + padding
+                            }
+                            
+                            const timeFormatOptions = { hour: 'numeric', minute: 'numeric', hour12: true };
+                            const startTimeString = shiftStart.toLocaleTimeString('en-US', timeFormatOptions);
+                            const endTimeString = shiftEnd.toLocaleTimeString('en-US', timeFormatOptions);
+
+                            shiftElement.innerHTML = `
+                                <strong>${shift.employee_name}</strong><br>
+                                <span style="font-size: 0.9em;">${startTimeString} - ${endTimeString}</span><br>
+                                <span style="color: #ddd;">${shift.location_name || ''}</span>
+                                <button class="delete-shift-btn" data-shift-id="${shift.id}" title="Delete Shift">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                                </button>
+                            `;
+                            shiftElement.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
+                            
+                            targetColumnElement.appendChild(shiftElement);
+                        }
+                    });
+                });
+            }
+        }
+        catch (error) {
+            showModalMessage(`Error loading shifts: ${error.message}`, true);
+            console.error('Error loading shifts:', error);
+        }
+    }
+    
+    /**
+     * Fetches employee availability data and renders it as semi-transparent overlay blocks.
+     * These blocks visually indicate when an employee is available.
+     * @param {boolean} isMobile - True if rendering for mobile single day view.
+     */
+    async function loadAndRenderAvailability(isMobile) {
+        // Remove existing availability blocks before rendering new ones
+        document.querySelectorAll('.availability-block').forEach(el => el.remove());
+        
+        try {
+            const employees = await apiRequest('GET', '/api/users/availability');
+            const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+            employees.forEach(employee => {
+                if (!employee.availability) return; // Skip if no availability data
+
+                daysOfWeek.forEach((day, index) => {
+                    // Only render for the specific mobile day if in mobile view
+                    if (isMobile && index !== currentMobileDay.getDay()) {
+                        return;
+                    }
+
+                    const dayAvailability = employee.availability[day];
+                    if (dayAvailability && dayAvailability.start && dayAvailability.end) {
+                        let targetColumnElement;
+                        if (isMobile) {
+                            targetColumnElement = mobileDayColumn;
+                        } else {
+                            targetColumnElement = document.getElementById(`day-column-${index}`);
+                        }
+
+                        if(targetColumnElement) {
+                            // Convert time strings to minutes from midnight for positioning
+                            const startMinutes = parseInt(dayAvailability.start.split(':')[0], 10) * 60 + parseInt(dayAvailability.start.split(':')[1], 10);
+                            const endMinutes = parseInt(dayAvailability.end.split(':')[0], 10) * 60 + parseInt(dayAvailability.end.split(':')[1], 10);
+                            const heightMinutes = endMinutes - startMinutes;
+                            
+                            if (heightMinutes > 0) {
+                                const availabilityBlock = document.createElement('div');
+                                availabilityBlock.className = 'availability-block';
+                                // Hide if the toggle is off
+                                if (availabilityToggle && !availabilityToggle.checked) {
+                                    availabilityBlock.classList.add('hidden');
+                                }
+                                availabilityBlock.style.top = `${startMinutes}px`; // Position in pixels
+                                availabilityBlock.style.height = `${heightMinutes}px`; // Height in pixels
+                                
+                                if (isMobile) {
+                                    availabilityBlock.style.width = `calc(100% - 100px)`; // Account for mobile-day-column padding and sticky time column
+                                    availabilityBlock.style.left = `90px`; // Position after time column + padding
+                                }
+                                targetColumnElement.appendChild(availabilityBlock);
+                            }
+                        }
+                    }
+                });
+            });
+        } catch (error) {
+            console.error("Failed to load availability:", error);
+            // No modal message here as it's a background visual enhancement
+        }
+    }
+
+    /**
+     * Fetches and renders the business operating hours as a subtle background block.
+     * This visually indicates the standard business hours for the location.
+     * @param {boolean} isMobile - True if rendering for mobile single day view.
+     */
+    async function loadAndRenderBusinessHours(isMobile) {
+        // Remove existing business hours blocks before rendering new ones
+        document.querySelectorAll('.business-hours-block').forEach(el => el.remove());
+
+        try {
+            const settings = await apiRequest('GET', '/api/settings/business');
+            const businessStartHour = parseInt((settings.operating_hours_start || '00:00').split(':')[0], 10);
+            const businessEndHour = parseInt((settings.operating_hours_end || '00:00').split(':')[0], 10);
+            const durationHours = businessEndHour - businessStartHour;
+
+            if (durationHours > 0) {
+                // Determine which columns to apply the business hours block to
+                let columnsToRender = [];
+                if (isMobile) {
+                    columnsToRender.push(mobileDayColumn); // Only the single mobile day column
+                } else {
+                    for (let i = 0; i < 7; i++) {
+                        columnsToRender.push(document.getElementById(`day-column-${i}`));
+                    }
+                }
+
+                columnsToRender.forEach(dayColumn => {
+                    if (dayColumn) {
+                        const businessHoursBlock = document.createElement('div');
+                        businessHoursBlock.className = 'business-hours-block';
+                        businessHoursBlock.style.top = `${businessStartHour * 60}px`; // Convert hours to pixels
+                        businessHoursBlock.style.height = `${durationHours * 60}px`; // Convert hours to pixels
+                        
+                        if (isMobile) {
+                            businessHoursBlock.style.width = `calc(100% - 100px)`; // Account for mobile-day-column padding and sticky time column
+                            businessHoursBlock.style.left = `90px`; // Position after time column + padding
+                        }
+                        dayColumn.appendChild(businessHoursBlock);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error("Failed to load or render business operating hours:", error);
+            // No modal message here as it's a background visual
+        }
+    }
+
+    /**
+     * Populates the employee and location dropdowns in the shift creation form.
+     */
+    async function populateDropdowns() {
+        try {
+            // Fetch users and locations concurrently
+            const [users, locations] = await Promise.all([
+                apiRequest('GET', '/api/users'), // Get all users (backend filters by role/location)
+                apiRequest('GET', '/api/locations') // Get all locations (backend filters by role)
+            ]);
+            
+            // Populate Employee Select
+            if (employeeSelect) {
+                employeeSelect.innerHTML = '<option value="">Select Employee</option>'; // Default empty option
+                // Filter for employees and location_admins (who might also be scheduled)
+                const employees = users.filter(u => u.role === 'employee' || u.role === 'location_admin');
+                employees.forEach(user => {
+                    const option = new Option(user.full_name, user.user_id);
+                    employeeSelect.add(option);
+                });
+            }
+
+            // Populate Location Select
+            if (locationSelect) {
+                locationSelect.innerHTML = '<option value="">Select Location</option>'; // Default empty option
+                locations.forEach(loc => {
+                    const option = new Option(loc.location_name, loc.location_id);
+                    locationSelect.add(option);
+                });
+            }
+        } catch (error) {
+            showModalMessage('Failed to load data for form dropdowns. Please try again.', true);
+            console.error('Error populating dropdowns:', error);
+        }
+    }
+
+    // --- Event Handlers ---
+
+    // Event listener for deleting shifts using event delegation on the calendar grid
+    if (calendarGrid) {
+        calendarGrid.addEventListener('click', async (e) => {
+            const deleteButton = e.target.closest('.delete-shift-btn');
+
+            if (deleteButton) {
+                e.stopPropagation(); // Prevent click from bubbling to parent elements
+                const shiftIdToDelete = String(deleteButton.dataset.shiftId); // Get shift ID from data attribute
+
+                if (!shiftIdToDelete || shiftIdToDelete === "undefined" || shiftIdToDelete === "null") {
+                    showModalMessage('Shift ID not found. Cannot delete.', true);
+                    return;
+                }
+                
+                const isConfirmed = await showConfirmModal('Are you sure you want to delete this shift? This action cannot be undone.');
+                
+                if (isConfirmed) {
+                    try {
+                        await apiRequest('DELETE', `/api/shifts/${shiftIdToDelete}`); // Call backend delete endpoint
+                        showModalMessage('Shift deleted successfully!', false); 
+                        renderCalendar(); // Re-render calendar to show updated shifts
+                    } catch (error) {
+                        showModalMessage(`Error deleting shift: ${error.message}`, true);
+                        console.error('Error deleting shift:', error);
+                    }
+                }
+            }
+        });
+    }
+
+    // Event listener for the availability toggle switch
+    if (availabilityToggle) {
+        availabilityToggle.addEventListener('change', () => {
+            const blocks = document.querySelectorAll('.availability-block');
+            blocks.forEach(block => {
+                block.classList.toggle('hidden', !availabilityToggle.checked); // Toggle 'hidden' class
+            });
+        });
+    }
+    
+    // Event listener for "Previous Week" button (Desktop)
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener('click', () => {
+            currentStartDate.setDate(currentStartDate.getDate() - 7); // Subtract 7 days
+            renderCalendar(); // Re-render calendar for the new week
+        });
+    }
+
+    // Event listener for "Next Week" button (Desktop)
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener('click', () => { 
+            currentStartDate.setDate(currentStartDate.getDate() + 7); // Add 7 days
+            renderCalendar(); // Re-render calendar for the new week
+        });
+    } 
+
+    // Event listener for "Previous Day" button (Mobile)
+    if (mobilePrevDayBtn) {
+        mobilePrevDayBtn.addEventListener('click', () => {
+            currentMobileDay.setDate(currentMobileDay.getDate() - 1); // Subtract 1 day
+            renderCalendar(); // Re-render calendar for the new day
+        });
+    }
+
+    // Event listener for "Next Day" button (Mobile)
+    if (mobileNextDayBtn) {
+        mobileNextDayBtn.addEventListener('click', () => { 
+            currentMobileDay.setDate(currentMobileDay.getDate() + 1); // Add 1 day
+            renderCalendar(); // Re-render calendar for the new day
+        });
+    }
+    
+    // Event listener for the "Create New Shift" form submission
+    if (createShiftForm) {
+        createShiftForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+            const shiftData = {
+                employee_id: employeeSelect.value,
+                location_id: locationSelect.value,
+                start_time: document.getElementById('start-time-input').value,
+                end_time: document.getElementById('end-time-input').value,
+                notes: document.getElementById('notes-input').value
+            };
+
+            // Basic validation
+            if (!shiftData.employee_id || !shiftData.location_id || !shiftData.start_time || !shiftData.end_time) {
+                showModalMessage('Please fill all required fields (Employee, Location, Start Time, End Time).', true);
+                return;
+            }
+
+            // Validate that end time is after start time
+            if (new Date(shiftData.start_time) >= new Date(shiftData.end_time)) {
+                showModalMessage('End time must be after start time.', true);
+                return;
+            }
+
+            try {
+                await apiRequest('POST', '/api/shifts', shiftData); // Send shift data to backend
+                showModalMessage('Shift created successfully!', false); 
+                createShiftForm.reset(); // Clear the form
+                renderCalendar(); // Re-render calendar to show the new shift
+            } catch (error) {
+                showModalMessage(`Error creating shift: ${error.message}`, true);
+                console.error('Error creating shift:', error);
+            }
+        });
+    }
+
+    // Event listener for window resize to switch between desktop and mobile views
+    window.addEventListener('resize', () => {
+        renderCalendar(); // Re-render calendar on resize
+    });
+    
+    // --- Initial Page Load Actions ---
+    renderCalendar(); // Render the initial calendar view based on screen size
+    populateDropdowns(); // Populate employee and location dropdowns
+}
