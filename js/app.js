@@ -13,8 +13,9 @@ import { handleSchedulingPage } from './pages/scheduling.js';
 import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
-import { handlePricingPage } from './pages/pricing.js'; // <-- ADD THIS LINE
+import { handlePricingPage } from './pages/pricing.js';
 
+// This function sets up the settings dropdown menu on pages that have it.
 function setupSettingsDropdown() {
     const settingsButton = document.getElementById("settings-button");
     const settingsDropdown = document.getElementById("settings-dropdown");
@@ -42,57 +43,39 @@ function setupSettingsDropdown() {
     }
 }
 
-// This function will be called globally by the HTML pages
-// It acts as the central router for client-side logic
-window.initializePage = () => { // Expose initializePage globally
+// This function is the central router. It determines which page is currently active
+// and calls the appropriate handler function for it.
+function initializePage() {
     const path = window.location.pathname;
 
     // A list of pages that have the main header with the settings dropdown
     const pagesWithSettings = [
-        "suite-hub.html",
-        "dashboard.html",
-        "checklists.html",
-        "admin.html",
-        "account.html",
-        "documents.html",
-        "hiring.html",
-        "scheduling.html",
-        "new-hire-view.html"
+        "suite-hub.html", "dashboard.html", "checklists.html", "admin.html",
+        "account.html", "documents.html", "hiring.html", "scheduling.html"
     ];
 
-    // Check if the current page is one that should have the settings dropdown
     if (pagesWithSettings.some(p => path.includes(p))) {
         setupSettingsDropdown();
     }
 
-    // Now, run the specific logic for the current page
-    if (path.includes("login.html")) {
-        handleLoginPage();
-    } else if (path.includes("register.html")) {
-        handleRegisterPage();
-    } else if (path.includes("suite-hub.html")) {
-        handleSuiteHubPage();
-    } else if (path.includes("dashboard.html")) {
-        handleDashboardPage();
-    } else if (path.includes("checklists.html")) {
-        handleChecklistsPage();
-    } else if (path.includes("admin.html")) {
-        handleAdminPage();
-    } else if (path.includes("account.html")) {
-        handleAccountPage();
-    } else if (path.includes("documents.html")) {
-        handleDocumentsPage();
-    } else if (path.includes("hiring.html")) {
-        handleHiringPage();
-    } else if (path.includes("scheduling.html")) {
-        handleSchedulingPage();
-    } else if (path.includes("apply.html")) {
-        handleApplyPage();
-    } else if (path.includes("new-hire-view.html")) {
-        handleOnboardingViewPage();
-    } else if (path.includes("pricing.html")) { // <-- ADD THIS LINE
-        handlePricingPage();                   // <-- ADD THIS LINE
-    }
-};
+    // Route to the correct page handler based on the URL
+    if (path.includes("login.html")) handleLoginPage();
+    else if (path.includes("register.html")) handleRegisterPage();
+    else if (path.includes("suite-hub.html")) handleSuiteHubPage();
+    else if (path.includes("dashboard.html")) handleDashboardPage();
+    else if (path.includes("checklists.html")) handleChecklistsPage();
+    else if (path.includes("admin.html")) handleAdminPage();
+    else if (path.includes("account.html")) handleAccountPage();
+    else if (path.includes("documents.html")) handleDocumentsPage();
+    else if (path.includes("hiring.html")) handleHiringPage();
+    else if (path.includes("scheduling.html")) handleSchedulingPage();
+    else if (path.includes("apply.html")) handleApplyPage();
+    else if (path.includes("new-hire-view.html")) handleOnboardingViewPage();
+    else if (path.includes("pricing.html")) handlePricingPage();
+}
 
-// Removed document.addEventListener("DOMContentLoaded") from here, it will be in HTML
+// --- AUTOMATIC STARTUP ---
+// This event listener waits for the HTML document to be fully loaded and ready,
+// and then it automatically calls our initializePage function.
+// This is the definitive fix that removes the need for an inline script call in the HTML.
+document.addEventListener('DOMContentLoaded', initializePage);
