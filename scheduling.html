@@ -690,6 +690,11 @@
         </div>
     </div>
     
+    <!-- CORRECTED: Added type="module" to the script tag -->
     <script type="module" src="dist/js/bundle.js"></script>
+    <script>
+        // This call will now reliably execute after the module has loaded.
+        window.initializePage();
+    </script>
 </body>
 </html>
