@@ -9,6 +9,102 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        /* Styles to center the card and match the login page design */
+        .main-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 120px);
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .register-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border-color);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 450px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .register-card h2 {
+            color: var(--primary-accent);
+            margin-top: 0;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        .register-form .form-group {
+            margin-bottom: 20px; /* Adjusted spacing */
+            text-align: left;
+        }
+
+        .register-form label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+
+        .register-form input[type="text"],
+        .register-form input[type="email"],
+        .register-form input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-light);
+            box-sizing: border-box;
+        }
+
+        .btn-register {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1rem;
+            margin-top: 10px;
+            background-color: var(--primary-accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        
+        .btn-register:hover {
+            background-color: rgba(200, 109, 215, 0.7);
+            transform: translateY(-2px);
+        }
+
+        #error-message {
+            color: #ff8a80;
+            margin-top: 15px;
+            min-height: 20px;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        .switch-link {
+            display: block;
+            margin-top: 25px;
+            color: var(--primary-accent);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .switch-link:hover {
+            color: var(--text-light);
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
     <div class="background-animation"></div>
@@ -27,15 +123,15 @@
                 </div>
                 <div class="form-group">
                     <label for="full-name">Your Full Name</label>
-                    <input type="text" id="full-name" required placeholder="John Doe">
+                    <input type="text" id="full-name" required placeholder="John Doe" autocomplete="name">
                 </div>
                 <div class="form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" required placeholder="you@company.com">
+                    <input type="email" id="email" required placeholder="you@company.com" autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" required minlength="6" placeholder="••••••••">
+                    <input type="password" id="password" required minlength="6" placeholder="••••••••" autocomplete="new-password">
                 </div>
                 <p id="error-message" role="alert" aria-live="polite"></p>
                 <button type="submit" class="btn-register">Create Account</button>
@@ -43,11 +139,11 @@
             <a href="login.html" class="switch-link">Already have an account? Log In</a>
         </div>
     </main>
-    <div id="message-modal-overlay" class="modal-overlay">
+    <div id="modal-message" class="modal-overlay" style="display: none;">
         <div class="modal-content">
-            <p id="modal-message-text"></p>
-            <div class="modal-buttons">
-                <button id="modal-close-button" class="btn btn-secondary">Close</button>
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-secondary">OK</button>
             </div>
         </div>
     </div>
