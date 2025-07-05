@@ -86,9 +86,6 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION (Attached to apiRoutes Router) ---
-// Define ALL routes on apiRoutes router here.
-// The order is important: ensure all routes are added to 'apiRoutes'
-// BEFORE 'app.use('/api', apiRoutes)' is called.
 
 // Authentication Routes
 apiRoutes.post('/register', async (req, res) => {
@@ -594,6 +591,126 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
         }
     });
 
+    // --- NEW: Hiring and Application Routes ---
+
+    // GET all job postings (protected)
+    apiRoutes.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+        try {
+            const result = await pool.query(`
+                SELECT jp.id, jp.title, jp.created_at, l.location_name 
+                FROM job_postings jp
+                LEFT JOIN locations l ON jp.location_id = l.location_id
+                ORDER BY jp.created_at DESC
+            `);
+            res.json(result.rows);
+        } catch (err) {
+            console.error('Error fetching job postings:', err);
+            res.status(500).json({ error: 'Failed to retrieve job postings.' });
+        }
+    });
+    
+    // GET a single job posting (public)
+    app.get('/job-postings/:id', async (req, res) => {
+        try {
+            const { id } = req.params;
+            const result = await pool.query(`
+                SELECT jp.id, jp.title, jp.description, jp.requirements, l.location_name
+                FROM job_postings jp
+                LEFT JOIN locations l ON jp.location_id = l.location_id
+                WHERE jp.id = $1
+            `, [id]);
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Job posting not found.' });
+            }
+            res.json(result.rows[0]);
+        } catch (err) {
+            console.error('Error fetching single job posting:', err);
+            res.status(500).json({ error: 'Failed to retrieve job posting.' });
+        }
+    });
+
+    // POST a new job posting (protected)
+    apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+        const { title, description, requirements, location_id } = req.body;
+        if (!title || !description || !location_id) {
+            return res.status(400).json({ error: 'Title, description, and location are required.' });
+        }
+        try {
+            const result = await pool.query(
+                'INSERT INTO job_postings (title, description, requirements, location_id) VALUES ($1, $2, $3, $4) RETURNING *',
+                [title, description, requirements, location_id]
+            );
+            res.status(201).json(result.rows[0]);
+        } catch (err) {
+            console.error('Error creating job posting:', err);
+            res.status(500).json({ error: 'Failed to create job posting.' });
+        }
+    });
+
+    // DELETE a job posting (protected)
+    apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
+        const { id } = req.params;
+        try {
+            const result = await pool.query('DELETE FROM job_postings WHERE id = $1 RETURNING id', [id]);
+            if (result.rowCount === 0) {
+                return res.status(404).json({ error: 'Job posting not found.' });
+            }
+            res.status(204).send();
+        } catch (err) {
+            console.error(`Error deleting job posting ${id}:`, err);
+            res.status(500).json({ error: 'Failed to delete job posting.' });
+        }
+    });
+
+    // GET all applicants (protected)
+    apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
+        try {
+            const result = await pool.query(`
+                SELECT a.id, a.name, a.email, a.phone, a.applied_at, jp.title AS job_title
+                FROM applicants a
+                JOIN job_postings jp ON a.job_id = jp.id
+                ORDER BY a.applied_at DESC
+            `);
+            res.json(result.rows);
+        } catch (err) {
+            console.error('Error fetching applicants:', err);
+            res.status(500).json({ error: 'Failed to retrieve applicants.' });
+        }
+    });
+    
+    // POST a new application (public)
+    app.post('/apply/:jobId', async (req, res) => {
+        const { jobId } = req.params;
+        const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
+        if (!name || !email || !availability) {
+            return res.status(400).json({ error: 'Name, email, and availability are required.' });
+        }
+        try {
+            const result = await pool.query(
+                'INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+                [jobId, name, email, address, phone, date_of_birth, availability, is_authorized]
+            );
+            res.status(201).json(result.rows[0]);
+        } catch (err) {
+            console.error('Error submitting application:', err);
+            res.status(500).json({ error: 'Failed to submit application.' });
+        }
+    });
+    
+    // DELETE an applicant (protected)
+    apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
+        const { id } = req.params;
+        try {
+            const result = await pool.query('DELETE FROM applicants WHERE id = $1 RETURNING id', [id]);
+            if (result.rowCount === 0) {
+                return res.status(404).json({ error: 'Applicant not found.' });
+            }
+            res.status(204).send();
+        } catch (err) {
+            console.error(`Error deleting applicant ${id}:`, err);
+            res.status(500).json({ error: 'Failed to delete applicant.' });
+        }
+    });
 
     // Onboarding Routes
     onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
@@ -622,4 +739,3 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
     };
 
     startServer();
-
