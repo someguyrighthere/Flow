@@ -509,7 +509,7 @@ apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
     }
 
     try {
-        // FIX: Ensure the column name 'content' is lowercase to match the database schema.
+        // Corrected: Ensure the column name 'content' is lowercase to match the database schema.
         await pool.query(
             'INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3)',
             [sender_id, recipient_id, content]
