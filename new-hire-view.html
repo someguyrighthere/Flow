@@ -10,6 +10,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.1/dist/confetti.browser.min.js"></script>
+    <style>
+        .onboarding-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+        }
+        .schedule-list-item {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .schedule-list-item:last-child {
+            border-bottom: none;
+        }
+    </style>
 </head>
 <body>
     <div class="background-animation"></div>
@@ -17,13 +31,20 @@
         <header class="dashboard-header">
             <h1 class="app-title">Onboard Flow</h1>
         </header>
-        <section>
+        <section class="onboarding-layout">
             <div class="card">
                 <h2 id="welcome-message">Welcome!</h2>
                 <p id="task-list-overview">Loading task status...</p>
                 <div id="onboarding-task-list">
                     </div>
                 <p id="onboarding-status-message"></p>
+            </div>
+            <div class="card">
+                <h2>Your Schedule This Week</h2>
+                <div id="employee-schedule-list">
+                    <p>Loading your schedule...</p>
+                </div>
+                <button id="print-employee-schedule-btn" class="btn btn-secondary" style="margin-top: 20px;">Print Schedule</button>
             </div>
         </section>
     </div>
