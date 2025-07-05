@@ -1,4 +1,4 @@
-// js/pages/scheduling.js - MASTER SOLUTION VERSION
+// js/pages/scheduling.js - MASTER SOLUTION: Final Version
 
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
@@ -182,9 +182,9 @@ export function handleSchedulingPage() {
             const dayCol = document.createElement('div');
             dayCol.className = 'day-column';
             // Grid column starts at 2 because the first column is for time slots
-            dayCol.style.gridColumn = `${i + 2}`; 
+            dayCol.style.gridColumn = `${i + 2}`;
             // Grid row starts at 2 because the first row is for day headers
-            dayCol.style.gridRow = `2 / span ${END_HOUR - START_HOUR}`; 
+            dayCol.style.gridRow = `2 / span ${END_HOUR - START_HOUR}`;
             dayCol.dataset.dayIndex = i; // Store day index for identifying column
             grid.appendChild(dayCol);
         }
