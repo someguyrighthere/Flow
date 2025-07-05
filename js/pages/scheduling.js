@@ -1,4 +1,4 @@
-// js/pages/scheduling.js - MASTER SOLUTION: Final Version
+// js/pages/scheduling.js - MASTER SOLUTION: Final Version with Timezone Fix
 
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
@@ -45,14 +45,16 @@ export function handleSchedulingPage() {
     const SUPER_ADMIN_PREF_LOCATION_KEY = 'superAdminPrefLocationId';
 
     /**
-     * Helper function to robustly parse an ISO 8601 string into a Date object.
+     * TIMEZONE FIX: Parses a date string as if it were local, ignoring timezone conversions.
+     * @param {string} dateTimeString - The ISO-like date-time string from the database (e.g., "YYYY-MM-DDTHH:MI:SS.MSZ").
+     * @returns {Date} A Date object representing the local time.
      */
-    const parseISODateString = (dateTimeString) => {
-        const date = new Date(dateTimeString);
-        if (isNaN(date.getTime())) {
-            console.error(`Failed to parse ISO date string "${dateTimeString}".`);
-        }
-        return date;
+    const parseAsLocalDate = (dateTimeString) => {
+        const [datePart, timePart] = dateTimeString.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
+        // Create a new Date object using local time components. Month is 0-indexed.
+        return new Date(year, month - 1, day, hour, minute);
     };
 
 
@@ -182,8 +184,9 @@ export function handleSchedulingPage() {
         if (!shifts || shifts.length === 0) return;
 
         shifts.forEach(shift => {
-            const shiftStart = parseISODateString(shift.start_time);
-            const shiftEnd = parseISODateString(shift.end_time);
+            // TIMEZONE FIX: Use the new local date parser
+            const shiftStart = parseAsLocalDate(shift.start_time);
+            const shiftEnd = parseAsLocalDate(shift.end_time);
 
             if (isNaN(shiftStart.getTime()) || isNaN(shiftEnd.getTime())) return;
 
@@ -191,17 +194,13 @@ export function handleSchedulingPage() {
             const endDayIndex = shiftEnd.getDay();
             
             if (startDayIndex === endDayIndex) {
-                // Handle shifts that do not cross midnight
                 createShiftBlock(shift, shiftStart, shiftEnd, startDayIndex);
             } else {
-                // Handle overnight shifts by splitting them
                 const midnight = new Date(shiftStart);
-                midnight.setHours(24, 0, 0, 0); // End of the first day
+                midnight.setHours(24, 0, 0, 0); 
                 
-                // Create block for the first day
                 createShiftBlock(shift, shiftStart, midnight, startDayIndex);
                 
-                // Create block for the second day
                 if (endDayIndex > startDayIndex || (startDayIndex === 6 && endDayIndex === 0)) {
                     createShiftBlock(shift, midnight, shiftEnd, endDayIndex);
                 }
@@ -217,7 +216,7 @@ export function handleSchedulingPage() {
         if (!targetColumn) return;
 
         const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
-        const endMinutes = (endTime.getHours() * 60 + endTime.getMinutes()) || (24 * 60); // Handle midnight as 24:00
+        const endMinutes = (endTime.getHours() * 60 + endTime.getMinutes()) || (24 * 60);
 
         const top = (startMinutes / 60) * PIXELS_PER_HOUR;
         const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;

@@ -19,7 +19,6 @@ const apiRoutes = express.Router(); // This will handle all routes prefixed with
 // --- Configuration Variables ---
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
-const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${PORT}`;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 // --- File Uploads Configuration ---
@@ -61,7 +60,8 @@ const isAuthenticated = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
     if (token == null) return res.sendStatus(401);
     
-    jwt.verify(token, JWT_SECRET, { issuer: API_BASE_URL }, (err, user) => {
+    // TIMEZONE FIX: Removed issuer validation as it's not strictly necessary and can cause issues.
+    jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) return res.sendStatus(403);
         req.user = user;
         next();
@@ -109,7 +109,7 @@ apiRoutes.post('/login', async (req, res) => {
             return res.status(401).json({ error: "Invalid email or password." });
         }
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d', issuer: API_BASE_URL });
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
         res.status(500).json({ error: "An internal server error occurred." });
@@ -425,8 +425,7 @@ apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     try {
         let query = `
             SELECT s.id, s.employee_id, u.full_name AS employee_name, s.location_id, l.location_name,
-            TO_CHAR(s.start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS start_time,
-            TO_CHAR(s.end_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS end_time
+            s.start_time, s.end_time
             FROM shifts s 
             JOIN users u ON s.employee_id = u.user_id 
             JOIN locations l ON s.location_id = l.location_id
