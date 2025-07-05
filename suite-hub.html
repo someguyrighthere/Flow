@@ -10,8 +10,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        .messaging-card h3 {
+        /* FIX: Target all card titles in the grid for consistent styling */
+        .app-grid .card h3, .app-grid .app-card h3 {
             color: var(--primary-accent);
+            margin-top: 0;
         }
     </style>
 </head>
@@ -40,8 +42,8 @@
                 <a href="scheduling.html" class="app-card"><h3>Scheduling</h3><p>Create and manage employee schedules.</p></a>
                 <a href="documents.html" class="app-card"><h3>Documents</h3><p>Upload files, videos, and training material.</p></a>
                 
-                <!-- Messaging Card moved into the app grid -->
-                <div class="card messaging-card">
+                <!-- Messaging Card -->
+                <div class="card">
                     <h3>Send a Message</h3>
                     <form id="send-message-form">
                         <div class="form-group">
