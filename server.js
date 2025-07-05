@@ -509,7 +509,6 @@ apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
     }
 
     try {
-        // Corrected: Ensure the column name 'content' is lowercase to match the database schema.
         await pool.query(
             'INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3)',
             [sender_id, recipient_id, content]
@@ -525,8 +524,9 @@ apiRoutes.get('/messages', isAuthenticated, async (req, res) => {
     const recipient_id = req.user.id;
 
     try {
+        // FIX: Changed m.message_id to message_id. The alias 'm' is on the table, not the column.
         const result = await pool.query(
-            `SELECT m.message_id, m.content, m.sent_at, m.is_read, u.full_name as sender_name
+            `SELECT message_id, content, sent_at, is_read, u.full_name as sender_name
              FROM messages m
              JOIN users u ON m.sender_id = u.user_id
              WHERE m.recipient_id = $1
