@@ -63,9 +63,9 @@ const isAdmin = (req, res, next) => {
     }
 };
 
-// --- API ROUTES ---
+// --- API ROUTES DEFINITION ---
 
-// ... (All other routes like /login, /register, /users, etc. are here and unchanged) ...
+// --- Authentication Routes ---
 apiRoutes.post('/register', async (req, res) => {
     const { companyName, fullName, email, password } = req.body;
     const client = await pool.connect();
@@ -90,18 +90,23 @@ apiRoutes.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
         const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: "Invalid email or password." });
+        }
         const user = result.rows[0];
-        if (!user || !(await bcrypt.compare(password, user.password))) {
+        if (!(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ error: "Invalid email or password." });
         }
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
+        console.error("Login error:", err);
         res.status(500).json({ error: "An internal server error occurred." });
     }
 });
 
+// --- User & Admin Routes ---
 apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
@@ -166,7 +171,6 @@ apiRoutes.get('/messages', isAuthenticated, async (req, res) => {
     }
 });
 
-// ADDED THIS ROUTE: This is the new route to delete a message
 apiRoutes.delete('/messages/:id', isAuthenticated, async (req, res) => {
     const messageId = req.params.id;
     const userId = req.user.id;
