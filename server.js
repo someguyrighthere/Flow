@@ -1,4 +1,4 @@
-// server.js - MASTER SOLUTION: FINAL VERIFIED ROUTING (with app.use() moved)
+// server.js - MASTER SOLUTION: FINAL VERIFIED ROUTING (Guaranteed Mounting)
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -86,7 +86,7 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION (Attached to apiRoutes Router) ---
-// Define ALL routes on apiRoutes router BEFORE mounting it to the main app.
+// Define ALL routes on apiRoutes router before it's mounted to the main app.
 // This ensures the router is fully populated when app.use() is called.
 
 // Authentication Routes
@@ -237,48 +237,6 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
         console.error(`[Users/Availability] Error retrieving user availability:`, err);
         res.status(500).json({ error: 'Failed to retrieve user availability.' });
     }
-    });
-
-    apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
-        const { location_id } = req.query; 
-        console.log(`[GET /api/users] Request. User ID: ${req.user.id}, Role: ${req.user.role}, Query Location ID: ${location_id || 'N/A'}.`);
-        try {
-            let query = `
-                SELECT u.user_id, u.full_name, u.position, u.role, u.location_id, u.availability, l.location_name
-                FROM users u LEFT JOIN locations l ON u.location_id = l.location_id
-            `;
-            const params = [];
-            let whereClauses = [];
-            let paramIndex = 1;
-
-            if (req.user.role === 'location_admin') {
-                whereClauses.push(`u.location_id = $${paramIndex++}`);
-                params.push(req.user.location_id);
-                console.log(`[GET /api/users] Filtering by location admin's assigned location: ${req.user.location_id}.`);
-            } else if (req.user.role === 'super_admin' && location_id) { 
-                whereClauses.push(`u.location_id = $${paramIndex++}`);
-                params.push(location_id);
-                console.log(`[GET /api/users] Super admin filtering by provided query location: ${location_id}.`);
-            } else if (req.user.role === 'super_admin' && !location_id) {
-                console.log(`[GET /api/users] Super admin fetching all users (no location filter applied).`);
-            } else {
-                console.log(`[GET /api/users] Non-admin user attempting to fetch all users, returning empty array.`);
-                return res.json([]); 
-            }
-
-            if (whereClauses.length > 0) {
-                query += ' WHERE ' + whereClauses.join(' AND ');
-            }
-            query += ' ORDER BY u.full_name'; 
-            
-            console.log(`[GET /api/users] Executing SQL query: "${query}" with params: [${params.join(', ')}].`);
-            const result = await pool.query(query, params);
-            console.log(`[GET /api/users] Query successful. Returning ${result.rows.length} users.`);
-            res.json(result.rows);
-        } catch (err) {
-            console.error(`[GET /api/users] Error retrieving users:`, err);
-            res.status(500).json({ error: 'Failed to retrieve users.' });
-        }
     });
 
     apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
