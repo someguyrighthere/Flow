@@ -58,7 +58,7 @@ export function handleOnboardingViewPage() {
         if (!messagesContainer) return;
         try {
             const messages = await apiRequest('GET', '/api/messages');
-            messagesContainer.innerHTML = '';
+            messagesContainer.innerHTML = ''; // Clear previous content
             if (messages && messages.length > 0) {
                 const messagesHeader = document.createElement('h3');
                 messagesHeader.textContent = "Messages for You";
@@ -68,10 +68,13 @@ export function handleOnboardingViewPage() {
                     const msgItem = document.createElement('div');
                     msgItem.className = 'message-item';
                     
-                    // FIX: Changed msg.message_content to msg.content to match the API response
+                    // Updated HTML to include a "New" indicator for unread messages
                     msgItem.innerHTML = `
                         <p>${msg.content}</p> 
-                        <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.message_id}">Dismiss</button>
+                        <div class="message-actions">
+                            ${!msg.is_read ? '<span class="new-message-indicator">New</span>' : ''}
+                            <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.message_id}">Dismiss</button>
+                        </div>
                     `;
                     messagesContainer.appendChild(msgItem);
                 });
@@ -83,14 +86,7 @@ export function handleOnboardingViewPage() {
 
     messagesContainer.addEventListener('click', async (e) => {
         if (e.target.classList.contains('dismiss-message-btn')) {
-            const messageId = e.target.dataset.messageId;
-            try {
-                // This route doesn't exist yet, but leaving the logic here for future implementation
-                // For now, we just remove it from the view.
-                e.target.closest('.message-item').remove();
-            } catch (error) {
-                showModalMessage('Could not dismiss message.', true);
-            }
+            e.target.closest('.message-item').remove();
         }
     });
 
@@ -154,9 +150,9 @@ export function handleOnboardingViewPage() {
         if (!taskListOverviewDiv) return;
         const completedTasks = userTasks.filter(task => task.completed).length;
         const totalTasks = userTasks.length;
-        const taskListOverviewDiv = document.getElementById('task-list-overview');
-        if(taskListOverviewDiv) {
-            taskListOverviewDiv.textContent = `${completedTasks}/${totalTasks} tasks complete`;
+        const taskListOverviewEl = document.getElementById('task-list-overview');
+        if(taskListOverviewEl) {
+            taskListOverviewEl.textContent = `${completedTasks}/${totalTasks} tasks complete`;
         }
         if (completedTasks === totalTasks && totalTasks > 0) {
             if (onboardingInfoContainer) {
