@@ -1,4 +1,4 @@
-// server.js - MASTER SOLUTION: FINAL ORDERED ROUTING FOR ALL API ROUTES
+// server.js - MASTER SOLUTION: FINAL, COMPLETE ROUTING FOR ALL API ROUTES
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -79,7 +79,7 @@ const isAdmin = (req, res, next) => {
 // --- API ROUTES DEFINITION ---
 // All private/protected API routes are defined on the 'apiRoutes' router.
 
-// Authentication
+// --- Authentication Routes ---
 apiRoutes.post('/register', async (req, res) => {
     const { companyName, fullName, email, password } = req.body;
     const client = await pool.connect();
@@ -116,7 +116,7 @@ apiRoutes.post('/login', async (req, res) => {
     }
 });
 
-// Users
+// --- User & Admin Routes ---
 apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
@@ -141,31 +141,110 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// Checklists
+apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
+    const { full_name, email, current_password, new_password } = req.body;
+    const userId = req.user.id;
+    try {
+        const userResult = await pool.query('SELECT password FROM users WHERE user_id = $1', [userId]);
+        if (userResult.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+        
+        let hashedPassword = userResult.rows[0].password;
+        if (new_password) {
+            if (!current_password || !(await bcrypt.compare(current_password, userResult.rows[0].password))) {
+                return res.status(401).json({ error: 'Current password incorrect.' });
+            }
+            hashedPassword = await bcrypt.hash(new_password, 10);
+        }
+
+        const result = await pool.query(
+            `UPDATE users SET full_name = $1, email = $2, password = $3 WHERE user_id = $4 RETURNING user_id, full_name, email, role`,
+            [full_name, email, hashedPassword, userId]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        if (err.code === '23505') return res.status(409).json({ error: 'Email address is already in use.' });
+        res.status(500).json({ error: 'Failed to update profile.' });
+    }
+});
+
+apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    if (req.user.id === parseInt(id, 10)) return res.status(400).json({ error: "You cannot delete your own account." });
+    try {
+        await pool.query('DELETE FROM users WHERE user_id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete user.' });
+    }
+});
+
+// --- Location Routes ---
+apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM locations ORDER BY location_name');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve locations.' });
+    }
+});
+
+// --- Checklist Routes ---
 apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM checklists ORDER BY position, title');
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching checklists:', err);
         res.status(500).json({ error: 'Failed to retrieve checklists.' });
     }
 });
 
-// ... (Add other protected routes to apiRoutes here)
-
-
-// --- PUBLIC ROUTES ---
-// These routes do not require authentication and are attached directly to the `app` object.
-
-app.get('/job-postings/:id', async (req, res) => {
+apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, position, tasks } = req.body;
+    if (!title || !position || !tasks) return res.status(400).json({ error: 'Missing required fields.' });
     try {
-        const { id } = req.params;
+        const result = await pool.query(
+            'INSERT INTO checklists (title, position, tasks) VALUES ($1, $2, $3) RETURNING *',
+            [title, position, JSON.stringify(tasks)]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to create checklist.' });
+    }
+});
+
+// --- Document Routes ---
+apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
+    try {
         const result = await pool.query(`
-            SELECT jp.id, jp.title, jp.description, jp.requirements, l.location_name
-            FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id
-            WHERE jp.id = $1
-        `, [id]);
+            SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name
+            FROM documents d JOIN users u ON d.uploaded_by = u.user_id
+            ORDER BY d.uploaded_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve documents.' });
+    }
+});
+
+apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
+    const { title, description } = req.body;
+    const { filename } = req.file;
+    try {
+        const result = await pool.query(
+            'INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',
+            [title, description, filename, req.user.id]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to upload document.' });
+    }
+});
+
+// --- Subscription and Public Routes ---
+app.get('/job-postings/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`SELECT * FROM job_postings WHERE id = $1`, [id]);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Job posting not found.' });
         res.json(result.rows[0]);
     } catch (err) {
@@ -173,8 +252,20 @@ app.get('/job-postings/:id', async (req, res) => {
     }
 });
 
-// ... (Add other public routes here)
-
+app.post('/apply/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+    const { name, email, availability } = req.body;
+    if (!name || !email || !availability) return res.status(400).json({ error: 'Name, email, and availability are required.' });
+    try {
+        const result = await pool.query(
+            'INSERT INTO applicants (job_id, name, email, availability) VALUES ($1, $2, $3, $4) RETURNING *',
+            [jobId, name, email, availability]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to submit application.' });
+    }
+});
 
 // --- MOUNT ROUTERS ---
 const onboardingRouter = createOnboardingRouter(pool, isAuthenticated, isAdmin);
