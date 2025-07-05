@@ -4,7 +4,6 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
  * Handles all logic for the NEW "Classic Week" scheduling page.
- * This version includes logic to display employee names on shifts.
  */
 export function handleSchedulingPage() {
     // --- Security & Role Check ---
@@ -36,25 +35,22 @@ export function handleSchedulingPage() {
     let currentStartDate = new Date();
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
-    let currentLocationId = null; // Will be set during initialization based on user role or selection
+    let currentLocationId = null; 
 
     // --- Constants ---
     const PIXELS_PER_HOUR = 60;
-    const START_HOUR = 0;  // Display calendar from 00:00 (12 AM)
-    const END_HOUR = 24;   // Display calendar until 24:00 (end of day, effectively covers up to 11:59 PM)
+    const START_HOUR = 0;
+    const END_HOUR = 24;
 
-    // Key for storing Super Admin's preferred location in localStorage
     const SUPER_ADMIN_PREF_LOCATION_KEY = 'superAdminPrefLocationId';
 
     /**
-     * Helper function to robustly parse an ISO 8601 string (with or without 'Z') into a Date object.
-     * @param {string} dateTimeString - The ISO 8601 date-time string from the database.
-     * @returns {Date} A Date object, or an Invalid Date if parsing fails.
+     * Helper function to robustly parse an ISO 8601 string into a Date object.
      */
     const parseISODateString = (dateTimeString) => {
         const date = new Date(dateTimeString);
         if (isNaN(date.getTime())) {
-            console.error(`Failed to parse ISO date string "${dateTimeString}". Resulted in Invalid Date.`);
+            console.error(`Failed to parse ISO date string "${dateTimeString}".`);
         }
         return date;
     };
@@ -181,66 +177,64 @@ export function handleSchedulingPage() {
 
     /**
      * Renders the shift blocks onto the calendar grid.
-     * @param {Array} shifts - An array of shift objects.
      */
     const renderShifts = (shifts) => {
-        if (!shifts || shifts.length === 0) {
-            console.log("No shifts to render or shifts array is empty.");
-            return;
-        }
+        if (!shifts || shifts.length === 0) return;
 
         shifts.forEach(shift => {
             const shiftStart = parseISODateString(shift.start_time);
             const shiftEnd = parseISODateString(shift.end_time);
 
-            if (isNaN(shiftStart.getTime()) || isNaN(shiftEnd.getTime())) {
-                console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered: Invalid date format from DB. Start: "${shift.start_time}", End: "${shift.end_time}"`);
-                return;
-            }
+            if (isNaN(shiftStart.getTime()) || isNaN(shiftEnd.getTime())) return;
 
-            const dayIndex = shiftStart.getDay(); 
-            const targetColumn = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-
-            // FIX: Declare these variables outside the 'if' block so they are accessible in the 'else' block.
-            const formattedStartTime = shiftStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-            const formattedEndTime = shiftEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-
-            if (targetColumn) {
-                const startHourLocal = shiftStart.getHours();
-                const startMinuteLocal = shiftStart.getMinutes();
-                const endHourLocal = shiftEnd.getHours();
-                const endMinuteLocal = shiftEnd.getMinutes();
-
-                const totalStartMinutesFromMidnight = startHourLocal * 60 + startMinuteLocal;
-                const totalEndMinutesFromMidnight = endHourLocal * 60 + endMinuteLocal;
-
-                let durationMinutes = totalEndMinutesFromMidnight - totalStartMinutesFromMidnight;
-                if (durationMinutes < 0) {
-                    durationMinutes += (24 * 60);
-                }
-
-                const calendarDisplayStartMinutes = START_HOUR * 60; 
-
-                const top = (totalStartMinutesFromMidnight - calendarDisplayStartMinutes) / 60 * PIXELS_PER_HOUR;
-                const height = durationMinutes / 60 * PIXELS_PER_HOUR;
-
-                if (height > 0 && top >= 0 && (top + height) <= ((END_HOUR - START_HOUR) * PIXELS_PER_HOUR)) {
-                    const shiftBlock = document.createElement('div');
-                    shiftBlock.className = 'shift-block';
-                    shiftBlock.style.top = `${top}px`;
-                    shiftBlock.style.height = `${height}px`;
-                    shiftBlock.innerHTML = `<strong>${shift.employee_name}</strong><br><small>${shift.location_name}</small>`;
-                    
-                    shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name} from ${formattedStartTime} to ${formattedEndTime}. Notes: ${shift.notes || 'None'}`;
-                    
-                    targetColumn.appendChild(shiftBlock);
-                } else {
-                    console.warn(`Shift for ${shift.employee_name} (ID: ${shift.id}) not rendered due to invalid calculated rendering size. Start: ${formattedStartTime}, End: ${formattedEndTime}. Calculated top: ${top}, height: ${height}`);
-                }
+            const startDayIndex = shiftStart.getDay();
+            const endDayIndex = shiftEnd.getDay();
+            
+            if (startDayIndex === endDayIndex) {
+                // Handle shifts that do not cross midnight
+                createShiftBlock(shift, shiftStart, shiftEnd, startDayIndex);
             } else {
-                console.warn(`Could not find target column for dayIndex: ${dayIndex} for shift ID: ${shift.id}. (Shift might be on a different day than the displayed week)`);
+                // Handle overnight shifts by splitting them
+                const midnight = new Date(shiftStart);
+                midnight.setHours(24, 0, 0, 0); // End of the first day
+                
+                // Create block for the first day
+                createShiftBlock(shift, shiftStart, midnight, startDayIndex);
+                
+                // Create block for the second day
+                if (endDayIndex > startDayIndex || (startDayIndex === 6 && endDayIndex === 0)) {
+                    createShiftBlock(shift, midnight, shiftEnd, endDayIndex);
+                }
             }
         });
+    };
+
+    /**
+     * Creates and appends a single shift block to the calendar.
+     */
+    const createShiftBlock = (shift, startTime, endTime, dayIndex) => {
+        const targetColumn = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
+        if (!targetColumn) return;
+
+        const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+        const endMinutes = (endTime.getHours() * 60 + endTime.getMinutes()) || (24 * 60); // Handle midnight as 24:00
+
+        const top = (startMinutes / 60) * PIXELS_PER_HOUR;
+        const height = ((endMinutes - startMinutes) / 60) * PIXELS_PER_HOUR;
+
+        if (height <= 0) return;
+
+        const shiftBlock = document.createElement('div');
+        shiftBlock.className = 'shift-block';
+        shiftBlock.style.top = `${top}px`;
+        shiftBlock.style.height = `${height}px`;
+        shiftBlock.innerHTML = `
+            <strong>${shift.employee_name}</strong>
+            <button class="delete-shift-btn" data-shift-id="${shift.id}">&times;</button>
+        `;
+        shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
+        
+        targetColumn.appendChild(shiftBlock);
     };
 
     // --- Helper Functions for Dates ---
@@ -328,6 +322,22 @@ export function handleSchedulingPage() {
             }
         });
     }
+
+    calendarGridWrapper.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('delete-shift-btn')) {
+            const shiftId = e.target.dataset.shiftId;
+            const confirmed = await showConfirmModal('Are you sure you want to delete this shift?');
+            if (confirmed) {
+                try {
+                    await apiRequest('DELETE', `/api/shifts/${shiftId}`);
+                    showModalMessage('Shift deleted successfully!', false);
+                    loadAndRenderWeeklySchedule(currentLocationId);
+                } catch (error) {
+                    showModalMessage(`Error deleting shift: ${error.message}`, true);
+                }
+            }
+        }
+    });
 
     // --- Initial Page Load ---
     const initializePage = async () => {
