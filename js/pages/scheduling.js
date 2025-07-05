@@ -25,6 +25,7 @@ export function handleSchedulingPage() {
     const createShiftForm = document.getElementById('create-shift-form');
     const locationSelectorContainer = document.getElementById('location-selector-container');
     const locationSelector = document.getElementById('location-selector');
+    const deleteShiftsForm = document.getElementById('delete-shifts-form');
     
     const startDateInput = document.getElementById('start-date-input');
     const startTimeSelect = document.getElementById('start-time-select');
@@ -37,6 +38,7 @@ export function handleSchedulingPage() {
     currentStartDate.setDate(currentStartDate.getDate() - currentStartDate.getDay());
     currentStartDate.setHours(0, 0, 0, 0);
     let currentLocationId = null; 
+    let allLocations = []; // Store all locations to get names easily
 
     // --- Constants ---
     const PIXELS_PER_HOUR = 60;
@@ -71,11 +73,13 @@ export function handleSchedulingPage() {
         calendarGridWrapper.innerHTML = '';
 
         try {
-            const [users, shifts, allLocations] = await Promise.all([
+            const [users, shifts, fetchedLocations] = await Promise.all([
                 apiRequest('GET', `/api/users?location_id=${currentLocationId}`),
                 apiRequest('GET', `/api/shifts?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&location_id=${currentLocationId}`),
                 apiRequest('GET', '/api/locations')
             ]);
+            
+            allLocations = fetchedLocations; // Store locations for later use
 
             populateSidebarDropdowns(users, allLocations);
             renderCalendarGrid();
@@ -271,7 +275,7 @@ export function handleSchedulingPage() {
                 showModalMessage('Please select a location to print a schedule.', true);
                 return;
             }
-            const locationName = locationSelector.options[locationSelector.selectedIndex].text;
+            const locationName = allLocations.find(loc => String(loc.location_id) === String(currentLocationId))?.location_name || 'Selected Location';
             const url = `printable-schedule.html?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&locationId=${currentLocationId}&locationName=${encodeURIComponent(locationName)}`;
             window.open(url, '_blank');
         });
@@ -351,12 +355,34 @@ export function handleSchedulingPage() {
         }
     });
 
+    if (deleteShiftsForm) {
+        deleteShiftsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const beforeDate = document.getElementById('delete-before-date').value;
+            if (!beforeDate) {
+                showModalMessage('Please select a date.', true);
+                return;
+            }
+            const confirmed = await showConfirmModal(`Are you sure you want to delete all shifts before ${beforeDate}? This action cannot be undone.`);
+            if (confirmed) {
+                try {
+                    const result = await apiRequest('DELETE', `/api/shifts?beforeDate=${beforeDate}`);
+                    showModalMessage(result.message || 'Old shifts deleted.', false);
+                    loadAndRenderWeeklySchedule(currentLocationId); // Refresh the view
+                } catch (error) {
+                    showModalMessage(`Error deleting old shifts: ${error.message}`, true);
+                }
+            }
+        });
+    }
+
     // --- Initial Page Load ---
     const initializePage = async () => {
         populateTimeSelects();
 
         try {
             const locations = await apiRequest('GET', '/api/locations');
+            allLocations = locations;
             
             if (userRole === 'super_admin') {
                 if(locationSelectorContainer) locationSelectorContainer.style.display = 'block';
