@@ -91,13 +91,13 @@
         }
 
         .job-posting-item .btn-sm, .applicant-item .btn-sm {
-            padding: 8px 15px;
+            padding: 8px 12px;
             font-size: 0.85rem;
             border-radius: 6px;
         }
 
         /* Specific style for delete/archive buttons */
-        .btn-delete-job-posting, .btn-delete-applicant {
+        .btn-delete-job-posting, .btn-delete-applicant, .btn-share {
             background: none;
             border: none;
             color: var(--text-medium);
@@ -107,20 +107,24 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 36px; /* Fixed width for consistent button size */
-            height: 36px; /* Fixed height for consistent button size */
-            padding: 0; /* Remove padding as width/height are fixed */
-            border-radius: 50%; /* Make it circular */
-            background-color: rgba(255, 255, 255, 0.1); /* Match btn-secondary background */
-            border: 1px solid rgba(255, 255, 255, 0.25); /* Match btn-secondary border */
+            width: 40px; 
+            height: 40px;
+            padding: 0;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.25);
         }
 
-        .btn-delete-job-posting:hover, .btn-delete-applicant:hover {
+        .btn-delete-job-posting:hover, .btn-delete-applicant:hover, .btn-share:hover {
             opacity: 1;
-            color: #e74c3c; /* Red color for delete on hover */
-            transform: scale(1.1); /* Slight enlarge on hover */
+            transform: scale(1.1);
             background-color: rgba(255, 255, 255, 0.2);
         }
+        
+        .btn-delete-job-posting:hover, .btn-delete-applicant:hover {
+             color: #e74c3c;
+        }
+
 
         /* NEW: Styles for the main hiring grid layout */
         .hiring-grid {
