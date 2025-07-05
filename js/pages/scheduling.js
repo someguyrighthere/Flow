@@ -1,4 +1,5 @@
-// js/pages/scheduling.js
+// js/pages/scheduling.js - MASTER SOLUTION VERSION
+
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
@@ -46,19 +47,15 @@ export function handleSchedulingPage() {
     const SUPER_ADMIN_PREF_LOCATION_KEY = 'superAdminPrefLocationId';
 
     /**
-     * Helper function to robustly parse a "YYYY-MM-DD HH:MM:SS" string as a local Date object.
-     * This avoids timezone interpretation issues with `new Date()` directly.
-     * @param {string} dateTimeString - The date-time string from the database (e.g., "2025-07-04 09:00:00").
-     * @returns {Date} A Date object representing the local time, or an Invalid Date.
+     * Helper function to robustly parse an ISO 8601 string (with or without 'Z') into a Date object.
+     * With backend returning 'Z' suffix, this becomes straightforward.
+     * @param {string} dateTimeString - The ISO 8601 date-time string from the database (e.g., "YYYY-MM-DDTHH:MM:SS.MSZ").
+     * @returns {Date} A Date object, or an Invalid Date if parsing fails.
      */
-    const parseLocalTimeLiteral = (dateTimeString) => {
-        // Replace space with 'T' for ISO 8601 compatibility without timezone.
-        const isoFormattedString = dateTimeString.replace(' ', 'T');
-        const date = new Date(isoFormattedString);
-
-        // Verify if the parsed date is valid
+    const parseISODateString = (dateTimeString) => {
+        const date = new Date(dateTimeString);
         if (isNaN(date.getTime())) {
-            console.error(`Failed to parse date string "${dateTimeString}". Resulted in Invalid Date.`);
+            console.error(`Failed to parse ISO date string "${dateTimeString}". Resulted in Invalid Date.`);
         }
         return date;
     };
@@ -207,9 +204,9 @@ export function handleSchedulingPage() {
         }
 
         shifts.forEach(shift => {
-            // Use the robust parser for database strings that might have spaces instead of 'T'
-            const shiftStart = parseLocalTimeLiteral(shift.start_time);
-            const shiftEnd = parseLocalTimeLiteral(shift.end_time);
+            // Use the updated parser for ISO 8601 'Z' suffixed strings from backend
+            const shiftStart = parseISODateString(shift.start_time);
+            const shiftEnd = parseISODateString(shift.end_time);
 
             // Check if dates are valid after parsing
             if (isNaN(shiftStart.getTime()) || isNaN(shiftEnd.getTime())) {
@@ -217,13 +214,15 @@ export function handleSchedulingPage() {
                 return; // Skip rendering this problematic shift
             }
 
-            const dayIndex = shiftStart.getDay(); // 0 for Sunday, 1 for Monday, etc.
+            // Get day index based on the local time of the shift start
+            const dayIndex = shiftStart.getDay(); 
             
             // Find the correct day column in the rendered grid
             const targetColumn = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
 
             if (targetColumn) {
                 // Calculate position and height of the shift block using local time components
+                // These are now reliably derived from the 'Z' suffixed ISO strings
                 const startHourLocal = shiftStart.getHours();
                 const startMinuteLocal = shiftStart.getMinutes();
                 const endHourLocal = shiftEnd.getHours();
@@ -235,7 +234,7 @@ export function handleSchedulingPage() {
                 // Handle shifts that span across midnight (e.g., 10 PM - 2 AM)
                 let durationMinutes = totalEndMinutesFromMidnight - totalStartMinutesFromMidnight;
                 if (durationMinutes < 0) {
-                    durationMinutes += (24 * 60); // Add 24 hours if end time is on the next day
+                    durationMinutes += (24 * 60); // Add 24 hours (1440 minutes) to duration if it crosses midnight
                 }
 
                 const calendarDisplayStartMinutes = START_HOUR * 60; 
@@ -310,10 +309,12 @@ export function handleSchedulingPage() {
             return showModalMessage('Please provide all date and time fields for the shift.', true); // More specific message
         }
 
-        // Basic validation: Ensure end time is after start time
-        const shiftStartDateTimeString = `${startDate}T${startTime}:00`;
-        const shiftEndDateTimeString = `${endDate}T${endTime}:00`;
+        // Combine date and time inputs into full ISO format strings (without Z for UTC)
+        // These will be saved to the database as `timestamp without time zone`
+        const shiftStartDateTimeString = `${startDate}T${startTime}:00`; 
+        const shiftEndDateTimeString = `${endDate}T${endTime}:00`; 
         
+        // Basic validation: Ensure end time is after start time
         if (new Date(shiftStartDateTimeString).getTime() >= new Date(shiftEndDateTimeString).getTime()) {
              showModalMessage('Shift end time must be after start time.', true);
              return;

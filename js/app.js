@@ -1,4 +1,4 @@
-// js/app.js (Main Router - Self-Starting) - DEFINITIVE VERSION
+// js/app.js (Main Router - Self-Starting) - DEFINITIVE MASTER VERSION
 
 // Import all page handlers using ESM import syntax for browser compatibility
 import { handleLoginPage } from './pages/login.js';

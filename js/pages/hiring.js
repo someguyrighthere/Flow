@@ -1,4 +1,4 @@
-// js/pages/hiring.js
+// js/pages/hiring.js - MASTER SOLUTION VERSION
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
 /**
@@ -49,7 +49,7 @@ export function handleHiringPage() {
         if (!jobLocationSelect) return;
         jobLocationSelect.innerHTML = '<option value="">Loading locations...</option>'; // Show loading state
         try {
-            const locations = await apiRequest('GET', '/api/locations');
+            const locations = await apiRequest('GET', '/api/locations'); 
             jobLocationSelect.innerHTML = '<option value="">Select Location</option>'; // Default empty option
 
             if (locations && locations.length > 0) {
@@ -58,7 +58,7 @@ export function handleHiringPage() {
                     jobLocationSelect.add(option);
                 });
             } else {
-                jobLocationSelect.innerHTML = '<option value="">No locations available</option>';
+                jobLocationSelect.innerHTML = '<option value="">No locations available</p>'; // Ensure a closing tag
             }
         } catch (error) {
             console.error('Error loading locations for job posting form:', error);
@@ -74,7 +74,7 @@ export function handleHiringPage() {
         if (!jobPostingsListDiv) return;
         jobPostingsListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading job postings...</p>'; // Show loading state
         try {
-            const jobPostings = await apiRequest('GET', '/api/job-postings');
+            const jobPostings = await apiRequest('GET', '/api/job-postings'); 
             jobPostingsListDiv.innerHTML = ''; // Clear loading message
 
             if (jobPostings && jobPostings.length > 0) {
@@ -114,13 +114,13 @@ export function handleHiringPage() {
         if (!applicantsListDiv) return;
         applicantsListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>'; // Show loading state
         try {
-            const applicants = await apiRequest('GET', '/api/applicants');
+            const applicants = await apiRequest('GET', '/api/applicants'); 
             applicantsListDiv.innerHTML = ''; // Clear loading message
 
             if (applicants && applicants.length > 0) {
                 applicants.forEach(applicant => {
                     const applicantItem = document.createElement('div');
-                    applicantItem.className = 'applicant-item'; // Use 'applicant-item' for specific styling
+                    applicantItem.className = 'applicant-item'; 
                     applicantItem.innerHTML = `
                         <div>
                             <h4>${applicant.name} <span style="font-size:0.8em; color:var(--text-medium);">(${applicant.job_title || 'N/A'})</span></h4>
@@ -128,7 +128,7 @@ export function handleHiringPage() {
                             ${applicant.phone ? `<p style="font-size: 0.8em; color: var(--text-medium); margin-bottom: 5px;">Phone: ${applicant.phone}</p>` : ''}
                             <p style="font-size: 0.8em; color: var(--text-medium);">Applied: ${new Date(applicant.applied_at).toLocaleDateString()}</p>
                         </div>
-                        <div class="job-posting-actions"> <!-- Re-using class for consistent button styling -->
+                        <div class="job-posting-actions"> 
                             <button class="btn btn-secondary btn-sm btn-delete-applicant" data-id="${applicant.id}">Archive</button>
                         </div>
                     `;
@@ -154,13 +154,13 @@ export function handleHiringPage() {
      * @param {Event} e - The submit event.
      */
     async function createJobPosting(e) {
-        e.preventDefault(); // Prevent default form submission
+        e.preventDefault(); 
 
         const jobData = {
             title: jobTitleInput.value.trim(),
             description: jobDescriptionTextarea.value.trim(),
             requirements: jobRequirementsTextarea.value.trim(),
-            location_id: jobLocationSelect.value || null // Use null if no location selected
+            location_id: jobLocationSelect.value || null 
         };
 
         // Basic validation
@@ -170,10 +170,10 @@ export function handleHiringPage() {
         }
 
         try {
-            await apiRequest('POST', '/api/job-postings', jobData); // Send data to backend
+            await apiRequest('POST', '/api/job-postings', jobData); 
             displayStatusMessage(jobPostingStatusMessage, 'Job posting created successfully!', false);
-            newJobPostingForm.reset(); // Clear the form
-            loadCurrentJobPostings(); // Reload the list of job postings to show the new one
+            newJobPostingForm.reset(); 
+            loadCurrentJobPostings(); 
         } catch (error) {
             displayStatusMessage(jobPostingStatusMessage, `Error creating job posting: ${error.message}`, true);
             console.error('Error creating job posting:', error);
@@ -188,9 +188,9 @@ export function handleHiringPage() {
         const confirmed = await showConfirmModal('Are you sure you want to delete this job posting? This cannot be undone.', 'Delete');
         if (confirmed) {
             try {
-                await apiRequest('DELETE', `/api/job-postings/${id}`); // Call backend delete endpoint
+                await apiRequest('DELETE', `/api/job-postings/${id}`); 
                 showModalMessage('Job posting deleted successfully!', false);
-                loadCurrentJobPostings(); // Reload the list after deletion
+                loadCurrentJobPostings(); 
             } catch (error) {
                 showModalMessage(`Error deleting job posting: ${error.message}`, true);
                 console.error('Error deleting job posting:', error);
@@ -206,10 +206,9 @@ export function handleHiringPage() {
         const confirmed = await showConfirmModal('Are you sure you want to archive this applicant? This cannot be undone.', 'Archive');
         if (confirmed) {
             try {
-                // Assuming a DELETE endpoint for applicants by ID
                 await apiRequest('DELETE', `/api/applicants/${id}`);
                 showModalMessage('Applicant archived successfully!', false);
-                loadRecentApplicants(); // Reload the list after archiving
+                loadRecentApplicants(); 
             } catch (error) {
                 showModalMessage(`Error archiving applicant: ${error.message}`, true);
                 console.error('Error archiving applicant:', error);
@@ -223,8 +222,7 @@ export function handleHiringPage() {
     }
     
     // --- Initial Page Load Actions ---
-    // Call these functions to populate the page when it loads
-    loadLocationsForJobPostingForm(); // Populate the location dropdown for new job postings
-    loadCurrentJobPostings(); // Load and display existing job postings
-    loadRecentApplicants(); // Load and display recent applicants
+    loadLocationsForJobPostingForm(); 
+    loadCurrentJobPostings(); 
+    loadRecentApplicants(); 
 }
