@@ -1,4 +1,4 @@
-// js/pages/scheduling.js - MASTER SOLUTION: Final Version with Timezone Fix
+// js/pages/scheduling.js - MASTER SOLUTION: Final Version with Timezone and Print Fix
 
 import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 
@@ -18,6 +18,7 @@ export function handleSchedulingPage() {
     const currentWeekDisplay = document.getElementById('current-week-display');
     const prevWeekBtn = document.getElementById('prev-week-btn');
     const nextWeekBtn = document.getElementById('next-week-btn');
+    const printScheduleBtn = document.getElementById('print-schedule-btn'); // New button
     const calendarGridWrapper = document.getElementById('calendar-grid-wrapper');
     const employeeSelect = document.getElementById('employee-select');
     const locationSelect = document.getElementById('location-select');
@@ -263,6 +264,18 @@ export function handleSchedulingPage() {
 
     prevWeekBtn.addEventListener('click', () => handleWeekChange(-7));
     nextWeekBtn.addEventListener('click', () => handleWeekChange(7));
+
+    if (printScheduleBtn) {
+        printScheduleBtn.addEventListener('click', () => {
+            if (!currentLocationId) {
+                showModalMessage('Please select a location to print a schedule.', true);
+                return;
+            }
+            const locationName = locationSelector.options[locationSelector.selectedIndex].text;
+            const url = `printable-schedule.html?startDate=${getApiDate(currentStartDate)}&endDate=${getApiDate(getEndDate(currentStartDate))}&locationId=${currentLocationId}&locationName=${encodeURIComponent(locationName)}`;
+            window.open(url, '_blank');
+        });
+    }
 
     createShiftForm.addEventListener('submit', async (e) => {
         e.preventDefault();
