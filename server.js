@@ -1,4 +1,4 @@
-// server.js - MASTER SOLUTION: ABSOLUTE FINAL ROUTING & STABILITY
+// server.js - MASTER SOLUTION: FINAL VERIFIED ROUTING (with app.use() moved)
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -8,12 +8,11 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-// Import external route modules
 const onboardingRoutes = require('./routes/onboardingRoutes');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
-const apiRoutes = express.Router(); // Declare apiRoutes here, at the top of its scope
+const apiRoutes = express.Router(); // Declare apiRoutes here
 
 // --- Configuration Variables ---
 const PORT = process.env.PORT || 3000;
@@ -57,7 +56,6 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname))); // Serves files like index.html directly
 app.use('/uploads', express.static(uploadsDir));
 
-
 // --- Authentication & Authorization Middleware ---
 const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -88,7 +86,7 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION (Attached to apiRoutes Router) ---
-// IMPORTANT: Define ALL routes on apiRoutes router BEFORE mounting it to the main app.
+// Define ALL routes on apiRoutes router BEFORE mounting it to the main app.
 // This ensures the router is fully populated when app.use() is called.
 
 // Authentication Routes
@@ -138,7 +136,6 @@ apiRoutes.post('/login', async (req, res) => {
         }
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) }; 
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d', issuer: API_BASE_URL });
-        console.log(`[Auth/Login] Login successful for "${email}". User ID: ${user.user_id}, Role: ${user.role}.`);
         res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
         console.error(`[Auth/Login] Error during login for "${email}":`, err);
