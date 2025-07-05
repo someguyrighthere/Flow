@@ -1,19 +1,5 @@
 // server.js - MASTER SOLUTION: FINAL, COMPLETE ROUTING FOR ALL API ROUTES
 
-/*
-    Database Schema for Messaging:
-    Run this command in your PostgreSQL database to create the required table.
-
-    CREATE TABLE messages (
-        message_id SERIAL PRIMARY KEY,
-        sender_id INT NOT NULL REFERENCES users(user_id),
-        recipient_id INT NOT NULL REFERENCES users(user_id),
-        content TEXT NOT NULL,
-        is_read BOOLEAN DEFAULT FALSE,
-        sent_at TIMESTAMPTZ DEFAULT NOW()
-    );
-*/
-
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -91,7 +77,6 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION ---
-// All private/protected API routes are defined on the 'apiRoutes' router.
 
 // --- Authentication Routes ---
 apiRoutes.post('/register', async (req, res) => {
@@ -514,7 +499,7 @@ apiRoutes.delete('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// START: Added Messaging Routes
+// --- Messaging Routes ---
 apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
     const { recipient_id, content } = req.body;
     const sender_id = req.user.id;
@@ -524,6 +509,7 @@ apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
     }
 
     try {
+        // FIX: Ensure the column name 'content' is lowercase to match the database schema.
         await pool.query(
             'INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3)',
             [sender_id, recipient_id, content]
@@ -553,7 +539,6 @@ apiRoutes.get('/messages', isAuthenticated, async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve messages.' });
     }
 });
-// END: Added Messaging Routes
 
 // --- Subscription Status Route ---
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
