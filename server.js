@@ -63,17 +63,40 @@ const isAdmin = (req, res, next) => {
     }
 };
 
-// --- ALL API ROUTES ---
-// ... (All other routes like /login, /register, /users, etc. are included here) ...
+// --- API ROUTES DEFINITION ---
+
+// --- Authentication Routes ---
+apiRoutes.post('/register', async (req, res) => {
+    const { companyName, fullName, email, password } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`, [`${companyName} HQ`]);
+        const newLocationId = locationRes.rows[0].location_id;
+        const hash = await bcrypt.hash(password, 10);
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await client.query('COMMIT');
+        res.status(201).json({ message: "Registration successful!" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(409).json({ error: "Email address is already registered." });
+        res.status(500).json({ error: "An internal server error occurred." });
+    } finally {
+        client.release();
+    }
+});
 
 apiRoutes.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
         const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
-        if (result.rows.length === 0) return res.status(401).json({ error: "Invalid email or password." });
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: "Invalid email or password." });
+        }
         const user = result.rows[0];
-        if (!(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid email or password." });
-        
+        if (!(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ error: "Invalid email or password." });
+        }
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, role: user.role, userId: user.user_id });
@@ -83,13 +106,37 @@ apiRoutes.post('/login', async (req, res) => {
     }
 });
 
+// --- User & Admin Routes ---
+apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User profile not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
+    }
+});
+
+apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT u.user_id, u.full_name, u.position, u.role, l.location_name 
+            FROM users u 
+            LEFT JOIN locations l ON u.location_id = l.location_id 
+            ORDER BY u.full_name
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve users.' });
+    }
+});
+
 // --- Scheduling Routes ---
 apiRoutes.get('/shifts', isAuthenticated, async (req, res) => {
     const { startDate, endDate, location_id, user_id } = req.query;
     const requestingUserId = req.user.id;
     const isUserAdmin = req.user.role === 'super_admin' || req.user.role === 'location_admin';
 
-    // Logic for employees to fetch their own schedule
     if (user_id && !isUserAdmin && String(user_id) !== String(requestingUserId)) {
         return res.status(403).json({ error: 'Access denied. You can only view your own schedule.' });
     }
@@ -116,7 +163,6 @@ apiRoutes.get('/shifts', isAuthenticated, async (req, res) => {
                 params.push(location_id);
             }
         } else {
-            // If not admin, or an admin looking at their own schedule via this param
             const targetUserId = user_id || requestingUserId;
             query += ` AND s.employee_id = $${paramIndex++}`;
             params.push(targetUserId);
@@ -131,6 +177,67 @@ apiRoutes.get('/shifts', isAuthenticated, async (req, res) => {
     }
 });
 
+
+// --- Messaging Routes ---
+apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
+    const { recipient_id, content } = req.body;
+    const sender_id = req.user.id;
+
+    if (!recipient_id || !content) {
+        return res.status(400).json({ error: 'Recipient and message content are required.' });
+    }
+
+    try {
+        await pool.query(
+            'INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3)',
+            [sender_id, recipient_id, content]
+        );
+        res.status(201).json({ message: 'Message sent successfully.' });
+    } catch (err) {
+        console.error('Error sending message:', err);
+        res.status(500).json({ error: 'Failed to send message.' });
+    }
+});
+
+apiRoutes.get('/messages', isAuthenticated, async (req, res) => {
+    const recipient_id = req.user.id;
+
+    try {
+        const result = await pool.query(
+            `SELECT message_id, content, sent_at, is_read, u.full_name as sender_name
+             FROM messages m
+             JOIN users u ON m.sender_id = u.user_id
+             WHERE m.recipient_id = $1
+             ORDER BY m.sent_at DESC`,
+            [recipient_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching messages:', err);
+        res.status(500).json({ error: 'Failed to retrieve messages.' });
+    }
+});
+
+apiRoutes.delete('/messages/:id', isAuthenticated, async (req, res) => {
+    const messageId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        const result = await pool.query(
+            'DELETE FROM messages WHERE message_id = $1 AND recipient_id = $2',
+            [messageId, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Message not found or you do not have permission to delete it.' });
+        }
+
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting message:', err);
+        res.status(500).json({ error: 'Failed to delete message.' });
+    }
+});
 
 // --- MOUNT ROUTERS ---
 const onboardingRouter = createOnboardingRouter(pool, isAuthenticated, isAdmin);
