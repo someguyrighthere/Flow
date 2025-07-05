@@ -1,4 +1,4 @@
-// server.js - DEFINITIVE AND FINAL VERSION for Backend Stability and Route Connectivity
+// server.js - MOST UP-TO-DATE AND FINAL VERSION for Backend Stability and Route Connectivity
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -9,7 +9,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const onboardingRoutes = require('./routes/onboardingRoutes');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Ensure STRIPE_SECRET_KEY is set on Render
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const apiRoutes = express.Router(); // Declare apiRoutes here
@@ -54,6 +54,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(uploadsDir));
+
+// Mount API routes under the '/api' prefix
+app.use('/api', apiRoutes); 
 
 // --- Authentication & Authorization Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -153,7 +156,7 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
         }
         console.log(`[Users/Me] Profile fetched for user ${req.user.id}.`);
         res.json(result.rows[0]);
-    } catch (err) { // Moved closing brace here
+    } catch (err) { // This closing brace was missing in a previous iteration, now fixed
         console.error(`[Users/Me] Failed to retrieve user profile for ${req.user.id}:`, err);
         res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
@@ -176,7 +179,6 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
         let hashedPassword = user.password;
         if (new_password) {
             if (!current_password || !(await bcrypt.compare(current_password, user.password))) {
-                console.log(`[Users/Me] Profile update failed: Incorrect current password provided for user ${userId}.`);
                 return res.status(401).json({ error: 'Current password incorrect.' });
             }
             hashedPassword = await bcrypt.hash(new_password, 10);
@@ -293,7 +295,7 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         try {
             await client.query('BEGIN'); 
 
-            const userToDeleteRes = await pool.query('SELECT role FROM users WHERE user_id = $1', [id]); // Changed to pool.query
+            const userToDeleteRes = await pool.query('SELECT role FROM users WHERE user_id = $1', [id]); 
             if (userToDeleteRes.rows.length === 0) {
                 console.log(`[DELETE /api/users/:id] User ${id} not found for deletion.`);
                 await client.query('ROLLBACK');
@@ -381,7 +383,7 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
-            const usersAtLocation = await pool.query('SELECT user_id FROM users WHERE location_id = $1', [id]); // Changed to pool.query
+            const usersAtLocation = await pool.query('SELECT user_id FROM users WHERE location_id = $1', [id]); 
             if (usersAtLocation.rows.length > 0) {
                 console.log(`[DELETE /api/locations/:id] Cannot delete location ${id}: ${usersAtLocation.rows.length} users are still assigned.`);
                 await client.query('ROLLBACK');
@@ -595,22 +597,22 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
 
     // --- Server Startup Logic ---
     const startServer = async () => {
-    try {
-        console.log('[Server Startup] Attempting to connect to database...');
-        const client = await pool.connect();
-        console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); 
-        client.release(); 
+        try {
+            console.log('[Server Startup] Attempting to connect to database...');
+            const client = await pool.connect();
+            console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); 
+            client.release(); 
 
-        app.listen(PORT, '0.0.0.0', () => { 
-            console.log(`--- SERVER: Express app listening successfully on port ${PORT}! ---`);
-            console.log(`Access your app locally at: http://localhost:${PORT}`);
-            console.log(`Access your deployed app at your Render URL.`);
-        });
+            app.listen(PORT, '0.0.0.0', () => { 
+                console.log(`--- SERVER: Express app listening successfully on port ${PORT}! ---`);
+                console.log(`Access your app locally at: http://localhost:${PORT}`);
+                console.log(`Access your deployed app at your Render URL.`);
+            });
 
-    } catch (err) {
-        console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack);
-        process.exit(1); 
-    }
-};
+        } catch (err) {
+            console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack);
+            process.exit(1); 
+        }
+    };
 
-startServer();
+    startServer();
