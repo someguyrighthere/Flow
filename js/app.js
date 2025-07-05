@@ -14,7 +14,7 @@ import { handleApplyPage } from './pages/apply.js';
 import { handleOnboardingViewPage } from './pages/onboardingView.js';
 import { handleSuiteHubPage } from './pages/suiteHub.js';
 import { handlePricingPage } from './pages/pricing.js';
-import { handlePrintableSchedulePage } from './pages/printable-schedule.js'; // New import
+import { handlePrintableSchedulePage } from './pages/printable-schedule.js';
 
 /**
  * Sets up the settings dropdown menu on pages that have it.
@@ -54,11 +54,13 @@ function setupSettingsDropdown() {
 function main() {
     const path = window.location.pathname;
 
+    // A list of pages that have the main header with the settings dropdown
     const pagesWithSettings = [
         "suite-hub.html", "dashboard.html", "checklists.html", "admin.html",
-        "account.html", "documents.html", "hiring.html", "scheduling.html"
+        "account.html", "documents.html", "hiring.html", "scheduling.html", "new-hire-view.html"
     ];
 
+    // Setup the dropdown if the current page needs it
     if (pagesWithSettings.some(p => path.includes(p))) {
         setupSettingsDropdown();
     }
@@ -77,7 +79,7 @@ function main() {
     else if (path.includes("apply.html")) handleApplyPage();
     else if (path.includes("new-hire-view.html")) handleOnboardingViewPage();
     else if (path.includes("pricing.html")) handlePricingPage();
-    else if (path.includes("printable-schedule.html")) handlePrintableSchedulePage(); // New route
+    else if (path.includes("printable-schedule.html")) handlePrintableSchedulePage();
 }
 
 // --- AUTOMATIC STARTUP ---
