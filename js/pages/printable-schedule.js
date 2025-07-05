@@ -26,7 +26,7 @@ export function handlePrintableSchedulePage() {
                     <h1>Work Schedule</h1>
                 </div>
                 <div class="schedule-info">
-                    <span><strong>Department:</strong> ${locationName}</span>
+                    <span><strong>Location:</strong> ${locationName}</span>
                     <span><strong>Week Ending:</strong> ${weekEndingDate.toLocaleDateString()}</span>
                 </div>
                 <table class="schedule-table">
