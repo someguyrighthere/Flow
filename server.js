@@ -1,4 +1,4 @@
-// server.js - FINAL MASTER SOLUTION FOR ROUTING & STABILITY
+// server.js - MASTER SOLUTION: FINAL ATTEMPT AT BACKEND STABILITY (Routes Mounted Earlier)
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -9,16 +9,16 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const onboardingRoutes = require('./routes/onboardingRoutes');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); 
 
 const app = express();
-const apiRoutes = express.Router(); // Declare apiRoutes here, at the top of its scope
+const apiRoutes = express.Router(); // Declare apiRoutes here
 
 // --- Configuration Variables ---
 const PORT = process.env.PORT || 3000; 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this'; 
-const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${PORT}`; // For JWT token issuer
-const DATABASE_URL = process.env.DATABASE_URL;
+const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${PORT}`; 
+const DATABASE_URL = process.env.DATABASE_URL; 
 
 // --- File Uploads Configuration ---
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -53,8 +53,12 @@ const pool = new Pool({
 // --- Express Global Middleware Configuration ---
 app.use(cors()); 
 app.use(express.json());
-app.use(express.static(path.join(__dirname))); // Serves files like index.html directly
-app.use('/uploads', express.static(uploadsDir)); // Serves uploaded files
+app.use(express.static(path.join(__dirname)));
+app.use('/uploads', express.static(uploadsDir));
+
+// --- IMPORTANT: Mount API routes here, AFTER global middleware, but BEFORE route definitions ---
+// This is a common pattern for Express to ensure router is ready when routes are defined.
+app.use('/api', apiRoutes); 
 
 // --- Authentication & Authorization Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -86,7 +90,7 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION (Attached to apiRoutes Router) ---
-// Define ALL routes on apiRoutes router here, BEFORE app.use('/api', apiRoutes)
+// Define ALL routes on apiRoutes router after it's been declared and app.use('/api', apiRoutes) is done.
 
 // Authentication Routes
 apiRoutes.post('/register', async (req, res) => {
@@ -153,6 +157,7 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
             console.log(`[Users/Me] User ${req.user.id} not found in DB.`);
             return res.status(404).json({ error: 'User profile not found.' });
         }
+        console.log(`[Users/Me] Profile fetched for user ${req.user.id}.`);
         res.json(result.rows[0]);
     } catch (err) { 
         console.error(`[Users/Me] Failed to retrieve user profile for ${req.user.id}:`, err);
@@ -177,7 +182,6 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
         let hashedPassword = user.password;
         if (new_password) {
             if (!current_password || !(await bcrypt.compare(current_password, user.password))) {
-                console.log(`[Users/Me] Profile update failed: Incorrect current password provided for user ${userId}.`);
                 return res.status(401).json({ error: 'Current password incorrect.' });
             }
             hashedPassword = await bcrypt.hash(new_password, 10);
