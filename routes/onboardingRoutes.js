@@ -1,8 +1,12 @@
 // routes/onboardingRoutes.js
+const express = require('express');
+const router = express.Router();
 
-module.exports = (app, pool, isAuthenticated, isAdmin) => {
+// This function now returns a configured router
+module.exports = (pool, isAuthenticated, isAdmin) => {
 
-    app.post('/onboarding-tasks', isAuthenticated, isAdmin, async (req, res) => {
+    // Note: The path is now '/' because the base path '/api/onboarding-tasks' will be defined in server.js
+    router.post('/', isAuthenticated, isAdmin, async (req, res) => {
         const { user_id, checklist_id } = req.body;
         if (!user_id || !checklist_id) {
             return res.status(400).json({ error: 'User ID and Checklist ID are required.' });
@@ -20,7 +24,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
                 return res.status(404).json({ error: 'Checklist not found.' });
             }
             
-            // Robustly parse tasks, whether it's a string or already an object
             let tasks = [];
             if (checklistRes.rows[0].tasks) {
                 tasks = typeof checklistRes.rows[0].tasks === 'string' ? JSON.parse(checklistRes.rows[0].tasks) : checklistRes.rows[0].tasks;
@@ -44,7 +47,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
         }
     });
     
-    app.get('/onboarding-tasks', isAuthenticated, async (req, res) => {
+    router.get('/', isAuthenticated, async (req, res) => {
         const { user_id } = req.query;
         const requestingUserId = req.user.id;
         const requestingUserRole = req.user.role;
@@ -87,7 +90,7 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
         }
     });
 
-    app.put('/onboarding-tasks/:id', isAuthenticated, async (req, res) => {
+    router.put('/:id', isAuthenticated, async (req, res) => {
         const { id } = req.params;
         const { completed } = req.body;
         const requestingUserId = req.user.id;
@@ -118,4 +121,6 @@ module.exports = (app, pool, isAuthenticated, isAdmin) => {
             res.status(500).json({ error: 'Failed to update onboarding task status.' });
         }
     });
+
+    return router;
 };
