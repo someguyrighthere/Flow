@@ -188,6 +188,29 @@ apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     }
 });
 
+apiRoutes.post('/locations', isAuthenticated, isAdmin, async (req, res) => {
+    const { location_name, location_address } = req.body;
+    if (!location_name || !location_address) {
+        return res.status(400).json({ error: 'Location name and address are required.' });
+    }
+    try {
+        const result = await pool.query('INSERT INTO locations (location_name, location_address) VALUES ($1, $2) RETURNING *', [location_name, location_address]);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to add new location.' });
+    }
+});
+
+apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM locations WHERE location_id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete location.' });
+    }
+});
+
 // --- Checklist Routes ---
 apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
     try {
@@ -227,7 +250,6 @@ apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// FIX: Added safety checks for file upload handling.
 apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
     try {
         if (!req.file) {
@@ -247,6 +269,27 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
     }
 });
 
+apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const docResult = await pool.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
+        if (docResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found.' });
+        }
+
+        await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
+        
+        const filePath = path.join(uploadsDir, docResult.rows[0].file_name);
+        fs.unlink(filePath, (err) => {
+            if (err) console.error(`Failed to delete file from disk: ${filePath}`, err);
+        });
+        
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete document.' });
+    }
+});
+
 // --- Hiring Routes ---
 apiRoutes.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     try {
@@ -258,7 +301,6 @@ apiRoutes.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
         `);
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching job postings:', err);
         res.status(500).json({ error: 'Failed to retrieve job postings.' });
     }
 });
@@ -275,7 +317,6 @@ apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        console.error('Error creating job posting:', err);
         res.status(500).json({ error: 'Failed to create job posting.' });
     }
 });
@@ -311,6 +352,17 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
         res.status(204).send();
     } catch (err) {
         res.status(500).json({ error: 'Failed to delete applicant.' });
+    }
+});
+
+// --- Subscription Status Route ---
+apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
+    try {
+        // This is a placeholder. In a real app, you would query your database
+        // to check the user's subscription status based on their ID (req.user.id)
+        res.json({ plan: 'Pro Plan' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to get subscription status.' });
     }
 });
 
