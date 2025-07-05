@@ -16,6 +16,7 @@ export function handleOnboardingViewPage() {
     const onboardingInfoContainer = document.getElementById('onboarding-info-container');
     const onboardingTaskListDiv = document.getElementById('onboarding-task-list');
     const taskListOverviewDiv = document.getElementById('task-list-overview');
+    const onboardingStatusMessageElement = document.getElementById('onboarding-status-message');
     const employeeScheduleListDiv = document.getElementById('employee-schedule-list');
     const printScheduleBtn = document.getElementById('print-employee-schedule-btn');
 
@@ -58,7 +59,7 @@ export function handleOnboardingViewPage() {
         if (!messagesContainer) return;
         try {
             const messages = await apiRequest('GET', '/api/messages');
-            messagesContainer.innerHTML = ''; // Clear previous content
+            messagesContainer.innerHTML = '';
             if (messages && messages.length > 0) {
                 const messagesHeader = document.createElement('h3');
                 messagesHeader.textContent = "Messages for You";
@@ -67,14 +68,10 @@ export function handleOnboardingViewPage() {
                 messages.forEach(msg => {
                     const msgItem = document.createElement('div');
                     msgItem.className = 'message-item';
-                    
-                    // Updated HTML to include a "New" indicator for unread messages
+                    // FIX: Changed msg.message_content to msg.content to match the API response
                     msgItem.innerHTML = `
-                        <p>${msg.content}</p> 
-                        <div class="message-actions">
-                            ${!msg.is_read ? '<span class="new-message-indicator">New</span>' : ''}
-                            <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.message_id}">Dismiss</button>
-                        </div>
+                        <p>${msg.content}</p>
+                        <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.message_id}">Dismiss</button>
                     `;
                     messagesContainer.appendChild(msgItem);
                 });
@@ -86,7 +83,15 @@ export function handleOnboardingViewPage() {
 
     messagesContainer.addEventListener('click', async (e) => {
         if (e.target.classList.contains('dismiss-message-btn')) {
-            e.target.closest('.message-item').remove();
+            const messageId = e.target.dataset.messageId;
+            try {
+                // This route doesn't exist yet, but leaving the logic here for future implementation
+                // For now, we just remove it from the view.
+                // await apiRequest('PUT', `/api/messages/${messageId}/read`);
+                e.target.closest('.message-item').remove();
+            } catch (error) {
+                showModalMessage('Could not dismiss message.', true);
+            }
         }
     });
 
@@ -150,10 +155,7 @@ export function handleOnboardingViewPage() {
         if (!taskListOverviewDiv) return;
         const completedTasks = userTasks.filter(task => task.completed).length;
         const totalTasks = userTasks.length;
-        const taskListOverviewEl = document.getElementById('task-list-overview');
-        if(taskListOverviewEl) {
-            taskListOverviewEl.textContent = `${completedTasks}/${totalTasks} tasks complete`;
-        }
+        taskListOverviewDiv.textContent = `${completedTasks}/${totalTasks} tasks complete`;
         if (completedTasks === totalTasks && totalTasks > 0) {
             if (onboardingInfoContainer) {
                 setTimeout(() => {

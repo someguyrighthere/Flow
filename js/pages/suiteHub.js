@@ -26,6 +26,7 @@ export async function handleSuiteHubPage() {
     async function loadEmployeesForMessaging() {
         if (!employeeSelect) return;
         try {
+            // This is the call that is failing with a 404
             const users = await apiRequest('GET', '/api/users');
             employeeSelect.innerHTML = '<option value="">Select an employee...</option>';
             users.filter(u => u.role === 'employee').forEach(user => {
@@ -34,6 +35,7 @@ export async function handleSuiteHubPage() {
             });
         } catch (error) {
             console.error("Failed to load employees for messaging:", error);
+            // The error modal is shown by the apiRequest utility function
         }
     }
 
@@ -41,19 +43,18 @@ export async function handleSuiteHubPage() {
         sendMessageForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const recipientId = employeeSelect.value;
-            const contentValue = messageContent.value.trim();
+            const content = messageContent.value.trim();
 
-            if (!recipientId || !contentValue) {
+            if (!recipientId || !content) {
                 messageStatus.textContent = 'Please select an employee and write a message.';
                 messageStatus.style.color = '#ff8a80';
                 return;
             }
 
             try {
-                // FIX: Changed 'message_content' to 'content' to match the database and API route
                 await apiRequest('POST', '/api/messages', {
                     recipient_id: recipientId,
-                    content: contentValue
+                    content: content
                 });
                 messageStatus.textContent = 'Message sent successfully!';
                 messageStatus.style.color = 'var(--primary-accent)';

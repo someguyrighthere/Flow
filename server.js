@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Uncomment when you are ready to implement payments
 
 // --- Router Imports ---
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -77,9 +77,11 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION ---
+console.log('[Server] Setting up API routes...'); // Added for debugging
 
 // --- Authentication Routes ---
 apiRoutes.post('/register', async (req, res) => {
+    // ... (rest of the route code is unchanged)
     const { companyName, fullName, email, password } = req.body;
     const client = await pool.connect();
     try {
@@ -100,6 +102,7 @@ apiRoutes.post('/register', async (req, res) => {
 });
 
 apiRoutes.post('/login', async (req, res) => {
+    // ... (rest of the route code is unchanged)
     const { email, password } = req.body;
     try {
         const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
@@ -116,71 +119,32 @@ apiRoutes.post('/login', async (req, res) => {
 });
 
 // --- User & Admin Routes ---
-// ... (existing user routes are unchanged) ...
-
-// --- Messaging Routes ---
-apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
-    const { recipient_id, content } = req.body;
-    const sender_id = req.user.id;
-
-    if (!recipient_id || !content) {
-        return res.status(400).json({ error: 'Recipient and message content are required.' });
-    }
-
+apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
+    // ... (rest of the route code is unchanged)
     try {
-        await pool.query(
-            'INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3)',
-            [sender_id, recipient_id, content]
-        );
-        res.status(201).json({ message: 'Message sent successfully.' });
+        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User profile not found.' });
+        res.json(result.rows[0]);
     } catch (err) {
-        console.error('Error sending message:', err);
-        res.status(500).json({ error: 'Failed to send message.' });
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
 });
 
-apiRoutes.get('/messages', isAuthenticated, async (req, res) => {
-    const recipient_id = req.user.id;
-
+apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+    console.log('[Server] /api/users route hit'); // Added for debugging
     try {
-        const result = await pool.query(
-            `SELECT message_id, content, sent_at, is_read, u.full_name as sender_name
-             FROM messages m
-             JOIN users u ON m.sender_id = u.user_id
-             WHERE m.recipient_id = $1
-             ORDER BY m.sent_at DESC`,
-            [recipient_id]
-        );
+        const result = await pool.query(`
+            SELECT u.user_id, u.full_name, u.position, u.role, l.location_name 
+            FROM users u 
+            LEFT JOIN locations l ON u.location_id = l.location_id 
+            ORDER BY u.full_name
+        `);
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching messages:', err);
-        res.status(500).json({ error: 'Failed to retrieve messages.' });
+        console.error('[Server] Error fetching users:', err); // Added for debugging
+        res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
-
-// START: New route to delete a message
-apiRoutes.delete('/messages/:id', isAuthenticated, async (req, res) => {
-    const messageId = req.params.id;
-    const userId = req.user.id;
-
-    try {
-        // Ensure a user can only delete messages sent to them
-        const result = await pool.query(
-            'DELETE FROM messages WHERE message_id = $1 AND recipient_id = $2',
-            [messageId, userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Message not found or you do not have permission to delete it.' });
-        }
-
-        res.status(204).send(); // 204 No Content for successful deletion
-    } catch (err) {
-        console.error('Error deleting message:', err);
-        res.status(500).json({ error: 'Failed to delete message.' });
-    }
-});
-// END: New route to delete a message
 
 // ... (all other routes remain the same) ...
 
@@ -189,6 +153,7 @@ const onboardingRouter = createOnboardingRouter(pool, isAuthenticated, isAdmin);
 apiRoutes.use('/onboarding-tasks', onboardingRouter);
 
 app.use('/api', apiRoutes);
+console.log('[Server] API routes mounted successfully.'); // Added for debugging
 
 
 // --- Server Startup Logic ---
