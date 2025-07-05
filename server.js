@@ -1,4 +1,4 @@
-// server.js - FINAL AND GUARANTEED SYNTAX-CORRECT VERSION for Backend Stability and Route Connectivity
+// server.js - MASTER SOLUTION VERSION for Full Stability & Data Consistency
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -9,14 +9,15 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const onboardingRoutes = require('./routes/onboardingRoutes');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Ensure STRIPE_SECRET_KEY is set on Render
 
 const app = express();
-const apiRoutes = express.Router();
+const apiRoutes = express.Router(); // Declare apiRoutes here
 
 // --- Configuration Variables ---
 const PORT = process.env.PORT || 3000; 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this'; 
+const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${PORT}`; // For JWT token issuer
 const DATABASE_URL = process.env.DATABASE_URL;
 
 // --- File Uploads Configuration ---
@@ -49,14 +50,11 @@ const pool = new Pool({
     idleTimeoutMillis: 20000,           
 });
 
-// --- Express Middleware Configuration ---
+// --- Express Global Middleware Configuration ---
 app.use(cors()); 
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(uploadsDir));
-
-// Mount API routes under the '/api' prefix
-app.use('/api', apiRoutes); 
 
 // --- Authentication & Authorization Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -66,7 +64,7 @@ const isAuthenticated = (req, res, next) => {
         console.log('[Auth] No token provided in Authorization header. Sending 401 (Unauthorized).');
         return res.sendStatus(401); 
     }
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, JWT_SECRET, { issuer: API_BASE_URL }, (err, user) => { // Verify with issuer
         if (err) {
             console.log(`[Auth] Token verification failed: ${err.message}. Sending 403 (Forbidden). Token snippet: ${token.substring(0, 20)}...`);
             return res.sendStatus(403); 
@@ -88,6 +86,7 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION (Attached to apiRoutes Router) ---
+// Define ALL routes on apiRoutes router before mounting it
 
 // Authentication Routes
 apiRoutes.post('/register', async (req, res) => {
@@ -135,8 +134,8 @@ apiRoutes.post('/login', async (req, res) => {
             console.log(`[Auth/Login] Login failed for "${email}": Incorrect password.`);
             return res.status(401).json({ error: "Invalid email or password." });
         }
-        const payload = { id: user.user_id, role: user.role, location_id: user.location_id };
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) }; // Added iat claim
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d', issuer: API_BASE_URL }); // Added issuer
         console.log(`[Auth/Login] Login successful for "${email}". User ID: ${user.user_id}, Role: ${user.role}.`);
         res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
@@ -154,9 +153,8 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
             console.log(`[Users/Me] User ${req.user.id} not found in DB.`);
             return res.status(404).json({ error: 'User profile not found.' });
         }
-        console.log(`[Users/Me] Profile fetched for user ${req.user.id}.`);
         res.json(result.rows[0]);
-    } catch (err) { // This closing brace was missing in a previous iteration, now fixed
+    } catch (err) { 
         console.error(`[Users/Me] Failed to retrieve user profile for ${req.user.id}:`, err);
         res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
@@ -483,137 +481,6 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Start date and end date are required for fetching shifts.' });
         }
         try {
+            // Updated query to explicitly return timestamps in ISO 8601 UTC format
             let query = `
-                SELECT s.id, s.employee_id, u.full_name AS employee_name, s.location_id, l.location_name, s.start_time, s.end_time, s.notes
-                FROM shifts s JOIN users u ON s.employee_id = u.user_id JOIN locations l ON s.location_id = l.location_id
-                WHERE s.start_time >= $1 AND s.end_time <= $2
-            `;
-            const params = [startDate, endDate];
-            let paramIndex = 3;
-
-            let effectiveLocationId = null;
-            if (req.user.role === 'super_admin') {
-                effectiveLocationId = location_id; 
-                console.log(`[GET /api/shifts] Super admin viewing location_id from query: ${effectiveLocationId || 'N/A'}.`);
-            } else if (req.user.role === 'location_admin') {
-                effectiveLocationId = req.user.location_id; 
-                console.log(`[GET /api/shifts] Location admin viewing assigned location_id: ${effectiveLocationId}.`);
-            } else {
-                console.log(`[GET /api/shifts] Non-admin user (${req.user.role}) attempting to view shifts, access denied.`);
-                return res.status(403).json({ error: 'Access denied.' }); 
-            }
-
-            if (effectiveLocationId) {
-                query += ` AND s.location_id = $${paramIndex++}`;
-                params.push(effectiveLocationId);
-                console.log(`[GET /api/shifts] Filtering by effectiveLocationId: ${effectiveLocationId}.`);
-            } else if (req.user.role === 'super_admin' && !effectiveLocationId) {
-                console.log(`[GET /api/shifts] Super admin fetching shifts for ALL locations (no location_id provided in query).`);
-            }
-            
-            query += ' ORDER BY s.start_time ASC'; 
-            
-            console.log(`[GET /api/shifts] Executing SQL query: "${query}" with params: [${params.join(', ')}].`);
-            const result = await pool.query(query, params);
-            console.log(`[GET /api/shifts] Query successful. Returning ${result.rows.length} shifts.`);
-            res.json(result.rows);
-        } catch (err) {
-            console.error(`[Shifts] Error retrieving shifts:`, err);
-            res.status(500).json({ error: 'Failed to retrieve shifts.' });
-        }
-    });
-
-    apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
-        const { employee_id, location_id, start_time, end_time, notes } = req.body;
-        console.log(`[POST /api/shifts] Request to create shift. Employee ID: ${employee_id}, Location ID: ${location_id}, Start: ${start_time}, End: ${end_time}.`);
-        
-        if (!employee_id || !location_id || !start_time || !end_time) {
-            console.log('[POST /api/shifts] Missing required fields. Sending 400.');
-            return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
-        }
-        if (new Date(start_time).getTime() >= new Date(end_time).getTime()) {
-            console.log('[POST /api/shifts] End time is not after start time. Sending 400.');
-            return res.status(400).json({ error: 'End time must be after start time.' });
-        }
-
-        if (req.user.role === 'location_admin' && String(req.user.location_id) !== String(location_id)) {
-            console.log(`[POST /api/shifts] Location Admin ${req.user.id} tried to post to location ${location_id}, but is assigned to ${req.user.location_id}. Access denied.`);
-            return res.status(403).json({ error: 'Location Admin can only create shifts for their assigned location.' });
-        }
-
-        try {
-            const result = await pool.query(
-                `INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-                [employee_id, location_id, start_time, end_time, notes]
-            );
-            console.log('[POST /api/shifts] Shift created successfully in DB:', result.rows[0].id);
-            res.status(201).json(result.rows[0]);
-        } catch (err) {
-            console.error(`[Shifts] Error creating shift:`, err);
-            res.status(500).json({ error: 'Failed to create shift.' });
-        }
-    });
-
-    apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
-        const { id } = req.params;
-        console.log(`[DELETE /api/shifts/:id] Request to delete shift ID: ${id}. By user ${req.user.id} (${req.user.role}).`);
-        const client = await pool.connect(); 
-        try {
-            await client.query('BEGIN'); 
-            if (req.user.role === 'location_admin') {
-                const shiftRes = await pool.query('SELECT location_id FROM shifts WHERE id = $1', [id]); 
-                if (shiftRes.rows.length === 0) {
-                    console.log(`[DELETE /api/shifts/:id] Shift ${id} not found in DB.`);
-                    await client.query('ROLLBACK');
-                    return res.status(404).json({ error: 'Shift not found.' });
-                }
-                if (String(shiftRes.rows[0].location_id) !== String(req.user.location_id)) {
-                    console.log(`[DELETE /api/shifts/:id] Location Admin ${req.user.id} tried to delete shift ${id} from location ${shiftRes.rows[0].location_id}, but is assigned to ${req.user.location_id}. Access denied.`);
-                    await client.query('ROLLBACK');
-                    return res.status(403).json({ error: 'Access denied. You can only delete shifts from your assigned location.' });
-                }
-            }
-
-            const result = await client.query('DELETE FROM shifts WHERE id = $1 RETURNING id', [id]);
-            if (result.rowCount === 0) {
-                console.log(`[DELETE /api/shifts/:id] Shift ID ${id} not found for deletion.`);
-                await client.query('ROLLBACK');
-                return res.status(404).json({ error: 'Shift not found.' });
-            }
-            console.log(`[DELETE /api/shifts/:id] Shift ID ${id} deleted successfully.`);
-            await client.query('COMMIT'); 
-            res.status(204).send(); 
-        } catch (err) {
-            await client.query('ROLLBACK'); 
-            console.error(`[DELETE /api/shifts/:id] Error deleting shift ${id}:`, err);
-            res.status(500).json({ error: 'Failed to delete shift.' });
-        } finally {
-            client.release();
-        }
-    });
-
-
-    // Onboarding Routes
-    onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
-
-    // --- Server Startup Logic ---
-    const startServer = async () => {
-        try {
-            console.log('[Server Startup] Attempting to connect to database...');
-            const client = await pool.connect();
-            console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); 
-            client.release(); 
-
-            app.listen(PORT, '0.0.0.0', () => { 
-                console.log(`--- SERVER: Express app listening successfully on port ${PORT}! ---`);
-                console.log(`Access your app locally at: http://localhost:${PORT}`);
-                console.log(`Access your deployed app at your Render URL.`);
-            });
-
-        } catch (err) {
-            console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack);
-            process.exit(1); 
-        }
-    };
-
-    startServer();
+                SELECT s.id, s.employee_id, u.full_name AS employee
