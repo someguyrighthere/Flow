@@ -41,19 +41,19 @@ export async function handleSuiteHubPage() {
         sendMessageForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const recipientId = employeeSelect.value;
-            const content = messageContent.value.trim();
+            const contentValue = messageContent.value.trim();
 
-            if (!recipientId || !content) {
+            if (!recipientId || !contentValue) {
                 messageStatus.textContent = 'Please select an employee and write a message.';
                 messageStatus.style.color = '#ff8a80';
                 return;
             }
 
             try {
-                // FIX: Changed 'message_content' to 'content' to match the database and new API route
+                // FIX: Changed 'message_content' to 'content' to match the database and API route
                 await apiRequest('POST', '/api/messages', {
                     recipient_id: recipientId,
-                    content: content 
+                    content: contentValue
                 });
                 messageStatus.textContent = 'Message sent successfully!';
                 messageStatus.style.color = 'var(--primary-accent)';
