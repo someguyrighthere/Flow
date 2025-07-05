@@ -1,4 +1,4 @@
-// server.js - FINAL VERSION
+// server.js - FINAL VERSION WITH ALL FIXES
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Uncomment when ready
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
@@ -65,7 +65,66 @@ const isAdmin = (req, res, next) => {
 
 // --- API ROUTES ---
 
-// ... (All other routes like /login, /register, /users, etc. remain here) ...
+// ... (All other routes like /login, /register, /users, etc. are here and unchanged) ...
+apiRoutes.post('/register', async (req, res) => {
+    const { companyName, fullName, email, password } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`, [`${companyName} HQ`]);
+        const newLocationId = locationRes.rows[0].location_id;
+        const hash = await bcrypt.hash(password, 10);
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await client.query('COMMIT');
+        res.status(201).json({ message: "Registration successful!" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(409).json({ error: "Email address is already registered." });
+        res.status(500).json({ error: "An internal server error occurred." });
+    } finally {
+        client.release();
+    }
+});
+
+apiRoutes.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
+        const user = result.rows[0];
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ error: "Invalid email or password." });
+        }
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+        res.json({ token, role: user.role, userId: user.user_id });
+    } catch (err) {
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
+});
+
+apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User profile not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
+    }
+});
+
+apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT u.user_id, u.full_name, u.position, u.role, l.location_name 
+            FROM users u 
+            LEFT JOIN locations l ON u.location_id = l.location_id 
+            ORDER BY u.full_name
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve users.' });
+    }
+});
 
 // --- Messaging Routes ---
 apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
@@ -107,7 +166,7 @@ apiRoutes.get('/messages', isAuthenticated, async (req, res) => {
     }
 });
 
-// ADD THIS ROUTE: This is the new route to delete a message
+// ADDED THIS ROUTE: This is the new route to delete a message
 apiRoutes.delete('/messages/:id', isAuthenticated, async (req, res) => {
     const messageId = req.params.id;
     const userId = req.user.id;
@@ -128,7 +187,6 @@ apiRoutes.delete('/messages/:id', isAuthenticated, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete message.' });
     }
 });
-
 
 // --- MOUNT ROUTERS ---
 const onboardingRouter = createOnboardingRouter(pool, isAuthenticated, isAdmin);
