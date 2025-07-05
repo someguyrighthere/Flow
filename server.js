@@ -1,4 +1,4 @@
-// server.js - MASTER SOLUTION: FINAL ROUTING & STABILITY
+// server.js - FINAL AND GUARANTEED SYNTAX-CORRECT VERSION for Backend Stability and Route Connectivity
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -9,7 +9,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const onboardingRoutes = require('./routes/onboardingRoutes');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); 
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const apiRoutes = express.Router(); // Declare apiRoutes here
@@ -17,7 +17,7 @@ const apiRoutes = express.Router(); // Declare apiRoutes here
 // --- Configuration Variables ---
 const PORT = process.env.PORT || 3000; 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this'; 
-const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${PORT}`; 
+const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${PORT}`; // For JWT token issuer
 const DATABASE_URL = process.env.DATABASE_URL;
 
 // --- File Uploads Configuration ---
@@ -56,6 +56,8 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(uploadsDir));
 
+// Mount API routes under the '/api' prefix
+app.use('/api', apiRoutes); 
 
 // --- Authentication & Authorization Middleware ---
 const isAuthenticated = (req, res, next) => {
@@ -530,4 +532,93 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
         const { employee_id, location_id, start_time, end_time, notes } = req.body;
         console.log(`[POST /api/shifts] Request to create shift. Employee ID: ${employee_id}, Location ID: ${location_id}, Start: ${start_time}, End: ${end_time}.`);
         
-        if (!employee_id || !location_id || !start_time || !end_time)
+        if (!employee_id || !location_id || !start_time || !end_time) {
+            console.log('[POST /api/shifts] Missing required fields. Sending 400.');
+            return res.status(400).json({ error: 'Employee, location, start time, and end time are required.' });
+        }
+        if (new Date(start_time).getTime() >= new Date(end_time).getTime()) {
+            console.log('[POST /api/shifts] End time is not after start time. Sending 400.');
+            return res.status(400).json({ error: 'End time must be after start time.' });
+        }
+
+        if (req.user.role === 'location_admin' && String(req.user.location_id) !== String(location_id)) {
+            console.log(`[POST /api/shifts] Location Admin ${req.user.id} tried to post to location ${location_id}, but is assigned to ${req.user.location_id}. Access denied.`);
+            return res.status(403).json({ error: 'Location Admin can only create shifts for their assigned location.' });
+        }
+
+        try {
+            const result = await pool.query(
+                `INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                [employee_id, location_id, start_time, end_time, notes]
+            );
+            console.log('[POST /api/shifts] Shift created successfully in DB:', result.rows[0].id);
+            res.status(201).json(result.rows[0]);
+        } catch (err) {
+            console.error(`[Shifts] Error creating shift:`, err);
+            res.status(500).json({ error: 'Failed to create shift.' });
+        }
+    });
+
+    apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+        const { id } = req.params;
+        console.log(`[DELETE /api/shifts/:id] Request to delete shift ID: ${id}. By user ${req.user.id} (${req.user.role}).`);
+        const client = await pool.connect(); 
+        try {
+            await client.query('BEGIN'); 
+            if (req.user.role === 'location_admin') {
+                const shiftRes = await pool.query('SELECT location_id FROM shifts WHERE id = $1', [id]); 
+                if (shiftRes.rows.length === 0) {
+                    console.log(`[DELETE /api/shifts/:id] Shift ${id} not found in DB.`);
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Shift not found.' });
+                }
+                if (String(shiftRes.rows[0].location_id) !== String(req.user.location_id)) {
+                    console.log(`[DELETE /api/shifts/:id] Location Admin ${req.user.id} tried to delete shift ${id} from location ${shiftRes.rows[0].location_id}, but is assigned to ${req.user.location_id}. Access denied.`);
+                    await client.query('ROLLBACK');
+                    return res.status(403).json({ error: 'Access denied. You can only delete shifts from your assigned location.' });
+                }
+            }
+
+            const result = await client.query('DELETE FROM shifts WHERE id = $1 RETURNING id', [id]);
+            if (result.rowCount === 0) {
+                console.log(`[DELETE /api/shifts/:id] Shift ID ${id} not found for deletion.`);
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Shift not found.' });
+            }
+            console.log(`[DELETE /api/shifts/:id] Shift ID ${id} deleted successfully.`);
+            await client.query('COMMIT'); 
+            res.status(204).send(); 
+        } catch (err) {
+            await client.query('ROLLBACK'); 
+            console.error(`[DELETE /api/shifts/:id] Error deleting shift ${id}:`, err);
+            res.status(500).json({ error: 'Failed to delete shift.' });
+        } finally {
+            client.release();
+        }
+    });
+
+
+    // Onboarding Routes
+    onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
+
+    // --- Server Startup Logic ---
+    const startServer = async () => {
+        try {
+            console.log('[Server Startup] Attempting to connect to database...');
+            const client = await pool.connect();
+            console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); 
+            client.release(); 
+
+            app.listen(PORT, '0.0.0.0', () => { 
+                console.log(`--- SERVER: Express app listening successfully on port ${PORT}! ---`);
+                console.log(`Access your app locally at: http://localhost:${PORT}`);
+                console.log(`Access your deployed app at your Render URL.`);
+            });
+
+        } catch (err) {
+            console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack);
+            process.exit(1); 
+        }
+    };
+
+    startServer();
