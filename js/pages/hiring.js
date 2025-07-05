@@ -210,14 +210,13 @@ export function handleHiringPage() {
         const applyUrl = `${window.location.origin}/apply.html?jobId=${jobId}`;
         const embedCode = `<iframe src="${applyUrl}" width="100%" height="600" frameborder="0"></iframe>`;
 
-        // Remove existing share modal if it exists
         const existingModal = document.getElementById('share-job-modal');
         if (existingModal) {
             existingModal.remove();
         }
 
         const modalHtml = `
-            <div id="share-job-modal" class="modal-overlay" style="display: flex;">
+            <div id="share-job-modal" class="modal-overlay" style="display: flex; align-items: center; justify-content: center;">
                 <div class="modal-content" style="text-align: left; max-width: 600px;">
                     <h3>Share Job Posting</h3>
                     
@@ -290,7 +289,6 @@ export function handleHiringPage() {
         newJobPostingForm.addEventListener('submit', createJobPosting);
     }
     
-    // Use event delegation for dynamically created buttons
     if(jobPostingsListDiv) {
         jobPostingsListDiv.addEventListener('click', (e) => {
             const deleteButton = e.target.closest('.btn-delete-job-posting');
