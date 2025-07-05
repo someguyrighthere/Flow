@@ -1,4 +1,4 @@
-// server.js - MASTER SOLUTION: FINAL VERIFIED ROUTING (Guaranteed Mounting)
+// server.js - MASTER SOLUTION: FINAL ORDERED ROUTING FOR ALL API ROUTES
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -8,8 +8,8 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const onboardingRoutes = require('./routes/onboardingRoutes');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const onboardingRoutes = require('./routes/onboardingRoutes'); // Import external router
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Assuming Stripe is used elsewhere
 
 const app = express();
 const apiRoutes = express.Router(); // Declare apiRoutes here
@@ -86,8 +86,9 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION (Attached to apiRoutes Router) ---
-// Define ALL routes on apiRoutes router before it's mounted to the main app.
-// This ensures the router is fully populated when app.use() is called.
+// Define ALL routes on apiRoutes router here.
+// The order is important: ensure all routes are added to 'apiRoutes'
+// BEFORE 'app.use('/api', apiRoutes)' is called.
 
 // Authentication Routes
 apiRoutes.post('/register', async (req, res) => {
@@ -107,7 +108,7 @@ apiRoutes.post('/register', async (req, res) => {
             [fullName, email, hash, newLocationId]
         );
         await client.query('COMMIT');
-        res.status(201).json({ message: "Registration successful! You can now log in." });
+        res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error(`[Auth/Register] Error during registration for "${email}":`, err);
@@ -134,7 +135,7 @@ apiRoutes.post('/login', async (req, res) => {
             console.log(`[Auth/Login] Login failed for "${email}": Incorrect password.`);
             return res.status(401).json({ error: "Invalid email or password." });
         }
-        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) }; 
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d', issuer: API_BASE_URL });
         res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
@@ -154,7 +155,7 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
         }
         console.log(`[Users/Me] Profile fetched for user ${req.user.id}.`);
         res.json(result.rows[0]);
-    } catch (err) { 
+    } catch (err) {
         console.error(`[Users/Me] Failed to retrieve user profile for ${req.user.id}:`, err);
         res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }
@@ -192,7 +193,7 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
 
     } catch (err) {
         console.error(`[Users/Me] Error updating profile for user ${userId}:`, err);
-        if (err.code === '23505') { 
+        if (err.code === '23505') {
             return res.status(409).json({ error: 'Email address is already in use by another account.' });
         }
         res.status(500).json({ error: 'Failed to update profile.' });
@@ -201,7 +202,7 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
 
 
 apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) => {
-    const { location_id } = req.query; 
+    const { location_id } = req.query;
     console.log(`[Users/Availability] Request. User ID: ${req.user.id}, Role: ${req.user.role}, Query Location ID: ${location_id || 'N/A'}.`);
     try {
         let query = `SELECT user_id, full_name, availability, location_id FROM users`;
@@ -213,7 +214,7 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
             whereClauses.push(`location_id = $${paramIndex++}`);
             params.push(req.user.location_id);
             console.log(`[Users/Availability] Filtering by location admin's assigned location: ${req.user.location_id}.`);
-        } else if (req.user.role === 'super_admin' && location_id) { 
+        } else if (req.user.role === 'super_admin' && location_id) {
             whereClauses.push(`location_id = $${paramIndex++}`);
             params.push(location_id);
             console.log(`[Users/Availability] Super admin filtering by provided query location: ${location_id}.`);
@@ -221,13 +222,13 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
             console.log(`[Users/Availability] Super admin fetching all users (no location filter applied).`);
         } else {
             console.log(`[Users/Availability] Non-admin user attempting to fetch availability, returning empty array.`);
-            return res.json([]); 
+            return res.json([]);
         }
 
         if (whereClauses.length > 0) {
             query += ' WHERE ' + whereClauses.join(' AND ');
         }
-        query += ' ORDER BY full_name'; 
+        query += ' ORDER BY full_name';
 
         console.log(`[Users/Availability] Executing SQL query: "${query}" with params: [${params.join(', ')}].`);
         const result = await pool.query(query, params);
@@ -239,6 +240,48 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
     }
     });
 
+    apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+        const { location_id } = req.query;
+        console.log(`[GET /api/users] Request. User ID: ${req.user.id}, Role: ${req.user.role}, Query Location ID: ${location_id || 'N/A'}.`);
+        try {
+            let query = `
+                SELECT u.user_id, u.full_name, u.position, u.role, u.location_id, u.availability, l.location_name
+                FROM users u LEFT JOIN locations l ON u.location_id = l.location_id
+            `;
+            const params = [];
+            let whereClauses = [];
+            let paramIndex = 1;
+
+            if (req.user.role === 'location_admin') {
+                whereClauses.push(`u.location_id = $${paramIndex++}`);
+                params.push(req.user.location_id);
+                console.log(`[GET /api/users] Filtering by location admin's assigned location: ${req.user.location_id}.`);
+            } else if (req.user.role === 'super_admin' && location_id) {
+                whereClauses.push(`u.location_id = $${paramIndex++}`);
+                params.push(location_id);
+                console.log(`[GET /api/users] Super admin filtering by provided query location: ${location_id}.`);
+            } else if (req.user.role === 'super_admin' && !location_id) {
+                console.log(`[GET /api/users] Super admin fetching all users (no location filter applied).`);
+            } else {
+                console.log(`[GET /api/users] Non-admin user attempting to fetch all users, returning empty array.`);
+                return res.json([]);
+            }
+
+            if (whereClauses.length > 0) {
+                query += ' WHERE ' + whereClauses.join(' AND ');
+            }
+            query += ' ORDER BY u.full_name';
+
+            console.log(`[GET /api/users] Executing SQL query: "${query}" with params: [${params.join(', ')}].`);
+            const result = await pool.query(query, params);
+            console.log(`[GET /api/users] Query successful. Returning ${result.rows.length} users.`);
+            res.json(result.rows);
+        } catch (err) {
+            console.error(`[GET /api/users] Error retrieving users:`, err);
+            res.status(500).json({ error: 'Failed to retrieve users.' });
+        }
+    });
+
     apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
         const { id } = req.params;
         console.log(`[DELETE /api/users/:id] Request to delete user ID: ${id}. By user ${req.user.id} (${req.user.role}).`);
@@ -247,11 +290,11 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
             return res.status(400).json({ error: "You cannot delete your own account. Please contact another Super Admin." });
         }
 
-        const client = await pool.connect(); 
+        const client = await pool.connect();
         try {
-            await client.query('BEGIN'); 
+            await client.query('BEGIN');
 
-            const userToDeleteRes = await pool.query('SELECT role FROM users WHERE user_id = $1', [id]); 
+            const userToDeleteRes = await pool.query('SELECT role FROM users WHERE user_id = $1', [id]);
             if (userToDeleteRes.rows.length === 0) {
                 console.log(`[DELETE /api/users/:id] User ${id} not found for deletion.`);
                 await client.query('ROLLBACK');
@@ -265,11 +308,11 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
                     return res.status(400).json({ error: 'Cannot delete the last Super Admin. Please create another Super Admin first.' });
                 }
             }
-            
+
             await client.query('DELETE FROM onboarding_tasks WHERE user_id = $1', [id]);
             console.log(`[DELETE /api/users/:id] Deleted onboarding tasks for user ${id}.`);
 
-            await client.query('DELETE FROM shifts WHERE employee_id = $1', [id]); 
+            await client.query('DELETE FROM shifts WHERE employee_id = $1', [id]);
             console.log(`[DELETE /api/users/:id] Deleted associated shifts for user ${id}.`);
 
 
@@ -280,10 +323,10 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
                 return res.status(404).json({ error: 'User not found.' });
             }
             console.log(`[DELETE /api/users/:id] User ${id} deleted successfully.`);
-            await client.query('COMMIT'); 
-            res.status(204).send(); 
+            await client.query('COMMIT');
+            res.status(204).send();
         } catch (err) {
-            await client.query('ROLLBACK'); 
+            await client.query('ROLLBACK');
             console.error(`[DELETE /api/users/:id] Error deleting user ${id}:`, err);
             res.status(500).json({ error: 'Failed to delete user.' });
         } finally {
