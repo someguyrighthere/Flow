@@ -595,24 +595,22 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
 
     // --- Server Startup Logic ---
     const startServer = async () => {
-        try {
-            console.log('[Server Startup] Attempting to connect to database...');
-            const client = await pool.connect();
-            console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); 
-            client.release(); 
+    try {
+        console.log('[Server Startup] Attempting to connect to database...');
+        const client = await pool.connect();
+        console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---'); 
+        client.release(); 
 
-            app.listen(PORT, '0.0.0.0', () => { 
-                console.log(`--- SERVER: Express app listening successfully on port ${PORT}! ---`);
-                console.log(`Access your app locally at: http://localhost:${PORT}`);
-                console.log(`Access your deployed app at your Render URL.`);
-            });
+        app.listen(PORT, '0.0.0.0', () => { 
+            console.log(`--- SERVER: Express app listening successfully on port ${PORT}! ---`);
+            console.log(`Access your app locally at: http://localhost:${PORT}`);
+            console.log(`Access your deployed app at your Render URL.`);
+        });
 
-        } catch (err) {
-            console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack);
-            process.exit(1); 
-        }
-    };
+    } catch (err) {
+        console.error('CRITICAL ERROR: Failed to start server. Database connection or port binding issue:', err.stack);
+        process.exit(1); 
+    }
+};
 
-    startServer(); 
-    ```
-
+startServer();
