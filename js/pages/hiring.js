@@ -24,9 +24,6 @@ export function handleHiringPage() {
 
     /**
      * Displays a status message on a specified DOM element.
-     * @param {HTMLElement} element - The DOM element to display the message in.
-     * @param {string} message - The message text.
-     * @param {boolean} [isError=false] - True if the message is an error, false for success.
      */
     function displayStatusMessage(element, message, isError = false) {
         if (!element) return;
@@ -88,14 +85,14 @@ export function handleHiringPage() {
                         </div>
                         <div class="job-posting-actions">
                             <a href="apply.html?jobId=${post.id}" class="btn btn-secondary btn-sm" target="_blank" title="View Public Ad">View</a>
-                            <button class="btn btn-secondary btn-sm btn-copy-link" data-id="${post.id}" title="Copy Apply Link">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                            <button class="btn btn-secondary btn-sm btn-share" data-id="${post.id}" title="Share Job Posting">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16">
                                     <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
                                     <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
                                 </svg>
                             </button>
                             <button class="btn btn-secondary btn-sm btn-delete-job-posting" data-id="${post.id}" title="Delete">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                             </button>
                         </div>
                     `;
@@ -133,7 +130,7 @@ export function handleHiringPage() {
                         </div>
                         <div class="job-posting-actions"> 
                             <button class="btn btn-secondary btn-sm btn-delete-applicant" data-id="${applicant.id}" title="Archive Applicant">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                             </button>
                         </div>
                     `;
@@ -205,6 +202,89 @@ export function handleHiringPage() {
         }
     }
 
+    /**
+     * Creates and displays a share modal with the job link and embed code.
+     * @param {string} jobId The ID of the job to share.
+     */
+    function openShareModal(jobId) {
+        const applyUrl = `${window.location.origin}/apply.html?jobId=${jobId}`;
+        const embedCode = `<iframe src="${applyUrl}" width="100%" height="600" frameborder="0"></iframe>`;
+
+        // Remove existing share modal if it exists
+        const existingModal = document.getElementById('share-job-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modalHtml = `
+            <div id="share-job-modal" class="modal-overlay" style="display: flex;">
+                <div class="modal-content" style="text-align: left; max-width: 600px;">
+                    <h3>Share Job Posting</h3>
+                    
+                    <div class="form-group">
+                        <label for="share-link">Direct Link</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="share-link" value="${applyUrl}" readonly style="background-color: rgba(0,0,0,0.3);">
+                            <button id="copy-share-link" class="btn btn-secondary">Copy</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="embed-code">Embed Code</label>
+                        <div style="display: flex; gap: 10px;">
+                            <textarea id="embed-code" readonly style="height: 100px; background-color: rgba(0,0,0,0.3);">${embedCode}</textarea>
+                            <button id="copy-embed-code" class="btn btn-secondary">Copy</button>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions" style="justify-content: flex-end; margin-top: 20px;">
+                        <button id="close-share-modal" class="btn btn-primary">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        const copyToClipboard = (textToCopy, message) => {
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showModalMessage(message, false);
+            } catch (err) {
+                showModalMessage('Failed to copy.', true);
+            }
+            document.body.removeChild(textArea);
+        };
+
+        document.getElementById('copy-share-link').addEventListener('click', () => {
+            copyToClipboard(applyUrl, 'Direct link copied!');
+        });
+
+        document.getElementById('copy-embed-code').addEventListener('click', () => {
+            copyToClipboard(embedCode, 'Embed code copied!');
+        });
+
+        const closeModal = () => {
+            const modal = document.getElementById('share-job-modal');
+            if (modal) {
+                modal.remove();
+            }
+        };
+
+        document.getElementById('close-share-modal').addEventListener('click', closeModal);
+        document.getElementById('share-job-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'share-job-modal') {
+                closeModal();
+            }
+        });
+    }
+
+
     // --- Attach Event Listeners ---
     if (newJobPostingForm) {
         newJobPostingForm.addEventListener('submit', createJobPosting);
@@ -214,26 +294,12 @@ export function handleHiringPage() {
     if(jobPostingsListDiv) {
         jobPostingsListDiv.addEventListener('click', (e) => {
             const deleteButton = e.target.closest('.btn-delete-job-posting');
-            const copyButton = e.target.closest('.btn-copy-link');
+            const shareButton = e.target.closest('.btn-share');
 
             if (deleteButton) {
                 deleteJobPosting(deleteButton.dataset.id);
-            } else if (copyButton) {
-                const jobId = copyButton.dataset.id;
-                const applyUrl = `${window.location.origin}/apply.html?jobId=${jobId}`;
-                
-                const textArea = document.createElement("textarea");
-                textArea.value = applyUrl;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    showModalMessage('Link copied to clipboard!', false);
-                } catch (err) {
-                    showModalMessage('Failed to copy link.', true);
-                    console.error('Failed to copy link: ', err);
-                }
-                document.body.removeChild(textArea);
+            } else if (shareButton) {
+                openShareModal(shareButton.dataset.id);
             }
         });
     }
