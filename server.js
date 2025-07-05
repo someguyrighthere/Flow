@@ -461,6 +461,16 @@ apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
+apiRoutes.delete('/shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM shifts WHERE id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete shift.' });
+    }
+});
+
 // --- Subscription Status Route ---
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
