@@ -233,12 +233,6 @@
             </div>
         </div>
     </div>
-    
-    <!-- Corrected: Load the bundled JavaScript from /dist/js/bundle.js -->
-    <script src="/dist/js/bundle.js"></script>
-    <script>
-        // Ensure initializePage is called after the bundle is loaded
-        window.initializePage();
-    </script>
+    <script type="module" src="dist/js/bundle.js"></script>
 </body>
 </html>
