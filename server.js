@@ -240,7 +240,75 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
     }
 });
 
-// --- Subscription and Public Routes ---
+// --- Hiring Routes ---
+apiRoutes.get('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT jp.id, jp.title, jp.created_at, l.location_name 
+            FROM job_postings jp
+            LEFT JOIN locations l ON jp.location_id = l.location_id
+            ORDER BY jp.created_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching job postings:', err);
+        res.status(500).json({ error: 'Failed to retrieve job postings.' });
+    }
+});
+
+apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
+    const { title, description, requirements, location_id } = req.body;
+    if (!title || !description || !location_id) {
+        return res.status(400).json({ error: 'Title, description, and location are required.' });
+    }
+    try {
+        const result = await pool.query(
+            'INSERT INTO job_postings (title, description, requirements, location_id) VALUES ($1, $2, $3, $4) RETURNING *',
+            [title, description, requirements, location_id]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating job posting:', err);
+        res.status(500).json({ error: 'Failed to create job posting.' });
+    }
+});
+
+apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM job_postings WHERE id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete job posting.' });
+    }
+});
+
+apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT a.id, a.name, a.email, a.phone, a.applied_at, jp.title AS job_title
+            FROM applicants a
+            JOIN job_postings jp ON a.job_id = jp.id
+            ORDER BY a.applied_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve applicants.' });
+    }
+});
+
+apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM applicants WHERE id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete applicant.' });
+    }
+});
+
+
+// --- PUBLIC ROUTES ---
 app.get('/job-postings/:id', async (req, res) => {
     const { id } = req.params;
     try {
