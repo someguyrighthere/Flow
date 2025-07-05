@@ -68,9 +68,10 @@ export function handleOnboardingViewPage() {
                 messages.forEach(msg => {
                     const msgItem = document.createElement('div');
                     msgItem.className = 'message-item';
+                    // FIX: Changed msg.message_content to msg.content to match the API response
                     msgItem.innerHTML = `
-                        <p>${msg.message_content}</p>
-                        <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.id}">Dismiss</button>
+                        <p>${msg.content}</p>
+                        <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.message_id}">Dismiss</button>
                     `;
                     messagesContainer.appendChild(msgItem);
                 });
@@ -84,7 +85,9 @@ export function handleOnboardingViewPage() {
         if (e.target.classList.contains('dismiss-message-btn')) {
             const messageId = e.target.dataset.messageId;
             try {
-                await apiRequest('PUT', `/api/messages/${messageId}/dismiss`);
+                // This route doesn't exist yet, but leaving the logic here for future implementation
+                // For now, we just remove it from the view.
+                // await apiRequest('PUT', `/api/messages/${messageId}/read`);
                 e.target.closest('.message-item').remove();
             } catch (error) {
                 showModalMessage('Could not dismiss message.', true);
@@ -222,7 +225,6 @@ export function handleOnboardingViewPage() {
              printWindow.document.write('</head><body>');
              printWindow.document.write('<h1>Your Schedule</h1>');
              printWindow.document.write(employeeScheduleListDiv.innerHTML);
-             printWindow.document.write('</body></html>');
              printWindow.document.close();
              printWindow.print();
         });
