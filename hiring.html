@@ -12,131 +12,37 @@
     <style>
         /* Custom styles for the form layout to reduce crowding */
         .card form .form-group {
-            margin-bottom: 25px; /* Increased space between form groups */
+            margin-bottom: 25px;
             display: flex;
-            flex-direction: column; /* Stack label and input vertically */
-            align-items: flex-start; /* Align label/input to the left */
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         .card form label {
-            margin-bottom: 8px; /* Space between label and input */
+            margin-bottom: 8px;
             font-weight: 600;
             color: var(--text-light);
-            display: block; /* Ensure label takes its own line */
+            display: block;
         }
 
         .card form input[type="text"],
-        .card form input[type="email"],
-        .card form input[type="password"],
         .card form textarea,
         .card form select {
-            width: 100%; /* Ensure inputs take full width of their container */
-            max-width: 400px; /* Limit overall width for better readability */
+            width: 100%;
+            max-width: 400px;
             padding: 12px;
             border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             background-color: rgba(0, 0, 0, 0.2);
             color: var(--text-light);
-            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+            box-sizing: border-box;
         }
 
-        .card form textarea {
-            min-height: 100px; /* Give text areas a bit more height */
-            resize: vertical; /* Allow vertical resizing */
-        }
-
-        /* Adjust button margin for better spacing below the form */
-        .card form .btn-primary {
-            margin-top: 20px;
-        }
-
-        /* Styles for job posting items and applicant items */
-        .job-posting-item, .applicant-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border-left: 4px solid transparent;
-            transition: all 0.3s ease;
-        }
-
-        .job-posting-item:hover, .applicant-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border-left: 4px solid var(--primary-accent);
-        }
-
-        .job-posting-item h4, .applicant-item h4 {
-            margin: 0 0 5px 0;
-            color: var(--primary-accent);
-        }
-
-        .job-posting-item p, .applicant-item p {
-            margin: 0;
-            color: var(--text-medium);
-            font-size: 0.9rem;
-            line-height: 1.4;
-        }
-
-        .job-posting-item .job-posting-actions, .applicant-item .job-posting-actions {
-            display: flex;
-            gap: 10px;
-            flex-shrink: 0; /* Prevent buttons from shrinking */
-            margin-left: 20px; /* Space between content and buttons */
-        }
-
-        .job-posting-item .btn-sm, .applicant-item .btn-sm {
-            padding: 8px 12px;
-            font-size: 0.85rem;
-            border-radius: 6px;
-        }
-
-        /* Specific style for delete/archive buttons */
-        .btn-delete-job-posting, .btn-delete-applicant, .btn-share {
-            background: none;
-            border: none;
-            color: var(--text-medium);
-            cursor: pointer;
-            opacity: 0.7;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 40px; 
-            height: 40px;
-            padding: 0;
-            border-radius: 50%;
-            background-color: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-        }
-
-        .btn-delete-job-posting:hover, .btn-delete-applicant:hover, .btn-share:hover {
-            opacity: 1;
-            transform: scale(1.1);
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        
-        .btn-delete-job-posting:hover, .btn-delete-applicant:hover {
-             color: #e74c3c;
-        }
-
-
-        /* NEW: Styles for the main hiring grid layout */
         .hiring-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Responsive 3-column grid */
-            gap: 30px; /* Space between columns and rows */
-            margin-top: 20px; /* Space below the nav bar */
-        }
-
-        /* Remove default margin-bottom from cards when they are inside the grid */
-        .hiring-grid .card {
-            margin-bottom: 0;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -161,7 +67,8 @@
             <a href="hiring.html" class="active">Hiring</a>
         </nav>
         <section>
-            <h2 style="color: var(--text-light);">Hiring Management</h2> <div class="hiring-grid">
+            <h2 style="color: var(--text-light);">Hiring Management</h2>
+            <div class="hiring-grid">
                 <div class="card">
                     <h3>Create New Job Posting</h3>
                     <form id="new-job-posting-form">
@@ -198,6 +105,27 @@
             </div>
         </section>
     </div>
+
+    <!-- START: Added Modal HTML for error messages -->
+    <div id="modal-message" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+    <!-- END: Added Modal HTML -->
+
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
 </html>
