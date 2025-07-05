@@ -61,6 +61,27 @@
             </div>
         </main>
     </div>
+
+    <!-- START: Added Modal HTML for error messages -->
+    <div id="modal-message" class="modal">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+    <!-- END: Added Modal HTML -->
+
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
 </html>

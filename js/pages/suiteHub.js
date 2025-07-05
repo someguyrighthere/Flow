@@ -50,9 +50,10 @@ export async function handleSuiteHubPage() {
             }
 
             try {
+                // FIX: Changed 'message_content' to 'content' to match the database and new API route
                 await apiRequest('POST', '/api/messages', {
                     recipient_id: recipientId,
-                    message_content: content
+                    content: content 
                 });
                 messageStatus.textContent = 'Message sent successfully!';
                 messageStatus.style.color = 'var(--primary-accent)';

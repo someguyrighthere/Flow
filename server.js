@@ -1,5 +1,19 @@
 // server.js - MASTER SOLUTION: FINAL, COMPLETE ROUTING FOR ALL API ROUTES
 
+/*
+    Database Schema for Messaging:
+    Run this command in your PostgreSQL database to create the required table.
+
+    CREATE TABLE messages (
+        message_id SERIAL PRIMARY KEY,
+        sender_id INT NOT NULL REFERENCES users(user_id),
+        recipient_id INT NOT NULL REFERENCES users(user_id),
+        content TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        sent_at TIMESTAMPTZ DEFAULT NOW()
+    );
+*/
+
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -499,6 +513,47 @@ apiRoutes.delete('/shifts', isAuthenticated, isAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete old shifts.' });
     }
 });
+
+// START: Added Messaging Routes
+apiRoutes.post('/messages', isAuthenticated, async (req, res) => {
+    const { recipient_id, content } = req.body;
+    const sender_id = req.user.id;
+
+    if (!recipient_id || !content) {
+        return res.status(400).json({ error: 'Recipient and message content are required.' });
+    }
+
+    try {
+        await pool.query(
+            'INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3)',
+            [sender_id, recipient_id, content]
+        );
+        res.status(201).json({ message: 'Message sent successfully.' });
+    } catch (err) {
+        console.error('Error sending message:', err);
+        res.status(500).json({ error: 'Failed to send message.' });
+    }
+});
+
+apiRoutes.get('/messages', isAuthenticated, async (req, res) => {
+    const recipient_id = req.user.id;
+
+    try {
+        const result = await pool.query(
+            `SELECT m.message_id, m.content, m.sent_at, m.is_read, u.full_name as sender_name
+             FROM messages m
+             JOIN users u ON m.sender_id = u.user_id
+             WHERE m.recipient_id = $1
+             ORDER BY m.sent_at DESC`,
+            [recipient_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching messages:', err);
+        res.status(500).json({ error: 'Failed to retrieve messages.' });
+    }
+});
+// END: Added Messaging Routes
 
 // --- Subscription Status Route ---
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
