@@ -12,6 +12,7 @@ export function handleOnboardingViewPage() {
     }
 
     const welcomeMessage = document.getElementById('welcome-message');
+    const onboardingInfoContainer = document.getElementById('onboarding-info-container');
     const onboardingTaskListDiv = document.getElementById('onboarding-task-list');
     const taskListOverviewDiv = document.getElementById('task-list-overview');
     const onboardingStatusMessageElement = document.getElementById('onboarding-status-message');
@@ -82,6 +83,7 @@ export function handleOnboardingViewPage() {
         onboardingTaskListDiv.innerHTML = '';
 
         if (userTasks && userTasks.length > 0) {
+            onboardingInfoContainer.style.display = 'block';
             userTasks.forEach(task => {
                 const taskItem = document.createElement('div');
                 taskItem.className = `checklist-item ${task.completed ? 'completed' : ''}`;
@@ -114,7 +116,7 @@ export function handleOnboardingViewPage() {
                 });
             });
         } else {
-            onboardingTaskListDiv.innerHTML = '<p>No onboarding tasks assigned yet.</p>';
+            if (onboardingInfoContainer) onboardingInfoContainer.style.display = 'none';
         }
     }
 
@@ -124,10 +126,11 @@ export function handleOnboardingViewPage() {
         const totalTasks = userTasks.length;
         taskListOverviewDiv.textContent = `${completedTasks}/${totalTasks} tasks complete`;
         if (completedTasks === totalTasks && totalTasks > 0) {
-            taskListOverviewDiv.textContent += " - All done!";
-            taskListOverviewDiv.style.color = 'var(--primary-accent)';
-        } else {
-             taskListOverviewDiv.style.color = 'var(--text-light)';
+            if (onboardingInfoContainer) {
+                setTimeout(() => {
+                    onboardingInfoContainer.style.display = 'none';
+                }, 2000);
+            }
         }
     }
 
