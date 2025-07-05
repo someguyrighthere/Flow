@@ -215,9 +215,11 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 // --- Document Routes ---
 apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     try {
+        // FIX: Changed JOIN to LEFT JOIN to include documents even if the uploader was deleted.
         const result = await pool.query(`
             SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name
-            FROM documents d JOIN users u ON d.uploaded_by = u.user_id
+            FROM documents d 
+            LEFT JOIN users u ON d.uploaded_by = u.user_id
             ORDER BY d.uploaded_at DESC
         `);
         res.json(result.rows);
