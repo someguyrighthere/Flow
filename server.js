@@ -215,7 +215,6 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 // --- Document Routes ---
 apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        // FIX: Changed JOIN to LEFT JOIN to include documents even if the uploader was deleted.
         const result = await pool.query(`
             SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name
             FROM documents d 
@@ -228,16 +227,22 @@ apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
+// FIX: Added safety checks for file upload handling.
 apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body;
-    const { filename } = req.file;
     try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file was uploaded.' });
+        }
+        const { title, description } = req.body;
+        const { filename } = req.file;
+        
         const result = await pool.query(
             'INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',
             [title, description, filename, req.user.id]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
+        console.error('Error uploading document:', err);
         res.status(500).json({ error: 'Failed to upload document.' });
     }
 });
