@@ -16,7 +16,6 @@ export function handleOnboardingViewPage() {
     const onboardingInfoContainer = document.getElementById('onboarding-info-container');
     const onboardingTaskListDiv = document.getElementById('onboarding-task-list');
     const taskListOverviewDiv = document.getElementById('task-list-overview');
-    const onboardingStatusMessageElement = document.getElementById('onboarding-status-message');
     const employeeScheduleListDiv = document.getElementById('employee-schedule-list');
     const printScheduleBtn = document.getElementById('print-employee-schedule-btn');
 
@@ -68,9 +67,10 @@ export function handleOnboardingViewPage() {
                 messages.forEach(msg => {
                     const msgItem = document.createElement('div');
                     msgItem.className = 'message-item';
+                    
                     // FIX: Changed msg.message_content to msg.content to match the API response
                     msgItem.innerHTML = `
-                        <p>${msg.content}</p>
+                        <p>${msg.content}</p> 
                         <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.message_id}">Dismiss</button>
                     `;
                     messagesContainer.appendChild(msgItem);
@@ -87,7 +87,6 @@ export function handleOnboardingViewPage() {
             try {
                 // This route doesn't exist yet, but leaving the logic here for future implementation
                 // For now, we just remove it from the view.
-                // await apiRequest('PUT', `/api/messages/${messageId}/read`);
                 e.target.closest('.message-item').remove();
             } catch (error) {
                 showModalMessage('Could not dismiss message.', true);
@@ -155,7 +154,10 @@ export function handleOnboardingViewPage() {
         if (!taskListOverviewDiv) return;
         const completedTasks = userTasks.filter(task => task.completed).length;
         const totalTasks = userTasks.length;
-        taskListOverviewDiv.textContent = `${completedTasks}/${totalTasks} tasks complete`;
+        const taskListOverviewDiv = document.getElementById('task-list-overview');
+        if(taskListOverviewDiv) {
+            taskListOverviewDiv.textContent = `${completedTasks}/${totalTasks} tasks complete`;
+        }
         if (completedTasks === totalTasks && totalTasks > 0) {
             if (onboardingInfoContainer) {
                 setTimeout(() => {
