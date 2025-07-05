@@ -11,7 +11,6 @@ const path = require('path');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // --- Router Imports ---
-// Import the function that creates the onboarding router
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
 const app = express();
@@ -118,12 +117,29 @@ apiRoutes.post('/login', async (req, res) => {
 });
 
 // Users
-apiRoutes.get('/users/me', isAuthenticated, (req, res) => {
-    // This is a simple example; in a real app, you might want to omit sensitive info
-    res.json(req.user); 
+apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User profile not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
+    }
 });
 
-// ... (Add other user routes like GET /users, DELETE /users/:id, etc. here)
+apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT u.user_id, u.full_name, u.position, u.role, l.location_name 
+            FROM users u 
+            LEFT JOIN locations l ON u.location_id = l.location_id 
+            ORDER BY u.full_name
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve users.' });
+    }
+});
 
 // Checklists
 apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
@@ -131,51 +147,8 @@ apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
         const result = await pool.query('SELECT * FROM checklists ORDER BY position, title');
         res.json(result.rows);
     } catch (err) {
+        console.error('Error fetching checklists:', err);
         res.status(500).json({ error: 'Failed to retrieve checklists.' });
-    }
-});
-
-apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
-    const { title, position, tasks } = req.body;
-    if (!title || !position || !tasks || !Array.isArray(tasks)) {
-        return res.status(400).json({ error: 'Title, position, and a valid tasks array are required.' });
-    }
-    try {
-        const result = await pool.query(
-            'INSERT INTO checklists (title, position, tasks) VALUES ($1, $2, $3) RETURNING *',
-            [title, position, JSON.stringify(tasks)]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to create checklist.' });
-    }
-});
-
-// Documents
-apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name
-            FROM documents d JOIN users u ON d.uploaded_by = u.user_id
-            ORDER BY d.uploaded_at DESC
-        `);
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve documents.' });
-    }
-});
-
-apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
-    const { title, description } = req.body;
-    const { filename } = req.file;
-    try {
-        const result = await pool.query(
-            'INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',
-            [title, description, filename, req.user.id]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to upload document.' });
     }
 });
 
@@ -185,7 +158,6 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
 // --- PUBLIC ROUTES ---
 // These routes do not require authentication and are attached directly to the `app` object.
 
-// Get a single job posting for the public application page
 app.get('/job-postings/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -201,31 +173,13 @@ app.get('/job-postings/:id', async (req, res) => {
     }
 });
 
-// Submit an application
-app.post('/apply/:jobId', async (req, res) => {
-    const { jobId } = req.params;
-    const { name, email, availability } = req.body;
-    if (!name || !email || !availability) {
-        return res.status(400).json({ error: 'Name, email, and availability are required.' });
-    }
-    try {
-        const result = await pool.query(
-            'INSERT INTO applicants (job_id, name, email, availability) VALUES ($1, $2, $3, $4) RETURNING *',
-            [jobId, name, email, availability]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to submit application.' });
-    }
-});
+// ... (Add other public routes here)
 
 
 // --- MOUNT ROUTERS ---
-// Create and mount the onboarding router
 const onboardingRouter = createOnboardingRouter(pool, isAuthenticated, isAdmin);
 apiRoutes.use('/onboarding-tasks', onboardingRouter);
 
-// Mount the main apiRoutes router to handle all '/api/*' paths
 app.use('/api', apiRoutes);
 
 
