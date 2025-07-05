@@ -12,6 +12,7 @@ export function handleOnboardingViewPage() {
     }
 
     const welcomeMessage = document.getElementById('welcome-message');
+    const messagesContainer = document.getElementById('messages-container');
     const onboardingInfoContainer = document.getElementById('onboarding-info-container');
     const onboardingTaskListDiv = document.getElementById('onboarding-task-list');
     const taskListOverviewDiv = document.getElementById('task-list-overview');
@@ -42,16 +43,6 @@ export function handleOnboardingViewPage() {
         }
     }
 
-    function displayStatusMessage(message, isError = false) {
-        if (!onboardingStatusMessageElement) {
-            showModalMessage(message, isError);
-            return;
-        }
-        onboardingStatusMessageElement.textContent = message;
-        onboardingStatusMessageElement.className = isError ? 'error' : 'success';
-        setTimeout(() => onboardingStatusMessageElement.textContent = '', 5000);
-    }
-
     async function loadWelcomeMessage() {
         if (!welcomeMessage) return;
         try {
@@ -63,6 +54,43 @@ export function handleOnboardingViewPage() {
             welcomeMessage.textContent = 'Welcome!';
         }
     }
+
+    async function loadMessages() {
+        if (!messagesContainer) return;
+        try {
+            const messages = await apiRequest('GET', '/api/messages');
+            messagesContainer.innerHTML = '';
+            if (messages && messages.length > 0) {
+                const messagesHeader = document.createElement('h3');
+                messagesHeader.textContent = "Messages for You";
+                messagesContainer.appendChild(messagesHeader);
+
+                messages.forEach(msg => {
+                    const msgItem = document.createElement('div');
+                    msgItem.className = 'message-item';
+                    msgItem.innerHTML = `
+                        <p>${msg.message_content}</p>
+                        <button class="btn btn-secondary btn-sm dismiss-message-btn" data-message-id="${msg.id}">Dismiss</button>
+                    `;
+                    messagesContainer.appendChild(msgItem);
+                });
+            }
+        } catch (error) {
+            console.error("Failed to load messages:", error);
+        }
+    }
+
+    messagesContainer.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('dismiss-message-btn')) {
+            const messageId = e.target.dataset.messageId;
+            try {
+                await apiRequest('PUT', `/api/messages/${messageId}/dismiss`);
+                e.target.closest('.message-item').remove();
+            } catch (error) {
+                showModalMessage('Could not dismiss message.', true);
+            }
+        }
+    });
 
     async function loadOnboardingTasks() {
         if (!onboardingTaskListDiv) return;
@@ -111,7 +139,7 @@ export function handleOnboardingViewPage() {
                         if (userTasks.every(t => t.completed)) triggerFireworks();
                     } catch (error) {
                         e.target.checked = !isCompleted;
-                        displayStatusMessage(`Error updating task: ${error.message}`, true);
+                        showModalMessage(`Error updating task: ${error.message}`, true);
                     }
                 });
             });
@@ -181,6 +209,7 @@ export function handleOnboardingViewPage() {
     }
 
     loadWelcomeMessage();
+    loadMessages();
     loadOnboardingTasks();
     loadEmployeeSchedule();
 

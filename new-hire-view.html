@@ -16,12 +16,17 @@
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
             gap: 30px;
         }
-        .schedule-list-item {
+        .schedule-list-item, .message-item {
             padding: 10px 0;
             border-bottom: 1px solid var(--border-color);
         }
-        .schedule-list-item:last-child {
+        .schedule-list-item:last-child, .message-item:last-child {
             border-bottom: none;
+        }
+        .message-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
     </style>
 </head>
@@ -43,6 +48,9 @@
         <section class="onboarding-layout">
             <div class="card">
                 <h2 id="welcome-message">Welcome!</h2>
+                <div id="messages-container">
+                    <!-- Messages will be injected here -->
+                </div>
                 <div id="onboarding-info-container">
                     <p id="task-list-overview">Loading task status...</p>
                     <div id="onboarding-task-list"></div>
