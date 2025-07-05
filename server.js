@@ -598,6 +598,9 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
     // Onboarding Routes
     onboardingRoutes(apiRoutes, pool, isAuthenticated, isAdmin);
 
+    // FIX: Mount the entire apiRoutes router to the /api path
+    app.use('/api', apiRoutes);
+
     // --- Server Startup Logic ---
     const startServer = async () => {
         try {
@@ -619,3 +622,4 @@ apiRoutes.get('/users/availability', isAuthenticated, isAdmin, async (req, res) 
     };
 
     startServer();
+
