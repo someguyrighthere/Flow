@@ -178,7 +178,44 @@ apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// --- Location Routes ---
+apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
+    const { full_name, email, password, location_id } = req.body;
+    if (!full_name || !email || !password || !location_id) {
+        return res.status(400).json({ error: 'All fields are required.' });
+    }
+    try {
+        const hash = await bcrypt.hash(password, 10);
+        await pool.query(
+            "INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'location_admin', $4)",
+            [full_name, email, hash, location_id]
+        );
+        res.status(201).json({ message: 'Location admin invited successfully.' });
+    } catch (err) {
+        if (err.code === '23505') return res.status(409).json({ error: 'Email already in use.' });
+        res.status(500).json({ error: 'Failed to invite location admin.' });
+    }
+});
+
+apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) => {
+    const { full_name, email, password, position, location_id, availability } = req.body;
+    if (!full_name || !email || !password || !location_id) {
+        return res.status(400).json({ error: 'Name, email, password, and location are required.' });
+    }
+    try {
+        const hash = await bcrypt.hash(password, 10);
+        await pool.query(
+            "INSERT INTO users (full_name, email, password, role, position, location_id, availability) VALUES ($1, $2, $3, 'employee', $4, $5, $6)",
+            [full_name, email, hash, position, location_id, availability ? JSON.stringify(availability) : null]
+        );
+        res.status(201).json({ message: 'Employee invited successfully.' });
+    } catch (err) {
+        if (err.code === '23505') return res.status(409).json({ error: 'Email already in use.' });
+        res.status(500).json({ error: 'Failed to invite employee.' });
+    }
+});
+
+
+// --- Location & Business Settings Routes ---
 apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM locations ORDER BY location_name');
@@ -210,6 +247,30 @@ apiRoutes.delete('/locations/:id', isAuthenticated, isAdmin, async (req, res) =>
         res.status(500).json({ error: 'Failed to delete location.' });
     }
 });
+
+apiRoutes.get('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM business_settings');
+        res.json(result.rows[0] || {});
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve business settings.' });
+    }
+});
+
+apiRoutes.put('/settings/business', isAuthenticated, isAdmin, async (req, res) => {
+    const { operating_hours_start, operating_hours_end } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO business_settings (id, operating_hours_start, operating_hours_end) VALUES (1, $1, $2)
+             ON CONFLICT (id) DO UPDATE SET operating_hours_start = $1, operating_hours_end = $2`,
+            [operating_hours_start, operating_hours_end]
+        );
+        res.status(200).json({ message: 'Business settings updated.' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update business settings.' });
+    }
+});
+
 
 // --- Checklist Routes ---
 apiRoutes.get('/checklists', isAuthenticated, isAdmin, async (req, res) => {
