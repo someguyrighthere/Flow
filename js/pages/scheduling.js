@@ -46,14 +46,11 @@ export function handleSchedulingPage() {
 
     /**
      * TIMEZONE FIX: Parses a date string as if it were local, ignoring timezone conversions.
-     * @param {string} dateTimeString - The ISO-like date-time string from the database (e.g., "YYYY-MM-DDTHH:MI:SS.MSZ").
-     * @returns {Date} A Date object representing the local time.
      */
     const parseAsLocalDate = (dateTimeString) => {
         const [datePart, timePart] = dateTimeString.split('T');
         const [year, month, day] = datePart.split('-').map(Number);
         const [hour, minute] = timePart.split(':').map(Number);
-        // Create a new Date object using local time components. Month is 0-indexed.
         return new Date(year, month - 1, day, hour, minute);
     };
 
@@ -184,7 +181,6 @@ export function handleSchedulingPage() {
         if (!shifts || shifts.length === 0) return;
 
         shifts.forEach(shift => {
-            // TIMEZONE FIX: Use the new local date parser
             const shiftStart = parseAsLocalDate(shift.start_time);
             const shiftEnd = parseAsLocalDate(shift.end_time);
 
@@ -223,12 +219,16 @@ export function handleSchedulingPage() {
 
         if (height <= 0) return;
 
+        const formattedStartTime = startTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const formattedEndTime = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
         const shiftBlock = document.createElement('div');
         shiftBlock.className = 'shift-block';
         shiftBlock.style.top = `${top}px`;
         shiftBlock.style.height = `${height}px`;
         shiftBlock.innerHTML = `
             <strong>${shift.employee_name}</strong>
+            <small class="shift-time">${formattedStartTime} - ${formattedEndTime}</small>
             <button class="delete-shift-btn" data-shift-id="${shift.id}">&times;</button>
         `;
         shiftBlock.title = `Shift for ${shift.employee_name} at ${shift.location_name}. Notes: ${shift.notes || 'None'}`;
