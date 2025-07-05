@@ -51,6 +51,18 @@ export function handleOnboardingViewPage() {
         setTimeout(() => onboardingStatusMessageElement.textContent = '', 5000);
     }
 
+    async function loadWelcomeMessage() {
+        if (!welcomeMessage) return;
+        try {
+            const user = await apiRequest('GET', '/api/users/me');
+            const userName = user && user.full_name ? user.full_name.split(' ')[0] : 'Employee';
+            welcomeMessage.textContent = `Welcome, ${userName}!`;
+        } catch (error) {
+            console.error("Failed to fetch user for welcome message:", error);
+            welcomeMessage.textContent = 'Welcome!';
+        }
+    }
+
     async function loadOnboardingTasks() {
         if (!onboardingTaskListDiv) return;
         onboardingTaskListDiv.innerHTML = '<p>Loading your onboarding tasks...</p>';
@@ -165,6 +177,7 @@ export function handleOnboardingViewPage() {
         return;
     }
 
+    loadWelcomeMessage();
     loadOnboardingTasks();
     loadEmployeeSchedule();
 
