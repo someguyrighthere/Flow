@@ -10,7 +10,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        /* FIX: Target all card titles in the grid for consistent styling */
         .app-grid .card h3, .app-grid .app-card h3 {
             color: var(--primary-accent);
             margin-top: 0;
@@ -42,7 +41,6 @@
                 <a href="scheduling.html" class="app-card"><h3>Scheduling</h3><p>Create and manage employee schedules.</p></a>
                 <a href="documents.html" class="app-card"><h3>Documents</h3><p>Upload files, videos, and training material.</p></a>
                 
-                <!-- Messaging Card -->
                 <div class="card">
                     <h3>Send a Message</h3>
                     <form id="send-message-form">
@@ -62,8 +60,8 @@
         </main>
     </div>
 
-    <!-- START: Added Modal HTML for error messages -->
-    <div id="modal-message" class="modal">
+    <!-- FIX: Changed class from "modal" to "modal-overlay" to match style.css -->
+    <div id="modal-message" class="modal-overlay">
         <div class="modal-content">
             <p id="modal-text"></p>
             <div class="modal-actions">
@@ -71,7 +69,7 @@
             </div>
         </div>
     </div>
-    <div id="confirm-modal" class="modal">
+    <div id="confirm-modal" class="modal-overlay">
         <div class="modal-content">
             <p id="confirm-modal-text"></p>
             <div class="modal-actions">
@@ -80,7 +78,6 @@
             </div>
         </div>
     </div>
-    <!-- END: Added Modal HTML -->
 
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
