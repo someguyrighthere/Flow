@@ -416,6 +416,51 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
     }
 });
 
+// --- Scheduling Routes ---
+apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { startDate, endDate, location_id } = req.query;
+    if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'Start and end dates are required.' });
+    }
+    try {
+        let query = `
+            SELECT s.id, s.employee_id, u.full_name AS employee_name, s.location_id, l.location_name,
+            TO_CHAR(s.start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS start_time,
+            TO_CHAR(s.end_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS end_time
+            FROM shifts s 
+            JOIN users u ON s.employee_id = u.user_id 
+            JOIN locations l ON s.location_id = l.location_id
+            WHERE s.start_time >= $1 AND s.end_time <= $2
+        `;
+        const params = [startDate, endDate];
+        if (location_id) {
+            query += ` AND s.location_id = $3`;
+            params.push(location_id);
+        }
+        query += ' ORDER BY s.start_time ASC';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve shifts.' });
+    }
+});
+
+apiRoutes.post('/shifts', isAuthenticated, isAdmin, async (req, res) => {
+    const { employee_id, location_id, start_time, end_time, notes } = req.body;
+    if (!employee_id || !location_id || !start_time || !end_time) {
+        return res.status(400).json({ error: 'All fields are required.' });
+    }
+    try {
+        const result = await pool.query(
+            'INSERT INTO shifts (employee_id, location_id, start_time, end_time, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [employee_id, location_id, start_time, end_time, notes]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to create shift.' });
+    }
+});
+
 // --- Subscription Status Route ---
 apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
