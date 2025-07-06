@@ -13,6 +13,10 @@ export function handlePricingPage() {
         button.addEventListener('click', async (event) => {
             selectedPlan = event.target.dataset.planId;
             
+            // --- DEBUGGING LINE ---
+            console.log('Clicked plan:', selectedPlan); 
+            // --- END DEBUGGING LINE ---
+
             if (selectedPlan === 'free') {
                 window.location.href = '/register.html';
                 return;
