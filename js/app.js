@@ -57,7 +57,8 @@ function main() {
     // A list of pages that have the main header with the settings dropdown
     const pagesWithSettings = [
         "suite-hub.html", "dashboard.html", "checklists.html", "admin.html",
-        "account.html", "documents.html", "hiring.html", "scheduling.html", "new-hire-view.html"
+        "account.html", "documents.html", "hiring.html", "scheduling.html", 
+        "new-hire-view.html", "help.html" // <-- ADDED help.html HERE
     ];
 
     // Setup the dropdown if the current page needs it
@@ -80,6 +81,7 @@ function main() {
     else if (path.includes("new-hire-view.html")) handleOnboardingViewPage();
     else if (path.includes("pricing.html")) handlePricingPage();
     else if (path.includes("printable-schedule.html")) handlePrintableSchedulePage();
+    // Note: help.html does not need a specific handler as its logic is self-contained.
 }
 
 // --- AUTOMATIC STARTUP ---
