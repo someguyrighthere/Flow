@@ -9,15 +9,114 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        /* Styles for the new landing page content */
+        .hero {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-light);
+        }
+        .hero h1 {
+            font-size: 3.5rem;
+            font-family: 'Fredoka One', cursive;
+            margin-bottom: 20px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .hero p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 0 auto 30px auto;
+            color: var(--text-medium);
+        }
+        .hero-actions .btn {
+            margin: 0 10px;
+        }
+        .features-section {
+            padding: 60px 20px;
+            text-align: center;
+        }
+        .features-section h2 {
+            font-size: 2.5rem;
+            margin-bottom: 40px;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--card-border-color);
+        }
+        .feature-card h3 {
+            color: var(--primary-accent);
+            margin-top: 0;
+        }
+        .cta-section {
+            text-align: center;
+            padding: 80px 20px;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            margin: 40px 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            color: var(--text-medium);
+            border-top: 1px solid var(--border-color);
+        }
+    </style>
 </head>
 <body>
     <div class="background-animation"></div>
     <div class="container">
         <header class="dashboard-header">
             <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <div>
+                <a href="login.html" class="btn btn-secondary">Login</a>
+            </div>
         </header>
         <main>
-            </main>
+            <section class="hero">
+                <h1>Streamline Your Business Operations</h1>
+                <p>The all-in-one suite to manage scheduling, onboarding, hiring, and documents. Everything you need, all in one flow.</p>
+                <div class="hero-actions">
+                    <a href="register.html" class="btn btn-primary">Get Started for Free</a>
+                </div>
+            </section>
+
+            <section class="features-section">
+                <h2>Powerful Features, Simplified</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Smart Scheduling</h3>
+                        <p>Create, manage, and view employee schedules with an intuitive weekly calendar. Avoid conflicts and keep your team in sync.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Effortless Onboarding</h3>
+                        <p>Create custom task lists for new hires. Track their progress and ensure a smooth and consistent onboarding experience for every position.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Centralized Documents</h3>
+                        <p>Upload and manage important files, training materials, and company handbooks. Accessible to your team whenever they need it.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="cta-section">
+                <h2>Ready to get started?</h2>
+                <p>Sign up today and take control of your business workflow.</p>
+                <a href="register.html" class="btn btn-primary">Sign Up Now</a>
+            </section>
+        </main>
+        <footer class="footer">
+            <p>&copy; 2024 Flow Business Suite. All rights reserved.</p>
+        </footer>
     </div>
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
