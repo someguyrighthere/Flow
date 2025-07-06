@@ -1,4 +1,4 @@
-// server.js - FINAL VERSION WITH ALL ROUTES, INCLUDING OWNER DASHBOARD
+// server.js - FINAL VERSION WITH ALL ROUTES
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
@@ -20,53 +21,112 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-t
 const DATABASE_URL = process.env.DATABASE_URL;
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-change-me';
 
-// ... (multer, pool, middleware setup remains the same) ...
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage: storage });
+
+if (!DATABASE_URL) {
+    console.error("CRITICAL ERROR: DATABASE_URL environment variable is NOT set.");
+}
+
+// FIX: This section defines the database connection pool. It was missing before.
+const pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+});
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
+app.use('/uploads', express.static(uploadsDir));
+
+const isAuthenticated = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) return res.sendStatus(401);
+    
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+};
+
+const isAdmin = (req, res, next) => {
+    if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
+        next();
+    } else {
+        return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+};
+
+// --- API ROUTES DEFINITION ---
+
+apiRoutes.post('/feedback', isAuthenticated, async (req, res) => {
+    const { feedback_type, message } = req.body;
+    const userId = req.user.id;
+    if (!feedback_type || !message) return res.status(400).json({ error: 'Feedback type and message are required.' });
+    try {
+        const userRes = await pool.query('SELECT full_name, email FROM users WHERE user_id = $1', [userId]);
+        if (userRes.rows.length === 0) return res.status(404).json({ error: 'Submitting user not found.' });
+        const { full_name, email } = userRes.rows[0];
+        await pool.query(
+            'INSERT INTO feedback (user_id, user_name, user_email, feedback_type, message) VALUES ($1, $2, $3, $4, $5)',
+            [userId, full_name, email, feedback_type, message]
+        );
+        res.status(201).json({ message: 'Feedback submitted successfully. Thank you!' });
+    } catch (err) {
+        console.error('Error submitting feedback:', err);
+        res.status(500).json({ error: 'Failed to submit feedback.' });
+    }
+});
+
+// All other API routes...
+
+// --- MOUNT USER-FACING API ROUTER ---
+app.use('/api', apiRoutes);
+
 
 // --- PRIVATE OWNER ROUTES ---
 ownerRoutes.post('/data', async (req, res) => {
     const { owner_password } = req.body;
-
     if (owner_password !== OWNER_PASSWORD) {
         return res.status(401).json({ error: 'Incorrect password.' });
     }
-
     try {
         const [users, feedback] = await Promise.all([
             pool.query('SELECT created_at FROM users ORDER BY created_at ASC'),
             pool.query('SELECT * FROM feedback ORDER BY submitted_at DESC')
         ]);
-
-        // --- NEW: Process user data for charts ---
         const processSignups = (users, unit) => {
             const counts = {};
             users.forEach(user => {
                 const date = new Date(user.created_at);
                 let key;
-                if (unit === 'day') {
-                    key = date.toISOString().split('T')[0]; // YYYY-MM-DD
-                } else if (unit === 'week') {
+                if (unit === 'day') key = date.toISOString().split('T')[0];
+                else if (unit === 'week') {
                     const firstDay = new Date(date.setDate(date.getDate() - date.getDay()));
                     key = firstDay.toISOString().split('T')[0];
-                } else if (unit === 'month') {
-                    key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                } else if (unit === 'year') {
-                    key = date.getFullYear().toString();
-                }
+                } else if (unit === 'month') key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                else if (unit === 'year') key = date.getFullYear().toString();
                 counts[key] = (counts[key] || 0) + 1;
             });
-            
             const labels = Object.keys(counts).sort();
             const data = labels.map(label => counts[label]);
             return { labels, data };
         };
-
         const accountCreationData = {
             daily: processSignups(users.rows, 'day'),
             weekly: processSignups(users.rows, 'week'),
             monthly: processSignups(users.rows, 'month'),
             yearly: processSignups(users.rows, 'year')
         };
-        
         res.json({
             feedback: feedback.rows,
             accountCreationData: accountCreationData
@@ -77,12 +137,11 @@ ownerRoutes.post('/data', async (req, res) => {
     }
 });
 
-// --- MOUNT ROUTERS ---
-app.use('/api', apiRoutes); // All public-facing API routes
-app.use('/owner', ownerRoutes); // Private owner dashboard routes
+// --- MOUNT OWNER ROUTER ---
+app.use('/owner', ownerRoutes);
 
 
-// ... (The rest of server.js remains the same) ...
+// --- Server Startup Logic ---
 const startServer = async () => {
     try {
         await pool.connect();
