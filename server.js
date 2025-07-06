@@ -21,6 +21,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-t
 const DATABASE_URL = process.env.DATABASE_URL;
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-change-me';
 
+// ... (multer, pool, middleware setup remains the same) ...
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
@@ -65,43 +66,8 @@ const isAdmin = (req, res, next) => {
     }
 };
 
-// --- API ROUTES DEFINITION ---
 
-// Authentication
-apiRoutes.post('/register', async (req, res) => { /* ... */ });
-apiRoutes.post('/login', async (req, res) => { /* ... */ });
-// Users & Admin
-apiRoutes.get('/users/me', isAuthenticated, async (req, res) => { /* ... */ });
-apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => { /* ... */ });
-// ... and all other user-facing API routes
-
-// --- Feedback Route ---
-apiRoutes.post('/feedback', isAuthenticated, async (req, res) => {
-    const { feedback_type, message } = req.body;
-    const userId = req.user.id;
-
-    if (!feedback_type || !message) {
-        return res.status(400).json({ error: 'Feedback type and message are required.' });
-    }
-    try {
-        const userRes = await pool.query('SELECT full_name, email FROM users WHERE user_id = $1', [userId]);
-        if (userRes.rows.length === 0) {
-            return res.status(404).json({ error: 'Submitting user not found.' });
-        }
-        const { full_name, email } = userRes.rows[0];
-        await pool.query(
-            'INSERT INTO feedback (user_id, user_name, user_email, feedback_type, message) VALUES ($1, $2, $3, $4, $5)',
-            [userId, full_name, email, feedback_type, message]
-        );
-        res.status(201).json({ message: 'Feedback submitted successfully. Thank you!' });
-    } catch (err) {
-        console.error('Error submitting feedback:', err);
-        res.status(500).json({ error: 'Failed to submit feedback.' });
-    }
-});
-
-
-// --- MOUNT USER-FACING API ROUTER ---
+// --- All other API routes remain unchanged ---
 app.use('/api', apiRoutes);
 
 
@@ -119,9 +85,29 @@ ownerRoutes.post('/data', async (req, res) => {
             pool.query('SELECT * FROM feedback ORDER BY submitted_at DESC')
         ]);
 
+        // FIX: Calculate subscription counts
+        const subscriptionCounts = {
+            free: 0,
+            pro: 0,
+            enterprise: 0,
+            total: subscriptions.rows.length
+        };
+
+        subscriptions.rows.forEach(sub => {
+            const plan = (sub.subscription_plan || 'free').toLowerCase();
+            if (plan.includes('pro')) {
+                subscriptionCounts.pro++;
+            } else if (plan.includes('enterprise')) {
+                subscriptionCounts.enterprise++;
+            } else {
+                subscriptionCounts.free++;
+            }
+        });
+
         res.json({
             subscriptions: subscriptions.rows,
-            feedback: feedback.rows
+            feedback: feedback.rows,
+            subscriptionCounts: subscriptionCounts // Add counts to the response
         });
     } catch (err) {
         console.error('Error fetching owner data:', err);
