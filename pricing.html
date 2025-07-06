@@ -10,17 +10,108 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        .pricing-header {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .pricing-header h2 {
+            font-size: 2.5rem;
+            color: var(--text-light);
+            margin-bottom: 10px;
+        }
+        .pricing-header p {
+            font-size: 1.1rem;
+            color: var(--text-medium);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        .pricing-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--card-border-color);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+        }
+        .pricing-card.pro {
+            border: 2px solid var(--primary-accent);
+            box-shadow: 0 0 25px var(--primary-accent-glow);
+        }
+        .pricing-card h3 {
+            font-size: 1.8rem;
+            color: var(--primary-accent);
+            margin-top: 0;
+        }
+        .price {
+            font-size: 3rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        .price span {
+            font-size: 1rem;
+            font-weight: 400;
+            color: var(--text-medium);
+        }
+        .features {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+            flex-grow: 1;
+        }
+        .features li {
+            margin-bottom: 15px;
+            color: var(--text-light);
+        }
+        .choose-plan-btn {
+            margin-top: auto;
+        }
+    </style>
 </head>
 <body>
     <div class="background-animation"></div>
     <div class="container">
         <header class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
         </header>
         <section class="pricing-header">
-            </section>
+            <h2>Find the perfect plan</h2>
+            <p>Start for free and scale as you grow. All plans include unlimited access to all features and premium support.</p>
+        </section>
         <section class="pricing-grid">
-            </section>
+            <div class="pricing-card">
+                <h3>Basic</h3>
+                <p class="price">$10<span>/month</span></p>
+                <ul class="features">
+                    <li>Up to 10 Employees</li>
+                    <li>Core Scheduling Tools</li>
+                    <li>Basic Onboarding</li>
+                    <li>Email Support</li>
+                </ul>
+                <button class="btn btn-secondary choose-plan-btn" data-plan="Basic">Choose Basic</button>
+            </div>
+            <div class="pricing-card pro">
+                <h3>Pro</h3>
+                <p class="price">$25<span>/month</span></p>
+                <ul class="features">
+                    <li>Unlimited Employees</li>
+                    <li>Advanced Scheduling</li>
+                    <li>Full Onboarding & Hiring Suite</li>
+                    <li>Priority Phone & Email Support</li>
+                </ul>
+                <button class="btn btn-primary choose-plan-btn" data-plan="Pro">Choose Pro</button>
+            </div>
+        </section>
     </div>
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
