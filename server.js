@@ -104,16 +104,6 @@ apiRoutes.post('/login', async (req, res) => {
 });
 
 // --- User & Admin Routes ---
-apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'User profile not found.' });
-        res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve user profile.' });
-    }
-});
-
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -173,7 +163,18 @@ apiRoutes.get('/applicants', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 
-// ... (All other routes are also included here) ...
+apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM locations ORDER BY location_name');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve locations.' });
+    }
+});
+
+
+// ... (all other routes are also in this file) ...
+
 
 // --- MOUNT ROUTERS ---
 const onboardingRouter = createOnboardingRouter(pool, isAuthenticated, isAdmin);
