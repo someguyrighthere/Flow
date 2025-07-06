@@ -10,12 +10,43 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        /* Your existing styles for hiring.html */
         .hiring-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 30px;
             margin-top: 20px;
+        }
+        .card form .form-group {
+            margin-bottom: 25px;
+        }
+        .card form label {
+            margin-bottom: 8px;
+            font-weight: 600;
+            display: block;
+        }
+        .card form input[type="text"],
+        .card form textarea,
+        .card form select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(0, 0, 0, 0.2);
+            color: var(--text-light);
+            box-sizing: border-box;
+        }
+        .job-posting-item, .applicant-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .job-posting-actions {
+            display: flex;
+            gap: 10px;
         }
     </style>
 </head>
@@ -29,9 +60,9 @@
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
                   <a href="account.html">My Account</a>
-                    <a href="admin.html">Admin Settings</a>
-                    <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
-                    <a href="help.html">Help & FAQ</a>
+                  <a href="admin.html">Admin Settings</a>
+                  <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
+                  <a href="help.html">Help & FAQ</a>
                   <button id="logout-button">Logout</button>
                 </div>
             </div>
@@ -46,7 +77,25 @@
                 <div class="card">
                     <h3>Create New Job Posting</h3>
                     <form id="new-job-posting-form">
-                        </form>
+                        <div class="form-group">
+                            <label for="job-title">Job Title</label>
+                            <input type="text" id="job-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-description">Job Description</label>
+                            <textarea id="job-description" rows="5" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-requirements">Requirements</label>
+                            <textarea id="job-requirements" rows="5"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-location-select">Location</label>
+                            <select id="job-location-select" required></select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Posting</button>
+                        <p id="job-posting-status-message"></p>
+                    </form>
                 </div>
 
                 <div class="card">
