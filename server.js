@@ -67,45 +67,88 @@ const isAdmin = (req, res, next) => {
 // Includes all routes for all features
 
 // Authentication
-apiRoutes.post('/register', async (req, res) => { /* ... */ });
-apiRoutes.post('/login', async (req, res) => { /* ... */ });
+apiRoutes.post('/register', async (req, res) => {
+    const { companyName, fullName, email, password } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`, [`${companyName} HQ`]);
+        const newLocationId = locationRes.rows[0].location_id;
+        const hash = await bcrypt.hash(password, 10);
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await client.query('COMMIT');
+        res.status(201).json({ message: "Registration successful!" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(409).json({ error: "Email address is already registered." });
+        res.status(500).json({ error: "An internal server error occurred." });
+    } finally {
+        client.release();
+    }
+});
+
+apiRoutes.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const result = await pool.query(`SELECT user_id, full_name, email, password, role, location_id FROM users WHERE email = $1`, [email]);
+        if (result.rows.length === 0) return res.status(401).json({ error: "Invalid email or password." });
+        const user = result.rows[0];
+        if (!(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid email or password." });
+        
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+        res.json({ token, role: user.role, userId: user.user_id });
+    } catch (err) {
+        console.error("Login error:", err);
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
+});
 
 // Users & Admin
-apiRoutes.get('/users/me', isAuthenticated, async (req, res) => { /* ... */ });
-apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => { /* ... */ });
+apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT user_id, full_name, email, role, location_id FROM users WHERE user_id = $1', [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User profile not found.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve user profile.' });
+    }
+});
 
-// Documents
-apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
+apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name
-            FROM documents d 
-            LEFT JOIN users u ON d.uploaded_by = u.user_id
-            ORDER BY d.uploaded_at DESC
+            SELECT u.user_id, u.full_name, u.position, u.role, l.location_name 
+            FROM users u 
+            LEFT JOIN locations l ON u.location_id = l.location_id 
+            ORDER BY u.full_name
         `);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve documents.' });
+        res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
-apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
+
+// Subscription Status
+apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file was uploaded.' });
-        }
-        const { title, description } = req.body;
-        const { filename } = req.file;
-        
         const result = await pool.query(
-            'INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',
-            [title, description, filename, req.user.id]
+            'SELECT subscription_plan, subscription_status FROM locations WHERE location_id = $1',
+            [req.user.location_id]
         );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error uploading document:', err);
-        res.status(500).json({ error: 'Failed to upload document.' });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ plan: 'None', status: 'inactive' });
+        }
+        res.json({
+            plan: result.rows[0].subscription_plan || 'Free Tier',
+            status: result.rows[0].subscription_status || 'inactive'
+        });
+    } catch (error) {
+        console.error('Failed to get subscription status:', error);
+        res.status(500).json({ error: 'Failed to get subscription status.' });
     }
 });
+
 
 // All other routes for locations, hiring, checklists, scheduling, messages...
 // ... (The full code for all other routes is included here)
