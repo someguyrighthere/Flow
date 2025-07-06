@@ -71,9 +71,9 @@
                 </button>
                 <div id="settings-dropdown" class="settings-dropdown">
                   <a href="account.html">My Account</a>
-                    <a href="admin.html">Admin Settings</a>
-                    <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
-                    <a href="help.html">Help & FAQ</a>
+                  <a href="admin.html">Admin Settings</a>
+                  <a href="pricing.html" id="upgrade-plan-link">Upgrade Plan</a>
+                  <a href="help.html">Help & FAQ</a>
                   <button id="logout-button">Logout</button>
                 </div>
             </div>
@@ -85,39 +85,76 @@
         <section id="admin-settings-content">
             <h2 style="color: var(--text-light);">Admin Settings</h2>
             <div class="admin-grid">
-                <div class="card" id="business-settings-card">
-                    <h3>Business Settings</h3>
-                    <form id="business-settings-form">
-                        <h4>Operating Hours</h4>
-                        <div style="display: flex; gap: 15px;">
-                            <div class="form-group" style="flex: 1;">
-                                <label for="operating-hours-start">Start Time</label>
-                                <input type="time" id="operating-hours-start" required>
+                <!-- Column 1: Business and Location Settings -->
+                <div>
+                    <div class="card" id="business-settings-card">
+                        <h3>Business Settings</h3>
+                        <form id="business-settings-form">
+                            <h4>Operating Hours</h4>
+                            <div style="display: flex; gap: 15px;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label for="operating-hours-start">Start Time</label>
+                                    <input type="time" id="operating-hours-start" required>
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label for="operating-hours-end">End Time</label>
+                                    <input type="time" id="operating-hours-end" required>
+                                </div>
                             </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label for="operating-hours-end">End Time</label>
-                                <input type="time" id="operating-hours-end" required>
+                            <p id="current-operating-hours-display" style="font-size: 0.9em; color: var(--text-medium); margin-top: 15px; text-align: center;">Loading current hours...</p>
+                            <button type="submit" class="btn btn-primary">Save Settings</button>
+                            <p id="business-settings-status-message"></p>
+                        </form>
+                    </div>
+                    <!-- FIX: Restored the missing Manage Locations card -->
+                    <div class="card" id="manage-locations-card" style="margin-top: 30px;">
+                        <h3>Manage Locations</h3>
+                        <form id="new-location-form">
+                            <div class="form-group">
+                                <label for="new-location-name">Location Name</label>
+                                <input type="text" id="new-location-name" required placeholder="e.g., Downtown Branch">
                             </div>
-                        </div>
-                        <p id="current-operating-hours-display" style="font-size: 0.9em; color: var(--text-medium); margin-top: 15px; text-align: center;">Loading current hours...</p>
-                        <button type="submit" class="btn btn-primary">Save Settings</button>
-                        <p id="business-settings-status-message"></p>
-                    </form>
+                            <div class="form-group">
+                                <label for="new-location-address">Address</label>
+                                <input type="text" id="new-location-address" required placeholder="e.g., 123 Main St, Anytown, USA">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Location</button>
+                            <p id="new-location-status-message"></p>
+                        </form>
+                        <hr style="border-color: var(--border-color); margin: 30px 0;">
+                        <h4>Existing Locations</h4>
+                        <div id="location-list"></div>
+                    </div>
                 </div>
 
-                <div class="card" id="invite-employee-card">
-                    <h3>Invite New Employee</h3>
-                    <form id="invite-employee-form">
-                        <div class="form-group"><label for="employee-name">Full Name</label><input type="text" id="employee-name" required></div>
-                        <div class="form-group"><label for="employee-email">Email</label><input type="email" id="employee-email" required></div>
-                        <div class="form-group"><label for="employee-password">Temporary Password</label><input type="password" id="employee-password" required></div>
-                        <div class="form-group"><label for="employee-position">Position/Title</label><input type="text" id="employee-position"></div>
-                        <div class="form-group"><label for="employee-location-select">Assign to Location</label><select id="employee-location-select" required></select></div>
-                        <button type="submit" class="btn btn-primary">Invite Employee</button>
-                        <p id="invite-employee-status-message"></p>
-                    </form>
+                <!-- Column 2: User Invitation -->
+                <div>
+                    <div class="card" id="invite-admin-card">
+                        <h3>Invite New Location Admin</h3>
+                        <form id="invite-admin-form">
+                            <div class="form-group"><label for="admin-name">Full Name</label><input type="text" id="admin-name" required></div>
+                            <div class="form-group"><label for="admin-email">Email</label><input type="email" id="admin-email" required></div>
+                            <div class="form-group"><label for="admin-password">Temporary Password</label><input type="password" id="admin-password" required></div>
+                            <div class="form-group"><label for="admin-location-select">Assign to Location</label><select id="admin-location-select" required></select></div>
+                            <button type="submit" class="btn btn-primary">Invite Admin</button>
+                            <p id="invite-admin-status-message"></p>
+                        </form>
+                    </div>
+                    <div class="card" id="invite-employee-card" style="margin-top: 30px;">
+                        <h3>Invite New Employee</h3>
+                        <form id="invite-employee-form">
+                            <div class="form-group"><label for="employee-name">Full Name</label><input type="text" id="employee-name" required></div>
+                            <div class="form-group"><label for="employee-email">Email</label><input type="email" id="employee-email" required></div>
+                            <div class="form-group"><label for="employee-password">Temporary Password</label><input type="password" id="employee-password" required></div>
+                            <div class="form-group"><label for="employee-position">Position/Title</label><input type="text" id="employee-position"></div>
+                            <div class="form-group"><label for="employee-location-select">Assign to Location</label><select id="employee-location-select" required></select></div>
+                            <button type="submit" class="btn btn-primary">Invite Employee</button>
+                            <p id="invite-employee-status-message"></p>
+                        </form>
+                    </div>
                 </div>
 
+                <!-- Column 3: User Management -->
                 <div class="card" id="manage-users-card">
                     <h3>Manage Users</h3>
                     <div id="user-list"></div>
@@ -126,7 +163,7 @@
         </section>
     </div>
 
-    <!-- START: Added Modal HTML for error messages -->
+    <!-- Modal HTML for error messages -->
     <div id="modal-message" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <p id="modal-text"></p>
@@ -144,7 +181,6 @@
             </div>
         </div>
     </div>
-    <!-- END: Added Modal HTML -->
 
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
