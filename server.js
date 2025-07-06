@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // UNCOMMENTED: Stripe initialization
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
@@ -20,6 +20,11 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-change-me';
+
+// Define Stripe Price IDs from environment variables
+const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
+const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
+const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
 
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -41,7 +46,87 @@ const pool = new Pool({
 });
 
 app.use(cors());
-app.use(express.json());
+
+// IMPORTANT: Stripe webhook needs the raw body, so this middleware must come BEFORE express.json()
+app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+        console.error('Stripe Webhook Secret is not set in environment variables.');
+        return res.status(500).send('Webhook secret not configured.');
+    }
+
+    try {
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } catch (err) {
+        console.error(`Webhook Error: ${err.message}`);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    switch (event.type) {
+        case 'checkout.session.completed':
+            const session = event.data.object;
+            console.log('Checkout Session Completed:', session.id);
+            const userId = session.metadata.userId;
+            const locationId = session.metadata.locationId;
+            const plan = session.metadata.plan;
+            const subscriptionId = session.subscription;
+
+            if (userId && locationId && plan) {
+                try {
+                    // Update the location's subscription plan and status
+                    await pool.query(
+                        `UPDATE locations SET subscription_plan = $1, subscription_status = 'active', stripe_customer_id = $2, stripe_subscription_id = $3 WHERE location_id = $4`,
+                        [plan, session.customer, subscriptionId, locationId]
+                    );
+                    console.log(`Location ${locationId} updated to ${plan} plan.`);
+                } catch (dbErr) {
+                    console.error('Database update error for checkout.session.completed:', dbErr);
+                    return res.status(500).send('Database update failed.');
+                }
+            } else {
+                console.warn('Missing metadata in checkout session:', session.metadata);
+            }
+            break;
+        case 'customer.subscription.updated':
+            const subscription = event.data.object;
+            console.log('Customer Subscription Updated:', subscription.id);
+            try {
+                await pool.query(
+                    `UPDATE locations SET subscription_status = $1 WHERE stripe_subscription_id = $2`,
+                    [subscription.status, subscription.id]
+                );
+                console.log(`Subscription ${subscription.id} status updated to ${subscription.status}.`);
+            } catch (dbErr) {
+                console.error('Database update error for customer.subscription.updated:', dbErr);
+                return res.status(500).send('Database update failed.');
+            }
+            break;
+        case 'customer.subscription.deleted':
+            const deletedSubscription = event.data.object;
+            console.log('Customer Subscription Deleted:', deletedSubscription.id);
+            try {
+                await pool.query(
+                    `UPDATE locations SET subscription_plan = 'free', subscription_status = 'cancelled', stripe_subscription_id = NULL WHERE stripe_subscription_id = $1`,
+                    [deletedSubscription.id]
+                );
+                console.log(`Subscription ${deletedSubscription.id} cancelled.`);
+            } catch (dbErr) {
+                console.error('Database update error for customer.subscription.deleted:', dbErr);
+                return res.status(500).send('Database update failed.');
+            }
+            break;
+        default:
+            console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.status(200).json({ received: true });
+});
+
+app.use(express.json()); // This must come AFTER the raw body parser for Stripe webhook
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(uploadsDir));
 
@@ -73,7 +158,7 @@ apiRoutes.post('/register', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const locationRes = await client.query(`INSERT INTO locations (location_name) VALUES ($1) RETURNING location_id`, [`${companyName} HQ`]);
+        const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']); // Default to free plan on registration
         const newLocationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
         await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
@@ -116,7 +201,7 @@ apiRoutes.get('/users/me', isAuthenticated, async (req, res) => {
 });
 apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const result = await pool.query(`SELECT u.user_id, u.full_name, u.position, u.role, l.location_name FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`);
+        const result = await pool.query(`SELECT u.user_id, u.full_name, u.position, u.role, l.location_name, u.location_id FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: 'Failed to retrieve users.' });
@@ -164,15 +249,45 @@ apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to invite location admin.' });
     }
 });
+
+// MODIFIED: Added employee limit enforcement
 apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) => {
     const { full_name, email, password, position, location_id, availability } = req.body;
     if (!full_name || !email || !password || !location_id) return res.status(400).json({ error: 'Name, email, password, and location are required.' });
+
     try {
+        // 1. Get current location's subscription plan
+        const locationResult = await pool.query('SELECT subscription_plan FROM locations WHERE location_id = $1', [location_id]);
+        if (locationResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Location not found.' });
+        }
+        const subscriptionPlan = locationResult.rows[0].subscription_plan;
+
+        // 2. Count existing employees and location admins for this location
+        const employeeCountResult = await pool.query(
+            `SELECT COUNT(*) FROM users WHERE location_id = $1 AND role IN ('employee', 'location_admin')`,
+            [location_id]
+        );
+        const currentEmployeeCount = parseInt(employeeCountResult.rows[0].count, 10);
+
+        // 3. Enforce limits based on subscription plan
+        const FREE_TIER_LIMIT = 5;
+        const PRO_TIER_LIMIT = 100;
+
+        if (subscriptionPlan === 'free' && currentEmployeeCount >= FREE_TIER_LIMIT) {
+            return res.status(403).json({ error: `Free tier is limited to ${FREE_TIER_LIMIT} employees. Please upgrade your plan to invite more.` });
+        } else if (subscriptionPlan === 'pro' && currentEmployeeCount >= PRO_TIER_LIMIT) {
+            return res.status(403).json({ error: `Pro plan is limited to ${PRO_TIER_LIMIT} employees. Please upgrade to the Enterprise plan to invite more.` });
+        }
+        // No limit for 'enterprise' plan
+
+        // If limits are not exceeded, proceed with invitation
         const hash = await bcrypt.hash(password, 10);
         await pool.query("INSERT INTO users (full_name, email, password, role, position, location_id, availability) VALUES ($1, $2, $3, 'employee', $4, $5, $6)",[full_name, email, hash, position, location_id, availability ? JSON.stringify(availability) : null]);
         res.status(201).json({ message: 'Employee invited successfully.' });
     } catch (err) {
         if (err.code === '23505') return res.status(409).json({ error: 'Email already in use.' });
+        console.error('Error inviting employee:', err); // Log the actual error for debugging
         res.status(500).json({ error: 'Failed to invite employee.' });
     }
 });
@@ -333,7 +448,7 @@ apiRoutes.get('/shifts', isAuthenticated, async (req, res) => {
     if (user_id && !isUserAdmin && String(user_id) !== String(requestingUserId)) return res.status(403).json({ error: 'Access denied.' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'Start and end dates are required.' });
     try {
-        let query = `SELECT s.id, s.employee_id, u.full_name AS employee_name, s.location_id, l.location_name, s.start_time, s.end_time FROM shifts s JOIN users u ON s.employee_id = u.user_id JOIN locations l ON s.location_id = l.location_id WHERE s.start_time >= $1 AND s.end_time <= $2`;
+        let query = `SELECT s.id, s.employee_id, u.full_name as employee_name, s.location_id, l.location_name, s.start_time, s.end_time FROM shifts s JOIN users u ON s.employee_id = u.user_id JOIN locations l ON s.location_id = l.location_id WHERE s.start_time >= $1 AND s.end_time <= $2`;
         const params = [startDate, endDate];
         let paramIndex = 3;
         if (isUserAdmin) {
@@ -426,6 +541,75 @@ apiRoutes.get('/subscription-status', isAuthenticated, async (req, res) => {
         res.status(500).json({ error: 'Failed to get subscription status.' });
     }
 });
+
+// NEW: Stripe Checkout Session Creation Endpoint
+apiRoutes.post('/create-checkout-session', isAuthenticated, async (req, res) => {
+    const { plan } = req.body;
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    const userLocationId = req.user.location_id;
+
+    let priceId;
+    let planName;
+
+    if (plan === 'pro') {
+        priceId = STRIPE_PRO_PRICE_ID;
+        planName = 'Pro Plan';
+    } else if (plan === 'enterprise') {
+        priceId = STRIPE_ENTERPRISE_PRICE_ID;
+        planName = 'Enterprise Plan';
+    } else {
+        return res.status(400).json({ error: 'Invalid plan selected.' });
+    }
+
+    if (!priceId) {
+        console.error(`Stripe Price ID not configured for plan: ${plan}`);
+        return res.status(500).json({ error: 'Payment configuration error. Please contact support.' });
+    }
+
+    try {
+        let customer;
+        // Check if customer already exists in Stripe for this email
+        const existingCustomers = await stripe.customers.list({ email: userEmail, limit: 1 });
+        if (existingCustomers.data.length > 0) {
+            customer = existingCustomers.data[0];
+        } else {
+            // Create a new customer in Stripe
+            customer = await stripe.customers.create({
+                email: userEmail,
+                name: req.user.full_name,
+                metadata: {
+                    userId: userId,
+                    locationId: userLocationId,
+                },
+            });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+            customer: customer.id,
+            line_items: [
+                {
+                    price: priceId,
+                    quantity: 1,
+                },
+            ],
+            mode: 'subscription',
+            success_url: `${APP_BASE_URL}/account.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${APP_BASE_URL}/pricing.html?payment=cancelled`,
+            metadata: {
+                userId: userId,
+                locationId: userLocationId,
+                plan: plan,
+            },
+        });
+
+        res.json({ id: session.id });
+    } catch (error) {
+        console.error('Error creating checkout session:', error);
+        res.status(500).json({ error: 'Failed to create checkout session.' });
+    }
+});
+
 
 // Feedback
 apiRoutes.post('/feedback', isAuthenticated, async (req, res) => {
