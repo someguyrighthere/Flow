@@ -3,84 +3,123 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pricing - Flow Business Suite</title>
+    <title>Flow Business Suite - All-in-One Business Tools</title>
     <link rel="stylesheet" href="dist/css/style.min.css">
     <link rel="stylesheet" href="dist/css/Theme.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
-    <script src="https://js.stripe.com/v3/"></script>
     <style>
-        .pricing-header { text-align: center; padding: 40px 20px; }
-        .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; max-width: 1000px; margin: 0 auto; padding: 0 20px; }
-        .pricing-card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid var(--card-border-color); border-radius: 16px; padding: 30px; text-align: center; display: flex; flex-direction: column; }
-        .pricing-card.highlight { border: 2px solid var(--primary-accent); box-shadow: 0 0 25px var(--primary-accent-glow); }
-        .price { font-size: 3rem; font-weight: 700; margin: 10px 0; }
-        .features-list { list-style: none; padding: 0; margin: 20px 0; flex-grow: 1; }
-        .features-list li { margin-bottom: 15px; }
-        #register-checkout-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1001; }
+        /* Styles for the new landing page content */
+        .hero {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-light);
+        }
+        .hero h1 {
+            font-size: 3.5rem;
+            font-family: 'Fredoka One', cursive;
+            margin-bottom: 20px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .hero p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 0 auto 30px auto;
+            color: var(--text-medium);
+        }
+        .hero-actions .btn {
+            margin: 0 10px;
+        }
+        .features-section {
+            padding: 60px 20px;
+            text-align: center;
+        }
+        .features-section h2 {
+            font-size: 2.5rem;
+            margin-bottom: 40px;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--card-border-color);
+        }
+        .feature-card h3 {
+            color: var(--primary-accent);
+            margin-top: 0;
+        }
+        .cta-section {
+            text-align: center;
+            padding: 80px 20px;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            margin: 40px 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            color: var(--text-medium);
+            border-top: 1px solid var(--border-color);
+        }
     </style>
 </head>
 <body>
     <div class="background-animation"></div>
     <div class="container">
         <header class="dashboard-header">
-            <a href="suite-hub.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <div>
+                <a href="login.html" class="btn btn-secondary">Login</a>
+            </div>
         </header>
-        <section class="pricing-header">
-            <h2>Find the perfect plan for your business</h2>
-        </section>
-        <section class="pricing-grid">
-            <div class="pricing-card">
-                <h3>Free</h3>
-                <p class="price">$0<span>/month</span></p>
-                <ul class="features-list">
-                    <li>Up to 5 Employees</li>
-                    <li>All Features Included</li>
-                    <li>Community Support</li>
-                </ul>
-                <button class="btn btn-secondary choose-plan-btn" data-plan-id="free">Get Started</button>
-            </div>
-            <div class="pricing-card highlight">
-                <h3>Pro</h3>
-                <p class="price">$29<span>/month</span></p>
-                <ul class="features-list">
-                    <li>Up to 100 Employees</li>
-                    <li>All Features Included</li>
-                    <li>Priority Email Support</li>
-                </ul>
-                <button class="btn btn-primary choose-plan-btn" data-plan-id="pro">Choose Pro</button>
-            </div>
-            <div class="pricing-card">
-                <h3>Enterprise</h3>
-                <p class="price">$79<span>/month</span></p>
-                <ul class="features-list">
-                    <li>Unlimited Employees</li>
-                    <li>All Features Included</li>
-                    <li>Dedicated Support Agent</li>
-                </ul>
-                <button class="btn btn-primary choose-plan-btn" data-plan-id="enterprise">Choose Enterprise</button>
-            </div>
-        </section>
-    </div>
-
-    <div id="register-checkout-modal-overlay">
-        <div class="modal-content card">
-            <h3 id="register-checkout-modal-title">Sign Up & Subscribe</h3>
-            <form id="register-checkout-form">
-                <div class="form-group"><label for="reg-co-name">Company Name</label><input type="text" id="reg-co-name" required></div>
-                <div class="form-group"><label for="reg-full-name">Your Full Name</label><input type="text" id="reg-full-name" required></div>
-                <div class="form-group"><label for="reg-email">Email Address</label><input type="email" id="reg-email" required></div>
-                <div class="form-group"><label for="reg-password">Password</label><input type="password" id="reg-password" required minlength="6"></div>
-                <p id="register-checkout-error-message"></p>
-                <div style="display: flex; gap: 15px; margin-top: 20px;">
-                    <button type="button" id="reg-checkout-cancel-btn" class="btn btn-secondary" style="flex:1;">Cancel</button>
-                    <button type="submit" class="btn btn-primary" style="flex:1;">Sign Up & Continue</button>
+        <main>
+            <section class="hero">
+                <h1>Streamline Your Business Operations</h1>
+                <p>The all-in-one suite to manage scheduling, onboarding, hiring, and documents. Everything you need, all in one flow.</p>
+                <div class="hero-actions">
+                    <!-- FIX: Changed href from register.html to pricing.html -->
+                    <a href="pricing.html" class="btn btn-primary">Get Started for Free</a>
                 </div>
-            </form>
-        </div>
-    </div>
+            </section>
 
+            <section class="features-section">
+                <h2>Powerful Features, Simplified</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Smart Scheduling</h3>
+                        <p>Create, manage, and view employee schedules with an intuitive weekly calendar. Avoid conflicts and keep your team in sync.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Effortless Onboarding</h3>
+                        <p>Create custom task lists for new hires. Track their progress and ensure a smooth and consistent onboarding experience for every position.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Centralized Documents</h3>
+                        <p>Upload and manage important files, training materials, and company handbooks. Accessible to your team whenever they need it.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="cta-section">
+                <h2>Ready to get started?</h2>
+                <p>Sign up today and take control of your business workflow.</p>
+                <!-- FIX: Changed href from register.html to pricing.html -->
+                <a href="pricing.html" class="btn btn-primary">Sign Up Now</a>
+            </section>
+        </main>
+        <footer class="footer">
+            <p>&copy; 2024 Flow Business Suite. All rights reserved.</p>
+        </footer>
+    </div>
     <script type="module" src="dist/js/bundle.js"></script>
 </body>
 </html>
