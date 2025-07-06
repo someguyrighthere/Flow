@@ -1,7 +1,8 @@
-import { apiRequest } from '../utils.js';
+import { apiRequest, showModalMessage } from '../utils.js';
 
 export function handlePricingPage() {
-    const stripePublicKey = 'pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYmQ8eX3eI00O5pP5bB9'; // Replace with your actual publishable key
+    // IMPORTANT: Replace with your actual publishable key from Stripe Dashboard
+    const stripePublicKey = 'pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYmQ8eX3eI00O5pP5bB9'; 
     const stripe = Stripe(stripePublicKey);
 
     const modal = document.getElementById('register-checkout-modal-overlay');
@@ -32,6 +33,7 @@ export function handlePricingPage() {
             e.preventDefault();
             const errorEl = document.getElementById('register-checkout-error-message');
             errorEl.textContent = '';
+            errorEl.style.display = 'none'; // Hide error message initially
 
             const companyName = document.getElementById('reg-co-name').value;
             const fullName = document.getElementById('reg-full-name').value;
@@ -47,13 +49,15 @@ export function handlePricingPage() {
                 if (!loginData.token) throw new Error("Login failed after registration.");
                 localStorage.setItem("authToken", loginData.token);
                 localStorage.setItem("userRole", loginData.role);
-                localStorage.setItem("userId", loginData.userId);
+                localStorage.setItem("userId", loginData.userId); // Ensure userId is stored
 
                 // Step 3: Proceed to checkout
                 await createCheckoutSession(selectedPlan);
 
             } catch (error) {
                 errorEl.textContent = error.message;
+                errorEl.style.display = 'block'; // Show error message
+                console.error('Registration/Checkout error:', error);
             }
         });
     }
@@ -69,13 +73,16 @@ export function handlePricingPage() {
         try {
             const session = await apiRequest('POST', '/api/create-checkout-session', { plan });
             if (session && session.id) {
+                // Redirect to Stripe Checkout
                 await stripe.redirectToCheckout({ sessionId: session.id });
             } else {
-                alert('Could not initiate checkout session.');
+                // Use showModalMessage instead of alert
+                showModalMessage('Could not initiate checkout session. Please try again.', true);
             }
         } catch (error) {
             console.error('Error creating checkout session:', error);
-            alert('Could not initiate checkout. Please try again.');
+            // Use showModalMessage instead of alert
+            showModalMessage('Could not initiate checkout. Please try again.', true);
         }
     }
 }

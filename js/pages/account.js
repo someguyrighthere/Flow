@@ -52,7 +52,7 @@ export function handleAccountPage() {
             // Fetch subscription status from the backend
             const response = await apiRequest('GET', '/api/subscription-status');
             if (response && response.plan) {
-                displaySubscriptionPlan.textContent = response.plan;
+                displaySubscriptionPlan.textContent = response.plan.toUpperCase(); // Display plan in uppercase
             } else {
                 displaySubscriptionPlan.textContent = 'N/A';
             }
@@ -105,6 +105,19 @@ export function handleAccountPage() {
                 console.error('Error updating profile:', error);
             }
         });
+    }
+
+    // --- Handle Payment Redirect Status ---
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('payment')) {
+        const paymentStatus = urlParams.get('payment');
+        if (paymentStatus === 'success') {
+            showModalMessage('Payment successful! Your plan has been updated.', false);
+        } else if (paymentStatus === 'cancelled') {
+            showModalMessage('Payment cancelled. You can try again at any time.', true);
+        }
+        // Clean the URL to remove the query parameters after displaying the message
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 
     // --- Initial Page Load Actions ---
