@@ -1,5 +1,5 @@
 // js/pages/suiteHub.js
-import { apiRequest } from '../utils.js';
+import { apiRequest, showModalMessage } from '../utils.js';
 
 /**
  * Handles all logic for the Suite Hub page.
@@ -7,73 +7,101 @@ import { apiRequest } from '../utils.js';
 export async function handleSuiteHubPage() {
     const greetingContainer = document.getElementById('greeting-container');
     const sendMessageForm = document.getElementById('send-message-form');
-    const employeeSelect = document.getElementById('message-employee-select');
+    const messageEmployeeSelect = document.getElementById('message-employee-select');
     const messageContent = document.getElementById('message-content');
-    const messageStatus = document.getElementById('send-message-status');
+    const sendMessageStatus = document.getElementById('send-message-status');
 
-    if (!greetingContainer) {
-        console.error("Greeting container not found on page.");
-        return;
-    }
-
-    function getGreeting() {
-        const hour = new Date().getHours();
-        if (hour < 12) return "Good morning";
-        if (hour < 18) return "Good afternoon";
-        return "Good evening";
-    }
-
-    async function loadEmployeesForMessaging() {
-        if (!employeeSelect) return;
+    // Fetch user info for greeting and role check
+    const fetchUserInfo = async () => {
         try {
-            // This is the call that is failing with a 404
+            const user = await apiRequest('GET', '/api/users/me');
+            if (greetingContainer) {
+                greetingContainer.innerHTML = `<h2 style="color: var(--primary-accent);">Welcome, ${user.full_name}!</h2>`;
+            }
+
+            // Only populate employee list for admins
+            if (user.role === 'super_admin' || user.role === 'location_admin') {
+                await populateEmployeeSelect(user.location_id);
+            } else {
+                // Hide the message form for regular employees, or show a message
+                if (sendMessageForm) {
+                    sendMessageForm.style.display = 'none';
+                    const messageContainer = sendMessageForm.parentElement;
+                    messageContainer.innerHTML = '<h3>Messaging</h3><p style="color: var(--text-medium);">Messaging is available for admin users.</p>';
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching user info for Suite Hub:', error);
+            showModalMessage('Failed to load user information.', true);
+        }
+    };
+
+    // Populate employee dropdown
+    const populateEmployeeSelect = async (adminLocationId) => {
+        try {
             const users = await apiRequest('GET', '/api/users');
-            employeeSelect.innerHTML = '<option value="">Select an employee...</option>';
-            users.filter(u => u.role === 'employee').forEach(user => {
-                const option = new Option(user.full_name, user.user_id);
-                employeeSelect.add(option);
+            messageEmployeeSelect.innerHTML = '<option value="">Select an employee</option>'; // Clear existing options
+
+            // Filter users based on admin's location if location_admin
+            const filteredUsers = users.filter(user => 
+                user.role === 'employee' || 
+                (user.role === 'location_admin' && String(user.user_id) !== String(localStorage.getItem('userId')))
+            ).filter(user => {
+                if (localStorage.getItem('userRole') === 'location_admin') {
+                    return String(user.location_id) === String(adminLocationId);
+                }
+                return true; // Super admin sees all
+            });
+
+
+            filteredUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.user_id;
+                option.textContent = `${user.full_name} (${user.role === 'employee' ? user.position || 'Employee' : 'Admin'})`;
+                messageEmployeeSelect.appendChild(option);
             });
         } catch (error) {
-            console.error("Failed to load employees for messaging:", error);
-            // The error modal is shown by the apiRequest utility function
+            console.error('Error populating employee select:', error);
+            showModalMessage('Failed to load employee list.', true);
         }
-    }
+    };
 
+    // Handle message form submission
     if (sendMessageForm) {
-        sendMessageForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const recipientId = employeeSelect.value;
+        sendMessageForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            sendMessageStatus.textContent = 'Sending message...';
+            sendMessageStatus.style.color = 'var(--text-medium)';
+
+            const recipientId = messageEmployeeSelect.value;
             const content = messageContent.value.trim();
 
-            if (!recipientId || !content) {
-                messageStatus.textContent = 'Please select an employee and write a message.';
-                messageStatus.style.color = '#ff8a80';
+            if (!recipientId) {
+                sendMessageStatus.textContent = 'Please select a recipient.';
+                sendMessageStatus.style.color = '#ff8a80';
+                return;
+            }
+            if (!content) {
+                sendMessageStatus.textContent = 'Message content cannot be empty.';
+                sendMessageStatus.style.color = '#ff8a80';
                 return;
             }
 
             try {
-                await apiRequest('POST', '/api/messages', {
-                    recipient_id: recipientId,
-                    content: content
-                });
-                messageStatus.textContent = 'Message sent successfully!';
-                messageStatus.style.color = 'var(--primary-accent)';
-                sendMessageForm.reset();
+                await apiRequest('POST', '/api/messages', { recipient_id: recipientId, content });
+                sendMessageStatus.textContent = 'Message sent successfully!';
+                sendMessageStatus.style.color = 'var(--primary-accent)';
+                messageContent.value = ''; // Clear message input
+                messageEmployeeSelect.value = ''; // Reset select
+
             } catch (error) {
-                messageStatus.textContent = `Error: ${error.message}`;
-                messageStatus.style.color = '#ff8a80';
+                console.error('Error sending message:', error);
+                sendMessageStatus.textContent = `Error sending message: ${error.message}`;
+                sendMessageStatus.style.color = '#ff8a80';
             }
         });
     }
 
-    try {
-        const user = await apiRequest('GET', '/api/users/me');
-        const userName = user && user.full_name ? user.full_name.split(' ')[0] : 'there';
-        greetingContainer.textContent = `${getGreeting()}, ${userName}. We are going to do great things today.`;
-    } catch (error) {
-        console.error("Failed to fetch user for greeting:", error);
-        greetingContainer.textContent = `${getGreeting()}! Welcome back. We are going to do great things today.`;
-    }
-
-    loadEmployeesForMessaging();
+    // Initial data fetch
+    fetchUserInfo();
 }
