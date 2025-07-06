@@ -496,6 +496,23 @@ ownerRoutes.post('/data', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch dashboard data.' });
     }
 });
+ownerRoutes.post('/feedback/delete/:id', async (req, res) => {
+    const { owner_password } = req.body;
+    const { id } = req.params;
+    if (owner_password !== OWNER_PASSWORD) {
+        return res.status(401).json({ error: 'Incorrect password.' });
+    }
+    try {
+        const result = await pool.query('DELETE FROM feedback WHERE feedback_id = $1', [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Feedback message not found.' });
+        }
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting feedback:', err);
+        res.status(500).json({ error: 'Failed to delete feedback message.' });
+    }
+});
 app.use('/owner', ownerRoutes);
 
 // --- Server Startup Logic ---
