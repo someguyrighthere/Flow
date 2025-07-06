@@ -5,23 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Owner Dashboard - Flow Business Suite</title>
     <link rel="stylesheet" href="dist/css/Theme.min.css">
+    <!-- Load Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #1c1c1e; color: #f0f0f0; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .dashboard-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 30px; }
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 30px; }
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
         .card { background-color: #2c2c2e; border: 1px solid #444; border-radius: 12px; padding: 25px; }
         .card h3 { margin-top: 0; color: var(--primary-accent, #C86DD7); border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #444; }
         .feedback-item { border: 1px solid #444; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #3a3a3c; }
         #password-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 2000; }
         #password-modal { background: #2c2c2e; padding: 40px; border-radius: 12px; text-align: center; border: 1px solid #444; }
         #password-input { padding: 10px; font-size: 1rem; width: 250px; margin-top: 10px; margin-bottom: 20px; }
         .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; background-color: var(--primary-accent, #C86DD7); color: white; font-weight: 600; }
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; text-align: center; }
-        .stat-item h4 { font-size: 2.5rem; margin: 0 0 5px 0; color: var(--primary-accent, #C86DD7); }
-        .stat-item p { margin: 0; color: #aaa; }
+        .chart-controls { display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; }
+        .chart-controls .btn { background-color: #444; }
+        .chart-controls .btn.active { background-color: var(--primary-accent, #C86DD7); }
     </style>
 </head>
 <body>
@@ -41,24 +41,17 @@
         <header class="dashboard-header">
             <h1 class="app-title">Owner Dashboard</h1>
         </header>
-
-        <div class="card" style="margin-bottom: 30px;">
-            <h3>Subscription Summary</h3>
-            <div class="stats-grid">
-                <div class="stat-item"><h4 id="total-users">0</h4><p>Total Companies</p></div>
-                <div class="stat-item"><h4 id="free-users">0</h4><p>Free Tier</p></div>
-                <div class="stat-item"><h4 id="pro-users">0</h4><p>Pro Plan</p></div>
-                <div class="stat-item"><h4 id="enterprise-users">0</h4><p>Enterprise Plan</p></div>
-            </div>
-        </div>
         
         <div class="dashboard-grid">
             <div class="card">
-                <h3>Subscription Status</h3>
-                <table id="subscriptions-table">
-                    <thead><tr><th>Company (Location)</th><th>Plan</th><th>Status</th></tr></thead>
-                    <tbody></tbody>
-                </table>
+                <h3>Account Creation Trends</h3>
+                <div class="chart-controls">
+                    <button class="btn active" data-period="daily">Daily</button>
+                    <button class="btn" data-period="weekly">Weekly</button>
+                    <button class="btn" data-period="monthly">Monthly</button>
+                    <button class="btn" data-period="yearly">Yearly</button>
+                </div>
+                <canvas id="account-creation-chart"></canvas>
             </div>
             <div class="card">
                 <h3>User Feedback</h3>
@@ -71,13 +64,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             const passwordOverlay = document.getElementById('password-overlay');
             const passwordForm = document.getElementById('password-form');
-            const passwordInput = document.getElementById('password-input');
-            const passwordError = document.getElementById('password-error');
             const dashboardContent = document.getElementById('dashboard-content');
+            let chartInstance = null;
+            let chartData = null;
 
             passwordForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const password = passwordInput.value;
+                const password = document.getElementById('password-input').value;
+                const passwordError = document.getElementById('password-error');
                 passwordError.textContent = '';
 
                 try {
@@ -88,10 +82,7 @@
                         body: JSON.stringify({ owner_password: password })
                     });
 
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({error: 'Incorrect password or server error.'}));
-                        throw new Error(errorData.error);
-                    }
+                    if (!response.ok) throw new Error('Incorrect password or server error.');
 
                     const data = await response.json();
                     renderDashboard(data);
@@ -104,28 +95,54 @@
             });
 
             function renderDashboard(data) {
-                if (data.subscriptionCounts) {
-                    document.getElementById('total-users').textContent = data.subscriptionCounts.total || 0;
-                    document.getElementById('free-users').textContent = data.subscriptionCounts.free || 0;
-                    document.getElementById('pro-users').textContent = data.subscriptionCounts.pro || 0;
-                    document.getElementById('enterprise-users').textContent = data.subscriptionCounts.enterprise || 0;
+                chartData = data.accountCreationData;
+                renderChart('daily');
+                renderFeedback(data.feedback);
+            }
+
+            function renderChart(period) {
+                const ctx = document.getElementById('account-creation-chart').getContext('2d');
+                const periodData = chartData[period];
+
+                if (chartInstance) {
+                    chartInstance.destroy();
                 }
 
-                const subsTbody = document.querySelector('#subscriptions-table tbody');
-                subsTbody.innerHTML = '';
-                if (data.subscriptions && data.subscriptions.length > 0) {
-                    data.subscriptions.forEach(sub => {
-                        const row = subsTbody.insertRow();
-                        row.innerHTML = `<td>${sub.location_name}</td><td>${sub.subscription_plan || 'N/A'}</td><td>${sub.subscription_status || 'inactive'}</td>`;
-                    });
-                } else {
-                    subsTbody.innerHTML = '<tr><td colspan="3">No subscriptions found.</td></tr>';
-                }
+                chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: periodData.labels,
+                        datasets: [{
+                            label: `New Accounts (${period.charAt(0).toUpperCase() + period.slice(1)})`,
+                            data: periodData.data,
+                            borderColor: 'rgba(200, 109, 215, 1)',
+                            backgroundColor: 'rgba(200, 109, 215, 0.2)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
 
+            document.querySelector('.chart-controls').addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    document.querySelectorAll('.chart-controls .btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderChart(e.target.dataset.period);
+                }
+            });
+
+            function renderFeedback(feedback) {
                 const feedbackList = document.getElementById('feedback-list');
                 feedbackList.innerHTML = '';
-                if (data.feedback && data.feedback.length > 0) {
-                    data.feedback.forEach(item => {
+                if (feedback && feedback.length > 0) {
+                    feedback.forEach(item => {
                         const div = document.createElement('div');
                         div.className = 'feedback-item';
                         div.innerHTML = `<p><strong>From:</strong> ${item.user_name} (${item.user_email})</p><p><strong>Type:</strong> ${item.feedback_type}</p><p><strong>Message:</strong> ${item.message}</p><small>Submitted: ${new Date(item.submitted_at).toLocaleString()}</small>`;

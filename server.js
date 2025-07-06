@@ -8,13 +8,12 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
 const app = express();
 const apiRoutes = express.Router();
-const ownerRoutes = express.Router(); // Router for private owner routes
+const ownerRoutes = express.Router();
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
@@ -22,54 +21,6 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-change-me';
 
 // ... (multer, pool, middleware setup remains the same) ...
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir);
-}
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsDir),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage: storage });
-
-if (!DATABASE_URL) {
-    console.error("CRITICAL ERROR: DATABASE_URL environment variable is NOT set.");
-}
-
-const pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-});
-
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(uploadsDir));
-
-const isAuthenticated = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-    
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
-        next();
-    });
-};
-
-const isAdmin = (req, res, next) => {
-    if (req.user && (req.user.role === 'super_admin' || req.user.role === 'location_admin')) {
-        next();
-    } else {
-        return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
-    }
-};
-
-
-// --- All other API routes remain unchanged ---
-app.use('/api', apiRoutes);
-
 
 // --- PRIVATE OWNER ROUTES ---
 ownerRoutes.post('/data', async (req, res) => {
@@ -80,34 +31,45 @@ ownerRoutes.post('/data', async (req, res) => {
     }
 
     try {
-        const [subscriptions, feedback] = await Promise.all([
-            pool.query('SELECT location_name, subscription_plan, subscription_status FROM locations ORDER BY location_name ASC'),
+        const [users, feedback] = await Promise.all([
+            pool.query('SELECT created_at FROM users ORDER BY created_at ASC'),
             pool.query('SELECT * FROM feedback ORDER BY submitted_at DESC')
         ]);
 
-        // FIX: Calculate subscription counts
-        const subscriptionCounts = {
-            free: 0,
-            pro: 0,
-            enterprise: 0,
-            total: subscriptions.rows.length
+        // --- NEW: Process user data for charts ---
+        const processSignups = (users, unit) => {
+            const counts = {};
+            users.forEach(user => {
+                const date = new Date(user.created_at);
+                let key;
+                if (unit === 'day') {
+                    key = date.toISOString().split('T')[0]; // YYYY-MM-DD
+                } else if (unit === 'week') {
+                    const firstDay = new Date(date.setDate(date.getDate() - date.getDay()));
+                    key = firstDay.toISOString().split('T')[0];
+                } else if (unit === 'month') {
+                    key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                } else if (unit === 'year') {
+                    key = date.getFullYear().toString();
+                }
+                counts[key] = (counts[key] || 0) + 1;
+            });
+            
+            const labels = Object.keys(counts).sort();
+            const data = labels.map(label => counts[label]);
+            return { labels, data };
         };
 
-        subscriptions.rows.forEach(sub => {
-            const plan = (sub.subscription_plan || 'free').toLowerCase();
-            if (plan.includes('pro')) {
-                subscriptionCounts.pro++;
-            } else if (plan.includes('enterprise')) {
-                subscriptionCounts.enterprise++;
-            } else {
-                subscriptionCounts.free++;
-            }
-        });
-
+        const accountCreationData = {
+            daily: processSignups(users.rows, 'day'),
+            weekly: processSignups(users.rows, 'week'),
+            monthly: processSignups(users.rows, 'month'),
+            yearly: processSignups(users.rows, 'year')
+        };
+        
         res.json({
-            subscriptions: subscriptions.rows,
             feedback: feedback.rows,
-            subscriptionCounts: subscriptionCounts // Add counts to the response
+            accountCreationData: accountCreationData
         });
     } catch (err) {
         console.error('Error fetching owner data:', err);
@@ -115,11 +77,12 @@ ownerRoutes.post('/data', async (req, res) => {
     }
 });
 
-// --- MOUNT OWNER ROUTER ---
-app.use('/owner', ownerRoutes);
+// --- MOUNT ROUTERS ---
+app.use('/api', apiRoutes); // All public-facing API routes
+app.use('/owner', ownerRoutes); // Private owner dashboard routes
 
 
-// --- Server Startup Logic ---
+// ... (The rest of server.js remains the same) ...
 const startServer = async () => {
     try {
         await pool.connect();
