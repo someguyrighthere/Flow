@@ -12,7 +12,8 @@
     <style>
         .help-container { max-width: 900px; margin: 20px auto; }
         .faq-search { width: 100%; padding: 15px; font-size: 1.1rem; border-radius: 8px; border: 1px solid var(--card-border-color); background-color: rgba(0,0,0,0.2); color: var(--text-light); margin-bottom: 30px; box-sizing: border-box; }
-        .faq-section details { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid var(--card-border-color); border-radius: 8px; margin-bottom: 15px; }
+        .faq-section details { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid var(--card-border-color); border-radius: 8px; margin-bottom: 15px; transition: background-color 0.3s ease; }
+        .faq-section details[open] { background: rgba(255, 255, 255, 0.15); }
         .faq-section summary { font-size: 1.3rem; font-weight: 600; padding: 20px; cursor: pointer; outline: none; list-style: none; position: relative; }
         .faq-section summary::-webkit-details-marker { display: none; }
         .faq-section summary::after { content: '+'; position: absolute; right: 20px; font-size: 1.5rem; transition: transform 0.3s ease; }
@@ -48,9 +49,67 @@
         <main class="help-container">
             <h2 style="color: var(--text-light); text-align: center; margin-bottom: 30px;">Help Center & FAQ</h2>
             <input type="text" id="faq-search" class="faq-search" placeholder="Search for a topic...">
+            
+            <!-- FIX: Restored the original FAQ content -->
             <div class="faq-section">
-                </div>
+                <details>
+                    <summary>General & Account</summary>
+                    <div class="faq-content">
+                        <div class="faq-item">
+                            <h4>How do I change my password?</h4>
+                            <p>Navigate to "My Account" from the settings menu (⚙ icon). You will find fields to enter your current and new passwords.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>What do the different user roles mean?</h4>
+                            <p><strong>Super Admin:</strong> Has full access to all settings, including creating locations and inviting other admins. <br><strong>Location Admin:</strong> Can manage users, schedules, and tasks for their assigned location. <br><strong>Employee:</strong> Can view their schedule, messages, and complete assigned onboarding tasks.</p>
+                        </div>
+                    </div>
+                </details>
 
+                <details>
+                    <summary>Admin Settings</summary>
+                    <div class="faq-content">
+                        <div class="faq-item">
+                            <h4>How do I invite a new employee?</h4>
+                            <p>Go to "Admin Settings", find the "Invite New Employee" card, fill in their details, assign them to a location, and click "Invite Employee". They will receive an email with a temporary password.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>How do I create a new location?</h4>
+                            <p>Only Super Admins can do this. Go to "Admin Settings" and use the "Manage Locations" card to add a new location name and address.</p>
+                        </div>
+                    </div>
+                </details>
+                
+                <details>
+                    <summary>Scheduling</summary>
+                    <div class="faq-content">
+                        <div class="faq-item">
+                            <h4>How do I create a new shift?</h4>
+                            <p>On the "Scheduling" page, use the "Create New Shift" form in the sidebar. Select an employee, location, start/end date and time, and click "Add Shift". The new shift will appear on the calendar instantly.</p>
+                        </div>
+                         <div class="faq-item">
+                            <h4>How do I print the schedule?</h4>
+                            <p>On the "Scheduling" page, use the "Print Schedule" button in the calendar header. This will open a printer-friendly version of the current week's schedule for the selected location.</p>
+                        </div>
+                    </div>
+                </details>
+                
+                <details>
+                    <summary>Onboarding & Task Lists</summary>
+                    <div class="faq-content">
+                        <div class="faq-item">
+                            <h4>How do I create a task list for a new position?</h4>
+                            <p>Navigate to the "Task Lists" page from the Onboarding Dashboard. Fill out the "Create New Task List" form, specifying which position it's for (e.g., "Sales Associate"). Add as many tasks as you need.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>How do I assign a task list to an employee?</h4>
+                            <p>Go to the "Onboarding Dashboard" and click the "Onboard Employee" button. Select an employee from the dropdown. The system will automatically find the correct task list based on the employee's position and show you which one will be assigned.</p>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Feedback Form -->
             <div class="card">
                 <h3>Contact Us & Submit Feedback</h3>
                 <form id="feedback-form">
@@ -76,9 +135,31 @@
     <script type="module" src="dist/js/bundle.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // FAQ Search script remains here...
+            const searchInput = document.getElementById('faq-search');
+            if (searchInput) {
+                searchInput.addEventListener('keyup', () => {
+                    const filter = searchInput.value.toLowerCase();
+                    const sections = document.querySelectorAll('.faq-section details');
+                    sections.forEach(section => {
+                        const items = section.querySelectorAll('.faq-item');
+                        let hasMatch = false;
+                        items.forEach(item => {
+                            if (item.textContent.toLowerCase().includes(filter)) {
+                                item.style.display = "";
+                                hasMatch = true;
+                            } else {
+                                item.style.display = "none";
+                            }
+                        });
+                        if (hasMatch || filter === '') {
+                            section.style.display = "";
+                        } else {
+                            section.style.display = "none";
+                        }
+                    });
+                });
+            }
 
-            // NEW: Script to handle feedback form submission
             const feedbackForm = document.getElementById('feedback-form');
             if(feedbackForm) {
                 feedbackForm.addEventListener('submit', async (e) => {
