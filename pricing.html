@@ -1,190 +1,243 @@
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Pricing - Flow Business Suite</title>
-        <link rel="stylesheet" href="dist/css/style.min.css">
-        <link rel="stylesheet" href="dist/css/Theme.min.css">
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
-        <script src="https://js.stripe.com/v3/"></script>
-        <style>
-            .pricing-header { text-align: center; padding: 40px 20px; }
-            .pricing-header h2 { font-size: 2.5rem; color: var(--text-light); margin-bottom: 10px; }
-            .pricing-header p { font-size: 1.1rem; color: var(--text-medium); max-width: 600px; margin: auto; }
-            .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; max-width: 1000px; margin: 0 auto; padding: 0 20px; }
-            .pricing-card {
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px); /* For Safari support */
-                border: 1px solid var(--card-border-color);
-                border-radius: 16px;
-                padding: 30px;
-                text-align: center;
-                display: flex;
-                flex-direction: column;
-                transition: all 0.3s ease;
-            }
-            .pricing-card.highlight {
-                border: 2px solid var(--primary-accent);
-                transform: scale(1.05);
-                box-shadow: 0 0 30px var(--primary-accent-glow);
-            }
-            .pricing-card-header { border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 20px; margin-bottom: 20px; }
-            .pricing-card-header h3 { font-size: 1.5rem; color: var(--primary-accent); margin: 10px 0; }
-            .pricing-card.highlight .pricing-card-header h3 { color: #fff; }
-            .price { font-size: 3rem; font-weight: 700; margin: 0; }
-            .price-note { color: var(--text-medium); }
-            .features-list { list-style: none; padding: 0; margin: 30px 0; text-align: left; flex-grow: 1; }
-            .features-list li { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
-            .features-list li svg { flex-shrink: 0; }
-            .choose-plan-btn { width: 100%; }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - Flow Business Suite</title>
+    <link rel="stylesheet" href="dist/css/style.min.css">
+    <link rel="stylesheet" href="dist/css/Theme.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        .pricing-header { text-align: center; padding: 40px 20px; }
+        .pricing-header h2 { font-size: 2.5rem; color: var(--text-light); margin-bottom: 10px; }
+        .pricing-header p { font-size: 1.1rem; color: var(--text-medium); max-width: 600px; margin: auto; }
+        .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+        .pricing-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); /* For Safari support */
+            border: 1px solid var(--card-border-color);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+        .pricing-card.highlight {
+            border: 2px solid var(--primary-accent);
+            transform: scale(1.05);
+            box-shadow: 0 0 30px var(--primary-accent-glow);
+        }
+        .pricing-card-header { border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 20px; margin-bottom: 20px; }
+        .pricing-card-header h3 { font-size: 1.5rem; color: var(--primary-accent); margin: 10px 0; }
+        .pricing-card.highlight .pricing-card-header h3 { color: #fff; }
+        .price { font-size: 3rem; font-weight: 700; margin: 0; }
+        .price-note { color: var(--text-medium); }
+        .features-list { list-style: none; padding: 0; margin: 30px 0; text-align: left; flex-grow: 1; }
+        .features-list li { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .features-list li svg { flex-shrink: 0; }
+        .choose-plan-btn { width: 100%; }
 
-            /* Styles for the registration/checkout modal */
-            #register-checkout-modal-overlay {
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.7); display: none; align-items: center;
-                justify-content: center; z-index: 1001;
-            }
-            #register-checkout-modal-overlay .modal-content {
-                max-width: 500px; text-align: left;
-            }
-            #register-checkout-modal-overlay h3 {
-                text-align: center; margin-top: 0; margin-bottom: 25px;
-                font-size: 1.8rem; color: var(--text-light);
-            }
-            #register-checkout-modal-overlay .form-group { margin-bottom: 18px; }
-            #register-checkout-modal-overlay label { display: block; margin-bottom: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
-            #register-checkout-modal-overlay input {
-                width: 100%; padding: 12px; border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                background-color: rgba(255, 255, 255, 0.1);
-                color: #fff; box-sizing: border-box; font-family: 'Poppins', sans-serif; font-size: 1rem;
-            }
-            #register-checkout-error-message { color: #ff8a80; display: none; margin-bottom: 15px; font-weight: 500; text-align: center; }
-            #register-checkout-modal-overlay .modal-buttons { display: flex; justify-content: space-between; gap: 15px; margin-top: 25px; }
-            #register-checkout-modal-overlay .modal-buttons .btn { flex-grow: 1; }
+        /* Styles for the registration/checkout modal */
+        #register-checkout-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: none; align-items: center;
+            justify-content: center; z-index: 1001;
+        }
+        #register-checkout-modal-overlay .modal-content {
+            max-width: 500px; text-align: left;
+        }
+        #register-checkout-modal-overlay h3 {
+            text-align: center; margin-top: 0; margin-bottom: 25px;
+            font-size: 1.8rem; color: var(--text-light);
+        }
+        #register-checkout-modal-overlay .form-group { margin-bottom: 18px; }
+        #register-checkout-modal-overlay label { display: block; margin-bottom: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
+        #register-checkout-modal-overlay input {
+            width: 100%; padding: 12px; border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff; box-sizing: border-box; font-family: 'Poppins', sans-serif; font-size: 1rem;
+        }
+        #register-checkout-error-message { color: #ff8a80; display: none; margin-bottom: 15px; font-weight: 500; text-align: center; }
+        #register-checkout-modal-overlay .modal-buttons { display: flex; justify-content: space-between; gap: 15px; margin-top: 25px; }
+        #register-checkout-modal-overlay .modal-buttons .btn { flex-grow: 1; }
 
-            /* General Modal Styles (used by showModalMessage from utils.js) */
-            .modal-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.6);
-                display: none; /* Corrected: Changed from 'flex' to 'none' to hide by default */
-                align-items: center;
-                justify-content: center;
-                z-index: 1000;
-            }
+        /* General Modal Styles (used by showModalMessage from utils.js) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none; /* Corrected: Changed from 'flex' to 'none' to hide by default */
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
 
-            .modal-content {
-                width: 90%; /* Keep it responsive */
-                max-width: 400px; /* Set a more appropriate max-width for a pop-up */
-                background-color: var(--card-bg); 
-                padding: 30px; /* Increased padding for better spacing */
-                border: 1px solid var(--border-color);
-                border-radius: 8px;
-                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
-                position: relative; 
-                color: var(--text-light); 
-                animation: fadeIn 0.3s ease-out;
-                text-align: center; /* Center text within the modal */
-            }
-            .modal-actions {
-                display: flex;
-                justify-content: center;
-                gap: 15px;
-                margin-top: 20px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="background-animation"></div>
-        <div class="container">
-            <header class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
-                <a href="login.html" class="btn btn-secondary">Log In</a>
-            </header>
-            
-            <section class="pricing-header">
-                <h2>Find the perfect plan for your business</h2>
-                <p>Simple, employee-based pricing for the entire Flow Business Suite.</p>
-            </section>
-            <section class="pricing-grid">
-                <div class="pricing-card">
-                    <div class="pricing-card-header"><h3>Free</h3><p class="price">$0</p><p class="price-note">per month</p></div>
-                    <ul class="features-list">
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Up to 5 Employees</li>
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>All Features Included</li>
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Community Support</li>
-                    </ul>
-                    <button class="btn btn-secondary choose-plan-btn" data-plan="free">Get Started</button>
-                    <p style="color: yellow; font-size: 0.8em;">(Version B - Button)</p> <!-- Updated for debugging -->
+        .modal-content {
+            width: 90%; /* Keep it responsive */
+            max-width: 400px; /* Set a more appropriate max-width for a pop-up */
+            background-color: var(--card-bg); 
+            padding: 30px; /* Increased padding for better spacing */
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; 
+            color: var(--text-light); 
+            animation: fadeIn 0.3s ease-out;
+            text-align: center; /* Center text within the modal */
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="background-animation"></div>
+    <div class="container">
+        <header class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <a href="index.html" style="text-decoration: none;"><h1 class="app-title">Flow Business Suite</h1></a>
+            <a href="login.html" class="btn btn-secondary">Log In</a>
+        </header>
+        
+        <section class="pricing-header">
+            <h2>Find the perfect plan for your business</h2>
+            <p>Simple, employee-based pricing for the entire Flow Business Suite.</p>
+        </section>
+        <section class="pricing-grid">
+            <div class="pricing-card">
+                <div class="pricing-card-header"><h3>Free</h3><p class="price">$0</p><p class="price-note">per month</p></div>
+                <ul class="features-list">
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Up to 5 Employees</li>
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>All Features Included</li>
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Community Support</li>
+                </ul>
+                <button class="btn btn-secondary choose-plan-btn" data-plan="free">Get Started</button>
+                <p style="color: yellow; font-size: 0.8em;">(Version C - Direct JS)</p> <!-- Updated for debugging -->
+            </div>
+            <div class="pricing-card highlight">
+                <div class="pricing-card-header"><h3>Pro</h3><p class="price">$29</p><p class="price-note">per month</p></div>
+                <ul class="features-list">
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Up to 100 Employees</li>
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>All Features Included</li>
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Priority Email Support</li>
+                </ul>
+                <button class="btn btn-primary choose-plan-btn" data-plan="pro">Choose Pro</button>
+            </div>
+            <div class="pricing-card">
+                <div class="pricing-card-header"><h3>Enterprise</h3><p class="price">$79</p><p class="price-note">per month</p></div>
+                <ul class="features-list">
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Unlimited Employees</li>
+                    <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Dedicated Support Agent</li>
+                </ul>
+                <button class="btn btn-primary choose-plan-btn" data-plan="enterprise">Choose Enterprise</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- Registration/Checkout Modal (for not-logged-in users choosing paid plans) -->
+    <div id="register-checkout-modal-overlay">
+        <div class="modal-content card">
+            <h3 id="register-checkout-modal-title">Sign Up & Subscribe</h3>
+            <form id="register-checkout-form">
+                <div class="form-group"><label for="reg-co-name">Company Name</label><input type="text" id="reg-co-name" required></div>
+                <div class="form-group"><label for="reg-full-name">Your Full Name</label><input type="text" id="reg-full-name" required></div>
+                <div class="form-group"><label for="reg-email">Email Address</label><input type="email" id="reg-email" required></div>
+                <div class="form-group"><label for="reg-password">Password</label><input type="password" id="reg-password" required minlength="6"></div>
+                <p id="register-checkout-error-message"></p>
+                <div style="display: flex; gap: 15px; margin-top: 20px;">
+                    <button type="button" id="reg-checkout-cancel-btn" class="btn btn-secondary" style="flex:1;">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="flex:1;">Sign Up & Continue</button>
                 </div>
-                <div class="pricing-card highlight">
-                    <div class="pricing-card-header"><h3>Pro</h3><p class="price">$29</p><p class="price-note">per month</p></div>
-                    <ul class="features-list">
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Up to 100 Employees</li>
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>All Features Included</li>
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Priority Email Support</li>
-                    </ul>
-                    <button class="btn btn-primary choose-plan-btn" data-plan="pro">Choose Pro</button>
-                </div>
-                <div class="pricing-card">
-                    <div class="pricing-card-header"><h3>Enterprise</h3><p class="price">$79</p><p class="price-note">per month</p></div>
-                    <ul class="features-list">
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Unlimited Employees</li>
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>All Features Included</li>
-                        <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Dedicated Support Agent</li>
-                    </ul>
-                    <button class="btn btn-primary choose-plan-btn" data-plan="enterprise">Choose Enterprise</button>
-                </div>
-            </section>
+            </form>
         </div>
+    </div>
 
-        <!-- Registration/Checkout Modal (for not-logged-in users choosing paid plans) -->
-        <div id="register-checkout-modal-overlay">
-            <div class="modal-content card">
-                <h3 id="register-checkout-modal-title">Sign Up & Subscribe</h3>
-                <form id="register-checkout-form">
-                    <div class="form-group"><label for="reg-co-name">Company Name</label><input type="text" id="reg-co-name" required></div>
-                    <div class="form-group"><label for="reg-full-name">Your Full Name</label><input type="text" id="reg-full-name" required></div>
-                    <div class="form-group"><label for="reg-email">Email Address</label><input type="email" id="reg-email" required></div>
-                    <div class="form-group"><label for="reg-password">Password</label><input type="password" id="reg-password" required minlength="6"></div>
-                    <p id="register-checkout-error-message"></p>
-                    <div style="display: flex; gap: 15px; margin-top: 20px;">
-                        <button type="button" id="reg-checkout-cancel-btn" class="btn btn-secondary" style="flex:1;">Cancel</button>
-                        <button type="submit" class="btn btn-primary" style="flex:1;">Sign Up & Continue</button>
-                    </div>
-                </form>
+    <!-- General Modal for showModalMessage (used by utils.js) -->
+    <div id="modal-message" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button id="modal-ok-button" class="btn btn-primary">OK</button>
             </div>
         </div>
-
-        <!-- General Modal for showModalMessage (used by utils.js) -->
-        <div id="modal-message" class="modal-overlay" style="display: none;">
-            <div class="modal-content">
-                <p id="modal-text"></p>
-                <div class="modal-actions">
-                    <button id="modal-ok-button" class="btn btn-primary">OK</button>
-                </div>
+    </div>
+    <!-- General Confirmation Modal (used by utils.js) -->
+    <div id="confirm-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
             </div>
         </div>
-        <!-- General Confirmation Modal (used by utils.js) -->
-        <div id="confirm-modal" class="modal-overlay" style="display: none;">
-            <div class="modal-content">
-                <p id="confirm-modal-text"></p>
-                <div class="modal-actions">
-                    <button id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
-                    <button id="confirm-modal-confirm" class="btn btn-primary">Confirm</button>
-                </div>
-            </div>
-        </div>
+    </div>
 
-        <script type="module" src="dist/js/bundle.js"></script>
-    </body>
-    </html>
-    
+    <script type="module">
+        // This is the direct JavaScript from js/pages/pricing.js for testing
+        // It's placed directly here to bypass bundle.js and ensure latest code is run.
+        // NOTE: This is TEMPORARY for debugging.
+        import { apiRequest, showModalMessage } from './dist/js/utils.js'; // Adjust path if needed
+
+        document.querySelectorAll('.choose-plan-btn').forEach(button => {
+            button.addEventListener('click', async (event) => {
+                let selectedPlan = event.target.dataset.planId;
+                
+                console.log('Clicked plan (Direct JS):', selectedPlan); 
+
+                if (selectedPlan === 'free') {
+                    console.log('Free plan selected, redirecting directly.');
+                    window.location.href = '/register.html';
+                    return; 
+                } 
+                else { 
+                    console.log('Paid plan selected:', selectedPlan);
+                    // For this direct JS test, we'll simplify the paid plan logic
+                    // to just show a message, as the backend API is external.
+                    if (localStorage.getItem('authToken')) {
+                        showModalMessage(`Attempting to subscribe to ${selectedPlan.toUpperCase()} plan (logged in).`, false);
+                        // In a real scenario, createCheckoutSession would be called here.
+                        // For this test, we're focusing on the free plan redirect.
+                    } else {
+                        showModalMessage(`Showing registration modal for ${selectedPlan.toUpperCase()} plan (not logged in).`, false);
+                        const modal = document.getElementById('register-checkout-modal-overlay');
+                        if (modal) modal.style.display = 'flex';
+                    }
+                }
+            });
+        });
+
+        // Simplified showModalMessage for this direct test, as utils.js might not be directly imported this way
+        // if the path is wrong. This ensures showModalMessage works for this test.
+        // This is a temporary fallback for this specific test.
+        if (typeof showModalMessage === 'undefined') {
+            window.showModalMessage = function(message, isError = false) {
+                const modalOverlay = document.getElementById("modal-message");
+                const modalMessageText = document.getElementById("modal-text");
+                const modalOkButton = document.getElementById("modal-ok-button");
+
+                if (!modalOverlay || !modalMessageText || !modalOkButton) {
+                    console.error("Fallback showModalMessage: Modal elements not found.", message);
+                    alert(message); 
+                    return;
+                }
+                modalMessageText.textContent = message;
+                modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
+                modalOverlay.style.display = "flex";
+                modalOkButton.onclick = () => { modalOverlay.style.display = "none"; };
+                modalOverlay.onclick = (e) => { if (e.target === modalOverlay) modalOverlay.style.display = "none"; };
+            };
+        }
+    </script>
+</body>
+</html>
