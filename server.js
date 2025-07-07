@@ -26,6 +26,11 @@ const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
 
+// --- DEBUGGING: Log Price IDs to confirm they are read correctly ---
+console.log('DEBUG: STRIPE_PRO_PRICE_ID:', STRIPE_PRO_PRICE_ID);
+console.log('DEBUG: STRIPE_ENTERPRISE_PRICE_ID:', STRIPE_ENTERPRISE_PRICE_ID);
+// --- END DEBUGGING ---
+
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
