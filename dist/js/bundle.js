@@ -2044,10 +2044,7 @@
         selectedPlan = event.target.dataset.planId;
         console.log("Clicked plan:", selectedPlan);
         if (selectedPlan === "free") {
-          showModalMessage("Redirecting to registration for the Free plan...", false);
-          setTimeout(() => {
-            window.location.href = "/register.html";
-          }, 500);
+          window.location.href = "/register.html";
           return;
         }
         if (localStorage.getItem("authToken")) {
