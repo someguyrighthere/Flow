@@ -10,41 +10,41 @@ export function handlePricingPage() {
     const form = document.getElementById('register-checkout-form');
     let selectedPlan = null; // This variable will store the plan selected for checkout
 
-    // Use event delegation on the parent container (pricing-grid)
-    const pricingGrid = document.querySelector('.pricing-grid');
-    if (pricingGrid) {
-        pricingGrid.addEventListener('click', async (event) => {
-            // Find the closest button or anchor with the 'choose-plan-btn' class
-            const clickedElement = event.target.closest('.choose-plan-btn');
+    // Get references to the specific Pro and Enterprise buttons
+    const proPlanButton = document.querySelector('.choose-plan-btn[data-plan="pro"]');
+    const enterprisePlanButton = document.querySelector('.choose-plan-btn[data-plan="enterprise"]');
 
-            // If a relevant button or link was clicked
-            if (clickedElement) {
-                // Handle the pure HTML link for the Free plan
-                if (clickedElement.tagName === 'A' && clickedElement.getAttribute('href') === 'register.html') {
-                    console.log('Free plan link clicked, letting HTML handle redirect.');
-                    // The browser's default behavior for <a> will take over, no JS redirect needed here.
-                    return; 
-                }
+    // Handle click for Pro and Enterprise buttons directly
+    const handlePaidPlanClick = async (event) => {
+        // Ensure the clicked element is a button and has a data-plan attribute
+        if (!event.currentTarget || event.currentTarget.tagName !== 'BUTTON' || !event.currentTarget.dataset.plan) {
+            console.error("Invalid element clicked for paid plan handler.");
+            return;
+        }
 
-                // For buttons (Pro/Enterprise plans)
-                // FIX: Changed .dataset.plan to .dataset.planId to match HTML
-                if (clickedElement.tagName === 'BUTTON' && clickedElement.dataset.planId) { 
-                    selectedPlan = clickedElement.dataset.planId; // FIX: Changed .dataset.plan to .dataset.planId
-                    
-                    console.log('Clicked plan:', selectedPlan); 
+        selectedPlan = event.currentTarget.dataset.plan;
+        
+        console.log('Clicked paid plan:', selectedPlan); 
 
-                    if (localStorage.getItem('authToken')) {
-                        // User is already logged in, proceed to create a Stripe checkout session
-                        await createCheckoutSession(selectedPlan);
-                    } else {
-                        // User is not logged in, show the registration/checkout modal
-                        if (modal) modal.style.display = 'flex';
-                    }
-                }
-            }
-        });
+        if (localStorage.getItem('authToken')) {
+            // User is already logged in, proceed to create a Stripe checkout session
+            await createCheckoutSession(selectedPlan);
+        } else {
+            // User is not logged in, show the registration/checkout modal
+            if (modal) modal.style.display = 'flex';
+        }
+    };
+
+    // Attach listeners directly to the paid plan buttons
+    if (proPlanButton) {
+        proPlanButton.addEventListener('click', handlePaidPlanClick);
     }
-
+    if (enterprisePlanButton) {
+        enterprisePlanButton.addEventListener('click', handlePaidPlanClick);
+    }
+    
+    // The Free plan button is an <a> tag and is handled by its href directly in HTML.
+    // No JavaScript listener is needed for the free plan button now.
 
     // Handle submission of the registration form within the checkout modal
     if (form) {

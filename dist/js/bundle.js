@@ -2039,26 +2039,26 @@
     const modal = document.getElementById("register-checkout-modal-overlay");
     const form = document.getElementById("register-checkout-form");
     let selectedPlan = null;
-    const pricingGrid = document.querySelector(".pricing-grid");
-    if (pricingGrid) {
-      pricingGrid.addEventListener("click", async (event) => {
-        const clickedElement = event.target.closest(".choose-plan-btn");
-        if (clickedElement) {
-          if (clickedElement.tagName === "A" && clickedElement.getAttribute("href") === "register.html") {
-            console.log("Free plan link clicked, letting HTML handle redirect.");
-            return;
-          }
-          if (clickedElement.tagName === "BUTTON" && clickedElement.dataset.planId) {
-            selectedPlan = clickedElement.dataset.planId;
-            console.log("Clicked plan:", selectedPlan);
-            if (localStorage.getItem("authToken")) {
-              await createCheckoutSession(selectedPlan);
-            } else {
-              if (modal) modal.style.display = "flex";
-            }
-          }
-        }
-      });
+    const proPlanButton = document.querySelector('.choose-plan-btn[data-plan="pro"]');
+    const enterprisePlanButton = document.querySelector('.choose-plan-btn[data-plan="enterprise"]');
+    const handlePaidPlanClick = async (event) => {
+      if (!event.currentTarget || event.currentTarget.tagName !== "BUTTON" || !event.currentTarget.dataset.plan) {
+        console.error("Invalid element clicked for paid plan handler.");
+        return;
+      }
+      selectedPlan = event.currentTarget.dataset.plan;
+      console.log("Clicked paid plan:", selectedPlan);
+      if (localStorage.getItem("authToken")) {
+        await createCheckoutSession(selectedPlan);
+      } else {
+        if (modal) modal.style.display = "flex";
+      }
+    };
+    if (proPlanButton) {
+      proPlanButton.addEventListener("click", handlePaidPlanClick);
+    }
+    if (enterprisePlanButton) {
+      enterprisePlanButton.addEventListener("click", handlePaidPlanClick);
     }
     if (form) {
       form.addEventListener("submit", async (e) => {
