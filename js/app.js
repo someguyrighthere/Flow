@@ -58,7 +58,7 @@ function main() {
     const pagesWithSettings = [
         "suite-hub.html", "dashboard.html", "checklists.html", "admin.html",
         "account.html", "documents.html", "hiring.html", "scheduling.html", 
-        "new-hire-view.html", "help.html" // <-- ADDED help.html HERE
+        "new-hire-view.html", "help.html", "pricing.html" // ADDED pricing.html HERE
     ];
 
     // Setup the dropdown if the current page needs it
