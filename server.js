@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // UNCOMMENTED: Stripe initialization
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
@@ -26,10 +26,29 @@ const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
 
-// --- DEBUGGING: Log Price IDs to confirm they are read correctly ---
-console.log('DEBUG: STRIPE_PRO_PRICE_ID:', STRIPE_PRO_PRICE_ID);
-console.log('DEBUG: STRIPE_ENTERPRISE_PRICE_ID:', STRIPE_ENTERPRISE_PRICE_ID);
+// --- DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
+const DEBUG_STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+if (DEBUG_STRIPE_SECRET_KEY) {
+    console.log('DEBUG_KEY: Length:', DEBUG_STRIPE_SECRET_KEY.length);
+    console.log('DEBUG_KEY: First 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(0, 5));
+    console.log('DEBUG_KEY: Last 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(DEBUG_STRIPE_SECRET_KEY.length - 5));
+    console.log('DEBUG_KEY: Contains newline?', DEBUG_STRIPE_SECRET_KEY.includes('\n'));
+    console.log('DEBUG_KEY: Contains space?', DEBUG_STRIPE_SECRET_KEY.includes(' '));
+    // Attempt to initialize Stripe here to catch errors earlier
+    try {
+        const stripe = require('stripe')(DEBUG_STRIPE_SECRET_KEY);
+        console.log('DEBUG_KEY: Stripe init successful with this key.');
+        // Re-assign to the global stripe variable
+        Object.defineProperty(global, 'stripe', { value: stripe, writable: true });
+    } catch (e) {
+        console.error('DEBUG_KEY: Stripe init FAILED with this key:', e.message);
+        // If init fails, we'll still proceed, but the next calls will fail.
+    }
+} else {
+    console.error('DEBUG_KEY: STRIPE_SECRET_KEY is not set!');
+}
 // --- END DEBUGGING ---
+
 
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -65,6 +84,7 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
     }
 
     try {
+        // Use the globally defined stripe object
         event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } catch (err) {
         console.error(`Webhook Error: ${err.message}`);
