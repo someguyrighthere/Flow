@@ -14,6 +14,14 @@ export function handlePricingPage() {
     // Attach event listener to all elements with the 'choose-plan-btn' class
     document.querySelectorAll('.choose-plan-btn').forEach(element => { // Changed 'button' to 'element' for clarity
         element.addEventListener('click', async (event) => {
+            // --- ROBUST NULL CHECK ADDED HERE ---
+            // Ensure element and its dataset property exist before accessing planId
+            if (!element || !element.dataset) {
+                console.error("Clicked element or its dataset is null/undefined.", element);
+                return; // Exit if element is not valid
+            }
+            // --- END ROBUST NULL CHECK ---
+
             // Only process clicks if the element is a BUTTON and has a data-plan attribute
             // This ignores the new <a> tag for the free plan.
             if (element.tagName === 'BUTTON' && element.dataset.planId) {
