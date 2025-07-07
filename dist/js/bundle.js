@@ -2041,6 +2041,10 @@
     let selectedPlan = null;
     document.querySelectorAll(".choose-plan-btn").forEach((element) => {
       element.addEventListener("click", async (event) => {
+        if (!element || !element.dataset) {
+          console.error("Clicked element or its dataset is null/undefined.", element);
+          return;
+        }
         if (element.tagName === "BUTTON" && element.dataset.planId) {
           selectedPlan = element.dataset.planId;
           console.log("Clicked plan:", selectedPlan);
