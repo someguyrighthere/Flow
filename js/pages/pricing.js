@@ -21,13 +21,11 @@ export function handlePricingPage() {
             console.log('Clicked plan:', selectedPlan); 
             // --- END DEBUGGING LINE ---
 
-            // If the selected plan is 'free', redirect directly to registration
-            // This bypasses the Stripe checkout flow for free users.
+            // If the selected plan is 'free', redirect directly to registration.
+            // We are removing the showModalMessage here to bypass the previous error,
+            // as the direct HTML link test confirmed the redirect works.
             if (selectedPlan === 'free') {
-                showModalMessage('Redirecting to registration for the Free plan...', false);
-                setTimeout(() => {
-                    window.location.href = '/register.html';
-                }, 500); // Small delay to allow modal to show
+                window.location.href = '/register.html';
                 return; // Crucial: Stop further execution in this event listener
             }
 
