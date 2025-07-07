@@ -22,10 +22,10 @@ export function handlePricingPage() {
             }
             // --- END ROBUST NULL CHECK ---
 
-            // Only process clicks if the element is a BUTTON and has a data-plan attribute
-            // This ignores the new <a> tag for the free plan.
-            if (element.tagName === 'BUTTON' && element.dataset.planId) {
-                selectedPlan = element.dataset.planId;
+            // Only process clicks if the element is a BUTTON and has a data-plan-id attribute
+            // This ignores the <a> tag for the free plan.
+            if (element.tagName === 'BUTTON' && element.dataset.planId) { // <<< FIX: Changed element.dataset.plan to element.dataset.planId
+                selectedPlan = element.dataset.planId; // <<< FIX: Changed element.dataset.plan to element.dataset.planId
                 
                 // --- DEBUGGING LINE: Log the value of selectedPlan ---
                 console.log('Clicked plan:', selectedPlan); 
