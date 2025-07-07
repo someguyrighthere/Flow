@@ -3,52 +3,48 @@ import { apiRequest, showModalMessage } from '../utils.js';
 
 export function handlePricingPage() {
     // IMPORTANT: Replace with your actual publishable key from Stripe Dashboard
-    // This key is safe to be in client-side code.
     const stripePublicKey = 'pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYm8eX3eI00O5pP5bB9'; 
     const stripe = Stripe(stripePublicKey);
 
     const modal = document.getElementById('register-checkout-modal-overlay');
     const form = document.getElementById('register-checkout-form');
-    let selectedPlan = null;
+    let selectedPlan = null; // This variable will store the plan selected for checkout
 
-    // Attach event listener to all elements with the 'choose-plan-btn' class
-    document.querySelectorAll('.choose-plan-btn').forEach(element => { // Changed 'button' to 'element' for clarity
-        element.addEventListener('click', async (event) => {
-            // --- ROBUST NULL CHECK ADDED HERE ---
-            // Ensure element and its dataset property exist before accessing planId
-            if (!element || !element.dataset) {
-                console.error("Clicked element or its dataset is null/undefined.", element);
-                return; // Exit if element is not valid
-            }
-            // --- END ROBUST NULL CHECK ---
+    // Use event delegation on the parent container (pricing-grid)
+    const pricingGrid = document.querySelector('.pricing-grid');
+    if (pricingGrid) {
+        pricingGrid.addEventListener('click', async (event) => {
+            // Find the closest button or anchor with the 'choose-plan-btn' class
+            const clickedElement = event.target.closest('.choose-plan-btn');
 
-            // Only process clicks if the element is a BUTTON and has a data-plan-id attribute
-            // This ignores the <a> tag for the free plan.
-            if (element.tagName === 'BUTTON' && element.dataset.planId) { // <<< FIX: Changed element.dataset.plan to element.dataset.planId
-                selectedPlan = element.dataset.planId; // <<< FIX: Changed element.dataset.plan to element.dataset.planId
-                
-                // --- DEBUGGING LINE: Log the value of selectedPlan ---
-                console.log('Clicked plan:', selectedPlan); 
-                // --- END DEBUGGING LINE ---
-
-                // LOGIC FOR PAID PLANS:
-                // This code will only be reached if a paid plan button is clicked.
-                if (localStorage.getItem('authToken')) {
-                    // User is already logged in, proceed to create a Stripe checkout session
-                    await createCheckoutSession(selectedPlan);
-                } else {
-                    // User is not logged in, show the registration/checkout modal.
-                    // This modal will handle registration and then proceed to checkout.
-                    if (modal) modal.style.display = 'flex';
+            // If a relevant button or link was clicked
+            if (clickedElement) {
+                // Handle the pure HTML link for the Free plan
+                if (clickedElement.tagName === 'A' && clickedElement.getAttribute('href') === 'register.html') {
+                    console.log('Free plan link clicked, letting HTML handle redirect.');
+                    // The browser's default behavior for <a> will take over, no JS redirect needed here.
+                    return; 
                 }
-            } else {
-                // This 'else' block will catch clicks on the <a> tag (Free plan)
-                // and any other non-button elements with 'choose-plan-btn' class.
-                // It will simply let the default HTML behavior (href) take over.
-                console.log('Non-button element clicked, letting HTML handle it:', element.tagName);
+
+                // For buttons (Pro/Enterprise plans)
+                // FIX: Changed .dataset.plan to .dataset.planId to match HTML
+                if (clickedElement.tagName === 'BUTTON' && clickedElement.dataset.planId) { 
+                    selectedPlan = clickedElement.dataset.planId; // FIX: Changed .dataset.plan to .dataset.planId
+                    
+                    console.log('Clicked plan:', selectedPlan); 
+
+                    if (localStorage.getItem('authToken')) {
+                        // User is already logged in, proceed to create a Stripe checkout session
+                        await createCheckoutSession(selectedPlan);
+                    } else {
+                        // User is not logged in, show the registration/checkout modal
+                        if (modal) modal.style.display = 'flex';
+                    }
+                }
             }
         });
-    });
+    }
+
 
     // Handle submission of the registration form within the checkout modal
     if (form) {

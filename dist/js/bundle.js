@@ -2039,25 +2039,27 @@
     const modal = document.getElementById("register-checkout-modal-overlay");
     const form = document.getElementById("register-checkout-form");
     let selectedPlan = null;
-    document.querySelectorAll(".choose-plan-btn").forEach((element) => {
-      element.addEventListener("click", async (event) => {
-        if (!element || !element.dataset) {
-          console.error("Clicked element or its dataset is null/undefined.", element);
-          return;
-        }
-        if (element.tagName === "BUTTON" && element.dataset.planId) {
-          selectedPlan = element.dataset.planId;
-          console.log("Clicked plan:", selectedPlan);
-          if (localStorage.getItem("authToken")) {
-            await createCheckoutSession(selectedPlan);
-          } else {
-            if (modal) modal.style.display = "flex";
+    const pricingGrid = document.querySelector(".pricing-grid");
+    if (pricingGrid) {
+      pricingGrid.addEventListener("click", async (event) => {
+        const clickedElement = event.target.closest(".choose-plan-btn");
+        if (clickedElement) {
+          if (clickedElement.tagName === "A" && clickedElement.getAttribute("href") === "register.html") {
+            console.log("Free plan link clicked, letting HTML handle redirect.");
+            return;
           }
-        } else {
-          console.log("Non-button element clicked, letting HTML handle it:", element.tagName);
+          if (clickedElement.tagName === "BUTTON" && clickedElement.dataset.planId) {
+            selectedPlan = clickedElement.dataset.planId;
+            console.log("Clicked plan:", selectedPlan);
+            if (localStorage.getItem("authToken")) {
+              await createCheckoutSession(selectedPlan);
+            } else {
+              if (modal) modal.style.display = "flex";
+            }
+          }
         }
       });
-    });
+    }
     if (form) {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
