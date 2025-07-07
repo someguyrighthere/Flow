@@ -2034,23 +2034,23 @@
 
   // js/pages/pricing.js
   function handlePricingPage() {
-    const stripePublicKey = "pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYmQ8eX3eI00O5pP5bB9";
+    const stripePublicKey = "pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYm8eX3eI00O5pP5bB9";
     const stripe = Stripe(stripePublicKey);
     const modal = document.getElementById("register-checkout-modal-overlay");
     const form = document.getElementById("register-checkout-form");
     let selectedPlan = null;
-    document.querySelectorAll(".choose-plan-btn").forEach((button) => {
-      button.addEventListener("click", async (event) => {
-        selectedPlan = event.target.dataset.planId;
-        console.log("Clicked plan:", selectedPlan);
-        if (selectedPlan === "free") {
-          window.location.href = "/register.html";
-          return;
-        }
-        if (localStorage.getItem("authToken")) {
-          await createCheckoutSession(selectedPlan);
+    document.querySelectorAll(".choose-plan-btn").forEach((element) => {
+      element.addEventListener("click", async (event) => {
+        if (element.tagName === "BUTTON" && element.dataset.planId) {
+          selectedPlan = element.dataset.planId;
+          console.log("Clicked plan:", selectedPlan);
+          if (localStorage.getItem("authToken")) {
+            await createCheckoutSession(selectedPlan);
+          } else {
+            if (modal) modal.style.display = "flex";
+          }
         } else {
-          if (modal) modal.style.display = "flex";
+          console.log("Non-button element clicked, letting HTML handle it:", element.tagName);
         }
       });
     });

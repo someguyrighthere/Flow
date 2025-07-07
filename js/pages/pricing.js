@@ -11,35 +11,33 @@ export function handlePricingPage() {
     const form = document.getElementById('register-checkout-form');
     let selectedPlan = null;
 
-    // Attach event listener to all buttons with the 'choose-plan-btn' class
-    document.querySelectorAll('.choose-plan-btn').forEach(button => {
-        button.addEventListener('click', async (event) => {
-            // Get the 'data-plan-id' attribute from the clicked button
-            selectedPlan = event.target.dataset.planId;
-            
-            // --- AGGRESSIVE REDIRECT FOR FREE PLAN ---
-            // This logic is placed at the very beginning to ensure it takes precedence.
-            if (selectedPlan === 'free') {
-                console.log('Free plan selected. Performing aggressive redirect to /register.html');
-                window.location.href = '/register.html';
-                // No return needed here, as the redirect will happen immediately.
-                // Any subsequent code in this tick will likely be interrupted by the navigation.
-                return; // Still good practice to return, but browser behavior should handle it.
-            }
+    // Attach event listener to all elements with the 'choose-plan-btn' class
+    document.querySelectorAll('.choose-plan-btn').forEach(element => { // Changed 'button' to 'element' for clarity
+        element.addEventListener('click', async (event) => {
+            // Only process clicks if the element is a BUTTON and has a data-plan attribute
+            // This ignores the new <a> tag for the free plan.
+            if (element.tagName === 'BUTTON' && element.dataset.planId) {
+                selectedPlan = element.dataset.planId;
+                
+                // --- DEBUGGING LINE: Log the value of selectedPlan ---
+                console.log('Clicked plan:', selectedPlan); 
+                // --- END DEBUGGING LINE ---
 
-            // --- DEBUGGING LINE: Log the value of selectedPlan (for paid plans) ---
-            console.log('Clicked plan (Paid):', selectedPlan); 
-            // --- END DEBUGGING LINE ---
-
-            // LOGIC FOR PAID PLANS:
-            // This code will only be reached if selectedPlan is NOT 'free'.
-            if (localStorage.getItem('authToken')) {
-                // User is already logged in, proceed to create a Stripe checkout session
-                await createCheckoutSession(selectedPlan);
+                // LOGIC FOR PAID PLANS:
+                // This code will only be reached if a paid plan button is clicked.
+                if (localStorage.getItem('authToken')) {
+                    // User is already logged in, proceed to create a Stripe checkout session
+                    await createCheckoutSession(selectedPlan);
+                } else {
+                    // User is not logged in, show the registration/checkout modal.
+                    // This modal will handle registration and then proceed to checkout.
+                    if (modal) modal.style.display = 'flex';
+                }
             } else {
-                // User is not logged in, show the registration/checkout modal.
-                // This modal will handle registration and then proceed to checkout.
-                if (modal) modal.style.display = 'flex';
+                // This 'else' block will catch clicks on the <a> tag (Free plan)
+                // and any other non-button elements with 'choose-plan-btn' class.
+                // It will simply let the default HTML behavior (href) take over.
+                console.log('Non-button element clicked, letting HTML handle it:', element.tagName);
             }
         });
     });
