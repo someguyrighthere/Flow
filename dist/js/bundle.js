@@ -66,11 +66,11 @@
   async function apiRequest(method, path, body = null, isFormData = false, onProgress = null) {
     const token = localStorage.getItem("authToken");
     const endpoint = `${API_BASE_URL}${path}`;
-    const handleAuthError = (errorMessage) => {
+    const logoutUser = (message) => {
       localStorage.removeItem("authToken");
       localStorage.removeItem("userRole");
       localStorage.removeItem("userId");
-      showModalMessage(errorMessage, true);
+      showModalMessage(message, true);
       setTimeout(() => {
         window.location.href = "login.html?sessionExpired=true";
       }, 1500);
@@ -78,7 +78,6 @@
     const options = {
       method,
       headers: {},
-      // DEFINITIVE FIX: Tells the browser to always fetch a fresh copy from the server.
       cache: "no-cache"
     };
     if (token) {
@@ -87,9 +86,6 @@
     if (body) {
       if (isFormData) {
         options.body = body;
-        if (onProgress && method === "POST") {
-          options.onUploadProgress = onProgress;
-        }
       } else {
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(body);
@@ -97,22 +93,21 @@
     }
     try {
       const response = await fetch(endpoint, options);
-      if (response.status === 401 || response.status === 403) {
-        handleAuthError("Your session has expired. Please log in again.");
-        throw new Error("Authentication failed.");
-      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+        if (response.status === 401 && (errorData.error === "Authentication failed." || errorData.error === "Invalid token.")) {
+          logoutUser("Your session has expired. Please log in again.");
+          throw new Error("Authentication failed.");
+        } else {
+          throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+        }
       }
       if (response.status === 204) {
         return null;
       }
       return response.json();
     } catch (error) {
-      if (error.message !== "Authentication failed.") {
-        showModalMessage(error.message, true);
-      }
+      console.error("API Request caught error:", error);
       throw error;
     }
   }
@@ -838,21 +833,25 @@
       inviteEmployeeForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const availability = {};
-        document.querySelectorAll("#employee-availability-grid select").forEach((select) => {
-          const day = select.dataset.day;
-          const type = select.dataset.type;
-          if (select.value) {
-            if (!availability[day]) availability[day] = {};
-            availability[day][type] = select.value;
-          }
-        });
+        if (employeeAvailabilityGrid) {
+          document.querySelectorAll("#employee-availability-grid select").forEach((select) => {
+            const day = select.dataset.day;
+            const type = select.dataset.type;
+            if (select.value) {
+              if (!availability[day]) availability[day] = {};
+              availability[day][type] = select.value;
+            }
+          });
+        }
         const employeeData = {
           full_name: document.getElementById("employee-name").value.trim(),
           email: document.getElementById("employee-email").value.trim(),
           password: document.getElementById("employee-password").value,
           position: document.getElementById("employee-position").value.trim(),
           employee_id: document.getElementById("employee-id").value.trim(),
+          // Ensure this element exists in HTML
           employment_type: document.getElementById("employee-type").value,
+          // Ensure this element exists in HTML
           location_id: employeeLocationSelect.value || null,
           availability: Object.keys(availability).length > 0 ? availability : null
           // Send as JSON object or null
@@ -864,7 +863,9 @@
           await apiRequest("POST", "/api/invite-employee", employeeData);
           displayStatusMessage(inviteEmployeeStatusMessage, "Employee invited successfully!", false);
           inviteEmployeeForm.reset();
-          generateAvailabilityInputs();
+          if (employeeAvailabilityGrid) {
+            generateAvailabilityInputs();
+          }
           loadUsers();
         } catch (error) {
           displayStatusMessage(inviteEmployeeStatusMessage, `Error: ${error.message}`, true);
@@ -2034,7 +2035,7 @@
 
   // js/pages/pricing.js
   function handlePricingPage() {
-    const stripePublicKey = "pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYm8eX3eI00O5pP5bB9";
+    const stripePublicKey = "pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td";
     const stripe = Stripe(stripePublicKey);
     const modal = document.getElementById("register-checkout-modal-overlay");
     const form = document.getElementById("register-checkout-form");
