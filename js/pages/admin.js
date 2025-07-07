@@ -41,7 +41,7 @@ export function handleAdminPage() {
     const inviteAdminStatusMessage = document.getElementById('invite-admin-status-message');
     const inviteEmployeeForm = document.getElementById('invite-employee-form');
     const employeeLocationSelect = document.getElementById('employee-location-select'); 
-    const employeeAvailabilityGrid = document.getElementById('employee-availability-grid');
+    const employeeAvailabilityGrid = document.getElementById('employee-availability-grid'); // This ID is not in admin.html, but keep for now if it's used elsewhere
     const inviteEmployeeStatusMessage = document.getElementById('invite-employee-status-message');
 
     // Business Settings Form Elements
@@ -271,7 +271,7 @@ export function handleAdminPage() {
      * Generates time input dropdowns for weekly availability.
      */
     function generateAvailabilityInputs() {
-        if (!employeeAvailabilityGrid) return;
+        if (!employeeAvailabilityGrid) return; // Check if the element exists
         employeeAvailabilityGrid.innerHTML = ''; // Clear existing inputs
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         
@@ -409,22 +409,25 @@ export function handleAdminPage() {
             e.preventDefault();
             const availability = {};
             // Collect availability data from generated selects
-            document.querySelectorAll('#employee-availability-grid select').forEach(select => {
-                const day = select.dataset.day;
-                const type = select.dataset.type; // 'start' or 'end'
-                if (select.value) { // Only add if a time is selected (not "Not Available")
-                    if (!availability[day]) availability[day] = {};
-                    availability[day][type] = select.value;
-                }
-            });
+            // Ensure employeeAvailabilityGrid exists before querying its children
+            if (employeeAvailabilityGrid) {
+                document.querySelectorAll('#employee-availability-grid select').forEach(select => {
+                    const day = select.dataset.day;
+                    const type = select.dataset.type; // 'start' or 'end'
+                    if (select.value) { // Only add if a time is selected (not "Not Available")
+                        if (!availability[day]) availability[day] = {};
+                        availability[day][type] = select.value;
+                    }
+                });
+            }
 
             const employeeData = {
                 full_name: document.getElementById('employee-name').value.trim(),
                 email: document.getElementById('employee-email').value.trim(),
                 password: document.getElementById('employee-password').value,
                 position: document.getElementById('employee-position').value.trim(),
-                employee_id: document.getElementById('employee-id').value.trim(),
-                employment_type: document.getElementById('employee-type').value,
+                employee_id: document.getElementById('employee-id').value.trim(), // Ensure this element exists in HTML
+                employment_type: document.getElementById('employee-type').value, // Ensure this element exists in HTML
                 location_id: employeeLocationSelect.value || null,
                 availability: Object.keys(availability).length > 0 ? availability : null // Send as JSON object or null
             };
@@ -436,7 +439,10 @@ export function handleAdminPage() {
                 await apiRequest('POST', '/api/invite-employee', employeeData);
                 displayStatusMessage(inviteEmployeeStatusMessage, 'Employee invited successfully!', false);
                 inviteEmployeeForm.reset(); // Clear the form
-                generateAvailabilityInputs(); // Regenerate default availability inputs
+                // Only call generateAvailabilityInputs if employeeAvailabilityGrid exists to avoid errors
+                if (employeeAvailabilityGrid) {
+                    generateAvailabilityInputs(); // Regenerate default availability inputs
+                }
                 loadUsers(); // Reload user list to show new employee
             } catch (error) {
                 displayStatusMessage(inviteEmployeeStatusMessage, `Error: ${error.message}`, true);
