@@ -3,7 +3,7 @@ import { apiRequest, showModalMessage } from '../utils.js';
 
 export function handlePricingPage() {
     // IMPORTANT: Replace with your actual publishable key from Stripe Dashboard
-    const stripePublicKey = 'pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYm8eX3eI00O5pP5bB9'; 
+    const stripePublicKey = 'pk_live_51Ra4RJG06NHrwsY9lqejmXiGn8DAGzwlrqTuarPZzIb3p1yIPchUaPGAXuKe7yJD73UCvQ3ydKzoclwRi0DiIrbP00xbXj54td'; 
     const stripe = Stripe(stripePublicKey);
 
     const modal = document.getElementById('register-checkout-modal-overlay');
