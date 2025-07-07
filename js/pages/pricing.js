@@ -21,20 +21,24 @@ export function handlePricingPage() {
             console.log('Clicked plan:', selectedPlan); 
             // --- END DEBUGGING LINE ---
 
+            // LOGIC FOR FREE PLAN:
             // If the selected plan is 'free', redirect directly to registration.
-            // We are removing the showModalMessage here to bypass the previous error,
-            // as the direct HTML link test confirmed the redirect works.
+            // This bypasses the Stripe checkout flow for free users.
+            // We specifically removed the showModalMessage here to avoid the "modal element not found" error
+            // that occurred when showModalMessage was called too early or in a conflicting context.
             if (selectedPlan === 'free') {
-                window.location.href = '/register.html';
+                window.location.href = '/register.html'; // Direct redirect
                 return; // Crucial: Stop further execution in this event listener
             }
 
-            // If a paid plan is selected, check if the user is authenticated
+            // LOGIC FOR PAID PLANS:
+            // If a paid plan is selected (i.e., selectedPlan is not 'free'),
+            // then proceed with the Stripe-related logic.
             if (localStorage.getItem('authToken')) {
                 // User is already logged in, proceed to create a Stripe checkout session
                 await createCheckoutSession(selectedPlan);
             } else {
-                // User is not logged in, show the registration/checkout modal
+                // User is not logged in, show the registration/checkout modal.
                 // This modal will handle registration and then proceed to checkout.
                 if (modal) modal.style.display = 'flex';
             }
