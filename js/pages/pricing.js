@@ -4,7 +4,7 @@ import { apiRequest, showModalMessage } from '../utils.js';
 export function handlePricingPage() {
     // IMPORTANT: Replace with your actual publishable key from Stripe Dashboard
     // This key is safe to be in client-side code.
-    const stripePublicKey = 'pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYmQ8eX3eI00O5pP5bB9'; 
+    const stripePublicKey = 'pk_test_51PVAzL07SADx7iWaKjDxtvJ9nOq86I0I74UjKqS8WvU4S1aQ9aL7xHl2D5bJz5Uo4lB3t5kYm8eX3eI00O5pP5bB9'; 
     const stripe = Stripe(stripePublicKey);
 
     const modal = document.getElementById('register-checkout-modal-overlay');
@@ -17,28 +17,29 @@ export function handlePricingPage() {
             // Get the 'data-plan-id' attribute from the clicked button
             selectedPlan = event.target.dataset.planId;
             
-            // --- DEBUGGING LINE: Log the value of selectedPlan ---
-            console.log('Clicked plan:', selectedPlan); 
+            // --- AGGRESSIVE REDIRECT FOR FREE PLAN ---
+            // This logic is placed at the very beginning to ensure it takes precedence.
+            if (selectedPlan === 'free') {
+                console.log('Free plan selected. Performing aggressive redirect to /register.html');
+                window.location.href = '/register.html';
+                // No return needed here, as the redirect will happen immediately.
+                // Any subsequent code in this tick will likely be interrupted by the navigation.
+                return; // Still good practice to return, but browser behavior should handle it.
+            }
+
+            // --- DEBUGGING LINE: Log the value of selectedPlan (for paid plans) ---
+            console.log('Clicked plan (Paid):', selectedPlan); 
             // --- END DEBUGGING LINE ---
 
-            // LOGIC FOR FREE PLAN:
-            // If the selected plan is 'free', redirect directly to registration.
-            // This bypasses the Stripe checkout flow for free users.
-            if (selectedPlan === 'free') {
-                window.location.href = '/register.html'; // Direct redirect
-                return; // Crucial: Stop further execution in this event listener
-            } 
             // LOGIC FOR PAID PLANS:
-            // This 'else' ensures that the following code ONLY runs if selectedPlan is NOT 'free'.
-            else { 
-                if (localStorage.getItem('authToken')) {
-                    // User is already logged in, proceed to create a Stripe checkout session
-                    await createCheckoutSession(selectedPlan);
-                } else {
-                    // User is not logged in, show the registration/checkout modal.
-                    // This modal will handle registration and then proceed to checkout.
-                    if (modal) modal.style.display = 'flex';
-                }
+            // This code will only be reached if selectedPlan is NOT 'free'.
+            if (localStorage.getItem('authToken')) {
+                // User is already logged in, proceed to create a Stripe checkout session
+                await createCheckoutSession(selectedPlan);
+            } else {
+                // User is not logged in, show the registration/checkout modal.
+                // This modal will handle registration and then proceed to checkout.
+                if (modal) modal.style.display = 'flex';
             }
         });
     });

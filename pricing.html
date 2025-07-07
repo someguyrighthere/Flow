@@ -123,7 +123,7 @@
                     <li><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>Community Support</li>
                 </ul>
                 <button class="btn btn-secondary choose-plan-btn" data-plan="free">Get Started</button>
-                <p style="color: yellow; font-size: 0.8em;">(Version D - Extreme Isolation)</p> <!-- Updated for debugging -->
+                <!-- Removed debugging text for clean version -->
             </div>
             <div class="pricing-card highlight">
                 <div class="pricing-card-header"><h3>Pro</h3><p class="price">$29</p><p class="price-note">per month</p></div>
@@ -163,7 +163,7 @@
         </div>
     </div>
 
-    <!-- General Modal for showModalMessage (used by showModalMessage) -->
+    <!-- General Modal for showModalMessage (used by utils.js) -->
     <div id="modal-message" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <p id="modal-text"></p>
@@ -172,7 +172,7 @@
             </div>
         </div>
     </div>
-    <!-- General Confirmation Modal (used by showConfirmModal) -->
+    <!-- General Confirmation Modal (used by utils.js) -->
     <div id="confirm-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <p id="confirm-modal-text"></p>
@@ -183,82 +183,6 @@
         </div>
     </div>
 
-    <script type="module">
-        // TEMPORARY DIRECT JS FOR DEBUGGING
-        // This script contains the essential logic for pricing page buttons
-        // and a local, simplified showModalMessage function to isolate the issue.
-
-        // Simplified showModalMessage function (local to this script)
-        function showModalMessageLocal(message, isError = false) {
-            const modalOverlay = document.getElementById("modal-message");
-            const modalMessageText = document.getElementById("modal-text");
-            const modalOkButton = document.getElementById("modal-ok-button");
-
-            if (!modalOverlay || !modalMessageText || !modalOkButton) {
-                console.error("Local showModalMessage: Modal elements not found.", message);
-                alert(message); 
-                return;
-            }
-            modalMessageText.textContent = message;
-            modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
-            modalOverlay.style.display = "flex";
-            modalOkButton.onclick = () => { modalOverlay.style.display = "none"; };
-            modalOverlay.onclick = (e) => { if (e.target === modalOverlay) modalOverlay.style.display = "none"; };
-        }
-
-        // Dummy apiRequest for this test, as we are not calling backend for free plan.
-        // For paid plans, this would still need to be properly imported or defined.
-        // For this extreme isolation test, we're not testing actual API calls.
-        async function apiRequestLocal(method, path, body = null, isFormData = false, onProgress = null) {
-            console.log(`API Request (Local Mock): ${method} ${path}`, body);
-            return new Promise((resolve, reject) => {
-                setTimeout(() => {
-                    if (path === '/api/create-checkout-session' && body && body.plan === 'free') {
-                        // This branch should ideally not be hit if free plan logic works
-                        console.error('ERROR: createCheckoutSession called for FREE plan in local mock.');
-                        reject(new Error('Local Mock Error: createCheckoutSession called for FREE plan.'));
-                    } else if (path === '/api/create-checkout-session') {
-                        // Simulate a successful session creation for paid plans
-                        resolve({ id: 'cs_test_12345' }); 
-                    } else {
-                        resolve({}); // Default resolve for other paths
-                    }
-                }, 100);
-            });
-        }
-
-
-        document.querySelectorAll('.choose-plan-btn').forEach(button => {
-            button.addEventListener('click', async (event) => {
-                let selectedPlan = event.target.dataset.planId;
-                
-                console.log('Clicked plan (Extreme Isolation):', selectedPlan); 
-
-                if (selectedPlan === 'free') {
-                    console.log('Free plan selected, redirecting directly (Extreme Isolation).');
-                    showModalMessageLocal('Redirecting to registration for the Free plan...', false); // Using local modal
-                    setTimeout(() => {
-                        window.location.href = '/register.html';
-                    }, 500); // Small delay to allow modal to show
-                    return; // Crucial: Stop further execution
-                } 
-                else { 
-                    console.log('Paid plan selected (Extreme Isolation):', selectedPlan);
-                    // For this extreme isolation test, we'll use the local showModalMessage
-                    // and a local mock for apiRequest.
-                    if (localStorage.getItem('authToken')) {
-                        showModalMessageLocal(`Attempting to subscribe to ${selectedPlan.toUpperCase()} plan (logged in).`, false);
-                        // In a real scenario, createCheckoutSession would be called here.
-                        // For this test, we're focusing on the free plan redirect.
-                        // await apiRequestLocal('POST', '/api/create-checkout-session', { plan: selectedPlan });
-                    } else {
-                        showModalMessageLocal(`Showing registration modal for ${selectedPlan.toUpperCase()} plan (not logged in).`, false);
-                        const modal = document.getElementById('register-checkout-modal-overlay');
-                        if (modal) modal.style.display = 'flex';
-                    }
-                }
-            });
-        });
-    </script>
+    <script type="module" src="dist/js/bundle.js"></script>
 </body>
 </html>
