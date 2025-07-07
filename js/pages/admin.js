@@ -445,7 +445,8 @@ export function handleAdminPage() {
                 }
                 loadUsers(); // Reload user list to show new employee
             } catch (error) {
-                displayStatusMessage(inviteEmployeeStatusMessage, `Error: ${error.message}`, true);
+                // MODIFIED: Use showModalMessage for the tier limit error
+                showModalMessage(`Error: ${error.message}`, true);
                 console.error('Error inviting employee:', error);
             }
         });
