@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const stripe = require('stripe')(STRIPE_SECRET_KEY); // UNCOMMENTED: Stripe initialization
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // UNCOMMENTED: Stripe initialization
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
