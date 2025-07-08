@@ -4,7 +4,7 @@ import { apiRequest, showModalMessage, showConfirmModal } from '../utils.js';
 /**
  * Handles the logic for the employee's onboarding view page (new-hire-view.html).
  */
-export function handleOnboardingViewPage() { // Ensure this is exported
+export function handleOnboardingViewPage() {
     const authToken = localStorage.getItem("authToken");
     if (!authToken) {
         window.location.href = "login.html";
@@ -103,6 +103,7 @@ export function handleOnboardingViewPage() { // Ensure this is exported
             renderOnboardingTasks(tasks);
         } catch (error) {
             onboardingTaskListDiv.innerHTML = '<p style="color: #e74c3c;">Error loading tasks.</p>';
+            console.error('Error loading onboarding tasks:', error); // Added detailed error log
         }
     }
 
@@ -119,18 +120,70 @@ export function handleOnboardingViewPage() { // Ensure this is exported
 
                 taskItem.innerHTML = `
                     <div class="checklist-item-title">
-                        <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''}>
+                        <input type="checkbox" class="task-checkbox" data-task-id="${task.id}" ${task.completed ? 'checked' : ''}>
                         <span>${task.description}</span>
                         ${task.document_name ? `<br><small>Attached: <a href="${task.document_name}" target="_blank">${task.document_name.split('/').pop()}</a></small>` : ''}
                     </div>
                 `;
                 onboardingTaskListDiv.appendChild(taskItem);
             });
+
+            // Update task list overview
+            const completedTasks = tasks.filter(task => task.completed).length;
+            const totalTasks = tasks.length;
+            if (taskListOverviewDiv) {
+                taskListOverviewDiv.textContent = `You have completed ${completedTasks} of ${totalTasks} tasks.`;
+            }
+
+            // Fire confetti if all tasks are completed
+            if (completedTasks === totalTasks && totalTasks > 0) {
+                if (typeof confetti !== 'undefined') { // Check if confetti library is loaded
+                    confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 }
+                    });
+                }
+            }
+
         } else {
             if (onboardingInfoContainer) onboardingInfoContainer.style.display = 'none';
+            if (taskListOverviewDiv) taskListOverviewDiv.textContent = 'No onboarding tasks assigned.';
         }
     }
     
+    // NEW: Event listener for task checkboxes (using event delegation)
+    onboardingTaskListDiv.addEventListener('change', async (e) => {
+        if (e.target.classList.contains('task-checkbox')) {
+            const checkbox = e.target;
+            const taskId = checkbox.dataset.taskId;
+            const isCompleted = checkbox.checked;
+
+            try {
+                await apiRequest('PUT', `/api/onboarding-tasks/${taskId}`, { completed: isCompleted });
+                // Update UI based on completion status
+                const taskItem = checkbox.closest('.checklist-item');
+                if (taskItem) {
+                    if (isCompleted) {
+                        taskItem.classList.add('completed');
+                        // Optionally show a small success message
+                        // showModalMessage('Task marked as complete!', false);
+                    } else {
+                        taskItem.classList.remove('completed');
+                        // showModalMessage('Task marked as incomplete.', false);
+                    }
+                }
+                // Reload tasks to update the overview count and re-trigger confetti if needed
+                loadOnboardingTasks(); 
+            } catch (error) {
+                showModalMessage(`Failed to update task: ${error.message}`, true);
+                console.error('Error updating task completion:', error);
+                // Revert checkbox state if API call fails
+                checkbox.checked = !isCompleted;
+            }
+        }
+    });
+
     async function loadEmployeeSchedule() {
         if (!employeeScheduleListDiv) return;
         employeeScheduleListDiv.innerHTML = '<p>Loading your schedule...</p>';
@@ -160,6 +213,7 @@ export function handleOnboardingViewPage() { // Ensure this is exported
             }
         } catch (error) {
             employeeScheduleListDiv.innerHTML = '<p style="color: #e74c3c;">Could not load schedule.</p>';
+            console.error('Error loading employee schedule:', error); // Added detailed error log
         }
     }
 
