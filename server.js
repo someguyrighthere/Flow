@@ -10,6 +10,11 @@ const fs = require('fs');
 const path = require('path');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
 
+// --- NEW GCS IMPORTS ---
+const { Storage } = require('@google-cloud/storage');
+const MulterGoogleCloudStorage = require('multer-google-cloud-storage');
+// --- END NEW GCS IMPORTS ---
+
 const createOnboardingRouter = require('./routes/onboardingRoutes');
 
 const app = express();
@@ -49,16 +54,52 @@ if (DEBUG_STRIPE_SECRET_KEY) {
 }
 // --- END DEBUGGING ---
 
-
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir);
+// --- NEW GCS CONFIGURATION ---
+let gcsConfig;
+try {
+    if (process.env.GCP_KEY_JSON) {
+        gcsConfig = JSON.parse(process.env.GCP_KEY_JSON);
+        console.log('Google Cloud Storage credentials loaded from environment variable.');
+    } else {
+        console.error('CRITICAL ERROR: GCP_KEY_JSON environment variable is NOT set. GCS uploads will fail.');
+        // In a production environment, you might want to exit here or prevent file uploads.
+        // For development, you might load from a local file:
+        // gcsConfig = require('./path/to/your/service-account-key.json');
+    }
+} catch (e) {
+    console.error('CRITICAL ERROR: Failed to parse GCP_KEY_JSON environment variable. Ensure it is valid JSON.', e.message);
+    process.exit(1);
 }
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsDir),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+
+const storage = new MulterGoogleCloudStorage({
+    projectId: gcsConfig.project_id,
+    keyFilename: null, // Set to null if using `credentials` directly
+    credentials: {
+        client_email: gcsConfig.client_email,
+        // IMPORTANT: Replace escaped newlines from environment variable back to actual newlines
+        private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
+    },
+    bucket: process.env.GCS_BUCKET_NAME, // Make sure this environment variable is set on Render
+    acl: 'publicRead', // This makes files publicly readable. Adjust if you need private files.
+    destination: (req, file, cb) => {
+        // Optional: specify a folder path within your bucket, e.g., 'documents/'
+        cb(null, `documents/${Date.now()}-${file.originalname}`);
+    }
 });
+
 const upload = multer({ storage: storage });
+
+// --- REMOVE OLD LOCAL DISK STORAGE CONFIGURATION ---
+// const uploadsDir = path.join(__dirname, 'uploads');
+// if (!fs.existsSync(uploadsDir)) {
+//     fs.mkdirSync(uploadsDir);
+// }
+// const storage = multer.diskStorage({
+//     destination: (req, file, cb) => cb(null, uploadsDir),
+//     filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+// });
+// const upload = multer({ storage: storage });
+// --- END REMOVAL ---
 
 if (!DATABASE_URL) {
     console.error("CRITICAL ERROR: DATABASE_URL environment variable is NOT set.");
@@ -153,18 +194,25 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
 });
 
 // Now, apply express.json() for all subsequent routes that need JSON body parsing
-app.use(express.json()); 
+app.use(express.json());
 
-// Serve static files
+// --- REMOVE OLD LOCAL STATIC FILE SERVING ---
+// app.use(express.static(path.join(__dirname)));
+// app.use('/uploads', express.static(uploadsDir));
+// --- END REMOVAL ---
+
+// Serve all frontend static files from the root of the project
+// This assumes your HTML, CSS, JS bundles are in the root or accessible directly.
+// If your HTML files reference /dist/css/style.min.css, they need access to /dist/
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(uploadsDir));
+
 
 // Authentication and Authorization middleware
 const isAuthenticated = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (token == null) return res.sendStatus(401);
-    
+
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) return res.sendStatus(403);
         req.user = user;
@@ -211,7 +259,7 @@ apiRoutes.post('/login', async (req, res) => {
         if (result.rows.length === 0) return res.status(401).json({ error: "Invalid email or password." });
         const user = result.rows[0];
         if (!(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid email or password." });
-        
+
         const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, role: user.role, userId: user.user_id });
@@ -393,6 +441,7 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
 // Documents
 apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     try {
+        // file_name will now contain the full GCS URL
         const result = await pool.query(`SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name FROM documents d LEFT JOIN users u ON d.uploaded_by = u.user_id ORDER BY d.uploaded_at DESC`);
         res.json(result.rows);
     } catch (err) {
@@ -403,10 +452,13 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
     try {
         if (!req.file) return res.status(400).json({ error: 'No file was uploaded.' });
         const { title, description } = req.body;
-        const { filename } = req.file;
-        const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',[title, description, filename, req.user.id]);
+        // IMPORTANT: Use req.file.publicUrl which multer-google-cloud-storage adds
+        const fileUrl = req.file.publicUrl;
+        // Store the full URL in the database
+        const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',[title, description, fileUrl, req.user.id]);
         res.status(201).json(result.rows[0]);
     } catch (err) {
+        console.error('Error uploading document to GCS:', err); // More specific error logging
         res.status(500).json({ error: 'Failed to upload document.' });
     }
 });
@@ -415,13 +467,43 @@ apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) =>
     try {
         const docResult = await pool.query('SELECT file_name FROM documents WHERE document_id = $1', [id]);
         if (docResult.rows.length === 0) return res.status(404).json({ error: 'Document not found.' });
-        await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
-        const filePath = path.join(uploadsDir, docResult.rows[0].file_name);
-        fs.unlink(filePath, (err) => {
-            if (err) console.error(`Failed to delete file from disk: ${filePath}`, err);
+
+        const fileUrlToDelete = docResult.rows[0].file_name;
+
+        // --- NEW: Delete from GCS ---
+        // You'll need to initialize the GCS Storage client here as well,
+        // or refactor gcsConfig to be globally accessible.
+        // For simplicity, let's re-initialize it.
+        const storageClient = new Storage({
+            projectId: gcsConfig.project_id,
+            credentials: {
+                client_email: gcsConfig.client_email,
+                private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
+            }
         });
+        const bucketName = process.env.GCS_BUCKET_NAME; // Get bucket name from env
+        const url = new URL(fileUrlToDelete);
+        const filePath = url.pathname.substring(1); // Remove leading slash, e.g., 'documents/123-filename.txt'
+
+        try {
+            await storageClient.bucket(bucketName).file(filePath).delete();
+            console.log(`File ${filePath} deleted from GCS bucket ${bucketName}.`);
+        } catch (gcsErr) {
+            console.warn(`Could not delete file ${filePath} from GCS bucket ${bucketName}. It might not exist or permissions are off. Error: ${gcsErr.message}`);
+            // Don't block DB deletion if GCS delete fails (e.g., file already gone)
+        }
+        // --- END NEW: Delete from GCS ---
+
+        await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
+        // --- REMOVE OLD LOCAL FILE DELETION ---
+        // const filePath = path.join(uploadsDir, docResult.rows[0].file_name);
+        // fs.unlink(filePath, (err) => {
+        //     if (err) console.error(`Failed to delete file from disk: ${filePath}`, err);
+        // });
+        // --- END REMOVAL ---
         res.status(204).send();
     } catch (err) {
+        console.error('Error deleting document:', err);
         res.status(500).json({ error: 'Failed to delete document.' });
     }
 });
@@ -679,12 +761,12 @@ const startServer = async () => {
     try {
         await pool.connect();
         console.log('--- DATABASE: Successfully Connected to PostgreSQL! ---');
-        app.listen(PORT, '0.0.0.0', () => { 
+        app.listen(PORT, '0.0.0.0', () => {
             console.log(`--- SERVER: Express app listening successfully on port ${PORT}! ---`);
         });
     } catch (err) {
         console.error('CRITICAL ERROR: Failed to start server.', err.stack);
-        process.exit(1); 
+        process.exit(1);
     }
 };
 
