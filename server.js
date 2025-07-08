@@ -31,9 +31,6 @@ const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
 
-// --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
-// --- END REMOVED DEBUGGING ---
-
 // --- NEW GCS CONFIGURATION ---
 let gcsConfig;
 try {
@@ -531,8 +528,7 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
             return res.status(404).json({ error: 'Checklist not found.' });
         }
         res.status(204).send();
-    }
-    catch (err) {
+    } catch (err) {
         console.error('Error deleting checklist:', err);
         res.status(500).json({ error: 'Failed to delete checklist.' });
     }
