@@ -11,9 +11,8 @@ const path = require('path');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
 
 // --- NEW GCS IMPORTS ---
-const gcs = require('@google-cloud/storage'); // Import the whole module
-const { Storage } = gcs; // Destructure Storage for direct GCS operations like deletion
-const GCS_Storage_Engine = require('multer-cloud-storage'); // Get the default export for Multer storage
+const { Storage } = require('@google-cloud/storage'); // Only need the official GCS library
+// --- REMOVE: const GCS_Storage_Engine = require('multer-cloud-storage'); // No longer needed
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -63,33 +62,76 @@ try {
         console.log('Google Cloud Storage credentials loaded from environment variable.');
     } else {
         console.error('CRITICAL ERROR: GCP_KEY_JSON environment variable is NOT set. GCS uploads will fail.');
-        // In a production environment, you might want to exit here or prevent file uploads.
-        // For development, you might load from a local file:
-        // gcsConfig = require('./path/to/your/service-account-key.json');
+        process.exit(1);
     }
 } catch (e) {
     console.error('CRITICAL ERROR: Failed to parse GCP_KEY_JSON environment variable. Ensure it is valid JSON.', e.message);
     process.exit(1);
 }
 
-// Initialize multer with the GCS storage engine directly
-const upload = multer({
-    storage: GCS_Storage_Engine({ // <--- FIX: Call GCS_Storage_Engine as a function directly here
-        projectId: gcsConfig.project_id,
-        keyFilename: null, // Set to null if using `credentials` directly
-        credentials: {
-            client_email: gcsConfig.client_email,
-            // IMPORTANT: Replace escaped newlines from environment variable back to actual newlines
-            private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
-        },
-        bucket: process.env.GCS_BUCKET_NAME, // Make sure this environment variable is set on Render
-        acl: 'publicRead', // This makes files publicly readable. Adjust if you need private files.
-        destination: (req, file, cb) => {
-            // Optional: specify a folder path within your bucket, e.g., 'documents/'
-            cb(null, `documents/${Date.now()}-${file.originalname}`);
-        }
-    })
+// Initialize GCS client
+const storageClient = new Storage({
+    projectId: gcsConfig.project_id,
+    credentials: {
+        client_email: gcsConfig.client_email,
+        private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
+    }
 });
+const bucket = storageClient.bucket(process.env.GCS_BUCKET_NAME);
+
+// --- CUSTOM MULTER GCS STORAGE ENGINE ---
+const gcsStorage = multer.diskStorage({ // We'll use diskStorage temporarily, but the _handleFile will override it
+    _handleFile: (req, file, cb) => {
+        const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
+        const gcsFile = bucket.file(uniqueFilename);
+
+        const stream = gcsFile.createWriteStream({
+            metadata: {
+                contentType: file.mimetype,
+            },
+            predefinedAcl: 'publicRead', // Make the file publicly readable
+        });
+
+        stream.on('error', (err) => {
+            console.error('GCS upload stream error:', err);
+            cb(err);
+        });
+
+        stream.on('finish', () => {
+            // After upload is complete, get the public URL
+            gcsFile.publicUrl().then(url => {
+                // Attach the public URL to req.file so it can be used in the route handler
+                file.publicUrl = url;
+                cb(null, {
+                    path: url, // Multer expects a path, use the URL here
+                    filename: uniqueFilename // Store the path within the bucket as filename
+                });
+            }).catch(urlErr => {
+                console.error('Error getting public URL for GCS file:', urlErr);
+                cb(urlErr);
+            });
+        });
+
+        file.stream.pipe(stream);
+    },
+    _removeFile: (req, file, cb) => {
+        // This function is called by Multer if an error occurs during upload
+        // or if you explicitly call `upload.storage._removeFile`.
+        // For GCS, we need to delete the file from the bucket.
+        const filePath = file.filename; // This is the path within the bucket
+        bucket.file(filePath).delete().then(() => {
+            console.log(`File ${filePath} removed from GCS.`);
+            cb(null);
+        }).catch(err => {
+            console.warn(`Error removing file ${filePath} from GCS: ${err.message}`);
+            cb(err); // Still call callback, but log warning
+        });
+    }
+});
+
+const upload = multer({ storage: gcsStorage }); // Use our custom GCS storage engine
+// --- END CUSTOM MULTER GCS STORAGE ENGINE ---
+
 
 // --- REMOVE OLD LOCAL DISK STORAGE CONFIGURATION ---
 // const uploadsDir = path.join(__dirname, 'uploads');
@@ -304,6 +346,16 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
     } catch (err) {
         if (err.code === '23505') return res.status(409).json({ error: 'Email address is already in use.' });
         res.status(500).json({ error: 'Failed to update profile.' });
+    }
+});
+apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    if (req.user.id === parseInt(id, 10)) return res.status(400).json({ error: "You cannot delete your own account." });
+    try {
+        await pool.query('DELETE FROM users WHERE user_id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete user.' });
     }
 });
 apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
