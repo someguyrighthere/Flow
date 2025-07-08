@@ -6,7 +6,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
+const fs = require('fs');
 const path = require('path');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -205,8 +205,9 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
 
 app.use(express.json());
 
-// --- NEW: Public Job Posting Endpoint (before static file serving) ---
+// --- NEW: Public Job Posting Endpoint (MOVED TO HERE) ---
 // This route is publicly accessible for the application form
+// It MUST be defined BEFORE app.use(express.static(...)) to ensure it's matched first.
 app.get('/apply/:id', async (req, res) => {
     // --- DEBUGGING START ---
     console.log('--- DEBUG: Hitting /apply/:id route ---');
@@ -230,7 +231,7 @@ app.get('/apply/:id', async (req, res) => {
 });
 // --- END NEW: Public Job Posting Endpoint ---
 
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname))); // Static file serving is now AFTER the dynamic route
 
 
 // Authentication and Authorization middleware
@@ -265,8 +266,8 @@ apiRoutes.post('/register', async (req, res) => {
         const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']);
         const newLocationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        await pool.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
-        await pool.query('COMMIT');
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -511,7 +512,6 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
 // Documents
 apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        // file_name will now contain the full GCS URL
         const result = await pool.query(`SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name FROM documents d LEFT JOIN users u ON d.uploaded_by = u.user_id ORDER BY d.uploaded_at DESC`);
         res.json(result.rows);
     } catch (err) {
@@ -521,8 +521,8 @@ apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
 apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
     // --- DEBUGGING START ---
     console.log('--- DEBUG: Starting document upload process ---');
-    console.log('DEBUG: req.file immediately after multer processing:', req.file); // Log req.file immediately
-    console.log('DEBUG: req.body at start of route handler:', req.body); // Log req.body immediately
+    console.log('DEBUG: req.file immediately after multer processing:', req.file);
+    console.log('DEBUG: req.body at start of route handler:', req.body);
     // --- DEBUGGING END ---
 
     try {
@@ -532,20 +532,19 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
         }
 
         const { title, description } = req.body;
-        const fileUrl = req.file.publicUrl; // This property is set by _handleFile
+        const fileUrl = req.file.publicUrl;
 
-        console.log('DEBUG: fileUrl retrieved from req.file.publicUrl:', fileUrl); // Log the fileUrl
+        console.log('DEBUG: fileUrl retrieved from req.file.publicUrl:', fileUrl);
 
         if (!fileUrl) {
             console.error('DEBUG ERROR: fileUrl is null or undefined BEFORE DB insert. GCS upload likely failed or URL not set by _handleFile.');
             return res.status(500).json({ error: 'Failed to obtain file URL from storage. Upload failed.' });
         }
 
-        // Store the full URL in the database
         const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',[title, description, fileUrl, req.user.id]);
-        res.status(201).json({ message: 'Document uploaded successfully!', document: result.rows[0] }); // Added document to response for frontend
+        res.status(201).json({ message: 'Document uploaded successfully!', document: result.rows[0] });
     } catch (err) {
-        console.error('Error uploading document to GCS and saving to DB (outer catch):', err); // More specific error logging
+        console.error('Error uploading document to GCS and saving to DB (outer catch):', err);
         res.status(500).json({ error: 'Failed to upload document.' });
     }
 });
@@ -558,18 +557,15 @@ apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) =>
         const fileUrlToDelete = docResult.rows[0].file_name;
 
         // --- NEW: Delete from GCS (Attempt to delete, but don't block DB deletion) ---
-        // Check if the file_name is a valid URL before attempting GCS deletion
         let isGcsUrl = false;
         let filePath = '';
         try {
             const url = new URL(fileUrlToDelete);
-            // Basic check if it looks like a GCS URL
             if (url.hostname.includes('storage.googleapis.com') || url.hostname.includes(process.env.GCS_BUCKET_NAME)) {
-                filePath = url.pathname.substring(1); // Remove leading slash
+                filePath = url.pathname.substring(1);
                 isGcsUrl = true;
             }
         } catch (e) {
-            // Not a valid URL, so it's likely an old local filename
             console.warn(`File name "${fileUrlToDelete}" is not a valid URL. Assuming it's an old local file.`);
         }
 
@@ -586,21 +582,17 @@ apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) =>
                 await storageClient.bucket(bucketName).file(filePath).delete();
                 console.log(`File ${filePath} deleted from GCS bucket ${bucketName}.`);
             } catch (gcsErr) {
-                // Log the GCS deletion error but continue to delete the DB record
                 console.warn(`Could not delete file ${filePath} from GCS bucket ${bucketName}. It might not exist or permissions are off. Error: ${gcsErr.message}`);
             }
         } else {
-            // Handle deletion for old local files (if they were ever persistent, which they aren't on Render)
-            // For now, just log a message as local files are ephemeral on Render.
             console.log(`Skipping GCS deletion for non-GCS URL: ${fileUrlToDelete}. Assuming it was an ephemeral local file.`);
         }
         // --- END NEW: Delete from GCS ---
 
-        // Always attempt to delete the database record
         await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
         res.status(204).send();
     } catch (err) {
-        console.error('Error deleting document record from database:', err); // More specific error message
+        console.error('Error deleting document record from database:', err);
         res.status(500).json({ error: 'Failed to delete document record.' });
     }
 });
@@ -625,11 +617,19 @@ apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 // NEW: Get a single job posting by ID (publicly accessible)
-app.get('/apply/:id', async (req, res) => { // Note: This is 'app.get' not 'apiRoutes.get' because it's a public endpoint
+app.get('/apply/:id', async (req, res) => {
+    // --- DEBUGGING START ---
+    console.log('--- DEBUG: Hitting /apply/:id route ---');
+    console.log('DEBUG: Received jobId:', req.params.id);
+    // --- DEBUGGING END ---
     const { id } = req.params;
     try {
         const result = await pool.query(`SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1`, [id]);
+        // --- DEBUGGING START ---
+        console.log('DEBUG: Database query result for jobId', id, ':', result.rows);
+        // --- DEBUGGING END ---
         if (result.rows.length === 0) {
+            console.warn('DEBUG WARNING: Job posting with ID', id, 'not found in database.');
             return res.status(404).json({ error: 'Job posting not found.' });
         }
         res.json(result.rows[0]);
