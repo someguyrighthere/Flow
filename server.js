@@ -6,12 +6,12 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
+const fs = require('fs');
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // --- NEW GCS IMPORTS ---
-const { Storage } = require('@google-cloud/storage'); // Only need the official GCS library
+const { Storage } = require('@google-cloud/storage');
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -28,7 +28,7 @@ const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-ch
 // Define Stripe Price IDs from environment variables
 const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
-const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
+const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
 
 // --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
 // --- END REMOVED DEBUGGING ---
@@ -64,61 +64,49 @@ function GCSCustomStorage(opts) {
 }
 
 GCSCustomStorage.prototype._handleFile = function _handleFile(req, file, cb) {
-    // Generate a unique filename for GCS to avoid collisions
     const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
     const gcsFile = bucket.file(uniqueFilename);
 
-    // Create a write stream to GCS
     const stream = gcsFile.createWriteStream({
         metadata: {
-            contentType: file.mimetype, // Set content type based on the uploaded file
+            contentType: file.mimetype,
         },
-        predefinedAcl: 'publicRead', // Make the file publicly readable after upload
+        predefinedAcl: 'publicRead',
     });
 
-    // Handle errors during the GCS upload stream
     stream.on('error', (err) => {
         console.error('GCS upload stream error during write (in _handleFile):', err);
-        // Propagate the error back to Multer
         cb(err);
     });
 
-    // Handle successful completion of the GCS upload stream
     stream.on('finish', () => {
-        const publicUrl = gcsFile.publicUrl; // FIX: Access publicUrl as a property, not a function
-
-        // Attach the public URL to req.file so it can be accessed in the route handler
+        const publicUrl = gcsFile.publicUrl;
+        
         file.publicUrl = publicUrl;
-        // Important: Ensure publicUrl is not null/undefined before passing to callback
+
         if (!file.publicUrl) {
             const error = new Error('GCS public URL was not generated (property was null/undefined).');
             console.error('GCS URL generation error (in _handleFile):', error);
-            return cb(error); // Propagate error
+            return cb(error);
         }
-        // Call Multer's callback to indicate success, passing necessary file info
+
         cb(null, {
-            path: publicUrl, // Use the public URL as the 'path' property
-            filename: uniqueFilename // Store the path within the bucket as 'filename' for deletion logic
+            path: publicUrl,
+            filename: uniqueFilename
         });
     });
 
-    // Pipe the incoming file stream (from Multer) to the GCS write stream
     file.stream.pipe(stream);
 };
 
 GCSCustomStorage.prototype._removeFile = function _removeFile(req, file, cb) {
-    // This function is called by Multer if an error occurs during upload (to clean up)
-    // or if you explicitly call `upload.storage._removeFile`.
-    // For GCS, we need to delete the file from the bucket.
-    // The file.filename here is the unique path within the GCS bucket.
     const filePath = file.filename; 
     bucket.file(filePath).delete().then(() => {
         console.log(`File ${filePath} removed from GCS.`);
-        cb(null); // Indicate success to Multer
+        cb(null);
     }).catch(err => {
-        // Log a warning if deletion fails, but don't block the process
         console.warn(`Error removing file ${filePath} from GCS: ${err.message}`);
-        cb(err); // Still call callback, but log warning
+        cb(err);
     });
 };
 
@@ -611,6 +599,21 @@ apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to create job posting.' });
     }
 });
+// NEW: Get a single job posting by ID (publicly accessible)
+app.get('/apply/:id', async (req, res) => { // Note: This is 'app.get' not 'apiRoutes.get' because it's a public endpoint
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1`, [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Job posting not found.' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error retrieving single job posting:', err);
+        res.status(500).json({ error: 'Failed to retrieve job posting.' });
+    }
+});
+
 apiRoutes.delete('/job-postings/:id', isAuthenticated, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
