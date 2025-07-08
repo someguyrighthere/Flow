@@ -6,12 +6,12 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs');
+const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
 
 // --- NEW GCS IMPORTS ---
-const { Storage } = require('@google-cloud/storage');
+const { Storage } = require('@google-cloud/storage'); // Only need the official GCS library
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -28,7 +28,7 @@ const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-ch
 // Define Stripe Price IDs from environment variables
 const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
-const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
+const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
 
 // --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
 // --- END REMOVED DEBUGGING ---
@@ -59,9 +59,8 @@ const storageClient = new Storage({
 const bucket = storageClient.bucket(process.env.GCS_BUCKET_NAME);
 
 // --- CUSTOM MULTER GCS STORAGE ENGINE ---
-// Define the custom storage engine as a plain object with _handleFile and _removeFile methods.
-// This is the correct way to create a custom storage engine for Multer.
-const gcsStorage = {
+// This is a custom storage engine for Multer that uploads directly to GCS.
+const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like structure for custom engines
     _handleFile: (req, file, cb) => {
         // Generate a unique filename for GCS to avoid collisions
         const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
@@ -84,25 +83,20 @@ const gcsStorage = {
 
         // Handle successful completion of the GCS upload stream
         stream.on('finish', () => {
-            // Get the public URL of the uploaded file
-            gcsFile.publicUrl().then(url => {
-                // Attach the public URL to req.file so it can be accessed in the route handler
-                file.publicUrl = url;
-                // Important: Ensure publicUrl is not null/undefined before passing to callback
-                if (!file.publicUrl) {
-                    const error = new Error('GCS public URL was not generated.');
-                    console.error('GCS URL generation error:', error);
-                    return cb(error); // Propagate error
-                }
-                // Call Multer's callback to indicate success, passing necessary file info
-                cb(null, {
-                    path: url, // Use the public URL as the 'path' property
-                    filename: uniqueFilename // Store the path within the bucket as 'filename' for deletion logic
-                });
-            }).catch(urlErr => {
-                // Handle errors during public URL retrieval
-                console.error('Error getting public URL for GCS file:', urlErr);
-                cb(urlErr); // Propagate error
+            const url = gcsFile.publicUrl; // FIX: Access publicUrl as a property, not a function
+
+            // Attach the public URL to req.file so it can be accessed in the route handler
+            file.publicUrl = url;
+            // Important: Ensure publicUrl is not null/undefined before passing to callback
+            if (!file.publicUrl) {
+                const error = new Error('GCS public URL was not generated (property was null/undefined).');
+                console.error('GCS URL generation error:', error);
+                return cb(error); // Propagate error
+            }
+            // Call Multer's callback to indicate success, passing necessary file info
+            cb(null, {
+                path: url, // Use the public URL as the 'path' property
+                filename: uniqueFilename // Store the path within the bucket as 'filename' for deletion logic
             });
         });
 
