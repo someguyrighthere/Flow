@@ -415,7 +415,7 @@ apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) =>
 });
 
 // Locations & Business Settings
-apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
+apiRoutes.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM locations ORDER BY location_name');
         res.json(result.rows);
