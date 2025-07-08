@@ -6,13 +6,13 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs');
+const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
 const path = require('path');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
 
 // --- NEW GCS IMPORTS ---
 const { Storage } = require('@google-cloud/storage');
-const MulterGoogleCloudStorage = require('multer-google-cloud-storage');
+const MulterGoogleCloudStorage = require('multer-cloud-storage'); // Corrected package name
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -94,11 +94,8 @@ const upload = multer({ storage: storage });
 // if (!fs.existsSync(uploadsDir)) {
 //     fs.mkdirSync(uploadsDir);
 // }
-// const storage = multer.diskStorage({
-//     destination: (req, file, cb) => cb(null, uploadsDir),
-//     filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-// });
-// const upload = multer({ storage: storage });
+// const localDiskStorage = multer.diskStorage(...);
+// const upload = multer({ storage: localDiskStorage });
 // --- END REMOVAL ---
 
 if (!DATABASE_URL) {
@@ -452,7 +449,7 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
     try {
         if (!req.file) return res.status(400).json({ error: 'No file was uploaded.' });
         const { title, description } = req.body;
-        // IMPORTANT: Use req.file.publicUrl which multer-google-cloud-storage adds
+        // IMPORTANT: Use req.file.publicUrl which multer-cloud-storage adds
         const fileUrl = req.file.publicUrl;
         // Store the full URL in the database
         const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',[title, description, fileUrl, req.user.id]);
@@ -482,8 +479,12 @@ apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) =>
             }
         });
         const bucketName = process.env.GCS_BUCKET_NAME; // Get bucket name from env
+        
+        // Extract the file path from the full GCS URL
+        // Example URL: https://storage.googleapis.com/your-bucket-name/documents/123-filename.txt
+        // We need 'documents/123-filename.txt'
         const url = new URL(fileUrlToDelete);
-        const filePath = url.pathname.substring(1); // Remove leading slash, e.g., 'documents/123-filename.txt'
+        const filePath = url.pathname.substring(1); // Remove leading slash
 
         try {
             await storageClient.bucket(bucketName).file(filePath).delete();

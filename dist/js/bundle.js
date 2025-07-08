@@ -18,7 +18,7 @@
     };
     modalOkButton.removeEventListener("click", hideModal);
     modalOverlay.removeEventListener("click", hideModalOutside);
-    modalMessageText.textContent = message;
+    modalMessageText.innerHTML = message;
     modalMessageText.style.color = isError ? "#ff8a80" : "var(--text-light)";
     modalOverlay.style.display = "flex";
     modalOkButton.addEventListener("click", hideModal);
@@ -99,7 +99,8 @@
           logoutUser("Your session has expired. Please log in again.");
           throw new Error("Authentication failed.");
         } else {
-          throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+          const errorMessage = typeof errorData.error === "string" ? errorData.error : `HTTP error! Status: ${response.status}`;
+          throw new Error(errorMessage);
         }
       }
       if (response.status === 204) {
@@ -423,7 +424,7 @@
             docItem.dataset.documentId = doc.document_id;
             docItem.dataset.documentName = doc.file_name;
             docItem.innerHTML = `
-                        <span>${doc.title} (<small>${doc.file_name}</small>)</span>
+                        <span>${doc.title} (<small>${doc.file_name.split("/").pop()}</small>)</span>
                         <button class="btn btn-primary btn-sm select-document-btn">Select</button>
                     `;
             attachDocumentListDiv.appendChild(docItem);
@@ -434,7 +435,9 @@
               const documentId = selectedDocItem.dataset.documentId;
               const documentName = selectedDocItem.dataset.documentName;
               attachDocumentToTask(documentId, documentName);
-              attachDocumentModalOverlay.style.display = "none";
+              if (attachDocumentModalOverlay) {
+                attachDocumentModalOverlay.style.display = "none";
+              }
             });
           });
         } else {
@@ -451,7 +454,7 @@
         currentTaskElement.dataset.attachedDocumentName = documentName;
         const infoDiv = currentTaskElement.querySelector(".attached-document-info");
         if (infoDiv) {
-          infoDiv.innerHTML = `Attached: <a href="/uploads/${encodeURIComponent(documentName)}" target="_blank" style="color: var(--primary-accent);">${documentName}</a>`;
+          infoDiv.innerHTML = `Attached: <a href="${documentName}" target="_blank" style="color: var(--primary-accent);">${documentName.split("/").pop()}</a>`;
         }
       }
     };
@@ -868,7 +871,7 @@
           }
           loadUsers();
         } catch (error) {
-          displayStatusMessage(inviteEmployeeStatusMessage, `Error: ${error.message}`, true);
+          showModalMessage(`Error: ${error.message}`, true);
           console.error("Error inviting employee:", error);
         }
       });
@@ -1014,12 +1017,12 @@
             docItem.className = "document-item";
             docItem.innerHTML = `
                         <h4>${doc.title}</h4>
-                        <p><strong>File:</strong> ${doc.file_name}</p>
+                        <p><strong>File:</strong> ${doc.file_name.split("/").pop()}</p> <!-- Display only filename from URL -->
                         <p><strong>Description:</strong> ${doc.description || "N/A"}</p>
                         <p style="font-size: 0.8em; color: var(--text-medium);">Uploaded by: ${doc.uploaded_by_name || "Unknown"}</p>
                         <p style="font-size: 0.8em; color: var(--text-medium);">Uploaded: ${new Date(doc.uploaded_at).toLocaleDateString()}</p>
                         <div class="actions">
-                            <a href="/uploads/${encodeURIComponent(doc.file_name)}" target="_blank" class="btn btn-secondary btn-sm" title="Download Document">
+                            <a href="${doc.file_name}" target="_blank" class="btn btn-secondary btn-sm" title="Download Document">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                                     <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
                                     <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
@@ -1900,7 +1903,7 @@
                     <div class="checklist-item-title">
                         <input type="checkbox" class="task-checkbox" ${task.completed ? "checked" : ""}>
                         <span>${task.description}</span>
-                        ${task.document_name ? `<br><small>Attached: <a href="/uploads/${encodeURIComponent(task.document_name)}" target="_blank">${task.document_name}</a></small>` : ""}
+                        ${task.document_name ? `<br><small>Attached: <a href="${task.document_name}" target="_blank">${task.document_name.split("/").pop()}</a></small>` : ""}
                     </div>
                 `;
           onboardingTaskListDiv.appendChild(taskItem);
