@@ -950,7 +950,7 @@ ownerRoutes.post('/data', async (req, res) => {
 
         // NEW: Fetch subscription account counts for SUPER ADMINS ONLY
         const subscriptionCountsResult = await pool.query(`
-            SELECT l.subscription_plan, COUNT(u.user_id) AS count
+            SELECT l.subscription_plan, COUNT(DISTINCT u.user_id) AS count
             FROM users u
             JOIN locations l ON u.location_id = l.location_id
             WHERE u.role = 'super_admin'
