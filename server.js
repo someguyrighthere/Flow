@@ -31,6 +31,9 @@ const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
 
+// --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
+// --- END REMOVED DEBUGGING ---
+
 // --- NEW GCS CONFIGURATION ---
 let gcsConfig;
 try {
@@ -415,7 +418,7 @@ apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) =>
 });
 
 // Locations & Business Settings
-apiRoutes.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
+apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM locations ORDER BY location_name');
         res.json(result.rows);
@@ -528,7 +531,8 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
             return res.status(404).json({ error: 'Checklist not found.' });
         }
         res.status(204).send();
-    } catch (err) {
+    }
+    catch (err) {
         console.error('Error deleting checklist:', err);
         res.status(500).json({ error: 'Failed to delete checklist.' });
     }
@@ -896,11 +900,11 @@ ownerRoutes.post('/data', async (req, res) => {
             yearly: { labels: [], data: [] }
         };
 
-        // Example: Fetch daily account creations for the last 7 days
+        // Example: Fetch daily super_admin account creations for the last 7 days
         const dailyAccounts = await pool.query(`
             SELECT DATE_TRUNC('day', created_at) AS date, COUNT(*) AS count
             FROM users
-            WHERE created_at >= NOW() - INTERVAL '7 days'
+            WHERE role = 'super_admin' AND created_at >= NOW() - INTERVAL '7 days'
             GROUP BY DATE_TRUNC('day', created_at)
             ORDER BY date ASC;
         `);
@@ -909,11 +913,11 @@ ownerRoutes.post('/data', async (req, res) => {
             accountCreationData.daily.data.push(parseInt(row.count, 10));
         });
 
-        // Example: Fetch weekly account creations for the last ~10 weeks
+        // Example: Fetch weekly super_admin account creations for the last ~10 weeks
         const weeklyAccounts = await pool.query(`
             SELECT DATE_TRUNC('week', created_at) AS date, COUNT(*) AS count
             FROM users
-            WHERE created_at >= NOW() - INTERVAL '10 weeks'
+            WHERE role = 'super_admin' AND created_at >= NOW() - INTERVAL '10 weeks'
             GROUP BY DATE_TRUNC('week', created_at)
             ORDER BY date ASC;
         `);
@@ -922,11 +926,11 @@ ownerRoutes.post('/data', async (req, res) => {
             accountCreationData.weekly.data.push(parseInt(row.count, 10));
         });
 
-        // Example: Fetch monthly account creations for the last 12 months
+        // Example: Fetch monthly super_admin account creations for the last 12 months
         const monthlyAccounts = await pool.query(`
             SELECT DATE_TRUNC('month', created_at) AS date, COUNT(*) AS count
             FROM users
-            WHERE created_at >= NOW() - INTERVAL '12 months'
+            WHERE role = 'super_admin' AND created_at >= NOW() - INTERVAL '12 months'
             GROUP BY DATE_TRUNC('month', created_at)
             ORDER BY date ASC;
         `);
@@ -935,11 +939,11 @@ ownerRoutes.post('/data', async (req, res) => {
             accountCreationData.monthly.data.push(parseInt(row.count, 10));
         });
 
-        // Example: Fetch yearly account creations for the last 5 years
+        // Example: Fetch yearly super_admin account creations for the last 5 years
         const yearlyAccounts = await pool.query(`
             SELECT DATE_TRUNC('year', created_at) AS date, COUNT(*) AS count
             FROM users
-            WHERE created_at >= NOW() - INTERVAL '5 years'
+            WHERE role = 'super_admin' AND created_at >= NOW() - INTERVAL '5 years'
             GROUP BY DATE_TRUNC('year', created_at)
             ORDER BY date ASC;
         `);
@@ -948,12 +952,33 @@ ownerRoutes.post('/data', async (req, res) => {
             accountCreationData.yearly.data.push(parseInt(row.count, 10));
         });
 
+        // NEW: Fetch subscription account counts
+        const subscriptionCountsResult = await pool.query(`
+            SELECT subscription_plan, COUNT(*) AS count
+            FROM locations
+            GROUP BY subscription_plan;
+        `);
+
+        const accountCounts = {
+            free: 0,
+            pro: 0,
+            enterprise: 0
+        };
+
+        subscriptionCountsResult.rows.forEach(row => {
+            const plan = row.subscription_plan.toLowerCase();
+            if (accountCounts.hasOwnProperty(plan)) {
+                accountCounts[plan] = parseInt(row.count, 10);
+            }
+        });
+
 
         // Fetch user feedback
         const feedback = await pool.query(`SELECT feedback_id, user_id, user_name, user_email, feedback_type, message, submitted_at FROM feedback ORDER BY submitted_at DESC`);
 
         res.status(200).json({
             accountCreationData,
+            accountCounts, // Include new account counts in the response
             feedback: feedback.rows
         });
 

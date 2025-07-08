@@ -10,7 +10,36 @@
         body { font-family: 'Poppins', sans-serif; background-color: #1c1c1e; color: #f0f0f0; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .dashboard-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 30px; }
-        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .dashboard-grid { 
+            display: grid; 
+            grid-template-columns: 2fr 1fr; /* Original layout */
+            gap: 30px; 
+        }
+        /* NEW: Styles for the counters grid */
+        .counters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Adjust minmax as needed */
+            gap: 20px;
+            margin-bottom: 30px; /* Space below counters */
+        }
+        .counter-card {
+            background-color: #2c2c2e;
+            border: 1px solid #444;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .counter-card h4 {
+            margin: 0 0 10px 0;
+            color: var(--text-medium);
+            font-size: 1em;
+        }
+        .counter-card .count {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: var(--primary-accent, #C86DD7);
+        }
+
         .card { background-color: #2c2c2e; border: 1px solid #444; border-radius: 12px; padding: 25px; }
         .card h3 { margin-top: 0; color: var(--primary-accent, #C86DD7); border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 20px; }
         .feedback-item { border: 1px solid #444; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #3a3a3c; position: relative; } /* Added position: relative */
@@ -57,6 +86,23 @@
             <h1 class="app-title">Owner Dashboard</h1>
         </header>
         
+        <!-- NEW: Subscription Counters Section -->
+        <div class="counters-grid">
+            <div class="counter-card">
+                <h4>Free Accounts</h4>
+                <div class="count" id="free-accounts-count">0</div>
+            </div>
+            <div class="counter-card">
+                <h4>Pro Accounts</h4>
+                <div class="count" id="pro-accounts-count">0</div>
+            </div>
+            <div class="counter-card">
+                <h4>Enterprise Accounts</h4>
+                <div class="count" id="enterprise-accounts-count">0</div>
+            </div>
+        </div>
+        <!-- END NEW: Subscription Counters Section -->
+
         <div class="dashboard-grid">
             <div class="card">
                 <h3>Account Creation Trends</h3>
@@ -80,10 +126,16 @@
             const passwordOverlay = document.getElementById('password-overlay');
             const passwordForm = document.getElementById('password-form');
             const dashboardContent = document.getElementById('dashboard-content');
-            const feedbackList = document.getElementById('feedback-list'); // Get feedback list element
+            const feedbackList = document.getElementById('feedback-list'); 
+            
+            // NEW: Counter elements
+            const freeAccountsCountEl = document.getElementById('free-accounts-count');
+            const proAccountsCountEl = document.getElementById('pro-accounts-count');
+            const enterpriseAccountsCountEl = document.getElementById('enterprise-accounts-count');
+
             let chartInstance = null;
             let chartData = null;
-            let ownerPassword = ''; // Store the owner password securely after successful authentication
+            let ownerPassword = ''; 
 
             passwordForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -102,7 +154,7 @@
                     if (!response.ok) throw new Error('Incorrect password or server error.');
 
                     const data = await response.json();
-                    ownerPassword = password; // Store the successfully entered password
+                    ownerPassword = password; 
                     renderDashboard(data);
                     passwordOverlay.style.display = 'none';
                     dashboardContent.style.display = 'block';
@@ -116,6 +168,10 @@
                 chartData = data.accountCreationData;
                 renderChart('daily');
                 renderFeedback(data.feedback);
+                // NEW: Render account counters
+                if (freeAccountsCountEl) freeAccountsCountEl.textContent = data.accountCounts.free || 0;
+                if (proAccountsCountEl) proAccountsCountEl.textContent = data.accountCounts.pro || 0;
+                if (enterpriseAccountsCountEl) enterpriseAccountsCountEl.textContent = data.accountCounts.enterprise || 0;
             }
 
             function renderChart(period) {
@@ -156,7 +212,6 @@
                 }
             });
 
-            // Modified renderFeedback function to include delete buttons
             function renderFeedback(feedback) {
                 feedbackList.innerHTML = '';
                 if (feedback && feedback.length > 0) {
@@ -177,7 +232,6 @@
                 }
             }
 
-            // Event delegation for delete feedback buttons
             feedbackList.addEventListener('click', async (e) => {
                 const deleteBtn = e.target.closest('.delete-feedback-btn');
                 if (deleteBtn) {
@@ -186,9 +240,9 @@
                         try {
                             const API_BASE_URL = window.location.origin;
                             const response = await fetch(`${API_BASE_URL}/owner/feedback/delete/${feedbackId}`, {
-                                method: 'POST', // Use POST for deletion with a body
+                                method: 'POST', 
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ owner_password: ownerPassword }) // Send the stored password
+                                body: JSON.stringify({ owner_password: ownerPassword }) 
                             });
 
                             if (!response.ok) {
@@ -196,7 +250,6 @@
                                 throw new Error(errorData.error || 'Failed to delete feedback.');
                             }
 
-                            // If successful, refresh the feedback list
                             const updatedDataResponse = await fetch(`${API_BASE_URL}/owner/data`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
