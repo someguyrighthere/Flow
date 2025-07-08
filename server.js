@@ -48,7 +48,7 @@ try {
     process.exit(1);
 }
 
-// Initialize GCS client (globally accessible for the custom storage)
+// Initialize GCS client
 const storageClient = new Storage({
     projectId: gcsConfig.project_id,
     credentials: {
@@ -65,13 +65,13 @@ function GCSCustomStorage(opts) {
 
 GCSCustomStorage.prototype._handleFile = function _handleFile(req, file, cb) {
     const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
-    const gcsFile = bucket.file(uniqueFilename); // Use the globally defined 'bucket'
+    const gcsFile = bucket.file(uniqueFilename);
 
     const stream = gcsFile.createWriteStream({
         metadata: {
             contentType: file.mimetype,
         },
-        predefinedAcl: 'publicRead', // Make the file publicly readable
+        predefinedAcl: 'publicRead',
     });
 
     stream.on('error', (err) => {
@@ -80,20 +80,19 @@ GCSCustomStorage.prototype._handleFile = function _handleFile(req, file, cb) {
     });
 
     stream.on('finish', () => {
-        const publicUrl = gcsFile.publicUrl(); // Call publicUrl() as a method, it returns the URL string
+        const publicUrl = gcsFile.publicUrl; // Access publicUrl as a property
         
-        // Attach the public URL to req.file for the route handler
         file.publicUrl = publicUrl;
 
         if (!file.publicUrl) {
-            const error = new Error('GCS public URL was not generated or is null/undefined after upload.');
+            const error = new Error('GCS public URL was not generated (property was null/undefined).');
             console.error('GCS URL generation error (in _handleFile):', error);
             return cb(error);
         }
 
         cb(null, {
-            path: publicUrl, // Multer expects 'path'
-            filename: uniqueFilename // Store the path within the bucket for deletion
+            path: publicUrl,
+            filename: uniqueFilename
         });
     });
 
@@ -101,7 +100,6 @@ GCSCustomStorage.prototype._handleFile = function _handleFile(req, file, cb) {
 };
 
 GCSCustomStorage.prototype._removeFile = function _removeFile(req, file, cb) {
-    // file.filename here is the unique path within the GCS bucket, as stored by _handleFile
     const filePath = file.filename; 
     bucket.file(filePath).delete().then(() => {
         console.log(`File ${filePath} removed from GCS.`);
@@ -112,26 +110,11 @@ GCSCustomStorage.prototype._removeFile = function _removeFile(req, file, cb) {
     });
 };
 
-// Create an instance of our custom storage engine
-const gcsStorage = new GCSCustomStorage(); // Instantiate the custom storage
+const gcsStorage = new GCSCustomStorage();
 
-const upload = multer({ storage: gcsStorage }); // Use our custom GCS storage engine
+const upload = multer({ storage: gcsStorage });
 // --- END CUSTOM MULTER GCS STORAGE ENGINE ---
 
-
-// --- REMOVE OLD LOCAL DISK STORAGE CONFIGURATION ---
-// The following lines are commented out as they are no longer needed
-// for local disk storage and static file serving.
-// const uploadsDir = path.join(__dirname, 'uploads');
-// if (!fs.existsSync(uploadsDir)) {
-//     fs.mkdirSync(uploadsDir);
-// }
-// const localDiskStorage = multer.diskStorage({
-//     destination: (req, file, cb) => cb(null, uploadsDir),
-//     filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-// });
-// const upload = multer({ storage: localDiskStorage });
-// --- END REMOVAL ---
 
 if (!DATABASE_URL) {
     console.error("CRITICAL ERROR: DATABASE_URL environment variable is NOT set.");
@@ -144,8 +127,6 @@ const pool = new Pool({
 
 app.use(cors());
 
-// IMPORTANT: Stripe webhook needs the raw body, so this middleware must come BEFORE express.json()
-// This route should be one of the first to be defined to ensure it catches the raw body.
 app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
@@ -157,14 +138,12 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
     }
 
     try {
-        // Use the globally defined stripe object
         event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } catch (err) {
         console.error(`Webhook Error: ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // Handle the event
     switch (event.type) {
         case 'checkout.session.completed':
             const session = event.data.object;
@@ -176,7 +155,6 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
 
             if (userId && locationId && plan) {
                 try {
-                    // Update the location's subscription plan and status
                     await pool.query(
                         `UPDATE locations SET subscription_plan = $1, subscription_status = 'active', stripe_customer_id = $2, stripe_subscription_id = $3 WHERE location_id = $4`,
                         [plan, session.customer, subscriptionId, locationId]
@@ -225,19 +203,8 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
     res.status(200).json({ received: true });
 });
 
-// Now, apply express.json() for all subsequent routes that need JSON body parsing
 app.use(express.json());
 
-// --- REMOVE OLD LOCAL STATIC FILE SERVING ---
-// The following lines are commented out as they are no longer needed
-// for local disk storage and static file serving.
-// app.use(express.static(path.join(__dirname)));
-// app.use('/uploads', express.static(uploadsDir));
-// --- END REMOVAL ---
-
-// Serve all frontend static files from the root of the project
-// This assumes your HTML, CSS, JS bundles are in the root or accessible directly.
-// If your HTML files reference /dist/css/style.min.css, they need access to /dist/
 app.use(express.static(path.join(__dirname)));
 
 
@@ -263,8 +230,6 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES DEFINITION ---
-// All routes defined using apiRoutes.get, apiRoutes.post, etc.
-// will be mounted under the '/api' prefix.
 
 // Authentication
 apiRoutes.post('/register', async (req, res) => {
@@ -272,11 +237,11 @@ apiRoutes.post('/register', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']); // Default to free plan on registration
+        const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']);
         const newLocationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        await pool.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
-        await pool.query('COMMIT');
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
