@@ -11,8 +11,9 @@ const path = require('path');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
 
 // --- NEW GCS IMPORTS ---
-const { Storage } = require('@google-cloud/storage');
-const MulterGoogleCloudStorage = require('multer-cloud-storage'); // Corrected package name
+const gcs = require('@google-cloud/storage'); // Import the whole module
+const { Storage } = gcs; // Destructure Storage for direct GCS operations like deletion
+const GCS_Storage = require('multer-cloud-storage'); // Get the default export for Multer storage
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -71,7 +72,8 @@ try {
     process.exit(1);
 }
 
-const storage = new MulterGoogleCloudStorage({
+// Initialize the storage engine by calling the GCS_Storage function
+const storage = GCS_Storage({ // <--- FIX: Call GCS_Storage as a function
     projectId: gcsConfig.project_id,
     keyFilename: null, // Set to null if using `credentials` directly
     credentials: {
@@ -579,7 +581,8 @@ apiRoutes.get('/shifts', isAuthenticated, async (req, res) => {
         query += ' ORDER BY s.start_time ASC';
         const result = await pool.query(query, params);
         res.json(result.rows);
-    } catch (err) {
+    }
+    catch (err) {
         res.status(500).json({ error: 'Failed to retrieve shifts.' });
     }
 });
