@@ -6,7 +6,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs');
+const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
 const path = require('path');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -208,10 +208,18 @@ app.use(express.json());
 // --- NEW: Public Job Posting Endpoint (before static file serving) ---
 // This route is publicly accessible for the application form
 app.get('/apply/:id', async (req, res) => {
+    // --- DEBUGGING START ---
+    console.log('--- DEBUG: Hitting /apply/:id route ---');
+    console.log('DEBUG: Received jobId:', req.params.id);
+    // --- DEBUGGING END ---
     const { id } = req.params;
     try {
         const result = await pool.query(`SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1`, [id]);
+        // --- DEBUGGING START ---
+        console.log('DEBUG: Database query result for jobId', id, ':', result.rows);
+        // --- DEBUGGING END ---
         if (result.rows.length === 0) {
+            console.warn('DEBUG WARNING: Job posting with ID', id, 'not found in database.');
             return res.status(404).json({ error: 'Job posting not found.' });
         }
         res.json(result.rows[0]);
@@ -257,8 +265,8 @@ apiRoutes.post('/register', async (req, res) => {
         const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']);
         const newLocationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
-        await client.query('COMMIT');
+        await pool.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await pool.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -659,7 +667,7 @@ apiRoutes.delete('/applicants/:id', isAuthenticated, isAdmin, async (req, res) =
 });
 
 // Scheduling
-apiRoutes.get('/shifts', isAuthenticated, async (req, res) => {
+apiRoutes.get('/shifts', isAuthenticated, isAdmin, async (req, res) => {
     const { startDate, endDate, location_id, user_id } = req.query;
     const requestingUserId = req.user.id;
     const isUserAdmin = req.user.role === 'super_admin' || req.user.role === 'location_admin';
