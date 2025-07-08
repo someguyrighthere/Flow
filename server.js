@@ -31,28 +31,28 @@ const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
 
-// --- DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
-const DEBUG_STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-if (DEBUG_STRIPE_SECRET_KEY) {
-    console.log('DEBUG_KEY: Length:', DEBUG_STRIPE_SECRET_KEY.length);
-    console.log('DEBUG_KEY: First 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(0, 5));
-    console.log('DEBUG_KEY: Last 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(DEBUG_STRIPE_SECRET_KEY.length - 5));
-    console.log('DEBUG_KEY: Contains newline?', DEBUG_STRIPE_SECRET_KEY.includes('\n'));
-    console.log('DEBUG_KEY: Contains space?', DEBUG_STRIPE_SECRET_KEY.includes(' '));
-    // Attempt to initialize Stripe here to catch errors earlier
-    try {
-        const stripe = require('stripe')(DEBUG_STRIPE_SECRET_KEY);
-        console.log('DEBUG_KEY: Stripe init successful with this key.');
-        // Re-assign to the global stripe variable
-        Object.defineProperty(global, 'stripe', { value: stripe, writable: true });
-    } catch (e) {
-        console.error('DEBUG_KEY: Stripe init FAILED with this key:', e.message);
-        // If init fails, we'll still proceed, but the next calls will fail.
-    }
-} else {
-    console.error('DEBUG_KEY: STRIPE_SECRET_KEY is not set!');
-}
-// --- END DEBUGGING ---
+// --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
+// const DEBUG_STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+// if (DEBUG_STRIPE_SECRET_KEY) {
+//     console.log('DEBUG_KEY: Length:', DEBUG_STRIPE_SECRET_KEY.length);
+//     console.log('DEBUG_KEY: First 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(0, 5));
+//     console.log('DEBUG_KEY: Last 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(DEBUG_STRIPE_SECRET_KEY.length - 5));
+//     console.log('DEBUG_KEY: Contains newline?', DEBUG_STRIPE_SECRET_KEY.includes('\n'));
+//     console.log('DEBUG_KEY: Contains space?', DEBUG_STRIPE_SECRET_KEY.includes(' '));
+//     // Attempt to initialize Stripe here to catch errors earlier
+//     try {
+//         const stripe = require('stripe')(DEBUG_STRIPE_SECRET_KEY);
+//         console.log('DEBUG_KEY: Stripe init successful with this key.');
+//         // Re-assign to the global stripe variable
+//         Object.defineProperty(global, 'stripe', { value: stripe, writable: true });
+//     } catch (e) {
+//         console.error('DEBUG_KEY: Stripe init FAILED with this key:', e.message);
+//         // If init fails, we'll still proceed, but the next calls will fail.
+//     }
+// } else {
+//     console.error('DEBUG_KEY: STRIPE_SECRET_KEY is not set!');
+// }
+// --- END REMOVED DEBUGGING ---
 
 // --- NEW GCS CONFIGURATION ---
 let gcsConfig;
@@ -282,8 +282,8 @@ apiRoutes.post('/register', async (req, res) => {
         const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']); // Default to free plan on registration
         const newLocationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
-        await client.query('COMMIT');
+        await pool.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await pool.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -324,7 +324,8 @@ apiRoutes.get('/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query(`SELECT u.user_id, u.full_name, u.position, u.role, l.location_name, u.location_id FROM users u LEFT JOIN locations l ON u.location_id = l.location_id ORDER BY u.full_name`);
         res.json(result.rows);
-    } catch (err) {
+    }
+    catch (err) {
         res.status(500).json({ error: 'Failed to retrieve users.' });
     }
 });
@@ -346,16 +347,6 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
     } catch (err) {
         if (err.code === '23505') return res.status(409).json({ error: 'Email address is already in use.' });
         res.status(500).json({ error: 'Failed to update profile.' });
-    }
-});
-apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    if (req.user.id === parseInt(id, 10)) return res.status(400).json({ error: "You cannot delete your own account." });
-    try {
-        await pool.query('DELETE FROM users WHERE user_id = $1', [id]);
-        res.status(204).send();
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to delete user.' });
     }
 });
 apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
