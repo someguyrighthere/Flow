@@ -26,7 +26,7 @@
         .card { background-color: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid var(--card-border-color); padding: 25px; border-radius: 16px; margin-top: 40px; }
         .form-group { margin-bottom: 20px; }
         .form-group label { display: block; font-weight: 600; margin-bottom: 8px; }
-        .form-group select, .form-group textarea { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0, 0, 0, 0.2); color: var(--text-light); box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        .form-group select, .form-group textarea { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(0,0,0,0.2); color: var(--text-light); box-sizing: border-box; font-family: 'Poppins', sans-serif; }
     </style>
 </head>
 <body>
@@ -51,6 +51,24 @@
             <input type="text" id="faq-search" class="faq-search" placeholder="Search for a topic...">
             
             <div class="faq-section">
+                <details open> <summary>Understanding Owner Dashboard Metrics</summary>
+                    <div class="faq-content">
+                        <div class="faq-item">
+                            <h4>Account Creation Trends</h4>
+                            <p>This chart tracks the growth of **new Super Admin accounts** over time, allowing you to monitor the rate at which new companies are registering as Super Admins with Flow Business Suite. You can view trends by Daily, Weekly, Monthly, or Yearly periods.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>Free, Pro, and Enterprise Accounts</h4>
+                            <p>These counters display the total number of **Super Admin accounts** currently active on each subscription tier (Free, Pro, and Enterprise). This gives you a quick overview of your Super Admin user base distribution across plans.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>Estimated Monthly Revenue</h4>
+                            <p>This metric calculates your estimated Monthly Recurring Revenue (MRR) based on your active Super Admin accounts on paid plans. It's calculated as:</p>
+                            <p><strong>(Number of Pro Accounts x $29.99) + (Number of Enterprise Accounts x $79.00)</strong></p>
+                            <p>This provides an estimate of your recurring income from Super Admin subscriptions.</p>
+                        </div>
+                    </div>
+                </details>
                 <details>
                     <summary>General & Account</summary>
                     <div class="faq-content">
@@ -65,7 +83,6 @@
                     </div>
                 </details>
 
-                <!-- NEW: Subscription Management FAQ -->
                 <details>
                     <summary>Subscription Management</summary>
                     <div class="faq-content">
@@ -79,8 +96,6 @@
                         </div>
                     </div>
                 </details>
-                <!-- END NEW: Subscription Management FAQ -->
-
                 <details>
                     <summary>Admin Settings</summary>
                     <div class="faq-content">
@@ -124,7 +139,6 @@
                 </details>
             </div>
 
-            <!-- Feedback Form -->
             <div class="card">
                 <h3>Contact Us & Submit Feedback</h3>
                 <form id="feedback-form">
