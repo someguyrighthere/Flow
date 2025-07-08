@@ -873,6 +873,119 @@ app.use('/api', apiRoutes);
 // Mount ownerRoutes under the '/owner' prefix
 app.use('/owner', ownerRoutes);
 
+// --- Owner Dashboard Routes ---
+// This route is specifically for the owner dashboard to fetch data
+ownerRoutes.post('/data', async (req, res) => {
+    const { owner_password } = req.body;
+
+    if (!owner_password) {
+        return res.status(400).json({ error: 'Owner password is required.' });
+    }
+
+    // Compare the provided password with the OWNER_PASSWORD environment variable
+    if (owner_password !== OWNER_PASSWORD) {
+        return res.status(401).json({ error: 'Incorrect owner password.' });
+    }
+
+    try {
+        // Fetch account creation data (example: daily, weekly, monthly, yearly)
+        const accountCreationData = {
+            daily: { labels: [], data: [] },
+            weekly: { labels: [], data: [] },
+            monthly: { labels: [], data: [] },
+            yearly: { labels: [], data: [] }
+        };
+
+        // Example: Fetch daily account creations for the last 7 days
+        const dailyAccounts = await pool.query(`
+            SELECT DATE_TRUNC('day', created_at) AS date, COUNT(*) AS count
+            FROM users
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY DATE_TRUNC('day', created_at)
+            ORDER BY date ASC;
+        `);
+        dailyAccounts.rows.forEach(row => {
+            accountCreationData.daily.labels.push(new Date(row.date).toLocaleDateString());
+            accountCreationData.daily.data.push(parseInt(row.count, 10));
+        });
+
+        // Example: Fetch weekly account creations for the last ~10 weeks
+        const weeklyAccounts = await pool.query(`
+            SELECT DATE_TRUNC('week', created_at) AS date, COUNT(*) AS count
+            FROM users
+            WHERE created_at >= NOW() - INTERVAL '10 weeks'
+            GROUP BY DATE_TRUNC('week', created_at)
+            ORDER BY date ASC;
+        `);
+        weeklyAccounts.rows.forEach(row => {
+            accountCreationData.weekly.labels.push(new Date(row.date).toLocaleDateString());
+            accountCreationData.weekly.data.push(parseInt(row.count, 10));
+        });
+
+        // Example: Fetch monthly account creations for the last 12 months
+        const monthlyAccounts = await pool.query(`
+            SELECT DATE_TRUNC('month', created_at) AS date, COUNT(*) AS count
+            FROM users
+            WHERE created_at >= NOW() - INTERVAL '12 months'
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY date ASC;
+        `);
+        monthlyAccounts.rows.forEach(row => {
+            accountCreationData.monthly.labels.push(new Date(row.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short' }));
+            accountCreationData.monthly.data.push(parseInt(row.count, 10));
+        });
+
+        // Example: Fetch yearly account creations for the last 5 years
+        const yearlyAccounts = await pool.query(`
+            SELECT DATE_TRUNC('year', created_at) AS date, COUNT(*) AS count
+            FROM users
+            WHERE created_at >= NOW() - INTERVAL '5 years'
+            GROUP BY DATE_TRUNC('year', created_at)
+            ORDER BY date ASC;
+        `);
+        yearlyAccounts.rows.forEach(row => {
+            accountCreationData.yearly.labels.push(new Date(row.date).getFullYear().toString());
+            accountCreationData.yearly.data.push(parseInt(row.count, 10));
+        });
+
+
+        // Fetch user feedback
+        const feedback = await pool.query(`SELECT feedback_id, user_id, user_name, user_email, feedback_type, message, submitted_at FROM feedback ORDER BY submitted_at DESC`);
+
+        res.status(200).json({
+            accountCreationData,
+            feedback: feedback.rows
+        });
+
+    } catch (err) {
+        console.error('Error fetching owner dashboard data:', err);
+        res.status(500).json({ error: 'Failed to retrieve dashboard data.' });
+    }
+});
+
+// NEW: Owner route to delete feedback
+ownerRoutes.post('/feedback/delete/:id', async (req, res) => {
+    const { id } = req.params;
+    const { owner_password } = req.body;
+
+    if (!owner_password || owner_password !== OWNER_PASSWORD) {
+        return res.status(401).json({ error: 'Unauthorized: Incorrect owner password.' });
+    }
+
+    try {
+        const result = await pool.query('DELETE FROM feedback WHERE feedback_id = $1', [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Feedback not found.' });
+        }
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting feedback from owner dashboard:', err);
+        res.status(500).json({ error: 'Failed to delete feedback.' });
+    }
+});
+// --- END Owner Dashboard Routes ---
+
+
 // --- Server Startup Logic ---
 const startServer = async () => {
     try {
