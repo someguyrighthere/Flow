@@ -50,7 +50,6 @@
             <h2 style="color: var(--text-light); text-align: center; margin-bottom: 30px;">Help Center & FAQ</h2>
             <input type="text" id="faq-search" class="faq-search" placeholder="Search for a topic...">
             
-            <!-- FIX: Restored the original FAQ content -->
             <div class="faq-section">
                 <details>
                     <summary>General & Account</summary>
@@ -65,6 +64,22 @@
                         </div>
                     </div>
                 </details>
+
+                <!-- NEW: Subscription Management FAQ -->
+                <details>
+                    <summary>Subscription Management</summary>
+                    <div class="faq-content">
+                        <div class="faq-item">
+                            <h4>How do I upgrade my plan?</h4>
+                            <p>You can upgrade your subscription plan at any time by visiting the <a href="pricing.html" style="color: var(--primary-accent);">Pricing page</a>. Choose your desired plan (Pro or Enterprise) and follow the prompts to complete the upgrade via Stripe's secure checkout. Your new plan will be activated immediately.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>How do I cancel my subscription?</h4>
+                            <p>To cancel your subscription, you will need to manage it directly through your Stripe customer portal. Please refer to your original subscription confirmation email from Stripe for a link to your customer portal, or contact support for assistance. Once canceled in Stripe, your account will automatically revert to the Free tier at the end of your current billing period.</p>
+                        </div>
+                    </div>
+                </details>
+                <!-- END NEW: Subscription Management FAQ -->
 
                 <details>
                     <summary>Admin Settings</summary>
