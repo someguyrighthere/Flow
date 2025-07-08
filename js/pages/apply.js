@@ -45,7 +45,8 @@ export function handleApplyPage() {
         jobDetailsContainer.innerHTML = '<p style="color: var(--text-medium);">Loading job details...</p>'; // Show loading state
         try {
             // Fetch job posting details from the public endpoint
-            const job = await apiRequest('GET', `/job-postings/${jobId}`);
+            // FIX: Change the API path to match the public route in server.js
+            const job = await apiRequest('GET', `/apply/${jobId}`); // <--- CORRECTED LINE
             
             if (job) {
                 document.title = `Apply for ${job.title} - Flow Business Suite`; // Update page title
