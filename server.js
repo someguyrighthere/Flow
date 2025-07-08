@@ -948,11 +948,13 @@ ownerRoutes.post('/data', async (req, res) => {
             accountCreationData.yearly.data.push(parseInt(row.count, 10));
         });
 
-        // NEW: Fetch subscription account counts
+        // NEW: Fetch subscription account counts for SUPER ADMINS ONLY
         const subscriptionCountsResult = await pool.query(`
-            SELECT subscription_plan, COUNT(*) AS count
-            FROM locations
-            GROUP BY subscription_plan;
+            SELECT l.subscription_plan, COUNT(u.user_id) AS count
+            FROM users u
+            JOIN locations l ON u.location_id = l.location_id
+            WHERE u.role = 'super_admin'
+            GROUP BY l.subscription_plan;
         `);
 
         const accountCounts = {
