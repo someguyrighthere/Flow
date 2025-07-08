@@ -6,12 +6,12 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
+const fs = require('fs');
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // --- NEW GCS IMPORTS ---
-const { Storage } = require('@google-cloud/storage'); // Only need the official GCS library
+const { Storage } = require('@google-cloud/storage');
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -28,7 +28,7 @@ const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-ch
 // Define Stripe Price IDs from environment variables
 const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
-const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
+const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
 
 // --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
 // --- END REMOVED DEBUGGING ---
@@ -48,7 +48,7 @@ try {
     process.exit(1);
 }
 
-// Initialize GCS client
+// Initialize GCS client (globally accessible for the custom storage)
 const storageClient = new Storage({
     projectId: gcsConfig.project_id,
     credentials: {
@@ -58,67 +58,62 @@ const storageClient = new Storage({
 });
 const bucket = storageClient.bucket(process.env.GCS_BUCKET_NAME);
 
-// --- CUSTOM MULTER GCS STORAGE ENGINE ---
-// This is a custom storage engine for Multer that uploads directly to GCS.
-const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like structure for custom engines
-    _handleFile: (req, file, cb) => {
-        // Generate a unique filename for GCS to avoid collisions
-        const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
-        const gcsFile = bucket.file(uniqueFilename);
+// --- CUSTOM MULTER GCS STORAGE ENGINE (Standard Pattern) ---
+function GCSCustomStorage(opts) {
+    this.opts = opts || {};
+}
 
-        // Create a write stream to GCS
-        const stream = gcsFile.createWriteStream({
-            metadata: {
-                contentType: file.mimetype, // Set content type based on the uploaded file
-            },
-            predefinedAcl: 'publicRead', // Make the file publicly readable after upload
+GCSCustomStorage.prototype._handleFile = function _handleFile(req, file, cb) {
+    const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
+    const gcsFile = bucket.file(uniqueFilename); // Use the globally defined 'bucket'
+
+    const stream = gcsFile.createWriteStream({
+        metadata: {
+            contentType: file.mimetype,
+        },
+        predefinedAcl: 'publicRead', // Make the file publicly readable
+    });
+
+    stream.on('error', (err) => {
+        console.error('GCS upload stream error during write (in _handleFile):', err);
+        cb(err);
+    });
+
+    stream.on('finish', () => {
+        const publicUrl = gcsFile.publicUrl(); // Call publicUrl() as a method, it returns the URL string
+        
+        // Attach the public URL to req.file for the route handler
+        file.publicUrl = publicUrl;
+
+        if (!file.publicUrl) {
+            const error = new Error('GCS public URL was not generated or is null/undefined after upload.');
+            console.error('GCS URL generation error (in _handleFile):', error);
+            return cb(error);
+        }
+
+        cb(null, {
+            path: publicUrl, // Multer expects 'path'
+            filename: uniqueFilename // Store the path within the bucket for deletion
         });
+    });
 
-        // Handle errors during the GCS upload stream
-        stream.on('error', (err) => {
-            console.error('GCS upload stream error during write:', err);
-            // Propagate the error back to Multer
-            cb(err);
-        });
-
-        // Handle successful completion of the GCS upload stream
-        stream.on('finish', () => {
-            const url = gcsFile.publicUrl; // FIX: Access publicUrl as a property, not a function
-
-            // Attach the public URL to req.file so it can be accessed in the route handler
-            file.publicUrl = url;
-            // Important: Ensure publicUrl is not null/undefined before passing to callback
-            if (!file.publicUrl) {
-                const error = new Error('GCS public URL was not generated (property was null/undefined).');
-                console.error('GCS URL generation error:', error);
-                return cb(error); // Propagate error
-            }
-            // Call Multer's callback to indicate success, passing necessary file info
-            cb(null, {
-                path: url, // Use the public URL as the 'path' property
-                filename: uniqueFilename // Store the path within the bucket as 'filename' for deletion logic
-            });
-        });
-
-        // Pipe the incoming file stream (from Multer) to the GCS write stream
-        file.stream.pipe(stream);
-    },
-    _removeFile: (req, file, cb) => {
-        // This function is called by Multer if an error occurs during upload (to clean up)
-        // or if you explicitly call `upload.storage._removeFile`.
-        // For GCS, we need to delete the file from the bucket.
-        // The file.filename here is the unique path within the GCS bucket.
-        const filePath = file.filename; 
-        bucket.file(filePath).delete().then(() => {
-            console.log(`File ${filePath} removed from GCS.`);
-            cb(null); // Indicate success to Multer
-        }).catch(err => {
-            // Log a warning if deletion fails, but don't block the process
-            console.warn(`Error removing file ${filePath} from GCS: ${err.message}`);
-            cb(err); // Still call callback, but log warning
-        });
-    }
+    file.stream.pipe(stream);
 };
+
+GCSCustomStorage.prototype._removeFile = function _removeFile(req, file, cb) {
+    // file.filename here is the unique path within the GCS bucket, as stored by _handleFile
+    const filePath = file.filename; 
+    bucket.file(filePath).delete().then(() => {
+        console.log(`File ${filePath} removed from GCS.`);
+        cb(null);
+    }).catch(err => {
+        console.warn(`Error removing file ${filePath} from GCS: ${err.message}`);
+        cb(err);
+    });
+};
+
+// Create an instance of our custom storage engine
+const gcsStorage = new GCSCustomStorage(); // Instantiate the custom storage
 
 const upload = multer({ storage: gcsStorage }); // Use our custom GCS storage engine
 // --- END CUSTOM MULTER GCS STORAGE ENGINE ---
