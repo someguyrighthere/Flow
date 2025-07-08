@@ -15,7 +15,7 @@ export function handleOnboardingViewPage() {
     const messagesContainer = document.getElementById('messages-container');
     const onboardingInfoContainer = document.getElementById('onboarding-info-container');
     const onboardingTaskListDiv = document.getElementById('onboarding-task-list');
-    const taskListOverviewDiv = document.getElementById('task-list-overview');
+    const taskListOverviewDiv = document.getElementById('taskList-overview'); // Corrected ID to match HTML
     const employeeScheduleListDiv = document.getElementById('employee-schedule-list');
     const printScheduleBtn = document.getElementById('print-employee-schedule-btn');
 
@@ -113,30 +113,38 @@ export function handleOnboardingViewPage() {
 
         if (tasks && tasks.length > 0) {
             onboardingInfoContainer.style.display = 'block';
-            tasks.forEach(task => {
-                const taskItem = document.createElement('div');
-                taskItem.className = `checklist-item ${task.completed ? 'completed' : ''}`;
-                taskItem.dataset.taskId = task.id;
+            
+            // Filter out completed tasks for display
+            const incompleteTasks = tasks.filter(task => !task.completed);
 
-                taskItem.innerHTML = `
-                    <div class="checklist-item-title">
-                        <input type="checkbox" class="task-checkbox" data-task-id="${task.id}" ${task.completed ? 'checked' : ''}>
-                        <span>${task.description}</span>
-                        ${task.document_name ? `<br><small>Attached: <a href="${task.document_name}" target="_blank">${task.document_name.split('/').pop()}</a></small>` : ''}
-                    </div>
-                `;
-                onboardingTaskListDiv.appendChild(taskItem);
-            });
+            if (incompleteTasks.length > 0) {
+                incompleteTasks.forEach(task => {
+                    const taskItem = document.createElement('div');
+                    taskItem.className = `checklist-item`; // No 'completed' class here as we only show incomplete
+                    taskItem.dataset.taskId = task.id;
 
-            // Update task list overview
-            const completedTasks = tasks.filter(task => task.completed).length;
+                    taskItem.innerHTML = `
+                        <div class="checklist-item-title">
+                            <input type="checkbox" class="task-checkbox" data-task-id="${task.id}">
+                            <span>${task.description}</span>
+                            ${task.document_name ? `<br><small>Attached: <a href="${task.document_name}" target="_blank">${task.document_name.split('/').pop()}</a></small>` : ''}
+                        </div>
+                    `;
+                    onboardingTaskListDiv.appendChild(taskItem);
+                });
+            } else {
+                onboardingTaskListDiv.innerHTML = '<p>All assigned tasks completed! Great job!</p>';
+            }
+
+            // Update task list overview (always based on all tasks, including completed)
+            const completedTasksCount = tasks.filter(task => task.completed).length;
             const totalTasks = tasks.length;
             if (taskListOverviewDiv) {
-                taskListOverviewDiv.textContent = `You have completed ${completedTasks} of ${totalTasks} tasks.`;
+                taskListOverviewDiv.textContent = `You have completed ${completedTasksCount} of ${totalTasks} tasks.`;
             }
 
             // Fire confetti if all tasks are completed
-            if (completedTasks === totalTasks && totalTasks > 0) {
+            if (completedTasksCount === totalTasks && totalTasks > 0) {
                 if (typeof confetti !== 'undefined') { // Check if confetti library is loaded
                     confetti({
                         particleCount: 100,
@@ -161,19 +169,8 @@ export function handleOnboardingViewPage() {
 
             try {
                 await apiRequest('PUT', `/api/onboarding-tasks/${taskId}`, { completed: isCompleted });
-                // Update UI based on completion status
-                const taskItem = checkbox.closest('.checklist-item');
-                if (taskItem) {
-                    if (isCompleted) {
-                        taskItem.classList.add('completed');
-                        // Optionally show a small success message
-                        // showModalMessage('Task marked as complete!', false);
-                    } else {
-                        taskItem.classList.remove('completed');
-                        // showModalMessage('Task marked as incomplete.', false);
-                    }
-                }
-                // Reload tasks to update the overview count and re-trigger confetti if needed
+                // No need to toggle 'completed' class here, as loadOnboardingTasks will re-render
+                // Reload tasks to update the overview count and re-render the list (hiding completed tasks)
                 loadOnboardingTasks(); 
             } catch (error) {
                 showModalMessage(`Failed to update task: ${error.message}`, true);
