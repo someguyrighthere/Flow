@@ -9,6 +9,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const morgan = require('morgan'); // Import morgan for logging
 
 // --- NEW GCS IMPORTS ---
 const { Storage } = require('@google-cloud/storage');
@@ -18,20 +19,17 @@ const createOnboardingRouter = require('./routes/onboardingRoutes');
 
 const app = express();
 const apiRoutes = express.Router();
-const ownerRoutes = express.Router();
+const ownerRoutes = express.Router(); // Define ownerRoutes here
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this';
 const DATABASE_URL = process.env.DATABASE_URL;
-const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-change-me';
+const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-change-me'; // Owner password from environment variable
 
 // Define Stripe Price IDs from environment variables
 const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
-
-// --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
-// --- END REMOVED DEBUGGING ---
 
 // --- NEW GCS CONFIGURATION ---
 let gcsConfig;
@@ -126,6 +124,7 @@ const pool = new Pool({
 });
 
 app.use(cors());
+app.use(morgan('dev')); // Use morgan for request logging
 
 app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -206,19 +205,13 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
 app.use(express.json());
 
 // --- NEW: Public Job Posting Endpoint (MOVED TO HERE) ---
-// This route is publicly accessible for the application form
-// It MUST be defined BEFORE app.use(express.static(...)) to ensure it's matched first.
 app.get('/apply/:id', async (req, res) => {
-    // --- DEBUGGING START ---
     console.log('--- DEBUG: Hitting /apply/:id route ---');
     console.log('DEBUG: Received jobId:', req.params.id);
-    // --- DEBUGGING END ---
     const { id } = req.params;
     try {
         const result = await pool.query(`SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1`, [id]);
-        // --- DEBUGGING START ---
         console.log('DEBUG: Database query result for jobId', id, ':', result.rows);
-        // --- DEBUGGING END ---
         if (result.rows.length === 0) {
             console.warn('DEBUG WARNING: Job posting with ID', id, 'not found in database.');
             return res.status(404).json({ error: 'Job posting not found.' });
@@ -232,24 +225,20 @@ app.get('/apply/:id', async (req, res) => {
 // --- END NEW: Public Job Posting Endpoint ---
 
 // NEW: Handle job applications (publicly accessible POST endpoint) - MOVED TO HERE
-// This MUST be defined BEFORE app.use(express.static(...)) to ensure it's matched first.
 app.post('/apply/:id', async (req, res) => {
-    const { id: jobId } = req.params; // Get jobId from URL parameter
+    const { id: jobId } = req.params;
     const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
 
-    // Basic validation
     if (!name || !email || !availability) {
         return res.status(400).json({ error: 'Full Name, Email Address, and Availability are required.' });
     }
 
     try {
-        // Check if the job posting actually exists
         const jobResult = await pool.query('SELECT id FROM job_postings WHERE id = $1', [jobId]);
         if (jobResult.rows.length === 0) {
             return res.status(404).json({ error: 'Job posting not found.' });
         }
 
-        // Insert applicant data into the applicants table
         await pool.query(
             `INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -259,8 +248,7 @@ app.post('/apply/:id', async (req, res) => {
         res.status(201).json({ message: 'Application submitted successfully!' });
     } catch (err) {
         console.error('Error submitting job application:', err);
-        // Check for duplicate email if 'email' has a unique constraint
-        if (err.code === '23505' && err.constraint === 'applicants_email_key') { // Assuming a unique constraint on email
+        if (err.code === '23505' && err.constraint === 'applicants_email_key') {
             return res.status(409).json({ error: 'You have already applied for this position with this email address.' });
         }
         res.status(500).json({ error: 'Failed to submit application.' });
@@ -269,7 +257,7 @@ app.post('/apply/:id', async (req, res) => {
 // --- END NEW: Handle job applications ---
 
 
-app.use(express.static(path.join(__dirname))); // Static file serving is now AFTER the dynamic routes
+app.use(express.static(path.join(__dirname)));
 
 
 // Authentication and Authorization middleware
