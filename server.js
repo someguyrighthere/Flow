@@ -415,7 +415,7 @@ apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) =>
 });
 
 // Locations & Business Settings
-apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
+apiRoutes.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM locations ORDER BY location_name');
         res.json(result.rows);
@@ -970,6 +970,11 @@ ownerRoutes.post('/data', async (req, res) => {
             }
         });
 
+        // NEW: Calculate Monthly Revenue
+        const proAccountsCount = accountCounts.pro;
+        const enterpriseAccountsCount = accountCounts.enterprise;
+        const monthlyRevenue = (proAccountsCount * 29.99) + (enterpriseAccountsCount * 79.00);
+
 
         // Fetch user feedback
         const feedback = await pool.query(`SELECT feedback_id, user_id, user_name, user_email, feedback_type, message, submitted_at FROM feedback ORDER BY submitted_at DESC`);
@@ -977,6 +982,7 @@ ownerRoutes.post('/data', async (req, res) => {
         res.status(200).json({
             accountCreationData,
             accountCounts, // Include new account counts in the response
+            monthlyRevenue, // Include monthly revenue in the response
             feedback: feedback.rows
         });
 
