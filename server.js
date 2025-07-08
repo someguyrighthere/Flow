@@ -231,7 +231,45 @@ app.get('/apply/:id', async (req, res) => {
 });
 // --- END NEW: Public Job Posting Endpoint ---
 
-app.use(express.static(path.join(__dirname))); // Static file serving is now AFTER the dynamic route
+// NEW: Handle job applications (publicly accessible POST endpoint) - MOVED TO HERE
+// This MUST be defined BEFORE app.use(express.static(...)) to ensure it's matched first.
+app.post('/apply/:id', async (req, res) => {
+    const { id: jobId } = req.params; // Get jobId from URL parameter
+    const { name, email, address, phone, date_of_birth, availability, is_authorized } = req.body;
+
+    // Basic validation
+    if (!name || !email || !availability) {
+        return res.status(400).json({ error: 'Full Name, Email Address, and Availability are required.' });
+    }
+
+    try {
+        // Check if the job posting actually exists
+        const jobResult = await pool.query('SELECT id FROM job_postings WHERE id = $1', [jobId]);
+        if (jobResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Job posting not found.' });
+        }
+
+        // Insert applicant data into the applicants table
+        await pool.query(
+            `INSERT INTO applicants (job_id, name, email, address, phone, date_of_birth, availability, is_authorized)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [jobId, name, email, address, phone, date_of_birth, availability, is_authorized]
+        );
+
+        res.status(201).json({ message: 'Application submitted successfully!' });
+    } catch (err) {
+        console.error('Error submitting job application:', err);
+        // Check for duplicate email if 'email' has a unique constraint
+        if (err.code === '23505' && err.constraint === 'applicants_email_key') { // Assuming a unique constraint on email
+            return res.status(409).json({ error: 'You have already applied for this position with this email address.' });
+        }
+        res.status(500).json({ error: 'Failed to submit application.' });
+    }
+});
+// --- END NEW: Handle job applications ---
+
+
+app.use(express.static(path.join(__dirname))); // Static file serving is now AFTER the dynamic routes
 
 
 // Authentication and Authorization middleware
@@ -614,28 +652,6 @@ apiRoutes.post('/job-postings', isAuthenticated, isAdmin, async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Failed to create job posting.' });
-    }
-});
-// NEW: Get a single job posting by ID (publicly accessible)
-app.get('/apply/:id', async (req, res) => {
-    // --- DEBUGGING START ---
-    console.log('--- DEBUG: Hitting /apply/:id route ---');
-    console.log('DEBUG: Received jobId:', req.params.id);
-    // --- DEBUGGING END ---
-    const { id } = req.params;
-    try {
-        const result = await pool.query(`SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1`, [id]);
-        // --- DEBUGGING START ---
-        console.log('DEBUG: Database query result for jobId', id, ':', result.rows);
-        // --- DEBUGGING END ---
-        if (result.rows.length === 0) {
-            console.warn('DEBUG WARNING: Job posting with ID', id, 'not found in database.');
-            return res.status(404).json({ error: 'Job posting not found.' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error retrieving single job posting for apply page:', err);
-        res.status(500).json({ error: 'Failed to retrieve job posting.' });
     }
 });
 
