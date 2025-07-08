@@ -132,7 +132,8 @@ export function handleChecklistsPage() {
         if (!attachDocumentListDiv) return;
         attachDocumentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
         try {
-            const documents = await apiRequest('GET', '/api/documents');
+            // FIX: Add a timestamp to bypass browser cache for /api/documents
+            const documents = await apiRequest('GET', `/api/documents?_t=${Date.now()}`);
             attachDocumentListDiv.innerHTML = '';
 
             if (documents && documents.length > 0) {
