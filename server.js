@@ -96,7 +96,7 @@ const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like st
 
         // Handle errors during the GCS upload stream
         stream.on('error', (err) => {
-            console.error('GCS upload stream error during write:', err);
+            console.error('GCS upload stream error during write:', err); // More specific log
             // Propagate the error back to Multer
             cb(err);
         });
@@ -304,8 +304,8 @@ apiRoutes.post('/register', async (req, res) => {
         const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']); // Default to free plan on registration
         const newLocationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
-        await client.query('COMMIT');
+        await pool.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await pool.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -503,16 +503,33 @@ apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     }
 });
 apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document'), async (req, res) => {
+    // --- DEBUGGING START ---
+    console.log('--- DEBUG: Starting document upload process ---');
+    console.log('DEBUG: req.file immediately after multer processing:', req.file); // Log req.file immediately
+    console.log('DEBUG: req.body at start of route handler:', req.body); // Log req.body immediately
+    // --- DEBUGGING END ---
+
     try {
-        if (!req.file) return res.status(400).json({ error: 'No file was uploaded.' });
+        if (!req.file) {
+            console.error('DEBUG ERROR: No file was processed by Multer, req.file is undefined.');
+            return res.status(400).json({ error: 'No file was uploaded or processed.' });
+        }
+
         const { title, description } = req.body;
-        // IMPORTANT: Use req.file.publicUrl which multer-cloud-storage adds
-        const fileUrl = req.file.publicUrl;
+        const fileUrl = req.file.publicUrl; // This property is set by _handleFile
+
+        console.log('DEBUG: fileUrl retrieved from req.file.publicUrl:', fileUrl); // Log the fileUrl
+
+        if (!fileUrl) {
+            console.error('DEBUG ERROR: fileUrl is null or undefined BEFORE DB insert. GCS upload likely failed or URL not set by _handleFile.');
+            return res.status(500).json({ error: 'Failed to obtain file URL from storage. Upload failed.' });
+        }
+
         // Store the full URL in the database
         const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',[title, description, fileUrl, req.user.id]);
         res.status(201).json({ message: 'Document uploaded successfully!', document: result.rows[0] }); // Added document to response for frontend
     } catch (err) {
-        console.error('Error uploading document to GCS and saving to DB:', err); // More specific error logging
+        console.error('Error uploading document to GCS and saving to DB (outer catch):', err); // More specific error logging
         res.status(500).json({ error: 'Failed to upload document.' });
     }
 });
