@@ -6,12 +6,12 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs');
+const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
 
 // --- NEW GCS IMPORTS ---
-const { Storage } = require('@google-cloud/storage');
+const { Storage } = require('@google-cloud/storage'); // Only need the official GCS library
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -28,7 +28,7 @@ const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-ch
 // Define Stripe Price IDs from environment variables
 const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
-const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
+const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
 
 // --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
 // --- END REMOVED DEBUGGING ---
@@ -64,49 +64,61 @@ function GCSCustomStorage(opts) {
 }
 
 GCSCustomStorage.prototype._handleFile = function _handleFile(req, file, cb) {
+    // Generate a unique filename for GCS to avoid collisions
     const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
     const gcsFile = bucket.file(uniqueFilename);
 
+    // Create a write stream to GCS
     const stream = gcsFile.createWriteStream({
         metadata: {
-            contentType: file.mimetype,
+            contentType: file.mimetype, // Set content type based on the uploaded file
         },
-        predefinedAcl: 'publicRead',
+        predefinedAcl: 'publicRead', // Make the file publicly readable after upload
     });
 
+    // Handle errors during the GCS upload stream
     stream.on('error', (err) => {
         console.error('GCS upload stream error during write (in _handleFile):', err);
+        // Propagate the error back to Multer
         cb(err);
     });
 
+    // Handle successful completion of the GCS upload stream
     stream.on('finish', () => {
-        const publicUrl = gcsFile.publicUrl; // Access publicUrl as a property
-        
-        file.publicUrl = publicUrl;
+        const publicUrl = gcsFile.publicUrl; // FIX: Access publicUrl as a property, not a function
 
+        // Attach the public URL to req.file so it can be accessed in the route handler
+        file.publicUrl = publicUrl;
+        // Important: Ensure publicUrl is not null/undefined before passing to callback
         if (!file.publicUrl) {
             const error = new Error('GCS public URL was not generated (property was null/undefined).');
             console.error('GCS URL generation error (in _handleFile):', error);
-            return cb(error);
+            return cb(error); // Propagate error
         }
-
+        // Call Multer's callback to indicate success, passing necessary file info
         cb(null, {
-            path: publicUrl,
-            filename: uniqueFilename
+            path: publicUrl, // Use the public URL as the 'path' property
+            filename: uniqueFilename // Store the path within the bucket as 'filename' for deletion logic
         });
     });
 
+    // Pipe the incoming file stream (from Multer) to the GCS write stream
     file.stream.pipe(stream);
 };
 
 GCSCustomStorage.prototype._removeFile = function _removeFile(req, file, cb) {
+    // This function is called by Multer if an error occurs during upload (to clean up)
+    // or if you explicitly call `upload.storage._removeFile`.
+    // For GCS, we need to delete the file from the bucket.
+    // The file.filename here is the unique path within the GCS bucket.
     const filePath = file.filename; 
     bucket.file(filePath).delete().then(() => {
         console.log(`File ${filePath} removed from GCS.`);
-        cb(null);
+        cb(null); // Indicate success to Multer
     }).catch(err => {
+        // Log a warning if deletion fails, but don't block the process
         console.warn(`Error removing file ${filePath} from GCS: ${err.message}`);
-        cb(err);
+        cb(err); // Still call callback, but log warning
     });
 };
 
@@ -427,6 +439,61 @@ apiRoutes.post('/checklists', isAuthenticated, isAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to create checklist.' });
     }
 });
+
+// NEW: Get a single checklist by ID
+apiRoutes.get('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('SELECT * FROM checklists WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Checklist not found.' });
+        }
+        // Ensure tasks are parsed if they are stored as JSON string
+        const checklist = result.rows[0];
+        if (typeof checklist.tasks === 'string') {
+            checklist.tasks = JSON.parse(checklist.tasks);
+        }
+        res.json(checklist);
+    } catch (err) {
+        console.error('Error retrieving single checklist:', err);
+        res.status(500).json({ error: 'Failed to retrieve checklist.' });
+    }
+});
+
+
+apiRoutes.put('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { title, position, tasks } = req.body;
+    if (!title || !position || !tasks) return res.status(400).json({ error: 'Missing required fields.' });
+    try {
+        const result = await pool.query(
+            'UPDATE checklists SET title = $1, position = $2, tasks = $3 WHERE id = $4 RETURNING *',
+            [title, position, JSON.stringify(tasks), id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Checklist not found.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error updating checklist:', err);
+        res.status(500).json({ error: 'Failed to update checklist.' });
+    }
+});
+
+apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM checklists WHERE id = $1', [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Checklist not found.' });
+        }
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error deleting checklist:', err);
+        res.status(500).json({ error: 'Failed to delete checklist.' });
+    }
+});
+
 
 // Documents
 apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
