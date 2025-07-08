@@ -205,6 +205,23 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
 
 app.use(express.json());
 
+// --- NEW: Public Job Posting Endpoint (before static file serving) ---
+// This route is publicly accessible for the application form
+app.get('/apply/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`SELECT jp.*, l.location_name FROM job_postings jp LEFT JOIN locations l ON jp.location_id = l.location_id WHERE jp.id = $1`, [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Job posting not found.' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error retrieving single job posting for apply page:', err);
+        res.status(500).json({ error: 'Failed to retrieve job posting.' });
+    }
+});
+// --- END NEW: Public Job Posting Endpoint ---
+
 app.use(express.static(path.join(__dirname)));
 
 
@@ -609,7 +626,7 @@ app.get('/apply/:id', async (req, res) => { // Note: This is 'app.get' not 'apiR
         }
         res.json(result.rows[0]);
     } catch (err) {
-        console.error('Error retrieving single job posting:', err);
+        console.error('Error retrieving single job posting for apply page:', err);
         res.status(500).json({ error: 'Failed to retrieve job posting.' });
     }
 });
