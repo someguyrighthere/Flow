@@ -73,7 +73,7 @@ try {
 }
 
 // Initialize the storage engine by calling the GCS_Storage function
-const storage = GCS_Storage({ // <--- FIX: Call GCS_Storage as a function
+const storage = new GCS_Storage({ // <--- FIX: Use 'new' keyword here
     projectId: gcsConfig.project_id,
     keyFilename: null, // Set to null if using `credentials` directly
     credentials: {
@@ -304,16 +304,6 @@ apiRoutes.put('/users/me', isAuthenticated, async (req, res) => {
     } catch (err) {
         if (err.code === '23505') return res.status(409).json({ error: 'Email address is already in use.' });
         res.status(500).json({ error: 'Failed to update profile.' });
-    }
-});
-apiRoutes.delete('/users/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    if (req.user.id === parseInt(id, 10)) return res.status(400).json({ error: "You cannot delete your own account." });
-    try {
-        await pool.query('DELETE FROM users WHERE user_id = $1', [id]);
-        res.status(204).send();
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to delete user.' });
     }
 });
 apiRoutes.post('/invite-admin', isAuthenticated, isAdmin, async (req, res) => {
