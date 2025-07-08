@@ -15,14 +15,15 @@
         .faq-section details { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid var(--card-border-color); border-radius: 8px; margin-bottom: 15px; transition: background-color 0.3s ease; }
         .faq-section details[open] { background: rgba(255, 255, 255, 0.15); }
         .faq-section summary { font-size: 1.3rem; font-weight: 600; padding: 20px; cursor: pointer; outline: none; list-style: none; position: relative; }
-        .faq-section summary::-webkit-details-marker { display: none; }
         .faq-section summary::after { content: '+'; position: absolute; right: 20px; font-size: 1.5rem; transition: transform 0.3s ease; }
         .faq-section details[open] summary::after { transform: rotate(45deg); }
         .faq-content { padding: 0 20px 20px; border-top: 1px solid var(--card-border-color); }
         .faq-item { padding: 15px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
         .faq-item:last-child { border-bottom: none; }
         .faq-item h4 { margin: 0 0 10px 0; color: var(--primary-accent); }
-        .faq-item p, .faq-item ol { margin: 0; line-height: 1.6; color: var(--text-medium); }
+        .faq-item p, .faq-item ol, .faq-item ul { margin: 0; line-height: 1.6; color: var(--text-medium); } /* Added ul to styling */
+        .faq-item ol, .faq-item ul { padding-left: 20px; margin-top: 10px; } /* Indent lists */
+        .faq-item li { margin-bottom: 5px; }
         .card { background-color: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid var(--card-border-color); padding: 25px; border-radius: 16px; margin-top: 40px; }
         .form-group { margin-bottom: 20px; }
         .form-group label { display: block; font-weight: 600; margin-bottom: 8px; }
@@ -51,24 +52,208 @@
             <input type="text" id="faq-search" class="faq-search" placeholder="Search for a topic...">
             
             <div class="faq-section">
-                <details open> <summary>Understanding Owner Dashboard Metrics</summary>
+                <!-- Getting Started Tutorial Section -->
+                <details open> <!-- Open by default for prominence -->
+                    <summary>Getting Started: A Comprehensive Tutorial</summary>
                     <div class="faq-content">
                         <div class="faq-item">
-                            <h4>Account Creation Trends</h4>
-                            <p>This chart tracks the growth of **new Super Admin accounts** over time, allowing you to monitor the rate at which new companies are registering as Super Admins with Flow Business Suite. You can view trends by Daily, Weekly, Monthly, or Yearly periods.</p>
+                            <h4>Part 1: Initial Company Setup (As a Super Admin)</h4>
+                            <p>When you first begin with Flow Business Suite, you'll register your company and automatically become its "Super Admin."</p>
+                            <h5>Register Your Company:</h5>
+                            <ol>
+                                <li>Navigate to your Flow Business Suite's main landing page.</li>
+                                <li>Click on the "Get Started for Free" or "Sign Up Now" button. This will take you to the registration page.</li>
+                                <li>Fill in the required details:
+                                    <ul>
+                                        <li><strong>Company Name:</strong> This will be used to create your first default location (e.g., "Your Company Inc. HQ").</li>
+                                        <li><strong>Your Full Name:</strong> Your name as the primary administrator.</li>
+                                        <li><strong>Email Address:</strong> Your login email.</li>
+                                        <li><strong>Password:</strong> Your secure password.</li>
+                                    </ul>
+                                </li>
+                                <li>Click "Create Account."</li>
+                                <li>You will receive a confirmation message, and then be redirected to the login page.</li>
+                            </ol>
+                            <h5>Log In to Your New Account:</h5>
+                            <ol>
+                                <li>On the login page, enter the email and password you just registered.</li>
+                                <li>Click "Sign In."</li>
+                                <li>As a Super Admin, you will be redirected to the <strong>App Hub</strong>.</li>
+                            </ol>
                         </div>
+
                         <div class="faq-item">
-                            <h4>Free, Pro, and Enterprise Accounts</h4>
-                            <p>These counters display the total number of **Super Admin accounts** currently active on each subscription tier (Free, Pro, and Enterprise). This gives you a quick overview of your Super Admin user base distribution across plans.</p>
+                            <h4>Part 2: Essential Admin Settings Configuration</h4>
+                            <p>As the Super Admin, your first stop should be the Admin Settings to tailor the suite to your company's needs.</p>
+                            <h5>Access Admin Settings:</h5>
+                            <ol>
+                                <li>From the App Hub, click the <strong>⚙ (gear) icon</strong> in the top right corner.</li>
+                                <li>Select "Admin Settings" from the dropdown menu.</li>
+                            </ol>
+                            <h5>Set Operating Hours:</h5>
+                            <ol>
+                                <li>In the "Business Settings" card, define your company's standard daily operating hours. These hours can be used for scheduling and availability planning.</li>
+                                <li>Click "Save Settings."</li>
+                            </ol>
+                            <h5>Manage Locations (If Applicable):</h5>
+                            <p>If your company has multiple physical branches, offices, or departments that operate as separate entities for scheduling or user management, use the "Manage Locations" card.</p>
+                            <ol>
+                                <li><strong>Add Location:</strong> Enter a "Location Name" (e.g., "Downtown Branch," "Warehouse") and its "Address." Click "Add Location."</li>
+                                <li>All users and shifts will be associated with a location.</li>
+                            </ol>
                         </div>
+
                         <div class="faq-item">
-                            <h4>Estimated Monthly Revenue</h4>
-                            <p>This metric calculates your estimated Monthly Recurring Revenue (MRR) based on your active Super Admin accounts on paid plans. It's calculated as:</p>
-                            <p><strong>(Number of Pro Accounts x $29.99) + (Number of Enterprise Accounts x $79.00)</strong></p>
-                            <p>This provides an estimate of your recurring income from Super Admin subscriptions.</p>
+                            <h4>Part 3: Setting Up Onboarding & Task Lists</h4>
+                            <p>This is crucial for standardizing your new hire process.</p>
+                            <h5>Go to Task Lists:</h5>
+                            <ol>
+                                <li>From the App Hub, click on the "Onboarding" app card.</li>
+                                <li>Then, click on "Task Lists" in the navigation bar.</li>
+                            </ol>
+                            <h5>Create New Task Lists:</h5>
+                            <ol>
+                                <li>In the "Create New Task List" form:
+                                    <ul>
+                                        <li><strong>Task List for Position:</strong> Enter the specific job title or position this list applies to (e.g., "Sales Associate," "Software Developer," "General Employee"). This is vital for automatic assignment later.</li>
+                                        <li><strong>Task List Title:</strong> Give it a descriptive name (e.g., "Q3 Sales Team Onboarding," "New Employee Welcome Checklist").</li>
+                                        <li><strong>Add Tasks:</strong> For each task:
+                                            <ul>
+                                                <li>Enter a "Task Description" (e.g., "Complete HR paperwork," "Attend IT orientation," "Read Employee Handbook").</li>
+                                                <li><strong>Attach Documents:</strong> Click the "Attach" button. A modal will appear showing your uploaded documents. Select a relevant document (e.g., "Employee Handbook.txt") to link it to this task.</li>
+                                            </ul>
+                                        </li>
+                                        <li>Click "Add Another Task" to add more items.</li>
+                                        <li>Click "Create Task List" when done.</li>
+                                    </ul>
+                                </li>
+                                <li>You can create multiple task lists for different positions.</li>
+                            </ol>
+                            <h5>Upload Documents (If not already done):</h5>
+                            <p>If you need to attach documents to tasks (like employee handbooks, training manuals, policy documents), go to the "Documents" app from the App Hub.</p>
+                            <ol>
+                                <li>Upload your files here. These will then be available to attach to tasks.</li>
+                            </ol>
+                            <h5>Invite Employees:</h5>
+                            <ol>
+                                <li>Go back to "Admin Settings" (⚙ icon > Admin Settings).</li>
+                                <li>In the "Invite New Employee" card:
+                                    <ul>
+                                        <li>Fill in their "Full Name," "Email," and a "Temporary Password."</li>
+                                        <li>Crucially, set their "Position/Title" to exactly match one of the Task List Positions you created earlier (e.g., "Sales Associate").</li>
+                                        <li>Assign them to a "Location."</li>
+                                    </ul>
+                                </li>
+                                <li>Click "Invite Employee."</li>
+                                <li>The system will automatically assign the matching task list to this new employee.</li>
+                            </ol>
+                            <h5>Onboard Existing Employees (If Needed):</h5>
+                            <ol>
+                                <li>Go to the "Onboarding Dashboard" from the App Hub.</li>
+                                <li>Click the "Onboard Employee" button.</li>
+                                <li>Select an existing employee from the dropdown. The system will show you which task list will be assigned based on their existing "Position."</li>
+                                <li>Click "Assign Task List."</li>
+                            </ol>
+                        </div>
+
+                        <div class="faq-item">
+                            <h4>Part 4: Managing Hiring (Job Postings & Applicants)</h4>
+                            <p>Streamline your recruitment process.</p>
+                            <h5>Go to Hiring:</h5>
+                            <ol>
+                                <li>From the App Hub, click on the "Hiring" app card.</li>
+                            </ol>
+                            <h5>Create New Job Postings:</h5>
+                            <ol>
+                                <li>Use the "Create New Job Posting" form.</li>
+                                <li>Provide a "Job Title," "Description," "Requirements," and assign it to a "Location."</li>
+                                <li>Click "Create Posting."</li>
+                            </ol>
+                            <h5>Share Job Postings:</h5>
+                            <ol>
+                                <li>Once a job is posted, it will appear in the "Current Job Postings" list.</li>
+                                <li>Click the "Share" button next to a job. A modal will appear with a direct link and embed code.</li>
+                                <li>Copy the "Direct Link" and share it with potential applicants.</li>
+                            </ol>
+                            <h5>Review Applicants:</h5>
+                            <ol>
+                                <li>In the "Recent Applicants" section, you'll see new applications as they come in.</li>
+                                <li>You can click the "Archive Applicant" button to remove them from the active list once processed.</li>
+                            </ol>
+                        </div>
+
+                        <div class="faq-item">
+                            <h4>Part 5: Employee Scheduling</h4>
+                            <p>Efficiently manage your team's shifts.</p>
+                            <h5>Go to Scheduling:</h5>
+                            <ol>
+                                <li>From the App Hub, click on the "Scheduling" app card.</li>
+                            </ol>
+                            <h5>Select a Location (Super Admins):</h5>
+                            <p>If you are a Super Admin, use the "View Schedule For" dropdown in the sidebar to select the location whose schedule you want to manage. Location Admins will automatically see their assigned location's schedule.</p>
+                            <h5>Create New Shifts:</h5>
+                            <ol>
+                                <li>Use the "Create New Shift" form in the sidebar.</li>
+                                <li>Select the "Employee," "Location," and the "Start Time" and "End Time" (date and time).</li>
+                                <li>Add any "Notes" if necessary.</li>
+                                <li>Click "Add Shift." The shift will appear on the calendar grid.</li>
+                            </ol>
+                            <h5>Navigate the Schedule:</h5>
+                            <ol>
+                                <li>Use the "◀ Prev" and "Next ▶" buttons in the calendar header to navigate between weeks.</li>
+                            </ol>
+                            <h5>Print Schedule:</h5>
+                            <ol>
+                                <li>Click the "Print Schedule" button to open a printer-friendly version of the current week's schedule for the selected location.</li>
+                            </ol>
+                            <h5>Delete Old Shifts:</h5>
+                            <p>In the "Data Management" card in the sidebar, you can select a date to delete all shifts that end before that date. Use with caution!</p>
+                        </div>
+
+                        <div class="faq-item">
+                            <h4>Part 6: Employee Experience (For Invited Employees)</h4>
+                            <p>Once an employee logs in, their view is streamlined to their tasks and schedule.</p>
+                            <h5>Log In:</h5>
+                            <ol>
+                                <li>Employees log in with the email and temporary password provided by their admin. They should change their password immediately in "My Account."</li>
+                            </ol>
+                            <h5>View Onboarding Tasks:</h5>
+                            <ol>
+                                <li>The first thing they'll see is their "Onboard Flow - Your Tasks" page.</li>
+                                <li>They can see their assigned tasks.</li>
+                                <li><strong>Mark Tasks Complete:</strong> Click the checkbox next to a task to mark it as complete. Completed tasks will disappear from their list, and they'll see their progress updated (e.g., "You have completed 1 of 3 tasks").</li>
+                                <li><strong>Access Attached Documents:</strong> If a task has an attached document, they can click the link to view it.</li>
+                            </ol>
+                            <h5>View Schedule:</h5>
+                            <ol>
+                                <li>The "Your Schedule This Week" section displays their assigned shifts.</li>
+                                <li>They can use the "Print Schedule" button to get a physical copy.</li>
+                            </ol>
+                            <h5>View Messages:</h5>
+                            <ol>
+                                <li>The "Messages for You" section displays any internal messages sent to them by administrators. They can delete messages after reading.</li>
+                            </ol>
+                        </div>
+
+                        <div class="faq-item">
+                            <h4>Part 7: Managing Your Subscription</h4>
+                            <h5>Upgrade Your Plan:</h5>
+                            <ol>
+                                <li>From the App Hub, click the <strong>⚙ (gear) icon</strong> in the top right corner.</li>
+                                <li>Select "Upgrade Plan" (or navigate directly to <code>pricing</code>).</li>
+                                <li>Choose your desired plan (Pro or Enterprise) and follow the prompts to complete the upgrade via Stripe's secure checkout. Your new plan will be activated immediately.</li>
+                            </ol>
+                            <h5>Cancel Your Subscription:</h5>
+                            <p>To cancel your subscription, you must manage it directly through your <strong>Stripe customer portal</strong>.</p>
+                            <ol>
+                                <li>Refer to your original subscription confirmation email from Stripe for a link to your customer portal, or contact support for assistance.</li>
+                                <li>Once canceled in Stripe, your account will automatically revert to the Free tier at the end of your current billing period.</li>
+                            </ol>
                         </div>
                     </div>
                 </details>
+
+                <!-- Original General & Account FAQ (now below Getting Started) -->
                 <details>
                     <summary>General & Account</summary>
                     <div class="faq-content">
@@ -83,6 +268,7 @@
                     </div>
                 </details>
 
+                <!-- Original Subscription Management FAQ (now below Getting Started) -->
                 <details>
                     <summary>Subscription Management</summary>
                     <div class="faq-content">
@@ -96,6 +282,8 @@
                         </div>
                     </div>
                 </details>
+
+                <!-- Original Admin Settings FAQ (now below Getting Started) -->
                 <details>
                     <summary>Admin Settings</summary>
                     <div class="faq-content">
@@ -110,6 +298,7 @@
                     </div>
                 </details>
                 
+                <!-- Original Scheduling FAQ (now below Getting Started) -->
                 <details>
                     <summary>Scheduling</summary>
                     <div class="faq-content">
@@ -124,6 +313,7 @@
                     </div>
                 </details>
                 
+                <!-- Original Onboarding & Task Lists FAQ (now below Getting Started) -->
                 <details>
                     <summary>Onboarding & Task Lists</summary>
                     <div class="faq-content">
@@ -139,6 +329,7 @@
                 </details>
             </div>
 
+            <!-- Feedback Form -->
             <div class="card">
                 <h3>Contact Us & Submit Feedback</h3>
                 <form id="feedback-form">
