@@ -214,6 +214,47 @@ export function handleOnboardingViewPage() {
         }
     }
 
+    // NEW: Event listener for Print Schedule button
+    if (printScheduleBtn) {
+        printScheduleBtn.addEventListener('click', async () => {
+            // Fetch current user's location to pass to printable schedule
+            let userLocationId = null;
+            let userLocationName = 'Your Location'; // Default name
+            try {
+                const user = await apiRequest('GET', '/api/users/me');
+                if (user && user.location_id) {
+                    userLocationId = user.location_id;
+                    // Attempt to get location name from API, or use a default
+                    const locations = await apiRequest('GET', '/api/locations');
+                    const currentLocation = locations.find(loc => String(loc.location_id) === String(userLocationId));
+                    if (currentLocation) {
+                        userLocationName = currentLocation.location_name;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching user location for print schedule:', error);
+            }
+
+            if (!currentUserId || !userLocationId) {
+                showModalMessage('Could not retrieve necessary information to print schedule. Please ensure your account is assigned to a location.', true);
+                return;
+            }
+
+            // Calculate current week's start and end dates for the printable schedule
+            const today = new Date();
+            const startDate = new Date(today.setDate(today.getDate() - today.getDay())); // Start of current week (Sunday)
+            startDate.setHours(0, 0, 0, 0); // Set to beginning of the day
+            
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 7); // End of current week (next Sunday, exclusive)
+            endDate.setHours(0, 0, 0, 0);
+
+            // Encode parameters for URL
+            const url = `printable-schedule.html?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}&user_id=${currentUserId}&locationId=${userLocationId}&locationName=${encodeURIComponent(userLocationName)}`;
+            window.open(url, '_blank');
+        });
+    }
+
     // --- Initial Page Load Actions ---
     currentUserId = getUserIdFromToken(authToken);
     if (!currentUserId) {
