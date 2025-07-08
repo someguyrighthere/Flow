@@ -12,7 +12,6 @@ const path = require('path');
 
 // --- NEW GCS IMPORTS ---
 const { Storage } = require('@google-cloud/storage'); // Only need the official GCS library
-// --- REMOVE: const GCS_Storage_Engine = require('multer-cloud-storage'); // No longer needed
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -80,49 +79,65 @@ const storageClient = new Storage({
 const bucket = storageClient.bucket(process.env.GCS_BUCKET_NAME);
 
 // --- CUSTOM MULTER GCS STORAGE ENGINE ---
-const gcsStorage = multer.diskStorage({ // We'll use diskStorage temporarily, but the _handleFile will override it
+// This is a custom storage engine for Multer that uploads directly to GCS.
+const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like structure for custom engines
     _handleFile: (req, file, cb) => {
+        // Generate a unique filename for GCS to avoid collisions
         const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
         const gcsFile = bucket.file(uniqueFilename);
 
+        // Create a write stream to GCS
         const stream = gcsFile.createWriteStream({
             metadata: {
-                contentType: file.mimetype,
+                contentType: file.mimetype, // Set content type based on the uploaded file
             },
-            predefinedAcl: 'publicRead', // Make the file publicly readable
+            predefinedAcl: 'publicRead', // Make the file publicly readable after upload
         });
 
+        // Handle errors during the GCS upload stream
         stream.on('error', (err) => {
-            console.error('GCS upload stream error:', err);
+            console.error('GCS upload stream error during write:', err);
+            // Propagate the error back to Multer
             cb(err);
         });
 
+        // Handle successful completion of the GCS upload stream
         stream.on('finish', () => {
-            // After upload is complete, get the public URL
+            // Get the public URL of the uploaded file
             gcsFile.publicUrl().then(url => {
-                // Attach the public URL to req.file so it can be used in the route handler
+                // Attach the public URL to req.file so it can be accessed in the route handler
                 file.publicUrl = url;
+                // Important: Ensure publicUrl is not null/undefined before passing to callback
+                if (!file.publicUrl) {
+                    const error = new Error('GCS public URL was not generated.');
+                    console.error('GCS URL generation error:', error);
+                    return cb(error); // Propagate error
+                }
+                // Call Multer's callback to indicate success, passing necessary file info
                 cb(null, {
-                    path: url, // Multer expects a path, use the URL here
-                    filename: uniqueFilename // Store the path within the bucket as filename
+                    path: url, // Use the public URL as the 'path' property
+                    filename: uniqueFilename // Store the path within the bucket as 'filename' for deletion logic
                 });
             }).catch(urlErr => {
+                // Handle errors during public URL retrieval
                 console.error('Error getting public URL for GCS file:', urlErr);
-                cb(urlErr);
+                cb(urlErr); // Propagate error
             });
         });
 
+        // Pipe the incoming file stream (from Multer) to the GCS write stream
         file.stream.pipe(stream);
     },
     _removeFile: (req, file, cb) => {
-        // This function is called by Multer if an error occurs during upload
+        // This function is called by Multer if an error occurs during upload (to clean up)
         // or if you explicitly call `upload.storage._removeFile`.
         // For GCS, we need to delete the file from the bucket.
-        const filePath = file.filename; // This is the path within the bucket
+        const filePath = file.filename; // This is the path within the bucket, stored during _handleFile
         bucket.file(filePath).delete().then(() => {
             console.log(`File ${filePath} removed from GCS.`);
-            cb(null);
+            cb(null); // Indicate success to Multer
         }).catch(err => {
+            // Log a warning if deletion fails, but don't block the process
             console.warn(`Error removing file ${filePath} from GCS: ${err.message}`);
             cb(err); // Still call callback, but log warning
         });
@@ -134,11 +149,16 @@ const upload = multer({ storage: gcsStorage }); // Use our custom GCS storage en
 
 
 // --- REMOVE OLD LOCAL DISK STORAGE CONFIGURATION ---
+// The following lines are commented out as they are no longer needed
+// for local disk storage and static file serving.
 // const uploadsDir = path.join(__dirname, 'uploads');
 // if (!fs.existsSync(uploadsDir)) {
 //     fs.mkdirSync(uploadsDir);
 // }
-// const localDiskStorage = multer.diskStorage(...);
+// const localDiskStorage = multer.diskStorage({
+//     destination: (req, file, cb) => cb(null, uploadsDir),
+//     filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+// });
 // const upload = multer({ storage: localDiskStorage });
 // --- END REMOVAL ---
 
@@ -238,6 +258,8 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
 app.use(express.json());
 
 // --- REMOVE OLD LOCAL STATIC FILE SERVING ---
+// The following lines are commented out as they are no longer needed
+// for local disk storage and static file serving.
 // app.use(express.static(path.join(__dirname)));
 // app.use('/uploads', express.static(uploadsDir));
 // --- END REMOVAL ---
@@ -282,8 +304,8 @@ apiRoutes.post('/register', async (req, res) => {
         const locationRes = await client.query(`INSERT INTO locations (location_name, subscription_plan, subscription_status) VALUES ($1, $2, $3) RETURNING location_id`, [`${companyName} HQ`, 'free', 'active']); // Default to free plan on registration
         const newLocationId = locationRes.rows[0].location_id;
         const hash = await bcrypt.hash(password, 10);
-        await pool.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
-        await pool.query('COMMIT');
+        await client.query(`INSERT INTO users (full_name, email, password, role, location_id) VALUES ($1, $2, $3, 'super_admin', $4) RETURNING user_id`, [fullName, email, hash, newLocationId]);
+        await client.query('COMMIT');
         res.status(201).json({ message: "Registration successful!" });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -488,9 +510,9 @@ apiRoutes.post('/documents', isAuthenticated, isAdmin, upload.single('document')
         const fileUrl = req.file.publicUrl;
         // Store the full URL in the database
         const result = await pool.query('INSERT INTO documents (title, description, file_name, uploaded_by) VALUES ($1, $2, $3, $4) RETURNING *',[title, description, fileUrl, req.user.id]);
-        res.status(201).json(result.rows[0]);
+        res.status(201).json({ message: 'Document uploaded successfully!', document: result.rows[0] }); // Added document to response for frontend
     } catch (err) {
-        console.error('Error uploading document to GCS:', err); // More specific error logging
+        console.error('Error uploading document to GCS and saving to DB:', err); // More specific error logging
         res.status(500).json({ error: 'Failed to upload document.' });
     }
 });
@@ -502,45 +524,51 @@ apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) =>
 
         const fileUrlToDelete = docResult.rows[0].file_name;
 
-        // --- NEW: Delete from GCS ---
-        // You'll need to initialize the GCS Storage client here as well,
-        // or refactor gcsConfig to be globally accessible.
-        // For simplicity, let's re-initialize it.
-        const storageClient = new Storage({
-            projectId: gcsConfig.project_id,
-            credentials: {
-                client_email: gcsConfig.client_email,
-                private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
-            }
-        });
-        const bucketName = process.env.GCS_BUCKET_NAME; // Get bucket name from env
-        
-        // Extract the file path from the full GCS URL
-        // Example URL: https://storage.googleapis.com/your-bucket-name/documents/123-filename.txt
-        // We need 'documents/123-filename.txt'
-        const url = new URL(fileUrlToDelete);
-        const filePath = url.pathname.substring(1); // Remove leading slash
-
+        // --- NEW: Delete from GCS (Attempt to delete, but don't block DB deletion) ---
+        // Check if the file_name is a valid URL before attempting GCS deletion
+        let isGcsUrl = false;
+        let filePath = '';
         try {
-            await storageClient.bucket(bucketName).file(filePath).delete();
-            console.log(`File ${filePath} deleted from GCS bucket ${bucketName}.`);
-        } catch (gcsErr) {
-            console.warn(`Could not delete file ${filePath} from GCS bucket ${bucketName}. It might not exist or permissions are off. Error: ${gcsErr.message}`);
-            // Don't block DB deletion if GCS delete fails (e.g., file already gone)
+            const url = new URL(fileUrlToDelete);
+            // Basic check if it looks like a GCS URL
+            if (url.hostname.includes('storage.googleapis.com') || url.hostname.includes(process.env.GCS_BUCKET_NAME)) {
+                filePath = url.pathname.substring(1); // Remove leading slash
+                isGcsUrl = true;
+            }
+        } catch (e) {
+            // Not a valid URL, so it's likely an old local filename
+            console.warn(`File name "${fileUrlToDelete}" is not a valid URL. Assuming it's an old local file.`);
+        }
+
+        if (isGcsUrl) {
+            try {
+                const storageClient = new Storage({
+                    projectId: gcsConfig.project_id,
+                    credentials: {
+                        client_email: gcsConfig.client_email,
+                        private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
+                    }
+                });
+                const bucketName = process.env.GCS_BUCKET_NAME;
+                await storageClient.bucket(bucketName).file(filePath).delete();
+                console.log(`File ${filePath} deleted from GCS bucket ${bucketName}.`);
+            } catch (gcsErr) {
+                // Log the GCS deletion error but continue to delete the DB record
+                console.warn(`Could not delete file ${filePath} from GCS bucket ${bucketName}. It might not exist or permissions are off. Error: ${gcsErr.message}`);
+            }
+        } else {
+            // Handle deletion for old local files (if they were ever persistent, which they aren't on Render)
+            // For now, just log a message as local files are ephemeral on Render.
+            console.log(`Skipping GCS deletion for non-GCS URL: ${fileUrlToDelete}. Assuming it was an ephemeral local file.`);
         }
         // --- END NEW: Delete from GCS ---
 
+        // Always attempt to delete the database record
         await pool.query('DELETE FROM documents WHERE document_id = $1', [id]);
-        // --- REMOVE OLD LOCAL FILE DELETION ---
-        // const filePath = path.join(uploadsDir, docResult.rows[0].file_name);
-        // fs.unlink(filePath, (err) => {
-        //     if (err) console.error(`Failed to delete file from disk: ${filePath}`, err);
-        // });
-        // --- END REMOVAL ---
         res.status(204).send();
     } catch (err) {
-        console.error('Error deleting document:', err);
-        res.status(500).json({ error: 'Failed to delete document.' });
+        console.error('Error deleting document record from database:', err); // More specific error message
+        res.status(500).json({ error: 'Failed to delete document record.' });
     }
 });
 
