@@ -6,12 +6,12 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs'); // Keep fs for mkdirSync if needed for other purposes, but not for uploadsDir
+const fs = require('fs');
 const path = require('path');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Temporarily comment out Stripe init
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // --- NEW GCS IMPORTS ---
-const { Storage } = require('@google-cloud/storage'); // Only need the official GCS library
+const { Storage } = require('@google-cloud/storage');
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -28,29 +28,9 @@ const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'default-secret-password-ch
 // Define Stripe Price IDs from environment variables
 const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_ENTERPRISE_PRICE_ID = process.env.STRIPE_ENTERPRISE_PRICE_ID;
-const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000'; // Define your app's base URL
+const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
 
 // --- REMOVED DEBUGGING: Inspect STRIPE_SECRET_KEY string content ---
-// const DEBUG_STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-// if (DEBUG_STRIPE_SECRET_KEY) {
-//     console.log('DEBUG_KEY: Length:', DEBUG_STRIPE_SECRET_KEY.length);
-//     console.log('DEBUG_KEY: First 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(0, 5));
-//     console.log('DEBUG_KEY: Last 5 chars:', DEBUG_STRIPE_SECRET_KEY.substring(DEBUG_STRIPE_SECRET_KEY.length - 5));
-//     console.log('DEBUG_KEY: Contains newline?', DEBUG_STRIPE_SECRET_KEY.includes('\n'));
-//     console.log('DEBUG_KEY: Contains space?', DEBUG_STRIPE_SECRET_KEY.includes(' '));
-//     // Attempt to initialize Stripe here to catch errors earlier
-//     try {
-//         const stripe = require('stripe')(DEBUG_STRIPE_SECRET_KEY);
-//         console.log('DEBUG_KEY: Stripe init successful with this key.');
-//         // Re-assign to the global stripe variable
-//         Object.defineProperty(global, 'stripe', { value: stripe, writable: true });
-//     } catch (e) {
-//         console.error('DEBUG_KEY: Stripe init FAILED with this key:', e.message);
-//         // If init fails, we'll still proceed, but the next calls will fail.
-//     }
-// } else {
-//     console.error('DEBUG_KEY: STRIPE_SECRET_KEY is not set!');
-// }
 // --- END REMOVED DEBUGGING ---
 
 // --- NEW GCS CONFIGURATION ---
@@ -79,8 +59,9 @@ const storageClient = new Storage({
 const bucket = storageClient.bucket(process.env.GCS_BUCKET_NAME);
 
 // --- CUSTOM MULTER GCS STORAGE ENGINE ---
-// This is a custom storage engine for Multer that uploads directly to GCS.
-const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like structure for custom engines
+// Define the custom storage engine as a plain object with _handleFile and _removeFile methods.
+// This is the correct way to create a custom storage engine for Multer.
+const gcsStorage = {
     _handleFile: (req, file, cb) => {
         // Generate a unique filename for GCS to avoid collisions
         const uniqueFilename = `documents/${Date.now()}-${file.originalname}`;
@@ -96,7 +77,7 @@ const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like st
 
         // Handle errors during the GCS upload stream
         stream.on('error', (err) => {
-            console.error('GCS upload stream error during write:', err); // More specific log
+            console.error('GCS upload stream error during write:', err);
             // Propagate the error back to Multer
             cb(err);
         });
@@ -132,7 +113,8 @@ const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like st
         // This function is called by Multer if an error occurs during upload (to clean up)
         // or if you explicitly call `upload.storage._removeFile`.
         // For GCS, we need to delete the file from the bucket.
-        const filePath = file.filename; // This is the path within the bucket, stored during _handleFile
+        // The file.filename here is the unique path within the GCS bucket.
+        const filePath = file.filename; 
         bucket.file(filePath).delete().then(() => {
             console.log(`File ${filePath} removed from GCS.`);
             cb(null); // Indicate success to Multer
@@ -142,7 +124,7 @@ const gcsStorage = multer.diskStorage({ // Multer requires a diskStorage-like st
             cb(err); // Still call callback, but log warning
         });
     }
-});
+};
 
 const upload = multer({ storage: gcsStorage }); // Use our custom GCS storage engine
 // --- END CUSTOM MULTER GCS STORAGE ENGINE ---
