@@ -13,7 +13,7 @@ const path = require('path');
 // --- NEW GCS IMPORTS ---
 const gcs = require('@google-cloud/storage'); // Import the whole module
 const { Storage } = gcs; // Destructure Storage for direct GCS operations like deletion
-const GCS_Storage = require('multer-cloud-storage'); // Get the default export for Multer storage
+const GCS_Storage_Engine = require('multer-cloud-storage'); // Get the default export for Multer storage
 // --- END NEW GCS IMPORTS ---
 
 const createOnboardingRouter = require('./routes/onboardingRoutes');
@@ -72,24 +72,24 @@ try {
     process.exit(1);
 }
 
-// Initialize the storage engine by calling the GCS_Storage function
-const storage = new GCS_Storage({ // <--- FIX: Use 'new' keyword here
-    projectId: gcsConfig.project_id,
-    keyFilename: null, // Set to null if using `credentials` directly
-    credentials: {
-        client_email: gcsConfig.client_email,
-        // IMPORTANT: Replace escaped newlines from environment variable back to actual newlines
-        private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
-    },
-    bucket: process.env.GCS_BUCKET_NAME, // Make sure this environment variable is set on Render
-    acl: 'publicRead', // This makes files publicly readable. Adjust if you need private files.
-    destination: (req, file, cb) => {
-        // Optional: specify a folder path within your bucket, e.g., 'documents/'
-        cb(null, `documents/${Date.now()}-${file.originalname}`);
-    }
+// Initialize multer with the GCS storage engine directly
+const upload = multer({
+    storage: GCS_Storage_Engine({ // <--- FIX: Call GCS_Storage_Engine as a function directly here
+        projectId: gcsConfig.project_id,
+        keyFilename: null, // Set to null if using `credentials` directly
+        credentials: {
+            client_email: gcsConfig.client_email,
+            // IMPORTANT: Replace escaped newlines from environment variable back to actual newlines
+            private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
+        },
+        bucket: process.env.GCS_BUCKET_NAME, // Make sure this environment variable is set on Render
+        acl: 'publicRead', // This makes files publicly readable. Adjust if you need private files.
+        destination: (req, file, cb) => {
+            // Optional: specify a folder path within your bucket, e.g., 'documents/'
+            cb(null, `documents/${Date.now()}-${file.originalname}`);
+        }
+    })
 });
-
-const upload = multer({ storage: storage });
 
 // --- REMOVE OLD LOCAL DISK STORAGE CONFIGURATION ---
 // const uploadsDir = path.join(__dirname, 'uploads');
