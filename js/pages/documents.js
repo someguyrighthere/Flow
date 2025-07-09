@@ -26,7 +26,8 @@ export function handleDocumentsPage() { // Ensure this is exported
         documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>'; // Show loading state
 
         try {
-            const documents = await apiRequest('GET', '/api/documents'); // Fetch documents from backend
+            // FIX: Add a timestamp to bypass browser cache for /api/documents
+            const documents = await apiRequest('GET', `/api/documents?_t=${Date.now()}`); 
             documentListDiv.innerHTML = ''; // Clear loading message
 
             if (documents && documents.length > 0) {
