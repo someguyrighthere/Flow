@@ -48,7 +48,7 @@ try {
     process.exit(1);
 }
 
-// Initialize GCS client
+// Initialize GCS client (Globally accessible)
 const storageClient = new Storage({
     projectId: gcsConfig.project_id,
     credentials: {
@@ -56,7 +56,7 @@ const storageClient = new Storage({
         private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
     }
 });
-const bucket = storageClient.bucket(process.env.GCS_BUCKET_NAME);
+const bucket = storageClient.bucket(process.env.GCS_BUCKET_NAME); // Globally defined bucket object
 
 // --- CUSTOM MULTER GCS STORAGE ENGINE (Standard Pattern) ---
 function GCSCustomStorage(opts) {
@@ -313,7 +313,7 @@ apiRoutes.post('/login', async (req, res) => {
         const user = result.rows[0];
         if (!(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid email or password." });
 
-        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) };
+        const payload = { id: user.user.id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) }; // FIX: user.user.id to user.id
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
