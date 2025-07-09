@@ -415,7 +415,7 @@ apiRoutes.post('/invite-employee', isAuthenticated, isAdmin, async (req, res) =>
 });
 
 // Locations & Business Settings
-apiRoutes.get('/locations', isAuthenticated, isAdmin, async (req, res) => {
+apiRoutes.get('/locations', isAuthenticated, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM locations ORDER BY location_name');
         res.json(result.rows);
@@ -538,9 +538,34 @@ apiRoutes.delete('/checklists/:id', isAuthenticated, isAdmin, async (req, res) =
 // Documents
 apiRoutes.get('/documents', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const result = await pool.query(`SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name FROM documents d LEFT JOIN users u ON d.uploaded_by = u.user_id ORDER BY d.uploaded_at DESC`);
+        const requestingUserLocationId = req.user.location_id; // Get the location_id of the authenticated user
+        const requestingUserRole = req.user.role; // Get the role of the authenticated user
+
+        let query = `
+            SELECT d.document_id, d.title, d.description, d.file_name, d.uploaded_at, u.full_name as uploaded_by_name
+            FROM documents d
+            LEFT JOIN users u ON d.uploaded_by = u.user_id
+        `;
+        const params = [];
+        let paramIndex = 1;
+
+        // FIX: Always filter by the requesting user's location_id for document access
+        // This ensures strict isolation between businesses.
+        if (requestingUserLocationId) { // Ensure location_id exists
+            query += ` WHERE u.location_id = $${paramIndex++}`;
+            params.push(requestingUserLocationId);
+        } else {
+            // If a user somehow has no location_id, they shouldn't see any documents
+            // This case should ideally not happen for authenticated users.
+            return res.status(403).json({ error: 'Access denied: User not assigned to a location.' });
+        }
+
+        query += ` ORDER BY d.uploaded_at DESC`;
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
+        console.error('Error retrieving documents:', err);
         res.status(500).json({ error: 'Failed to retrieve documents.' });
     }
 });
