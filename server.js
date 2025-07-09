@@ -313,7 +313,7 @@ apiRoutes.post('/login', async (req, res) => {
         const user = result.rows[0];
         if (!(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid email or password." });
 
-        const payload = { id: user.user.id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) }; // FIX: user.user.id to user.id
+        const payload = { id: user.user_id, role: user.role, location_id: user.location_id, iat: Math.floor(Date.now() / 1000) }; 
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, role: user.role, userId: user.user_id });
     } catch (err) {
@@ -624,18 +624,11 @@ apiRoutes.delete('/documents/:id', isAuthenticated, isAdmin, async (req, res) =>
 
         if (isGcsUrl) {
             try {
-                const storageClient = new Storage({
-                    projectId: gcsConfig.project_id,
-                    credentials: {
-                        client_email: gcsConfig.client_email,
-                        private_key: gcsConfig.private_key.replace(/\\n/g, '\n')
-                    }
-                });
-                const bucketName = process.env.GCS_BUCKET_NAME;
-                await storageClient.bucket(bucketName).file(filePath).delete();
-                console.log(`File ${filePath} deleted from GCS bucket ${bucketName}.`);
+                // Use the globally defined 'bucket' object directly.
+                await bucket.file(filePath).delete();
+                console.log(`File ${filePath} deleted from GCS bucket ${process.env.GCS_BUCKET_NAME}.`);
             } catch (gcsErr) {
-                console.warn(`Could not delete file ${filePath} from GCS bucket ${bucketName}. It might not exist or permissions are off. Error: ${gcsErr.message}`);
+                console.warn(`Could not delete file ${filePath} from GCS bucket ${process.env.GCS_BUCKET_NAME}. It might not exist or permissions are off. Error: ${gcsErr.message}`);
             }
         } else {
             console.log(`Skipping GCS deletion for non-GCS URL: ${fileUrlToDelete}. Assuming it was an ephemeral local file.`);
