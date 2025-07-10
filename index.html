@@ -22,7 +22,13 @@
         /* Styles for index.html ONLY - Inspired by Dubber AI's dark theme */
         body {
             font-family: 'Poppins', sans-serif;
-            background-color: #0d0d0d; /* Very dark background */
+            /* NEW: Generated image as global background */
+            background-image: url('http://googleusercontent.com/image_generation_content/158');
+            background-color: #0d0d0d; /* Fallback color */
+            background-size: cover; /* Cover the entire viewport */
+            background-position: center; /* Center the image */
+            background-repeat: no-repeat; /* Do not repeat the image */
+            background-attachment: fixed; /* Keep background fixed when scrolling */
             color: #f0f0f0; /* Light text for contrast */
             margin: 0;
             padding: 0;
@@ -34,6 +40,8 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 20px; /* Adjust padding for edges */
+            position: relative; /* Ensure content is above background */
+            z-index: 2; /* Place content above the background */
         }
 
         /* Header Styling */
@@ -83,22 +91,18 @@
             overflow: hidden; /* Hide overflow from background image */
             margin-bottom: 60px; /* Space before next section */
             border-radius: 15px; /* Subtle rounded corners for the section */
-            background-color: #1a1a1a; /* Fallback background */
-            /* NEW: Abstract background image to mimic Dubber AI's hero */
-            background-image: url('http://googleusercontent.com/image_generation_content/158'); /* Replaced with generated image URL */
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
+            background-color: transparent; /* Make hero background transparent to see body background */
+            /* Removed background-image from here as it's now on body */
         }
 
-        .hero::before { /* Overlay for text readability */
+        .hero::before { /* Overlay for text readability - Adjusted opacity */
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.7));
+            background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.5)); /* Lighter overlay */
             z-index: 1;
         }
 
