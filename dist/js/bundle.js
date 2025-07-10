@@ -1134,7 +1134,7 @@
       if (!documentListDiv) return;
       documentListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading documents...</p>';
       try {
-        const documents = await apiRequest("GET", "/api/documents");
+        const documents = await apiRequest("GET", `/api/documents?_t=${Date.now()}`);
         documentListDiv.innerHTML = "";
         if (documents && documents.length > 0) {
           documents.forEach((doc) => {
@@ -1855,7 +1855,7 @@
       }
       jobDetailsContainer.innerHTML = '<p style="color: var(--text-medium);">Loading job details...</p>';
       try {
-        const job = await apiRequest("GET", `/job-postings/${jobId}`);
+        const job = await apiRequest("GET", `/apply/${jobId}`);
         if (job) {
           document.title = `Apply for ${job.title} - Flow Business Suite`;
           const detailsHtml = `
@@ -1936,7 +1936,7 @@
     const messagesContainer = document.getElementById("messages-container");
     const onboardingInfoContainer = document.getElementById("onboarding-info-container");
     const onboardingTaskListDiv = document.getElementById("onboarding-task-list");
-    const taskListOverviewDiv = document.getElementById("task-list-overview");
+    const taskListOverviewDiv = document.getElementById("taskList-overview");
     const employeeScheduleListDiv = document.getElementById("employee-schedule-list");
     const printScheduleBtn = document.getElementById("print-employee-schedule-btn");
     let currentUserId = null;
@@ -2021,25 +2021,30 @@
       onboardingTaskListDiv.innerHTML = "";
       if (tasks && tasks.length > 0) {
         onboardingInfoContainer.style.display = "block";
-        tasks.forEach((task) => {
-          const taskItem = document.createElement("div");
-          taskItem.className = `checklist-item ${task.completed ? "completed" : ""}`;
-          taskItem.dataset.taskId = task.id;
-          taskItem.innerHTML = `
-                    <div class="checklist-item-title">
-                        <input type="checkbox" class="task-checkbox" data-task-id="${task.id}" ${task.completed ? "checked" : ""}>
-                        <span>${task.description}</span>
-                        ${task.document_name ? `<br><small>Attached: <a href="${task.document_name}" target="_blank">${task.document_name.split("/").pop()}</a></small>` : ""}
-                    </div>
-                `;
-          onboardingTaskListDiv.appendChild(taskItem);
-        });
-        const completedTasks = tasks.filter((task) => task.completed).length;
+        const incompleteTasks = tasks.filter((task) => !task.completed);
+        if (incompleteTasks.length > 0) {
+          incompleteTasks.forEach((task) => {
+            const taskItem = document.createElement("div");
+            taskItem.className = `checklist-item`;
+            taskItem.dataset.taskId = task.id;
+            taskItem.innerHTML = `
+                        <div class="checklist-item-title">
+                            <input type="checkbox" class="task-checkbox" data-task-id="${task.id}">
+                            <span>${task.description}</span>
+                            ${task.document_name ? `<br><small>Attached: <a href="${task.document_name}" target="_blank">${task.document_name.split("/").pop()}</a></small>` : ""}
+                        </div>
+                    `;
+            onboardingTaskListDiv.appendChild(taskItem);
+          });
+        } else {
+          onboardingTaskListDiv.innerHTML = "<p>All assigned tasks completed! Great job!</p>";
+        }
+        const completedTasksCount = tasks.filter((task) => task.completed).length;
         const totalTasks = tasks.length;
         if (taskListOverviewDiv) {
-          taskListOverviewDiv.textContent = `You have completed ${completedTasks} of ${totalTasks} tasks.`;
+          taskListOverviewDiv.textContent = `You have completed ${completedTasksCount} of ${totalTasks} tasks.`;
         }
-        if (completedTasks === totalTasks && totalTasks > 0) {
+        if (completedTasksCount === totalTasks && totalTasks > 0) {
           if (typeof confetti !== "undefined") {
             confetti({
               particleCount: 100,
@@ -2060,14 +2065,6 @@
         const isCompleted = checkbox.checked;
         try {
           await apiRequest("PUT", `/api/onboarding-tasks/${taskId}`, { completed: isCompleted });
-          const taskItem = checkbox.closest(".checklist-item");
-          if (taskItem) {
-            if (isCompleted) {
-              taskItem.classList.add("completed");
-            } else {
-              taskItem.classList.remove("completed");
-            }
-          }
           loadOnboardingTasks();
         } catch (error) {
           showModalMessage(`Failed to update task: ${error.message}`, true);
@@ -2105,6 +2102,37 @@
         employeeScheduleListDiv.innerHTML = '<p style="color: #e74c3c;">Could not load schedule.</p>';
         console.error("Error loading employee schedule:", error);
       }
+    }
+    if (printScheduleBtn) {
+      printScheduleBtn.addEventListener("click", async () => {
+        let userLocationId = null;
+        let userLocationName = "Your Location";
+        try {
+          const user = await apiRequest("GET", "/api/users/me");
+          if (user && user.location_id) {
+            userLocationId = user.location_id;
+            const locations = await apiRequest("GET", "/api/locations");
+            const currentLocation = locations.find((loc) => String(loc.location_id) === String(userLocationId));
+            if (currentLocation) {
+              userLocationName = currentLocation.location_name;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user location for print schedule:", error);
+        }
+        if (!currentUserId || !userLocationId) {
+          showModalMessage("Could not retrieve necessary information to print schedule. Please ensure your account is assigned to a location.", true);
+          return;
+        }
+        const today = /* @__PURE__ */ new Date();
+        const startDate = new Date(today.setDate(today.getDate() - today.getDay()));
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 7);
+        endDate.setHours(0, 0, 0, 0);
+        const url = `printable-schedule.html?startDate=${startDate.toISOString().split("T")[0]}&endDate=${endDate.toISOString().split("T")[0]}&user_id=${currentUserId}&locationId=${userLocationId}&locationName=${encodeURIComponent(userLocationName)}`;
+        window.open(url, "_blank");
+      });
     }
     currentUserId = getUserIdFromToken(authToken);
     if (!currentUserId) {

@@ -8,79 +8,327 @@
     <link rel="stylesheet" href="dist/css/Theme.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
 
+    <!-- Google Tag Manager (Part 1) -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-5V9JPN4N');</script>
+    <!-- End Google Tag Manager -->
+
     <style>
-        /* Styles for the new landing page content */
-        .hero {
-            text-align: center;
-            padding: 80px 20px;
-            color: var(--text-light);
+        /* Styles for index.html ONLY - Inspired by Dubber AI's dark theme */
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #0d0d0d; /* Very dark background */
+            color: #f0f0f0; /* Light text for contrast */
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            overflow-x: hidden; /* Prevent horizontal scroll */
         }
-        .hero h1 {
-            font-size: 3.5rem;
-            font-family: 'Fredoka One', cursive;
-            margin-bottom: 20px;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        .hero p {
-            font-size: 1.2rem;
-            max-width: 600px;
-            margin: 0 auto 30px auto;
-            color: var(--text-medium);
-        }
-        .hero-actions .btn {
-            margin: 0 10px;
-        }
-        .features-section {
-            padding: 60px 20px;
-            text-align: center;
-        }
-        .features-section h2 {
-            font-size: 2.5rem;
-            margin-bottom: 40px;
-        }
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 30px;
+
+        .container {
             max-width: 1200px;
             margin: 0 auto;
+            padding: 0 20px; /* Adjust padding for edges */
         }
+
+        /* Header Styling */
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 25px 0; /* More padding */
+            position: relative;
+            z-index: 10; /* Ensure header is on top of hero background */
+        }
+
+        .app-title {
+            font-family: 'Fredoka One', cursive;
+            font-size: 2.2rem; /* Slightly smaller for header */
+            color: var(--primary-accent); /* Use your theme's accent color */
+            text-decoration: none;
+            text-shadow: 0 0 10px rgba(200, 109, 215, 0.4); /* Subtle glow */
+        }
+
+        .dashboard-header a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        /* Login Button Style */
+        .dashboard-header .btn-secondary {
+            background-color: transparent;
+            color: var(--text-light);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 10px 25px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .dashboard-header .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        /* Hero Section Styling - Inspired by Dubber AI's hero */
+        .hero {
+            position: relative;
+            text-align: center;
+            padding: 120px 20px; /* Generous padding */
+            overflow: hidden; /* Hide overflow from background image */
+            margin-bottom: 60px; /* Space before next section */
+            border-radius: 15px; /* Subtle rounded corners for the section */
+            background-color: #1a1a1a; /* Fallback background */
+            /* Abstract background image to mimic Dubber AI's hero */
+            background-image: url('http://googleusercontent.com/image_generation_content/158'); /* Replaced with generated image */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .hero::before { /* Overlay for text readability */
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.7));
+            z-index: 1;
+        }
+
+        .hero-content { /* To keep text above background overlay */
+            position: relative;
+            z-index: 2;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 4.5rem; /* Larger, bolder headline */
+            font-weight: 700; /* Bold */
+            margin-bottom: 25px;
+            color: #fff;
+            line-height: 1.1;
+            text-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+        /* Responsive headline */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 3rem;
+            }
+        }
+        @media (max-width: 480px) {
+            .hero h1 {
+                font-size: 2.2rem;
+            }
+        }
+
+        .hero p {
+            font-size: 1.3rem; /* Slightly larger sub-headline */
+            max-width: 700px;
+            margin: 0 auto 50px auto;
+            color: #e0e0e0;
+            font-weight: 300; /* Lighter weight for sub-headline */
+        }
+
+        .hero-actions .btn {
+            display: inline-block;
+            margin: 0 15px;
+            padding: 18px 40px; /* Larger buttons */
+            font-size: 1.3rem;
+            border-radius: 10px; /* More rounded */
+            text-decoration: none;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            font-weight: 600;
+        }
+
+        .hero-actions .btn-primary {
+            background-color: var(--primary-accent); /* Your vibrant accent color */
+            color: #fff; /* Changed text color to white for better readability */
+            border: none;
+            box-shadow: 0 5px 20px rgba(200, 109, 215, 0.4); /* Glowing shadow */
+        }
+
+        .hero-actions .btn-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(200, 109, 215, 0.6);
+        }
+
+        .hero-actions a.learn-more {
+            color: #bb86fc; /* A secondary accent color, similar to Dubber AI */
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        .hero-actions a.learn-more:hover {
+            color: #fff;
+            text-decoration: underline;
+        }
+
+        /* Features Section Styling */
+        .features-section {
+            padding: 80px 20px;
+            text-align: center;
+            background-color: #1a1a1a; /* Consistent dark background for sections */
+            border-radius: 15px;
+            margin-bottom: 60px;
+        }
+
+        .features-section h2 {
+            font-size: 3.2rem; /* Consistent large section titles */
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #fff;
+            line-height: 1.2;
+        }
+        .features-section .section-description {
+            font-size: 1.15rem;
+            color: #ccc;
+            max-width: 800px;
+            margin: 0 auto 60px auto;
+            font-weight: 300;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px; /* More generous gap */
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
         .feature-card {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 30px;
+            background-color: #2c2c2c; /* Slightly lighter card background */
+            padding: 40px 30px; /* More padding */
             border-radius: 12px;
-            border: 1px solid var(--card-border-color);
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+            border: 1px solid #3a3a3a; /* Subtle border */
         }
-        .feature-card h3 {
+
+        .feature-card:hover {
+            transform: translateY(-8px); /* More pronounced lift */
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
+            background-color: #3a3a3a; /* Slight change on hover */
+        }
+
+        .feature-card .icon {
+            font-size: 3.5rem; /* Larger icons */
             color: var(--primary-accent);
-            margin-top: 0;
+            margin-bottom: 25px;
+            display: block; /* Ensure it takes its own line */
         }
+
+        .feature-card h3 {
+            color: #fff;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.6rem; /* Larger feature titles */
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: #ccc;
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+
+        /* Testimonials Section Styling */
+        .testimonials-section {
+            padding: 80px 20px;
+            text-align: center;
+            margin-bottom: 60px;
+            background-color: #0d0d0d; /* Match body background */
+        }
+
+        .testimonials-section h2 {
+            font-size: 3.2rem;
+            font-weight: 700;
+            margin-bottom: 50px;
+            color: #fff;
+        }
+
+        .testimonial-card {
+            background-color: #1a1a1a; /* Darker card for testimonials */
+            padding: 40px;
+            border-radius: 12px;
+            max-width: 800px; /* Wider card */
+            margin: 20px auto;
+            font-style: italic;
+            color: #ccc;
+            line-height: 1.8;
+            border: 1px solid #2c2c2c;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .testimonial-card p {
+            font-size: 1.2rem; /* Larger testimonial text */
+            margin-bottom: 25px;
+        }
+
+        .testimonial-author {
+            font-style: normal;
+            color: var(--primary-accent);
+            margin-top: 20px;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        .testimonial-author small {
+            color: #bbb;
+            font-weight: 400;
+            display: block;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+
+        /* CTA Section Styling */
         .cta-section {
             text-align: center;
-            padding: 80px 20px;
-            background-color: rgba(0,0,0,0.2);
-            border-radius: 16px;
-            margin: 40px 0;
+            padding: 100px 20px;
+            background-color: #1a1a1a; /* Consistent dark background */
+            border-radius: 15px;
+            margin-bottom: 80px;
         }
+
+        .cta-section h2 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: #fff;
+            line-height: 1.1;
+        }
+
+        .cta-section p {
+            font-size: 1.3rem;
+            max-width: 700px;
+            margin: 0 auto 50px auto;
+            color: #e0e0e0;
+            font-weight: 300;
+        }
+
+        /* Footer Styling */
         .footer {
             text-align: center;
-            padding: 20px;
-            margin-top: 40px;
-            color: var(--text-medium);
-            border-top: 1px solid var(--border-color);
+            padding: 30px 0;
+            background-color: #0b0b0b; /* Even darker footer */
+            color: #777;
+            border-top: 1px solid #222;
         }
     </style>
 </head>
 <body>
+    <!-- Google Tag Manager (noscript Part 2) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5V9JPN4N"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+
     <div class="background-animation"></div>
     <div class="container">
         <header class="dashboard-header">
@@ -89,41 +337,81 @@
                 <a href="login.html" class="btn btn-secondary">Login</a>
             </div>
         </header>
+
         <main>
             <section class="hero">
-                <h1>Streamline Your Business Operations</h1>
-                <p>The all-in-one suite to manage scheduling, onboarding, hiring, and documents. Everything you need, all in one flow.</p>
-                <div class="hero-actions">
-                    <a href="register.html" class="btn btn-primary">Get Started for Free</a>
+                <div class="hero-content">
+                    <h1>Finally! Business Tools That Have Your Back.</h1>
+                    <p>Tired of juggling multiple apps and endless paperwork? Flow Business Suite brings all your essential operations—from scheduling and onboarding to hiring and documents—into **one seamless, intuitive platform.**</p>
+                    <div class="hero-actions">
+                        <a href="register.html" class="btn btn-primary">Get Started Free Today!</a>
+                        <a href="#features" class="learn-more">Learn More</a>
+                    </div>
                 </div>
             </section>
 
-            <section class="features-section">
-                <h2>Powerful Features, Simplified</h2>
+            <section id="features" class="features-section">
+                <h2>Capabilities That Empower Your Business</h2>
+                <p class="section-description">Experience seamless operations and creative mastery as Flow Business Suite simplifies complexity for you.</p>
                 <div class="features-grid">
                     <div class="feature-card">
+                        <span class="icon">📅</span> 
                         <h3>Smart Scheduling</h3>
-                        <p>Create, manage, and view employee schedules with an intuitive weekly calendar. Avoid conflicts and keep your team in sync.</p>
+                        <p>Start planning and managing employee shifts with ease, ensuring optimal coverage and team coordination.</p>
                     </div>
                     <div class="feature-card">
+                        <span class="icon">🚀</span> 
                         <h3>Effortless Onboarding</h3>
-                        <p>Create custom task lists for new hires. Track their progress and ensure a smooth and consistent onboarding experience for every position.</p>
+                        <p>Generate structured onboarding flows for new hires, complete with task lists and document access, in any language.</p>
                     </div>
                     <div class="feature-card">
+                        <span class="icon">📄</span> 
                         <h3>Centralized Documents</h3>
-                        <p>Upload and manage important files, training materials, and company handbooks. Accessible to your team whenever they need it.</p>
+                        <p>Securely store, organize, and share all your crucial business documents, making information accessible when and where it's needed.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="icon">🤝</span> 
+                        <h3>Streamlined Hiring</h3>
+                        <p>Post jobs, track applicants, and simplify your recruitment process to find the best talent faster.</p>
+                    </p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="icon">💬</span> 
+                        <h3>Direct Communication</h3>
+                        <p>Facilitate real-time communication within your team, ensuring quick updates and efficient collaboration.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="icon">✨</span> <!-- Changed icon for Ease of Useability -->
+                        <h3>Ease of Useability</h3>
+                        <p>Our intuitive design ensures a smooth and simple experience, allowing you to focus on your business, not the software.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="testimonials-section">
+                <h2>Loved by Businesses Like Yours</h2>
+                <div class="testimonial-card">
+                    <p>"Flow Business Suite has completely transformed our operations. The hiring and onboarding features alone have saved us countless hours and made our new hires feel so much more welcome. It's truly an all-in-one solution that delivers!"</p>
+                    <div class="testimonial-author">
+                        Sarah M.
+                        <small>Owner, Local Cafe Chain</small>
                     </div>
                 </div>
             </section>
 
             <section class="cta-section">
-                <h2>Ready to get started?</h2>
-                <p>Sign up today and take control of your business workflow.</p>
-                <a href="register.html" class="btn btn-primary">Sign Up Now</a>
+                <h2>Ready to Experience the Flow?</h2>
+                <p>Join hundreds of businesses simplifying their daily operations. Get started today and unlock a new level of efficiency.</p>
+                <div class="hero-actions">
+                    <a href="register.html" class="btn btn-primary">Start Your Free Account Now!</a>
+                </div>
             </section>
         </main>
+
         <footer class="footer">
-            <p>&copy; 2024 Flow Business Suite. All rights reserved.</p>
+            <div class="container">
+                <p>&copy; 2024 Flow Business Suite. All rights reserved.</p>
+            </div>
         </footer>
     </div>
     <script type="module" src="dist/js/bundle.js"></script>
