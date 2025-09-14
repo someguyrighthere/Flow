@@ -156,8 +156,17 @@ export function handleAdminPage() {
         userListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading users...</p>'; // Show loading state
         try {
             // API call to get users (backend filters by location_admin role)
-            const users = await apiRequest('GET', '/api/users');
+            let users = await apiRequest('GET', '/api/users');
             userListDiv.innerHTML = ''; // Clear loading message
+
+            // --- START: SECURITY FIX ---
+            // If the current user is a super_admin, filter out all other super_admins from the list.
+            // This prevents a super_admin from seeing or managing their peers.
+            const userRole = localStorage.getItem('userRole');
+            if (userRole === 'super_admin') {
+                users = users.filter(user => user.role !== 'super_admin');
+            }
+            // --- END: SECURITY FIX ---
 
             if (users && users.length > 0) {
                 const userGroups = {
