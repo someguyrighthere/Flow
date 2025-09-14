@@ -159,18 +159,15 @@ export function handleAdminPage() {
             let users = await apiRequest('GET', '/api/users');
             userListDiv.innerHTML = ''; // Clear loading message
 
-            // --- START: SECURITY FIX ---
-            // If the current user is a super_admin, filter out all other super_admins from the list.
-            // This prevents a super_admin from seeing or managing their peers.
-            const userRole = localStorage.getItem('userRole');
-            if (userRole === 'super_admin') {
-                users = users.filter(user => user.role !== 'super_admin');
-            }
-            // --- END: SECURITY FIX ---
+            // --- START: ENHANCED SECURITY FIX ---
+            // Always filter out super_admins from the manageable user list.
+            // No role should be able to see or manage super_admins from this panel.
+            users = users.filter(user => user.role !== 'super_admin');
+            // --- END: ENHANCED SECURITY FIX ---
 
             if (users && users.length > 0) {
                 const userGroups = {
-                    super_admin: [],
+                    super_admin: [], // This will now always be empty, but we keep it for structural consistency
                     location_admin: [],
                     employee: []
                 };
@@ -200,7 +197,7 @@ export function handleAdminPage() {
                         group.forEach(user => {
                             let userDisplayTitle;
                             // Determine the title to display based on role or position
-                            // NEW LOGIC: Use role for Super Admin and Location Admin
+                            // This block for super_admin will now not be reached, but is safe to keep
                             if (user.role === 'super_admin') {
                                 userDisplayTitle = 'Super Admin';
                             } else if (user.role === 'location_admin') {
@@ -229,7 +226,7 @@ export function handleAdminPage() {
                     }
                 });
             } else {
-                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users found.</p>';
+                userListDiv.innerHTML = '<p style="color: var(--text-medium);">No users to display.</p>';
             }
         } catch (error) {
             showModalMessage(`Error loading users: ${error.message}`, true);
@@ -497,3 +494,4 @@ export function handleAdminPage() {
         loadUsers();
     });
 }
+
