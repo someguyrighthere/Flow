@@ -114,7 +114,20 @@ export function handleHiringPage() {
         if (!applicantsListDiv) return;
         applicantsListDiv.innerHTML = '<p style="color: var(--text-medium);">Loading applicants...</p>';
         try {
-            const applicants = await apiRequest('GET', '/api/applicants'); 
+            // FIX: Security patch to filter applicants by location for location_admins
+            const userRole = localStorage.getItem('userRole');
+            let applicants = await apiRequest('GET', '/api/applicants');
+
+            if (userRole === 'location_admin') {
+                const admin = await apiRequest('GET', '/api/users/me');
+                const adminLocationId = admin.location_id;
+                if (adminLocationId) {
+                    applicants = applicants.filter(applicant => String(applicant.location_id) === String(adminLocationId));
+                } else {
+                    applicants = []; // If admin has no location, they see no applicants
+                }
+            }
+            
             applicantsListDiv.innerHTML = '';
 
             if (applicants && applicants.length > 0) {
@@ -144,6 +157,7 @@ export function handleHiringPage() {
             applicantsListDiv.innerHTML = `<p style="color: #e74c3c;">Error loading applicants: ${error.message}</p>`;
         }
     }
+
 
     /**
      * Handles the submission of the new job posting form.
@@ -215,69 +229,124 @@ export function handleHiringPage() {
             existingModal.remove();
         }
 
-        const modalHtml = `
-            <div id="share-job-modal" class="modal-overlay" style="display: flex; align-items: center; justify-content: center;">
-                <div class="modal-content" style="text-align: left; max-width: 600px;">
-                    <h3>Share Job Posting</h3>
-                    
-                    <div class="form-group">
-                        <label for="share-link">Direct Link</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="text" id="share-link" value="${applyUrl}" readonly style="background-color: rgba(0,0,0,0.3);">
-                            <button id="copy-share-link" class="btn btn-secondary">Copy</button>
-                        </div>
-                    </div>
+        const modalContainer = document.createElement('div');
+        modalContainer.id = 'share-job-modal';
+        modalContainer.className = 'modal-overlay';
+        modalContainer.style.display = 'flex';
 
-                    <div class="form-group">
-                        <label for="embed-code">Embed Code</label>
-                        <div style="display: flex; gap: 10px;">
-                            <textarea id="embed-code" readonly style="height: 100px; background-color: rgba(0,0,0,0.3);">${embedCode}</textarea>
-                            <button id="copy-embed-code" class="btn btn-secondary">Copy</button>
-                        </div>
+        modalContainer.innerHTML = `
+            <style>
+                .share-modal-content {
+                    text-align: left;
+                    max-width: 600px;
+                    width: 90%;
+                    padding: 30px;
+                }
+                .share-modal-content h3 {
+                    margin-top: 0;
+                    margin-bottom: 25px;
+                    color: var(--text-light);
+                }
+                .share-modal-content .form-group {
+                    margin-bottom: 25px;
+                }
+                .share-modal-content label {
+                    font-weight: 600;
+                    display: block;
+                    margin-bottom: 8px;
+                }
+                .share-modal-content .input-group {
+                    display: flex;
+                    gap: 10px;
+                }
+                .share-modal-content input[type="text"],
+                .share-modal-content textarea {
+                    flex-grow: 1;
+                    background-color: rgba(0,0,0,0.3) !important;
+                    border-color: var(--border-color) !important;
+                    color: var(--text-light) !important;
+                    padding: 10px !important;
+                    border-radius: 6px;
+                    border: 1px solid;
+                    resize: none;
+                }
+                .share-modal-content .btn-copy {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    white-space: nowrap;
+                }
+                .share-modal-content .btn-copy svg {
+                    width: 16px;
+                    height: 16px;
+                }
+                 .share-modal-content .modal-actions {
+                    justify-content: flex-end;
+                    margin-top: 20px;
+                }
+            </style>
+            <div class="modal-content share-modal-content">
+                <h3>Share Job Posting</h3>
+                
+                <div class="form-group">
+                    <label for="share-link">Direct Link</label>
+                    <div class="input-group">
+                        <input type="text" id="share-link" value="${applyUrl}" readonly>
+                        <button id="copy-share-link" class="btn btn-secondary btn-copy">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1a.5.5 0 0 1 .5-.5h-3a.5.5 0 0 1 0-1h3zM-1 7a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1A.5.5 0 0 1-1 7zm-1 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/></svg>
+                            Copy
+                        </button>
                     </div>
+                </div>
 
-                    <div class="modal-actions" style="justify-content: flex-end; margin-top: 20px;">
-                        <button id="close-share-modal" class="btn btn-primary">Close</button>
+                <div class="form-group">
+                    <label for="embed-code">Embed Code</label>
+                    <div class="input-group">
+                        <textarea id="embed-code" readonly style="height: 100px;">${embedCode}</textarea>
+                        <button id="copy-embed-code" class="btn btn-secondary btn-copy">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1a.5.5 0 0 1 .5-.5h-3a.5.5 0 0 1 0-1h3zM-1 7a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1A.5.5 0 0 1-1 7zm-1 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/></svg>
+                             Copy
+                        </button>
                     </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="close-share-modal" class="btn btn-primary">Close</button>
                 </div>
             </div>
         `;
 
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.body.appendChild(modalContainer);
 
-        const copyToClipboard = (textToCopy, message) => {
-            const textArea = document.createElement("textarea");
-            textArea.value = textToCopy;
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                showModalMessage(message, false);
-            } catch (err) {
+        const copyToClipboard = (textToCopy, message, button) => {
+            const originalText = button.innerHTML;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                button.innerHTML = 'Copied!';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                }, 2000);
+            }).catch(err => {
                 showModalMessage('Failed to copy.', true);
-            }
-            document.body.removeChild(textArea);
+            });
         };
 
-        document.getElementById('copy-share-link').addEventListener('click', () => {
-            copyToClipboard(applyUrl, 'Direct link copied!');
+        const copyLinkBtn = document.getElementById('copy-share-link');
+        copyLinkBtn.addEventListener('click', () => {
+            copyToClipboard(applyUrl, 'Direct link copied!', copyLinkBtn);
         });
 
-        document.getElementById('copy-embed-code').addEventListener('click', () => {
-            copyToClipboard(embedCode, 'Embed code copied!');
+        const copyEmbedBtn = document.getElementById('copy-embed-code');
+        copyEmbedBtn.addEventListener('click', () => {
+            copyToClipboard(embedCode, 'Embed code copied!', copyEmbedBtn);
         });
 
         const closeModal = () => {
-            const modal = document.getElementById('share-job-modal');
-            if (modal) {
-                modal.remove();
-            }
+            modalContainer.remove();
         };
 
         document.getElementById('close-share-modal').addEventListener('click', closeModal);
-        document.getElementById('share-job-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'share-job-modal') {
+        modalContainer.addEventListener('click', (e) => {
+            if (e.target === modalContainer) {
                 closeModal();
             }
         });
