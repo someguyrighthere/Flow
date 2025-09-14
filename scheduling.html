@@ -141,8 +141,13 @@
         .day-column {
             position: relative;
             border-right: 1px solid var(--border-color);
-            background-image: linear-gradient(to bottom, var(--border-color) 1px, transparent 1px);
-            background-size: 100% 60px;
+            /* UPDATED: Layered gradients to create a finer grid */
+            background-image:
+                linear-gradient(to bottom, var(--border-color) 1px, transparent 1px), /* Hour lines */
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px); /* Half-hour lines */
+            background-size:
+                100% 60px, /* Solid lines every 60px */
+                100% 30px; /* Lighter lines every 30px */
             transition: background-color 0.2s ease-in-out;
         }
         
